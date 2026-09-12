@@ -1,0 +1,225 @@
+import { createApp } from './app.js'
+import { env } from './config/env.js'
+import { migrate } from './db/schema.js'
+import { db, transaction } from './db/connection.js'
+import { ensureMemberProfileColumns } from './db/memberProfileMigration.js'
+import { ensureBootstrapAdmin } from './db/bootstrapAdmin.js'
+import { Server as SocketIOServer } from 'socket.io'
+import { setRealtime, emitSessionUpdated, emitDataChanged, emitPcPresence } from './realtime.js'
+import jwt from 'jsonwebtoken'
+import { activeSessionPause, closeSessionAndSaveRemaining, isSessionHeartbeatStale, pauseActiveSession, remainingSecondsForSession, resumeActiveSession } from './utils/sessionTime.js'
+import { normalizeIp, isValidIpv4 } from './middleware/clientIdentity.js'
+import { stationCredentialMatches } from './utils/stationAuth.js'
+import { startCloudSyncWorker, stopCloudSyncWorker } from './cloud/syncWorker.js'
+
+migrate()
+ensureMemberProfileColumns()
+await ensureBootstrapAdmin()
+
+// A queued/running command belongs to the backend process that delivered it.
+// Process-local acknowledgement timers disappear on restart, so never replay a
+// command inherited from a previous process — especially shutdown/reboot.
+const remoteCommandCleanupAt = new Date().toISOString()
+db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE status IN ('queued','running')")
+  .run(remoteCommandCleanupAt,JSON.stringify({error:'Remote command cancelled because the backend restarted.',code:'REMOTE_COMMAND_SERVER_RESTARTED'}))
+
+// Presence belongs to this backend process, not to the last value stored in
+// SQLite. After a restart no Customer Station sockets exist yet, so every
+// normal station must be treated as offline until it proves itself by making a
+// valid paired socket connection. Keep intentional maintenance/reservation
+// states untouched and keep active sessions intact for recovery/management.
+const presenceResetAt = new Date().toISOString()
+db.prepare("UPDATE pcs SET status='offline', updated_at=? WHERE status IN ('available','occupied')").run(presenceResetAt)
+const app = createApp()
+
+function cleanupExpiredComputerSessions() {
+  const scanAt = new Date().toISOString()
+  const candidateIds = db.prepare(`SELECT id FROM computer_sessions WHERE status='active' AND expires_at IS NOT NULL AND expires_at<=?`).all(scanAt).map(row=>row.id)
+  if (!candidateIds.length) return
+  const closed = transaction(() => {
+    // Revalidate after obtaining the IMMEDIATE write lock. An extension may
+    // have renewed the session after the read-only candidate scan.
+    const results=[]
+    for (const sessionId of candidateIds) {
+      const nowMs=Date.now(); const now=new Date(nowMs).toISOString()
+      const s=db.prepare(`SELECT * FROM computer_sessions
+        WHERE id=? AND status='active' AND expires_at IS NOT NULL AND expires_at<=?
+          AND NOT EXISTS (SELECT 1 FROM session_pauses sp WHERE sp.computer_session_id=computer_sessions.id AND sp.resumed_at IS NULL)`)
+        .get(sessionId,now)
+      if(!s) continue
+      const changed=db.prepare("UPDATE computer_sessions SET status='ended',ended_at=? WHERE id=? AND status='active' AND expires_at IS NOT NULL AND expires_at<=?").run(now,s.id,now)
+      if(changed.changes!==1) continue
+      if(s.member_id) {
+        db.prepare('UPDATE members SET session_seconds_remaining=0,updated_at=? WHERE id=?').run(now,s.member_id)
+        db.prepare(`UPDATE auth_sessions SET revoked_at=? WHERE revoked_at IS NULL AND user_id=(SELECT user_id FROM members WHERE id=?)`).run(now,s.member_id)
+      }
+      db.prepare("UPDATE pcs SET status='available',updated_at=? WHERE id=? AND status='occupied'").run(now,s.pc_id)
+      results.push({...s,remainingSeconds:0})
+    }
+    return results
+  })
+  for(const s of closed) emitSessionUpdated(s.id,{pcId:s.pc_id,memberId:s.member_id,reason:'session_expired',remainingSeconds:0})
+  if(closed.length) emitDataChanged({method:'SYSTEM',path:'/sessions/expire'})
+}
+cleanupExpiredComputerSessions()
+const cleanupTimer=setInterval(cleanupExpiredComputerSessions,5000)
+const server=app.listen(env.port,env.host,()=>{
+  console.log(`Aezakmi Cafe backend listening on http://${env.host}:${env.port}`)
+  console.log(`iCafe8 diskless provider: ${env.disklessProvider}`)
+})
+startCloudSyncWorker()
+if (env.cloudEnabled) console.log(`Aezakmi Cloud sync enabled: ${env.supabaseUrl}`)
+const io=new SocketIOServer(server,{cors:{origin:env.corsOrigin==='*'?true:env.corsOrigin.split(',').map(x=>x.trim()).filter(Boolean)}})
+setRealtime(io)
+
+// Presence is independent from a session's billing state.  A station that
+// reconnects while its guest session is active must immediately become busy
+// again instead of remaining visually offline until another mutation occurs.
+function restorePcPresence(pcId) {
+  db.prepare("UPDATE pcs SET status=CASE WHEN EXISTS (SELECT 1 FROM computer_sessions WHERE pc_id=pcs.id AND status='active') THEN 'occupied' ELSE 'available' END,updated_at=? WHERE id=? AND status='offline'")
+    .run(new Date().toISOString(), pcId)
+}
+
+io.on('connection', (socket) => {
+  const token = socket.handshake.auth?.token
+  const advertisedIp = normalizeIp(socket.handshake.auth?.clientIp)
+  const peerIp = normalizeIp(socket.handshake.address)
+  const trustedAdvertisedIp = advertisedIp && isValidIpv4(advertisedIp) && ((peerIp === '127.0.0.1' && env.nodeEnv !== 'production') || advertisedIp === peerIp) ? advertisedIp : ''
+  const stationIp = trustedAdvertisedIp || (isValidIpv4(peerIp) ? peerIp : '')
+  const suppliedStationToken=String(socket.handshake.auth?.stationToken||'')
+  let auth = null
+  let presencePcId = null
+
+  if (token) {
+    try {
+      const payload = jwt.verify(String(token), env.jwtSecret)
+      const session = db.prepare(`
+        SELECT a.*, u.role, u.is_active, u.member_id, u.must_change_credentials
+        FROM auth_sessions a
+        JOIN users u ON u.id = a.user_id
+        WHERE a.jwt_id = ?
+      `).get(payload.jti)
+
+      const active = session && !session.revoked_at && session.is_active && new Date(session.expires_at).getTime() > Date.now()
+      if (active) {
+        if (session.role === 'admin' && Boolean(session.must_change_credentials)) {
+          socket.emit('auth:setup-required', { reason:'credential_setup_required' })
+          socket.disconnect(true)
+          return
+        }
+        const claimedPc = stationIp ? db.prepare('SELECT id,ip_address,status,station_token_hash FROM pcs WHERE ip_address=?').get(stationIp) : null
+        if (session.role === 'customer' && session.pc_id && (!claimedPc || String(session.pc_id) !== String(claimedPc.id) || !stationCredentialMatches(claimedPc, suppliedStationToken))) {
+          socket.disconnect(true)
+          return
+        }
+        auth = { role:session.role, memberId:session.member_id, pcId:session.pc_id, userId:session.user_id, sessionId:session.id, jwtId:session.jwt_id }
+        socket.data.auth = auth
+        if (session.role === 'admin') socket.join('admin')
+        if (session.member_id) socket.join(`customer:${session.member_id}`)
+        if (session.role === 'customer' && session.pc_id) socket.join('customer-stations')
+        if (session.pc_id) {
+          presencePcId = session.pc_id
+          socket.join(`pc:${session.pc_id}`)
+          restorePcPresence(session.pc_id)
+          emitPcPresence(session.pc_id, true, { role:session.role })
+          emitDataChanged({ method:'SOCKET', path:'/pcs/presence', pcId:session.pc_id, online:true })
+        }
+      }
+    } catch {
+      // Anonymous realtime connections are allowed for login/guest screens,
+      // but they are never placed in private rooms.
+    }
+  }
+
+  // Guest stations have no JWT, but still identify themselves through the
+  // trusted Electron-provided station IP so Admin can track their presence.
+  if (!presencePcId && !auth && stationIp) {
+    const guestPc = db.prepare('SELECT id,status,station_token_hash FROM pcs WHERE ip_address=?').get(stationIp)
+    // A browser development station may lose its local enrollment token when
+    // storage is cleared. Limit this recovery path to a local peer with an
+    // already-active guest session; production stations always need pairing.
+    const activeGuestSession=guestPc && db.prepare("SELECT id FROM computer_sessions WHERE pc_id=? AND member_id IS NULL AND status='active' LIMIT 1").get(guestPc.id)
+    const localGuestDevelopmentRecovery=env.nodeEnv !== 'production' && peerIp === '127.0.0.1' && Boolean(activeGuestSession)
+    if (guestPc && (stationCredentialMatches(guestPc, suppliedStationToken) || localGuestDevelopmentRecovery)) {
+      presencePcId = guestPc.id
+      socket.data.guestPcId = guestPc.id
+      socket.join(`pc:${guestPc.id}`)
+      socket.join('customer-stations')
+      restorePcPresence(guestPc.id)
+      emitPcPresence(guestPc.id, true, { role:'guest' })
+      emitDataChanged({ method:'SOCKET', path:'/pcs/presence', pcId:guestPc.id, online:true })
+    }
+  }
+
+  if (presencePcId) {
+    const activeSession=db.prepare("SELECT id,member_id,billing_type FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(presencePcId)
+    const pause=activeSession ? activeSessionPause(activeSession.id) : null
+    if (pause?.reason === 'reboot') {
+      const reboot= pause.command_id ? db.prepare("SELECT status FROM remote_commands WHERE id=? AND command='reboot'").get(pause.command_id) : null
+      if (reboot?.status === 'completed') {
+        resumeActiveSession(presencePcId,{commandId:pause.command_id})
+        emitSessionUpdated(activeSession.id,{pcId:presencePcId,memberId:activeSession.member_id,reason:'session_resumed_after_reboot',locked:false})
+      }
+    }
+    if (pause?.reason === 'station_offline') {
+      resumeActiveSession(presencePcId)
+      emitSessionUpdated(activeSession.id,{pcId:presencePcId,memberId:activeSession.member_id,reason:'station_session_resumed',locked:false})
+    }
+    const replayNow=new Date().toISOString()
+    const expiredReplay=db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE pc_id=? AND status IN ('queued','running') AND ((expires_at IS NOT NULL AND expires_at<=?) OR (expires_at IS NULL AND julianday(requested_at)<=julianday('now','-30 seconds')) OR (status='queued' AND command IN ('shutdown','reboot') AND warning_expires_at IS NOT NULL AND warning_expires_at<=?))")
+      .run(replayNow,JSON.stringify({error:'Remote command expired before reconnect replay.',code:'REMOTE_COMMAND_EXPIRED'}),presencePcId,replayNow,replayNow)
+    if(expiredReplay.changes) emitDataChanged({method:'EXPIRE',path:'/remote-commands',pcId:presencePcId})
+    const queued=db.prepare("SELECT id,command,payload,warning_started_at,warning_expires_at,expires_at FROM remote_commands WHERE pc_id=? AND status='queued' AND (expires_at IS NULL OR expires_at>?) ORDER BY requested_at").all(presencePcId,replayNow)
+    for(const command of queued) {
+      const warningExpiresAt=command.warning_expires_at || null
+      const warningSeconds=warningExpiresAt ? Math.max(0,Math.ceil((new Date(warningExpiresAt).getTime()-Date.now())/1000)) : 0
+      socket.emit('remote:command',{id:command.id,command:command.command,payload:command.payload?JSON.parse(command.payload):null,warningSeconds,warningExpiresAt,expiresAt:command.expires_at || null,replayed:true})
+    }
+  }
+
+  const sessionCheck = auth ? setInterval(() => {
+    const current = db.prepare('SELECT revoked_at,expires_at FROM auth_sessions WHERE id=?').get(auth.sessionId)
+    const sessionInvalid = !current || current.revoked_at || new Date(current.expires_at).getTime() <= Date.now()
+    if (sessionInvalid) {
+      socket.emit('auth:revoked', { sessionId:auth.sessionId, reason:current?.revoked_at ? 'revoked' : 'expired' })
+      socket.disconnect(true)
+      return
+    }
+    if (auth.role === 'customer' && !env.allowUnregisteredDevStation) {
+      const pairedPc = auth.pcId ? db.prepare('SELECT id,ip_address,station_token_hash FROM pcs WHERE id=?').get(auth.pcId) : null
+      const pairingValid = pairedPc && String(pairedPc.ip_address) === String(stationIp) && stationCredentialMatches(pairedPc, suppliedStationToken)
+      if (!pairingValid) {
+        socket.emit('auth:revoked', { sessionId:auth.sessionId, reason:'station_pairing_invalid' })
+        socket.disconnect(true)
+      }
+    }
+  }, 15000) : null
+
+  socket.emit('realtime:ready', { serverTime:Date.now(), authenticated:Boolean(auth) })
+  socket.on('disconnect', async (reason) => {
+    if (sessionCheck) clearInterval(sessionCheck)
+    const pcId = presencePcId || socket.data.auth?.pcId || socket.data.guestPcId
+    if (!pcId || (socket.data.auth?.role && socket.data.auth.role !== 'customer')) return
+    try {
+      const peers = await io.in(`pc:${pcId}`).fetchSockets()
+      if (peers.length > 0) return
+      const activeSession=db.prepare("SELECT id,member_id,billing_type FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(pcId)
+      if (activeSession) {
+        const paused=pauseActiveSession(pcId,{reason:'station_offline'})
+        if (paused?.created) {
+          const remaining=activeSession.billing_type==='prepaid' ? remainingSecondsForSession(paused.session) : null
+          if(activeSession.member_id && activeSession.billing_type==='prepaid') db.prepare('UPDATE members SET session_seconds_remaining=?,updated_at=? WHERE id=?').run(Number(remaining||0),new Date().toISOString(),activeSession.member_id)
+          emitSessionUpdated(activeSession.id,{pcId,memberId:activeSession.member_id,reason:'station_session_paused',remainingSeconds:remaining,locked:true})
+        }
+      }
+      db.prepare("UPDATE pcs SET status='offline',updated_at=? WHERE id=? AND status<>'maintenance'").run(new Date().toISOString(), pcId)
+      emitPcPresence(pcId, false, { reason })
+      emitDataChanged({ method:'SOCKET', path:'/pcs/presence', pcId, online:false })
+    } catch (error) {
+      console.warn('Unable to update PC presence:', error?.message || error)
+    }
+  })
+})
+const cleanup=()=>{try{clearInterval(cleanupTimer)
+  stopCloudSyncWorker();io.close();server.close(()=>{db.close();process.exit(0)})}catch{process.exit(0)}}
+process.on('SIGINT',cleanup);process.on('SIGTERM',cleanup)

@@ -1,0 +1,23 @@
+project_id = "aezakmi-cloud"
+
+[functions.pair-edge]
+verify_jwt = false
+[functions.edge-sync]
+verify_jwt = false
+[functions.edge-unpair]
+verify_jwt = false
+[functions.create-pairing-code]
+verify_jwt = true
+[functions.issue-command]
+verify_jwt = true
+[functions.admin-action]
+verify_jwt = true
+[functions.update-branch-config]
+verify_jwt = true
+[functions.create-branch]
+verify_jwt = true
+[functions.revoke-edge]
+verify_jwt = true
+
+[functions.admin-api]
+verify_jwt = true

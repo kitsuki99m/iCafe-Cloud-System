@@ -1,0 +1,318 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ArrowUpRight,
+  CalendarDays,
+  ChartNoAxesCombined,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  LifeBuoy,
+  MessageSquareText,
+  MonitorCheck,
+  MonitorCog,
+  MonitorPlay,
+  Moon,
+  Tags,
+  Users,
+  WalletCards,
+  Wrench,
+  Sun,
+} from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { apiGet } from '../lib/api.js'
+import FeedbackInboxModal from '../components/admin/FeedbackInboxModal.jsx'
+import AdminNotificationCenter from '../components/admin/AdminNotificationCenter.jsx'
+import AnnouncementCenter from '../components/admin/AnnouncementCenter.jsx'
+import AdminQuickFind from '../components/admin/AdminQuickFind.jsx'
+import { useAppData } from '../context/AppDataContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
+import { useTheme } from '../context/ThemeContext.jsx'
+import { formatAdminPeso } from '../lib/numeric.js'
+import { buildRevenueScale, formatRevenueDay, normalizeSevenDayRevenue } from '../lib/revenueChart.js'
+
+const STATUS_META = {
+  available: { label:'Available', icon:MonitorCheck, tone:'text-teal-dim bg-teal/10', dot:'bg-teal' },
+  occupied: { label:'In use', icon:MonitorPlay, tone:'text-gold bg-gold/10', dot:'bg-gold' },
+  maintenance: { label:'Maintenance', icon:Wrench, tone:'text-ember-dim bg-ember/10', dot:'bg-ember' },
+}
+
+function OverviewCard({ title, subtitle, action, children, className='' }) {
+  return <section className={`overview-card min-w-0 p-4 lg:p-5 ${className}`}>
+    <div className="mb-4 flex items-start justify-between gap-4">
+      <div>
+        <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink-900">{title}</h2>
+        {subtitle&&<p className="mt-1 text-[10px] leading-4 text-slate-soft">{subtitle}</p>}
+      </div>
+      {action}
+    </div>
+    {children}
+  </section>
+}
+
+function Empty({ children }) {
+  return <p className="rounded-xl border border-dashed border-surface-line px-3 py-7 text-center text-xs text-slate-soft">{children}</p>
+}
+
+function initials(value='Admin') {
+  return String(value).trim().split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join('') || 'AD'
+}
+
+function formatRelativeTime(value) {
+  if (!value) return 'Just now'
+  const timestamp = typeof value === 'number' ? value : new Date(value).getTime()
+  if (!Number.isFinite(timestamp)) return 'Just now'
+  const diff = Math.max(0, Date.now() - timestamp)
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} hr${hours === 1 ? '' : 's'} ago`
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
+function formatEndingSoon(value) {
+  if (!value) return 'Postpaid'
+  const diff = new Date(value).getTime() - Date.now()
+  if (!Number.isFinite(diff)) return 'Time unavailable'
+  const minutes = Math.max(0, Math.ceil(diff / 60000))
+  if (minutes < 60) return `${minutes} min left`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  return rest ? `${hours} hr ${rest} min left` : `${hours} hr left`
+}
+
+
+function formatWeekRange(week) {
+  const first=week[0].date,last=week[6].date
+  const year=last.getUTCFullYear()
+  const firstMonth=new Intl.DateTimeFormat('en-US',{month:'long',timeZone:'UTC'}).format(first)
+  const lastMonth=new Intl.DateTimeFormat('en-US',{month:'long',timeZone:'UTC'}).format(last)
+  if(first.getUTCMonth()===last.getUTCMonth()) return `${firstMonth} ${first.getUTCDate()} – ${last.getUTCDate()}, ${year}`
+  return `${firstMonth} ${first.getUTCDate()} – ${lastMonth} ${last.getUTCDate()}, ${year}`
+}
+
+function manilaWeek(now=new Date()) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone:'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit'
+  }).formatToParts(now).filter(part=>part.type!=='literal').map(part=>[part.type,Number(part.value)]))
+  const current = new Date(Date.UTC(parts.year, parts.month-1, parts.day))
+  const weekday = current.getUTCDay() || 7
+  const monday = new Date(current)
+  monday.setUTCDate(current.getUTCDate() - weekday + 1)
+  return Array.from({length:7},(_,index)=>{
+    const date = new Date(monday)
+    date.setUTCDate(monday.getUTCDate()+index)
+    return {
+      date,
+      day:new Intl.DateTimeFormat('en-US',{weekday:'short',timeZone:'UTC'}).format(date),
+      number:date.getUTCDate(),
+      isToday:date.getUTCFullYear()===current.getUTCFullYear()&&date.getUTCMonth()===current.getUTCMonth()&&date.getUTCDate()===current.getUTCDate(),
+    }
+  })
+}
+
+export default function OverviewPage(){
+  const { user }=useAuth()
+  const { isDark, toggleTheme }=useTheme()
+  const { settings, pcs, topUpRequests, supportRequests, serverError }=useAppData()
+  const [data,setData]=useState(null)
+  const [error,setError]=useState('')
+  const [feedbackOpen,setFeedbackOpen]=useState(false)
+  const loadSequenceRef=useRef(0)
+  const navigate=useNavigate()
+
+  const load=useCallback(async()=>{
+    const requestId=++loadSequenceRef.current
+    setError('')
+    try{
+      const next=await apiGet('/dashboard/overview')
+      if(requestId !== loadSequenceRef.current)return
+      setData(next)
+    }catch{
+      if(requestId !== loadSequenceRef.current)return
+      setError('Live dashboard data is temporarily unavailable. Existing data may be stale.')
+    }
+  },[])
+
+  useEffect(()=>{
+    void load()
+    const timer=setInterval(()=>void load(),30000)
+    return()=>{clearInterval(timer);loadSequenceRef.current += 1}
+  },[load])
+
+  const summary=data?.summary||{}
+  const cards=[['Available',summary.available,MonitorCheck,'text-teal-dim bg-teal/10','available'],['In use',summary.inUse,MonitorPlay,'text-gold bg-gold/10','occupied'],['Maintenance',summary.maintenance,Wrench,'text-ember-dim bg-ember/10','maintenance'],['Revenue today',formatAdminPeso(summary.incomeToday,settings),CircleDollarSign,'text-gold bg-gold/10',null]]
+
+  const floorPreview=useMemo(()=>{
+    const rank={occupied:0,available:1,maintenance:2}
+    return [...(pcs||[])].sort((a,b)=>(rank[a.status]??9)-(rank[b.status]??9)||String(a.label||'').localeCompare(String(b.label||''))).slice(0,12)
+  },[pcs])
+
+  const endingSoon=useMemo(()=>{
+    return [...(data?.active||[])]
+      .filter(item=>item.expires_at)
+      .sort((a,b)=>new Date(a.expires_at).getTime()-new Date(b.expires_at).getTime())
+      .slice(0,5)
+  },[data?.active])
+
+  const pendingTopUps=useMemo(()=>topUpRequests.filter(item=>item.status==='pending'),[topUpRequests])
+  const openSupport=useMemo(()=>supportRequests.filter(item=>item.status==='open'),[supportRequests])
+
+  const activity=useMemo(()=>{
+    const sessions=(data?.active||[]).map(item=>({
+      id:`session-${item.id}`,
+      type:'session',
+      title:`${item.pc_label||'PC'} session started`,
+      detail:item.username||item.customer_name||'Guest',
+      at:item.started_at,
+      pcId:item.pc_id,
+    }))
+    const topups=pendingTopUps.map(item=>({
+      id:`topup-${item.id}`,
+      type:'topup',
+      title:`${item.customerName||'Member'} requested ${formatAdminPeso(item.amount,settings)}`,
+      detail:`${item.pcLabel||'Counter'} · ${String(item.method||'cash').toUpperCase()}`,
+      at:item.createdAt,
+      route:'/members',
+    }))
+    const help=openSupport.map(item=>({
+      id:`support-${item.id}`,
+      type:'support',
+      title:`${item.pcLabel||'PC'} requested assistance`,
+      detail:item.customerName||item.message||'Customer needs help',
+      at:item.createdAt,
+      pcId:item.pcId,
+    }))
+    return [...sessions,...topups,...help]
+      .sort((a,b)=>new Date(b.at||0).getTime()-new Date(a.at||0).getTime())
+      .slice(0,8)
+  },[data?.active,pendingTopUps,openSupport,settings])
+
+  const week=useMemo(()=>manilaWeek(),[])
+  const todayLabel=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long',day:'numeric',year:'numeric'}).format(new Date())
+  const weekLabel=formatWeekRange(week)
+  const totalPcs=pcs.length || Number(summary.available||0)+Number(summary.inUse||0)+Number(summary.maintenance||0)
+  const feedbackCount=data?.feedback?.length||0
+  const firstName=String(user?.name||'Admin').trim().split(/\s+/)[0]||'Admin'
+
+  if(!data&&!error)return <div className="overview-workspace flex min-h-full items-center justify-center p-8 text-sm text-slate-soft">Loading business overview…</div>
+
+  return <div className="overview-workspace">
+    <div className="overview-workspace-grid grid min-h-full xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="overview-main-column min-w-0 border-b border-[var(--admin-ui-border)] xl:border-b-0 xl:border-r">
+        <header className="overview-header flex min-h-[96px] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
+          <div className="min-w-0">
+            <p className="text-[24px] font-semibold tracking-[-0.03em] text-ink-900">Hi, {firstName}</p>
+            <p className="mt-1 text-[11px] leading-4 text-slate-soft">Here’s what’s happening across {settings?.cafeName||'the cafe'} today.</p>
+          </div>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <AdminQuickFind />
+            <button type="button" onClick={()=>setFeedbackOpen(true)} className="overview-header-control relative" title="Open customer feedback">
+              <MessageSquareText size={15}/><span className="hidden sm:inline">Feedback</span>
+              {feedbackCount>0&&<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-midnight px-1 text-[9px] font-bold text-soft-white">{feedbackCount>=3?'3+':feedbackCount}</span>}
+            </button>
+            <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark?'Switch to light mode':'Switch to dark mode'} aria-label={isDark?'Switch to light mode':'Switch to dark mode'}>{isDark?<Sun size={16}/>:<Moon size={16}/>}</button>
+            <AdminNotificationCenter />
+            <AnnouncementCenter />
+            <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-midnight text-[11px] font-bold tracking-wide text-soft-white" title={user?.name||'Admin'}>{initials(user?.name)}</div>
+          </div>
+        </header>
+
+        <div className="px-5 pb-5 sm:px-6 lg:px-7 lg:pb-6">
+          {(error||serverError)&&<div className="mb-4 flex items-center justify-between rounded-xl border border-ember/20 bg-ember/10 px-3 py-2 text-xs text-ember-dim"><span>{error||serverError}</span><button onClick={load} className="font-semibold underline">Retry</button></div>}
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {cards.map(([label,value,Icon,tone,status])=><button key={label} type="button" onClick={()=>status&&navigate(`/clients?status=${status}`)} disabled={!status} className="overview-card group flex min-h-[112px] items-center justify-between p-4 text-left transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-midnight/30">
+              <div>
+                <p className="text-[10px] font-medium text-slate-soft">{label}</p>
+                <p className="stat-figure mt-2 text-[24px] font-semibold tracking-[-0.04em] text-ink-900">{value??0}</p>
+              </div>
+              <span className={`flex h-10 w-10 items-center justify-center rounded-full ${tone}`}><Icon size={17} strokeWidth={1.8}/></span>
+            </button>)}
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
+            <OverviewCard title="Floor status" subtitle="A quick look at the stations that need attention." action={<button onClick={()=>navigate('/clients')} className="flex items-center gap-1 text-[10px] font-semibold text-gold">Open floor <ArrowUpRight size={12}/></button>}>
+              {floorPreview.length?<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-4">{floorPreview.map(pc=>{
+                const meta=STATUS_META[pc.status]||STATUS_META.available
+                const Icon=meta.icon
+                return <button key={pc.id} onClick={()=>navigate(`/clients?pc=${encodeURIComponent(pc.id)}`)} className="overview-soft-card group min-h-[82px] p-3 text-left transition-all hover:-translate-y-0.5">
+                  <div className="flex items-center justify-between gap-2"><span className={`flex h-7 w-7 items-center justify-center rounded-full ${meta.tone}`}><Icon size={13}/></span><span className="h-1.5 w-1.5 rounded-full bg-current opacity-60"/></div>
+                  <p className="mt-3 truncate text-[11px] font-semibold text-ink-900">{pc.label}</p>
+                  <p className="mt-0.5 truncate text-[9px] text-slate-soft">{meta.label}{pc.session?.customerName?` · ${pc.session.customerName}`:''}</p>
+                </button>
+              })}</div>:<Empty>No PCs are registered yet.</Empty>}
+            </OverviewCard>
+
+            <OverviewCard title="Seven-day revenue" subtitle="Daily revenue across the current seven-day window." action={<button onClick={()=>navigate('/analytics')} className="flex items-center gap-1 text-[10px] font-semibold text-gold">Full analytics <ArrowUpRight size={12}/></button>}>
+              <RevenueBar data={data?.analytics||[]} settings={settings}/>
+            </OverviewCard>
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
+            <OverviewCard title="Sessions ending soon" subtitle="Prepaid sessions with the nearest expiry times.">
+              {endingSoon.length?<div className="space-y-2">{endingSoon.map(item=><button key={item.id} onClick={()=>navigate(`/clients?pc=${encodeURIComponent(item.pc_id)}`)} className="flex w-full items-center justify-between gap-4 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--admin-card-subtle)]">
+                <div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold"><Clock3 size={14}/></span><div className="min-w-0"><p className="truncate text-[11px] font-semibold text-ink-900">{item.pc_label} · {item.username||item.customer_name||'Guest'}</p><p className="mt-0.5 text-[9px] text-slate-soft">{item.billing_type==='prepaid'?'Prepaid session':'Session'}</p></div></div>
+                <span className="shrink-0 rounded-full bg-ember/10 px-2.5 py-1 text-[9px] font-semibold text-ember-dim">{formatEndingSoon(item.expires_at)}</span>
+              </button>)}</div>:<Empty>No prepaid sessions are ending soon.</Empty>}
+            </OverviewCard>
+
+            <OverviewCard title="Quick actions" subtitle="Jump directly to the most common staff tasks.">
+              <div className="grid grid-cols-2 gap-2">{[
+                ['/clients','Floor matrix',MonitorCog],
+                ['/members','Members',Users],
+                ['/tariffs','Rates',Tags],
+                ['/earnings','Earnings',CircleDollarSign],
+              ].map(([to,label,Icon])=><button key={to} onClick={()=>navigate(to)} className="overview-soft-card flex min-h-[74px] items-center justify-between p-3 text-left transition-all hover:-translate-y-0.5"><span><Icon size={15} className="mb-2 text-gold"/><span className="block text-[10px] font-semibold text-ink-900">{label}</span></span><ChevronRight size={13} className="text-slate-soft"/></button>)}</div>
+            </OverviewCard>
+          </div>
+        </div>
+      </div>
+
+      <aside className="overview-utility-rail min-w-0 p-4 sm:p-5 xl:p-4 2xl:p-5">
+        <div className="space-y-4 xl:sticky xl:top-4">
+          <section className="overview-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-[12px] font-semibold text-ink-900">{weekLabel}</p><p className="mt-1 text-[9px] text-slate-soft">Today · {todayLabel}</p></div>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gold/10 text-gold"><CalendarDays size={14}/></span>
+            </div>
+            <div className="mt-4 grid grid-cols-7 gap-1">{week.map(item=><div key={item.date.toISOString()} className="text-center"><p className="text-[8px] font-medium text-slate-soft">{item.day.slice(0,2)}</p><div className={`mx-auto mt-2 flex h-7 w-7 items-center justify-center rounded-full text-[9px] font-semibold ${item.isToday?'bg-midnight text-soft-white':'text-ink-900'}`}>{item.number}</div></div>)}</div>
+          </section>
+
+          <section className="overview-card p-4">
+            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-[15px] font-semibold text-ink-900">Cafe status</h2><p className="mt-1 text-[9px] text-slate-soft">Live floor capacity</p></div><span className="stat-figure text-[11px] font-semibold text-gold">{totalPcs} PCs</span></div>
+            <div className="space-y-2">{[
+              ['Available',summary.available,MonitorCheck,'bg-teal','text-teal-dim'],
+              ['In use',summary.inUse,MonitorPlay,'bg-gold','text-gold'],
+              ['Maintenance',summary.maintenance,Wrench,'bg-ember','text-ember-dim'],
+            ].map(([label,value,Icon,dot,tone])=><button key={label} onClick={()=>navigate(`/clients?status=${label==='Available'?'available':label==='In use'?'occupied':'maintenance'}`)} className="flex w-full items-center justify-between rounded-xl px-2 py-2.5 text-left hover:bg-[var(--admin-card-subtle)]"><div className="flex items-center gap-3"><span className={`h-2 w-2 rounded-full ${dot}`}/><Icon size={13} className={tone}/><span className="text-[10px] font-medium text-ink-900">{label}</span></div><span className="stat-figure text-[11px] font-semibold text-ink-900">{value||0}</span></button>)}</div>
+            <div className="mt-3 border-t border-[var(--admin-ui-border)] pt-3"><div className="flex items-center justify-between"><span className="text-[10px] text-slate-soft">Open requests</span><div className="flex items-center gap-3 text-[9px] font-semibold"><span className="flex items-center gap-1 text-gold"><WalletCards size={11}/>{pendingTopUps.length}</span><span className="flex items-center gap-1 text-ember-dim"><LifeBuoy size={11}/>{openSupport.length}</span></div></div></div>
+          </section>
+
+          <section className="overview-card p-4">
+            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-[15px] font-semibold text-ink-900">Live cafe activity</h2><p className="mt-1 text-[9px] text-slate-soft">Sessions, top-ups, and help requests</p></div><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-led rounded-full bg-teal"/></span></div>
+            {activity.length?<div className="space-y-1">{activity.map(item=>{
+              const Icon=item.type==='support'?LifeBuoy:item.type==='topup'?WalletCards:MonitorPlay
+              const tone=item.type==='support'?'text-ember-dim bg-ember/10':item.type==='topup'?'text-gold bg-gold/10':'text-teal-dim bg-teal/10'
+              const route=item.route||(item.pcId?`/clients?pc=${encodeURIComponent(item.pcId)}`:null)
+              return <button key={item.id} disabled={!route} onClick={()=>route&&navigate(route)} className="flex w-full items-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors enabled:hover:bg-[var(--admin-card-subtle)]"><span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}><Icon size={12}/></span><div className="min-w-0 flex-1"><p className="line-clamp-1 text-[10px] font-semibold text-ink-900">{item.title}</p><p className="mt-0.5 line-clamp-1 text-[9px] text-slate-soft">{item.detail}</p></div><span className="shrink-0 pt-0.5 text-[8px] text-slate-soft">{formatRelativeTime(item.at)}</span></button>
+            })}</div>:<Empty>No recent cafe activity.</Empty>}
+          </section>
+        </div>
+      </aside>
+    </div>
+    <FeedbackInboxModal open={feedbackOpen} onClose={()=>setFeedbackOpen(false)} onChanged={load}/>
+  </div>
+}
+
+function RevenueBar({ data, settings }) {
+  const series=normalizeSevenDayRevenue(data)
+  const width=640,height=190,padLeft=62,padRight=14,padTop=12,padBottom=32
+  const values=series.map(item=>Math.max(0,Number(item.revenue||0)))
+  const scale=buildRevenueScale(values)
+  const chartWidth=width-padLeft-padRight,chartHeight=height-padTop-padBottom,slot=chartWidth/series.length,barWidth=Math.min(34,slot*0.44)
+  const baselineY=height-padBottom
+  const points=series.map((item,index)=>{const value=Math.max(0,Number(item.revenue||0));const rawHeight=(value/scale.max)*chartHeight;const barHeight=Math.max(2,rawHeight);const x=padLeft+(index*slot)+((slot-barWidth)/2);const y=baselineY-barHeight;return {x,y,barHeight,value,item}})
+  return <div className="min-h-[190px]" role="img" aria-label="Bar chart showing revenue for the last seven days"><svg viewBox={`0 0 ${width} ${height}`} className="h-[190px] w-full"><title>Seven-day revenue bar chart</title>{scale.ticks.map(tick=>{const y=baselineY-((tick/scale.max)*chartHeight);return <g key={tick}><line x1={padLeft} y1={y} x2={width-padRight} y2={y} className="stroke-surface-line" strokeWidth="1"/><text x={padLeft-8} y={y+3} textAnchor="end" className="fill-slate-soft text-[9px]">{formatAdminPeso(tick,settings)}</text></g>})}{points.map(point=><g key={point.item.day}><title>{`${point.item.day}: ${formatAdminPeso(point.value,settings)}`}</title><rect x={point.x} y={point.y} width={barWidth} height={point.barHeight} rx="6" className="fill-gold transition-opacity hover:opacity-80"/><text x={point.x+(barWidth/2)} y={height-9} textAnchor="middle" className="fill-slate-soft text-[9px]">{formatRevenueDay(point.item.day)}</text></g>)}</svg></div>
+}

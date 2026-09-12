@@ -1,0 +1,277 @@
+@import "tailwindcss";
+
+@theme {
+  /* Aezakmi brand palette */
+  --color-midnight: #202937;
+  --color-bluish: #423D42;
+  --color-grape: #766664;
+  --color-trillium: #A99898;
+  --color-new-wool: #D4C1B9;
+  --color-dance: #E6D7CD;
+  --color-soft-white: #F5F5F5;
+
+  /* Existing semantic token names remapped to the approved palette. */
+  --color-ink: #F5F5F5;
+  --color-ink-soft: #E6D7CD;
+  --color-ink-900: #202937;
+
+  --color-surface: #F5F5F5;
+  --color-surface-raised: #E6D7CD;
+  --color-surface-line: #D4C1B9;
+
+  /* Customer secondary/accent color: true gold. */
+  --color-gold: #C9A85D;
+  --color-gold-soft: #F3E6C4;
+  --color-gold-dim: #8B6B25;
+
+  /* Semantic status colors stay recognizable. */
+  --color-teal: #2E9E6B;
+  --color-teal-soft: #E1F3EA;
+  --color-teal-dim: #237A54;
+
+  --color-ember: #DD5353;
+  --color-ember-soft: #FBE4E4;
+  --color-ember-dim: #B53E3E;
+
+  /* Tertiary/supporting copy uses neutral slate, not a warm accent. */
+  --color-slate: #94A3B8;
+  --color-slate-soft: #5F6F82;
+
+  --font-display: "Space Grotesk", "Chakra Petch", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --shadow-glow: 0 0 0 1px rgba(32, 41, 55, 0.18), 0 0 24px -6px rgba(32, 41, 55, 0.28);
+  --shadow-glow-teal: 0 0 0 1px rgba(63, 184, 175, 0.2), 0 0 20px -4px rgba(63, 184, 175, 0.35);
+  --shadow-glow-ember: 0 0 0 1px rgba(232, 93, 78, 0.2), 0 0 20px -4px rgba(232, 93, 78, 0.35);
+  --shadow-card: 0 1px 0 0 rgba(32,41,55,0.04) inset, 0 8px 20px -12px rgba(32,41,55,0.24);
+
+  --animate-led: pulseLed 2s ease-in-out infinite;
+  --animate-rise: riseIn 0.25s ease-out;
+}
+
+@keyframes pulseLed {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}
+
+@keyframes riseIn {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+    --app-dot: rgba(118, 102, 100, 0.11);
+  }
+  html[data-theme="dark"] {
+    --app-dot: rgba(245, 245, 245, 0.055);
+    --color-ink: #202937;
+    --color-ink-soft: #D4C1B9;
+    --color-ink-900: #F5F5F5;
+    --color-surface: #272D39;
+    --color-surface-raised: #303744;
+    --color-surface-line: #4B5360;
+    --color-gold: #D6B76A;
+    --color-gold-soft: #5A4C2A;
+    --color-gold-dim: #E8CD85;
+    --color-teal-soft: #55C9A0;
+    --color-teal-dim: #8ED8B8;
+    --color-ember-soft: #C86B6B;
+    --color-ember-dim: #FFB1B1;
+    --color-slate: #64748B;
+    --color-slate-soft: #94A3B8;
+  }
+  html[data-theme="dark"] body {
+    background-color: #202937;
+  }
+  body {
+    @apply bg-ink text-ink-900 font-body antialiased;
+    background-image: radial-gradient(circle, var(--app-dot) 0.8px, transparent 0.9px);
+    background-size: 28px 28px;
+  }
+  ::selection {
+    background-color: var(--color-gold);
+    color: #202937;
+    text-shadow: none;
+  }
+  ::-moz-selection {
+    background-color: var(--color-gold);
+    color: #202937;
+    text-shadow: none;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #A99898;
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #766664;
+  }
+}
+
+@layer components {
+  .customer-login-dark {
+    --color-ink: #202937;
+    --color-ink-soft: #D4C1B9;
+    --color-ink-900: #F5F5F5;
+    --color-surface: #272D39;
+    --color-surface-raised: #303744;
+    --color-surface-line: #4B5360;
+    --color-gold: #D6B76A;
+    --color-gold-soft: #5A4C2A;
+    --color-gold-dim: #E8CD85;
+    --color-teal: #2E9E6B;
+    --color-teal-soft: #55C9A0;
+    --color-teal-dim: #8ED8B8;
+    --color-ember: #DD5353;
+    --color-ember-soft: #C86B6B;
+    --color-ember-dim: #FFB1B1;
+    --color-slate: #64748B;
+    --color-slate-soft: #94A3B8;
+    background-color: #202937;
+  }
+
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-[0.16em] uppercase text-slate-soft;
+  }
+
+  .stat-figure {
+    @apply font-mono tabular-nums;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-soft transition-colors hover:bg-surface-raised hover:text-ink-900;
+  }
+
+  .nav-item.active {
+    @apply bg-surface-raised text-ink-900;
+    box-shadow: inset 2px 0 0 0 var(--color-gold);
+  }
+
+  .panel {
+    @apply rounded-[14px] border border-surface-line bg-surface shadow-card;
+  }
+
+  .customer-dashboard-shell {
+    @apply flex h-screen min-h-0 flex-col overflow-hidden bg-ink text-ink-900;
+  }
+
+  .customer-topbar {
+    @apply flex shrink-0 items-center justify-between gap-3 border-b border-surface-line bg-surface/95 px-4 py-3;
+  }
+
+  .customer-content-grid {
+    @apply grid min-h-0 flex-1 gap-3 p-3;
+    grid-template-columns: minmax(0, 1.65fr) minmax(270px, 0.85fr);
+  }
+
+  .customer-primary-card {
+    @apply rounded-[18px] border border-surface-line bg-surface shadow-card;
+  }
+
+  .customer-info-card {
+    @apply rounded-[14px] border border-surface-line bg-surface px-3.5 py-3;
+  }
+
+  .customer-action-tile {
+    @apply min-h-12 rounded-xl border border-surface-line px-3 py-2.5 text-sm font-semibold transition-colors;
+  }
+
+  .customer-support-card {
+    @apply rounded-[16px] border border-surface-line bg-surface p-3.5 shadow-card;
+  }
+
+  .customer-login-shell {
+    @apply flex h-screen min-h-0 flex-col overflow-hidden bg-ink px-4 py-4 text-ink-900 sm:px-6;
+  }
+
+  .customer-login-grid {
+    @apply mx-auto grid min-h-0 w-full max-w-[1180px] flex-1 items-stretch gap-4 overflow-hidden py-4;
+    grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  }
+
+  .customer-timer-value {
+    @apply font-display font-semibold tracking-[-0.04em] tabular-nums text-ink-900;
+    font-size: clamp(3.4rem, 8vw, 5.8rem);
+    line-height: 0.95;
+  }
+
+  .customer-readable-copy {
+    @apply text-[13px] leading-5 text-slate-soft;
+  }
+
+  .customer-neutral-surface {
+    background-color: #F5F5F5;
+    color: #202937;
+  }
+
+  html[data-theme="dark"] .customer-neutral-surface,
+  .customer-login-dark .customer-neutral-surface {
+    background-color: #303744;
+    color: #F5F5F5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .customer-content-grid, .customer-login-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Overview-style customer authentication ------------------------------------ */
+@layer components {
+  .customer-login-header {
+    @apply mx-auto flex w-full max-w-[1240px] shrink-0 items-center justify-between gap-4 rounded-[18px] border border-surface-line bg-surface px-4 py-3 shadow-card;
+  }
+
+  .customer-login-actions {
+    @apply flex shrink-0 items-center gap-2;
+  }
+
+  .customer-login-grid {
+    max-width: 1240px;
+    grid-template-columns: minmax(0, 1.12fr) minmax(380px, 0.88fr);
+    gap: 14px;
+    padding-top: 14px;
+    padding-bottom: 0;
+  }
+}
+
+@media (max-width: 820px) {
+  .customer-login-header { align-items: flex-start; }
+  .customer-login-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .customer-login-grid {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+    align-content: start;
+  }
+  .customer-login-grid > .customer-primary-card,
+  .customer-login-grid > .customer-support-card { overflow: visible; }
+}
+
+@media (max-width: 620px) {
+  .customer-login-header { flex-direction: column; }
+  .customer-login-actions { width: 100%; justify-content: stretch; }
+  .customer-login-actions > button:not(:last-child) { flex: 1; }
+}

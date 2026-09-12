@@ -1,0 +1,19 @@
+iCafe Management — Terms and Conditions
+
+Copyright © 2026 Kyle Serina. All rights reserved.
+
+PROPRIETARY SOFTWARE LICENSE
+
+This software and its source code, binaries, artwork, and documentation are
+proprietary to Kyle Serina. Installation grants only a limited license to use
+an authorized Customer Station. You may not copy, modify, reverse engineer,
+redistribute, resell, or create competing products from it. Unauthorized use
+terminates this license.
+
+By installing and using the iCafe Management Customer Station, you agree to
+use it only for an authorized cafe session and to follow the cafe operator's
+instructions. Do not bypass station restrictions, access another customer's
+account, interfere with the network, or tamper with the software.
+
+The software is provided "AS IS" to the maximum extent permitted by law.
+If you do not agree to these terms, cancel the installation.

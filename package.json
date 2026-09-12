@@ -1,0 +1,30 @@
+{
+  "name": "icafe-management-system",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/customer",
+    "apps/admin",
+    "backend"
+  ],
+  "scripts": {
+    "dev:backend": "set NODE_ENV=development&& npm --workspace backend run dev",
+    "dev:backend:open": "set NODE_ENV=development&& set AEZAKMI_ALLOW_UNREGISTERED_DEV_STATION=true&& npm --workspace backend run dev",
+    "seed": "set NODE_ENV=development&& npm --workspace backend run seed",
+    "dev:customer": "npm --workspace apps/customer run dev",
+    "dev:customer:web": "npm --workspace apps/customer run dev",
+    "dev:customer:electron": "npm --workspace apps/customer run electron:dev",
+    "dev:customer:open": "concurrently -k \"set NODE_ENV=development&& set AEZAKMI_ALLOW_UNREGISTERED_DEV_STATION=true&& npm --workspace backend run dev\" \"npm --workspace apps/customer run electron:dev\"",
+    "dev:local-admin": "npm --workspace apps/admin run dev",
+    "dev:admin": "node scripts/cloud-admin.mjs dev",
+    "build:customer": "npm --workspace apps/customer run build",
+    "build:local-admin": "npm --workspace apps/admin run build",
+    "build:admin": "node scripts/cloud-admin.mjs build",
+    "build:all": "npm run build:customer && npm run build:local-admin && npm run build:admin",
+    "reset": "set NODE_ENV=development&& npm --workspace backend run reset",
+    "start:backend": "npm --workspace backend run start",
+    "test": "node --test tools/*.test.mjs",
+    "test:cloud": "node --test tools/cloud-deployment-regressions.test.mjs",
+    "check:release": "node tools/release-readiness.mjs"
+  }
+}

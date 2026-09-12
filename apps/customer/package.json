@@ -1,0 +1,65 @@
+{
+  "name": "aezakmi-cafe-customer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "iCafe Management customer station for secure session access, prepaid time, top-ups, and station services.",
+  "author": "Kyle Serina",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron": "electron .",
+    "kill:electron": "taskkill /F /IM electron.exe /T 2>nul || exit 0",
+    "kill:customer": "taskkill /F /IM \"iCafe Customer Station.exe\" /T 2>nul || exit 0",
+    "wait:release": "timeout /t 2 /nobreak >nul 2>&1 || exit 0",
+    "dist:win": "node ../../scripts/build-installer.mjs customer"
+  },
+  "dependencies": {
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@vitejs/plugin-react": "^6.0.5",
+    "concurrently": "^9.2.1",
+    "electron": "39.0.0",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.1",
+    "wait-on": "^9.0.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.icafe.customer",
+    "productName": "iCafe Customer Station",
+    "directories": {
+      "output": "installer"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "icon": "electron/app-icon.ico",
+    "extraResources": [
+      "electron/windows-key-hook.ps1"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/app-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "license": "TERMS_AND_CONDITIONS.txt",
+      "runAfterFinish": true,
+      "include": "installer.nsh"
+    }
+  },
+  "main": "electron/main.cjs"
+}

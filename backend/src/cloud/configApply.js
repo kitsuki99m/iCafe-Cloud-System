@@ -1,0 +1,2 @@
+import { db, nowIso } from '../db/connection.js'
+export function applyCloudConfig(config={}){const settings=config?.settings&&typeof config.settings==='object'?config.settings:null;if(settings){const stmt=db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)');db.transaction(()=>{for(const [key,value] of Object.entries(settings))stmt.run(key,typeof value==='string'?value:JSON.stringify(value))})()}return{appliedAt:nowIso(),settings:Boolean(settings)}}

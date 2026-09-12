@@ -1,0 +1,82 @@
+{
+  "name": "aezakmi-cafe-admin",
+  "private": true,
+  "version": "0.1.0",
+  "description": "iCafe Management console for customer stations, sessions, billing, rates, and business reporting.",
+  "author": "Kyle Serina",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5174",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"npm run dev\" \"electron .\"",
+    "electron": "electron .",
+    "kill:electron": "taskkill /F /IM electron.exe /T 2>nul || exit 0",
+    "kill:admin": "taskkill /F /IM \"iCafe Management System.exe\" /T 2>nul || exit 0",
+    "clean:dist": "powershell -NoProfile -Command \"if (Test-Path './installer') { Remove-Item -Recurse -Force './installer' }\"",
+    "wait:release": "timeout /t 2 /nobreak >nul 2>&1 || exit 0",
+    "rebuild:backend": "npm install --prefix ../../backend && npx --yes @electron/rebuild --version 39.0.0 --arch x64 --module-dir ../../backend --force --only better-sqlite3,argon2",
+    "restore:backend": "npm rebuild --prefix ../../backend better-sqlite3 argon2",
+    "dist:win": "node ../../scripts/build-installer.mjs admin"
+  },
+  "dependencies": {
+    "chart.js": "^4.5.1",
+    "dayjs": "^1.11.21",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.8",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2",
+    "socket.io-client": "^4.8.1",
+    "svg2pdf.js": "^2.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@vitejs/plugin-react": "^6.0.5",
+    "concurrently": "^9.2.1",
+    "electron": "39.0.0",
+    "electron-builder": "^26.15.3",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.1"
+  },
+  "build": {
+    "appId": "com.iCafe.Management.System.admin",
+    "productName": "iCafe Management System",
+    "directories": {
+      "output": "installer"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "icon": "electron/app-icon.ico",
+    "afterPack": "scripts/afterPack.cjs",
+    "extraResources": [
+      {
+        "from": "../../backend",
+        "to": "backend",
+        "filter": [
+          "src/**/*",
+          "package.json",
+          ".env.example",
+          "node_modules/**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/app-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "license": "TERMS_AND_CONDITIONS.txt",
+      "include": "installer.nsh"
+    }
+  },
+  "main": "electron/main.cjs"
+}
