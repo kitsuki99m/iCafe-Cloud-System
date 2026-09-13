@@ -12,13 +12,17 @@ import MembersPage from './pages/MembersPage.jsx'
 import EarningsPage from './pages/EarningsPage.jsx'
 import LogsPage from './pages/LogsPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
-import CloudSetup from './components/cloud/CloudSetup.jsx'
+import DeveloperConsolePage from './pages/DeveloperConsolePage.jsx'
+import CloudInviteSetup from './components/cloud/CloudInviteSetup.jsx'
+import CloudAccessPending from './components/cloud/CloudAccessPending.jsx'
 
 export default function App() {
   const { user, authLoading, mustChange } = useAuth()
   if (authLoading) return <div className="flex min-h-screen items-center justify-center"><div className="panel px-6 py-5">Checking admin session…</div></div>
   if (!user) return <><AdminLoginForm /><ToastContainer /></>
-  if (user.cloud && user.cloudNeedsSetup) return <><CloudSetup /><ToastContainer /></>
+  if (user.cloud && user.cloudInviteSetup) return <><CloudInviteSetup /><ToastContainer /></>
+  if (user.cloud && user.cloudDeveloper && user.cloudNeedsSetup) return <><DeveloperConsolePage standalone /><ToastContainer /></>
+  if (user.cloud && user.cloudNeedsSetup) return <><CloudAccessPending /><ToastContainer /></>
   return <>
     {mustChange && <AdminCredentialSetup />}
     <MainLayout>
@@ -33,6 +37,7 @@ export default function App() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/logs" element={<LogsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/developer" element={user.cloudDeveloper?<DeveloperConsolePage />:<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </MainLayout>

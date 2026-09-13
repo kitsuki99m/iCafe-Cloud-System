@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound } from 'lucide-react'
+import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import AdminNotificationCenter from '../admin/AdminNotificationCenter.jsx'
@@ -15,7 +15,7 @@ import Button from '../common/Button.jsx'
 import CloudBranchPicker from '../cloud/CloudBranchPicker.jsx'
 import { isCloudAdmin, cloudVerifyPassword } from '../../lib/cloudClient.js'
 
-const NAV = [
+const BASE_NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/clients', label: 'Clients', icon: MonitorCog },
   { to: '/tariffs', label: 'Rates', icon: Tags },
@@ -36,6 +36,7 @@ const PAGE_PURPOSE = {
   Analytics:'Understand trends, utilization, and customer activity.',
   Logs:'Audit operational and financial activity.',
   Settings:'Update cafe branding, payment details, and account security.',
+  Developer:'Review and approve new Aezakmi Cloud business registrations.',
 }
 export default function MainLayout({ children }) {
   const { user, logout } = useAuth()
@@ -43,7 +44,8 @@ export default function MainLayout({ children }) {
   const { isDark, toggleTheme } = useTheme()
   const branding = useBranding()
   const location = useLocation()
-  const currentLabel = PAGE_ALIASES[location.pathname] || NAV.find((item) => item.to !== '/' && location.pathname.startsWith(item.to))?.label || 'Overview'
+  const navItems = user?.cloudDeveloper ? [...BASE_NAV,{to:'/developer',label:'Developer',icon:ShieldCheck}] : BASE_NAV
+  const currentLabel = PAGE_ALIASES[location.pathname] || navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to))?.label || 'Overview'
   const isOverview = location.pathname === '/'
   const [clock, setClock] = useState(() => new Date())
   const [locked, setLocked] = useState(false)
@@ -147,7 +149,7 @@ export default function MainLayout({ children }) {
           <div className="mb-3"><CloudBranchPicker /></div>
 
           <nav className="min-h-0 flex flex-1 flex-col gap-1 overflow-y-auto py-1">
-            {NAV.map(({ to, label, icon: Icon, end }) => (
+            {navItems.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}

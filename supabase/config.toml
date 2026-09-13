@@ -21,3 +21,10 @@ verify_jwt = true
 
 [functions.admin-api]
 verify_jwt = true
+
+[functions.request-business-access]
+verify_jwt = false
+[functions.developer-registrations]
+verify_jwt = true
+[functions.activate-registration]
+verify_jwt = true

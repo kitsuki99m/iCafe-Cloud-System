@@ -19,7 +19,7 @@ test('cloud architecture is Supabase-only and Render/duplicate cloud app are rem
 })
 
 test('apps/admin is the single Vercel and Emergency Electron Admin codebase',()=>{
-  for(const f of['apps/admin/package.json','apps/admin/src/App.jsx','apps/admin/src/lib/cloudClient.js','apps/admin/electron/main.cjs','apps/admin/.env.cloud.example','vercel.json'])assert.ok(exists(f),f)
+  for(const f of['apps/admin/package.json','apps/admin/src/App.jsx','apps/admin/src/lib/cloudClient.js','apps/admin/electron/main.cjs','apps/admin/.env.cloud.example','apps/admin/vercel.json','vercel.json'])assert.ok(exists(f),f)
   const pkg=read('package.json')
   assert.match(pkg,/scripts\/cloud-admin\.mjs/)
   const env=read('apps/admin/.env.cloud.example')
@@ -27,6 +27,8 @@ test('apps/admin is the single Vercel and Emergency Electron Admin codebase',()=
   assert.match(env,/VITE_SUPABASE_URL/)
   assert.match(env,/VITE_SUPABASE_PUBLISHABLE_KEY/)
   assert.doesNotMatch(env,/SUPABASE_SECRET_KEY|SERVICE_ROLE_KEY|sb_secret_/)
+  const vercel=read('apps/admin/vercel.json')
+  assert.match(vercel,/index\.html/)
 })
 
 test('Customer Electron never imports or calls Supabase directly',()=>{
@@ -43,7 +45,7 @@ test('Edge stores only public Supabase configuration and revocable device creden
 })
 
 test('all required Supabase functions exist',()=>{
-  for(const n of['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge'])assert.ok(exists(`supabase/functions/${n}/index.ts`),n)
+  for(const n of['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge','request-business-access','developer-registrations','activate-registration'])assert.ok(exists(`supabase/functions/${n}/index.ts`),n)
 })
 
 test('privileged Edge RPCs are denied to browser roles and service-role-only',()=>{
@@ -129,12 +131,55 @@ test('local Admin and Customer cache optimistic state before reconciliation',()=
   for(const s of[a,c]){assert.match(s,/optimisticState/);assert.match(s,/writeSnapshot/);assert.match(s,/\.catch\(\(error\)=>\{refresh\(\)/)}
 })
 
-test('Cloud Admin login is Supabase Auth while local Emergency Admin keeps local credentials',()=>{
-  const auth=read('apps/admin/src/context/AuthContext.jsx'),login=read('apps/admin/src/components/auth/AdminLoginForm.jsx')
+test('Cloud Admin is approval-only while local Emergency Admin keeps local credentials',()=>{
+  const auth=read('apps/admin/src/context/AuthContext.jsx'),login=read('apps/admin/src/components/auth/AdminLoginForm.jsx'),client=read('apps/admin/src/lib/cloudClient.js')
   assert.match(auth,/cloudSignIn/)
-  assert.match(auth,/cloudSignUp/)
-  assert.match(login,/isCloudAdmin/)
+  assert.doesNotMatch(auth,/cloudSignUp|registerCloud/)
+  assert.doesNotMatch(client,/\/auth\/v1\/signup/)
+  assert.match(client,/cloudRequestBusinessAccess/)
+  assert.match(login,/Request Aezakmi Cloud access/)
   assert.match(login,/BackendStatusIndicator/)
+})
+
+
+
+test('business registration requires developer approval before Auth invitation and tenant creation',()=>{
+  const sql=read('supabase/migrations/20260913000004_registration_approval.sql')
+  const requestFn=read('supabase/functions/request-business-access/index.ts')
+  const developerFn=read('supabase/functions/developer-registrations/index.ts')
+  const activateFn=read('supabase/functions/activate-registration/index.ts')
+  const config=read('supabase/config.toml')
+  assert.match(sql,/create table if not exists public\.platform_developers/)
+  assert.match(sql,/create table if not exists public\.registration_requests/)
+  assert.match(sql,/aezakmi_finalize_registration_approval/)
+  assert.match(sql,/revoke all on function public\.aezakmi_create_organization\(text,text\) from public, anon, authenticated/)
+  assert.doesNotMatch(requestFn,/inviteUserByEmail|organization_members/)
+  assert.match(developerFn,/requireDeveloper/)
+  assert.match(developerFn,/inviteUserByEmail/)
+  assert.match(developerFn,/aezakmi_finalize_registration_approval/)
+  assert.match(activateFn,/status:'activated'/)
+  assert.match(config,/\[functions\.request-business-access\][\s\S]*verify_jwt = false/)
+  assert.match(config,/\[functions\.developer-registrations\][\s\S]*verify_jwt = true/)
+})
+
+test('invitation callback is consumed before HashRouter and owner must set a password',()=>{
+  const client=read('apps/admin/src/lib/cloudClient.js'),auth=read('apps/admin/src/context/AuthContext.jsx'),app=read('apps/admin/src/App.jsx'),main=read('apps/admin/src/main.jsx')
+  assert.match(client,/cloudConsumeAuthCallback/)
+  assert.match(client,/access_token=/)
+  assert.match(client,/INVITE_SETUP_KEY/)
+  assert.match(main,/cloudConsumeAuthCallback\(\)/)
+  assert.match(auth,/completeCloudInvitation/)
+  assert.match(auth,/cloudActivateRegistration/)
+  assert.match(app,/CloudInviteSetup/)
+  assert.match(app,/CloudAccessPending/)
+})
+
+test('developer console is visible only to platform developers',()=>{
+  const app=read('apps/admin/src/App.jsx'),layout=read('apps/admin/src/components/layout/MainLayout.jsx'),page=read('apps/admin/src/pages/DeveloperConsolePage.jsx')
+  assert.match(app,/user\.cloudDeveloper/)
+  assert.match(layout,/cloudDeveloper/)
+  assert.match(page,/Approve & invite/)
+  assert.match(page,/cloudDeveloperRegistrations/)
 })
 
 test('Git repository ignores secrets, runtime databases, build output and Vercel local state',()=>{
@@ -151,7 +196,7 @@ test('cloud admin launcher avoids direct npm.cmd spawning on modern Windows Node
 })
 
 test('Supabase Edge Functions are single-file for Docker-free API bundling',()=>{
-  const functionNames=['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge']
+  const functionNames=['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge','request-business-access','developer-registrations','activate-registration']
   assert.equal(exists('supabase/functions/_shared'),false,'shared filesystem helpers must not be required by API deployment')
   for(const name of functionNames){
     const dir=`supabase/functions/${name}`

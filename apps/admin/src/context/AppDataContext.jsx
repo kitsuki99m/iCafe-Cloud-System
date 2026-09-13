@@ -99,6 +99,11 @@ export function AppDataProvider({ children }) {
       setState((s) => ({ ...s, loading:false, serverError:'' }))
       return
     }
+    if (isCloudAdmin() && !cloudBranchId()) {
+      if (generation !== refreshGenerationRef.current) return
+      setState((s) => ({ ...s, loading:false, serverError:'', realtimeConnected:false }))
+      return
+    }
     try {
       if (user.role === 'guest') {
         const guestData = await apiGet('/guest/session')

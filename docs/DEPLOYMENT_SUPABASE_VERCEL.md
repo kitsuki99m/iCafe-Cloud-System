@@ -5,14 +5,14 @@ _Last updated: September 2026_
 ## Production topology
 
 ```text
-Owner / staff browser
+Business owner / staff browser
         |
         v
 Vercel — apps/admin (cloud mode)
         |
         v
 Supabase
-  - Auth
+  - Auth (invitation-only for owners)
   - PostgreSQL + RLS
   - Edge Functions
   - Realtime wake-ups
@@ -27,37 +27,28 @@ Cafe Edge — backend/
         +---- Emergency Admin Electron (local mode)
 ```
 
-The local Edge is the operational authority for live sessions, station identity, wallets, time, rates, and customer login. Supabase is the cloud control plane and durable multi-tenant mirror. Customer Stations never connect directly to Supabase.
+The local Edge remains authoritative for live café operations. Supabase is the cloud control plane and durable multi-tenant mirror. Customer Stations never connect directly to Supabase.
 
-## 1. Before pushing to GitHub
+## 1. Release validation
 
 From the repository root:
 
 ```powershell
 npm install
 npm test
+npm run test:cloud
 npm run check:release
-npm run build:admin
 npm run build:customer
+npm --workspace apps/admin run build
 ```
 
-Do not commit these files/directories:
+Do not commit `.env`, databases, build output, `.vercel`, `.supabase`, or real secret keys.
 
-- `.env` or `.env.*` containing real values
-- `node_modules/`
-- `dist/`
-- `installer/`
-- `.vercel/`
-- `.supabase/` / `supabase/.temp/`
-- `*.sqlite`, `*.db`, WAL/SHM/journal files
+## 2. Create / link the Supabase project
 
-The included `.gitignore` already excludes them.
+One Supabase project hosts the Aezakmi SaaS platform. Tenant separation is implemented through organizations, branches, memberships, RLS, and developer-approved registration.
 
-## 2. Create the Supabase project
-
-Create one Supabase project for the Aezakmi SaaS platform. Do **not** create one project per café. Tenant separation is implemented with organizations, branches, memberships, and PostgreSQL RLS.
-
-Record these public values for later:
+Record only these browser-safe values:
 
 ```text
 Project URL:      https://YOUR_PROJECT_REF.supabase.co
@@ -66,109 +57,170 @@ Publishable key:  sb_publishable_...
 
 Never put a Supabase secret key in Vercel browser variables, Customer Electron, Emergency Admin Electron, or the distributed Edge server.
 
-## 3. Link the Supabase CLI and apply migrations
-
-Install/authenticate the Supabase CLI, then from the repository root:
+Link the CLI:
 
 ```powershell
 npx supabase login
 npx supabase link --project-ref YOUR_PROJECT_REF
-npx supabase db push
 ```
 
-`db push` applies the migrations under `supabase/migrations/`, including the multi-tenant cloud schema and cloud-command idempotency migration.
+## 3. Apply database migrations
 
-## 4. Deploy all Supabase Edge Functions
+```powershell
+npx supabase db push --dry-run
+npx supabase db push
+npx supabase migration list
+```
 
-From the repository root:
+Expected migrations include:
+
+```text
+20260913000001  cloud base
+20260913000002  cloud admin idempotency
+20260913000003  pairing code security
+20260913000004  developer-approved registration
+```
+
+Migration 4 creates `platform_developers`, `registration_requests`, `registration_audit_logs`, approval RPCs, and revokes authenticated self-service organization creation.
+
+## 4. Configure approval-only Supabase Auth
+
+In Supabase Dashboard:
+
+1. Keep Email authentication enabled.
+2. Set **Allow new users to sign up = OFF**.
+3. Set Auth **Site URL** to the production Vercel Admin URL.
+4. Add the production URL to allowed Redirect URLs.
+5. Add Preview URLs only when intentionally testing Preview invitations.
+
+Public Cloud Admin now exposes **Request access**, not Auth signup. A developer must approve a request before Supabase creates the invited owner.
+
+See `docs/DEVELOPER_APPROVAL_SETUP.md` for the complete workflow.
+
+## 5. Bootstrap the first platform developer
+
+Use an existing Auth user and run this in Supabase SQL Editor:
+
+```sql
+insert into public.platform_developers(user_id,email,display_name,is_active)
+select id,email,'Aezakmi Developer',true
+from auth.users
+where lower(email)=lower('YOUR_DEVELOPER_EMAIL@example.com')
+on conflict(user_id) do update
+set email=excluded.email,
+    display_name=excluded.display_name,
+    is_active=true;
+```
+
+If no developer Auth user exists, create one manually in Supabase Dashboard → Authentication → Users. Do not temporarily reopen public signup.
+
+## 6. Deploy all Supabase Edge Functions
+
+The functions are intentionally single-file for Docker-free API deployment:
 
 ```powershell
 npx supabase functions deploy --use-api
+npx supabase functions list
 ```
 
-Functions in this release include:
+Functions in this release:
 
-- `pair-edge`
-- `edge-sync`
-- `edge-unpair`
-- `create-pairing-code`
-- `create-branch`
-- `revoke-edge`
-- `update-branch-config`
-- `issue-command`
-- `admin-action`
-- `admin-api`
+```text
+pair-edge
+edge-sync
+edge-unpair
+create-pairing-code
+create-branch
+revoke-edge
+update-branch-config
+issue-command
+admin-action
+admin-api
+request-business-access
+developer-registrations
+activate-registration
+```
 
-Hosted Supabase Edge Functions provide the project URL and platform API keys in their environment. The shared server helper supports current `SUPABASE_PUBLISHABLE_KEYS` / `SUPABASE_SECRET_KEYS`, local single-key variables, and the legacy anon/service-role variables.
+Hosted Edge Functions receive Supabase server-side secret keys from the platform environment. Those keys never enter Vercel browser code or café machines.
 
-Do not add a secret key to the repository.
+Optional explicit invite redirect:
 
-## 5. Configure Supabase Auth
+```powershell
+npx supabase secrets set AEZAKMI_ADMIN_URL=https://YOUR-ADMIN-DOMAIN
+```
 
-In **Supabase Dashboard → Authentication**:
+Otherwise invitations use the Supabase Auth Site URL.
 
-1. Enable Email authentication.
-2. Decide whether email confirmation is required.
-3. Set the production Site URL to the Vercel Admin URL once Vercel assigns it, for example:
-   `https://admin.example.com`.
-4. Add any Vercel Preview URL patterns you intentionally want to use for authentication testing.
+## 7. Deploy Admin to Vercel
 
-The Vercel Admin supports creating the first cloud account. After sign-in, a new user with no organization is shown the Aezakmi Cloud setup screen to create their first organization and branch.
+This release follows the working monorepo deployment used by the current production setup.
 
-## 6. Deploy the Admin to Vercel
+In Vercel Project Settings:
 
-Connect the GitHub repository to a Vercel project.
+```text
+Root Directory:   apps/admin
+Framework:        Vite
+Install Command:  npm install
+Build Command:    npm run build
+Output Directory: dist
+```
 
-Use the **repository root** as the Vercel Root Directory. The root `vercel.json` already specifies:
+`apps/admin/vercel.json` contains the SPA rewrite and cache headers.
 
-- build command: `npm run build:admin`
-- output directory: `apps/admin/dist`
-- SPA fallback to `index.html`
-
-Add these Vercel Environment Variables for Production (and Preview/Development if desired):
+Set these Vercel **Config** variables for Production (and Preview/Development when needed):
 
 ```env
+VITE_ADMIN_MODE=cloud
 VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
 ```
 
-`npm run build:admin` forces `VITE_ADMIN_MODE=cloud` during the Vite build, so the deployed Admin never attempts to use a café LAN address directly.
+These are browser-safe public configuration values. Never add `sb_secret_...`, `SUPABASE_SECRET_KEY`, or `SUPABASE_SERVICE_ROLE_KEY` to Vercel frontend variables.
 
-Do **not** add any of these to Vercel frontend variables:
+Redeploy after changing Vite environment variables because they are embedded at build time.
 
-```text
-SUPABASE_SECRET_KEY
-SUPABASE_SERVICE_ROLE_KEY
-sb_secret_...
-```
+## 8. Business onboarding
 
-## 7. First cloud onboarding
-
-Open the deployed Vercel Admin.
-
-1. Create/sign in to the owner account.
-2. If this is the first account, create the first organization and branch.
-3. Open **Settings → Aezakmi Cloud**.
-4. Generate a one-time Edge pairing code.
-5. Keep the page open or copy the code. It expires automatically.
-
-Additional branches can be created from the same Cloud settings section. The current subscription's branch limit is enforced server-side.
-
-## 8. Configure the local Edge server
-
-Copy:
+Public visitor:
 
 ```text
-backend/.env.example
+Cloud Admin login
+→ New business? Request access
+→ Submit application
+→ wait for developer review
 ```
 
-to:
+Developer:
 
 ```text
-backend/.env
+Developer Approvals
+→ select application
+→ Review / Needs info / Reject / Approve & invite
 ```
 
-Use strong local production values. Example:
+Approval creates the Auth invitation plus the approved Organization, owner membership, Starter subscription, Main Branch, and branch config.
+
+Owner:
+
+```text
+Invitation email
+→ Cloud Admin
+→ set password
+→ account activated
+→ enter assigned organization
+```
+
+No public user can create an arbitrary organization.
+
+## 9. Pair the local Edge
+
+After the approved owner is activated:
+
+```text
+Settings → Aezakmi Cloud → Generate pairing code
+```
+
+On the local Edge configure `backend/.env`:
 
 ```env
 NODE_ENV=production
@@ -181,7 +233,6 @@ JWT_EXPIRES_IN=8h
 SESSION_IDLE_TIMEOUT_MINUTES=10
 SESSION_HEARTBEAT_SECONDS=10
 
-# Electron production pages use a null origin; dev Vite ports are included for local testing.
 CORS_ORIGIN=null,http://localhost:5173,http://localhost:5174
 TRUST_PROXY=false
 DISKLESS_PROVIDER=icafe8
@@ -196,114 +247,35 @@ AEZAKMI_CLOUD_REQUEST_TIMEOUT_MS=8000
 AEZAKMI_EDGE_VERSION=1.0.0
 ```
 
-The Edge receives only the public Supabase project URL/key. Pairing returns a revocable Edge-specific credential. The Supabase privileged key is never distributed to the café.
+Start the Edge and pair it using the one-time code from Cloud Admin. The Edge receives its own revocable device credential; it never receives the Supabase platform secret.
 
-Start the Edge:
+## 10. Customer PCs
 
-```powershell
-npm run start:backend
-```
-
-For development:
-
-```powershell
-npm run dev:backend
-```
-
-## 9. Pair the Edge to the branch
-
-Open the **Emergency Admin** locally and go to:
-
-```text
-Settings → Aezakmi Cloud
-```
-
-Enter the one-time pairing code generated by the Vercel Admin.
-
-After successful pairing, the Edge:
-
-1. stores its Edge-specific identity/credential locally,
-2. queues a sanitized baseline snapshot of existing café data,
-3. synchronizes subsequent core SQLite mutations through the durable outbox,
-4. sends heartbeat/status summaries,
-5. receives authenticated cloud commands/config changes,
-6. remains fully operational if internet/cloud access disappears.
-
-Credential hashes, Admin PIN/password hashes, and Customer station token hashes are never mirrored to cloud.
-
-## 10. Add Customer PCs
-
-Customer Electron always registers against the local Edge.
-
-You may use the existing Admin flows to:
-
-- Add PC
-- Bulk Add PCs
-- assign IP/name/zone
-- re-pair/reset a station device
-
-When Vercel Admin performs those actions, Supabase sends an authenticated `admin_api` command to the Edge; the Edge executes the **same existing local REST/business rules** used by Emergency Admin. This prevents cloud and local billing/session logic from drifting apart.
-
-Customer Electron stores/uses its station credential and talks only to the local Edge over the LAN. The Edge mirrors station status/data to Supabase.
+Customer Electron always connects to the local Edge. Add / Bulk Add PC remains an Edge-authoritative workflow. Cloud Admin commands are authorized in Supabase and executed through the existing local REST/business rules.
 
 ## 11. Offline behavior
 
-If the internet, Vercel, or Supabase is unavailable:
+If internet, Vercel, or Supabase is unavailable:
 
 - Customer login continues locally.
 - Session timers continue locally.
-- Wallet/time ledger operations continue locally.
-- PC controls continue locally.
+- Wallet/time ledgers continue locally.
+- Station controls continue locally.
 - Emergency Admin continues locally.
 - SQLite remains authoritative.
-- cloud-bound events remain in `sync_outbox` and retry later.
+- cloud-bound events remain in the durable outbox and retry later.
 
-The Vercel Admin will be temporarily unable to issue new remote actions. It can still render its cached browser snapshot where available, but it cannot make Edge-authoritative changes until the branch reconnects.
+## 12. Live production checklist
 
-Cloud subscription/license state is advisory to the Edge and does not immediately shut down an offline café.
+After static tests, verify with real Supabase/Vercel/Windows infrastructure:
 
-## 12. Release validation
-
-Before each tagged release run:
-
-```powershell
-npm test
-npm run test:cloud
-npm run check:release
-npm run build:admin
-npm run build:customer
-```
-
-Also perform live integration testing with the actual Supabase/Vercel/Windows environment:
-
-1. cloud owner sign-up/sign-in,
-2. organization/branch creation,
-3. Edge pairing,
-4. initial baseline sync,
-5. new member + rate + session + wallet transaction,
-6. Vercel remote action and Edge acknowledgement,
-7. duplicate/retry of a mutation (must execute once),
-8. internet disconnect while a session is active,
-9. reconnect and outbox catch-up,
-10. Customer Electron station re-pair/replacement,
-11. Edge revocation and re-pair,
-12. Emergency Admin operation while cloud is unavailable.
-
-A local/static green test suite does not replace these live deployment checks.
-
-## Edge Function bundling note (Windows / API deploy)
-
-The Edge Functions in this release are intentionally **single-file**: every function directory contains only `index.ts`. CORS, response handling, Supabase auth/client setup, Edge authentication, hashing, and realtime wake-up helpers are inlined into that entrypoint. There are no `./cors.ts`, `./response.ts`, or `_shared` filesystem imports, so Docker-free API deployment does not depend on the CLI uploading sibling files.
-
-Deploy with the project-local CLI:
-
-```powershell
-npx supabase functions deploy --use-api
-```
-
-If a deployment still reports a bundle error, update the CLI and retry one function with debug output:
-
-```powershell
-npm update supabase --save-dev
-npx supabase functions deploy update-branch-config --debug
-```
+1. unapproved visitor can submit a request but cannot create an Auth user,
+2. direct public Auth signup is disabled,
+3. non-developer cannot invoke developer approvals,
+4. developer can approve and send an invitation,
+5. invitation lands on the Vercel Admin and requires password setup,
+6. approved owner sees only the provisioned organization/branch,
+7. Edge pairing succeeds,
+8. initial baseline sync succeeds,
+9. cloud remote action executes once and is acknowledged,
+10. active local café sessions survive internet disconnection/reconnection.

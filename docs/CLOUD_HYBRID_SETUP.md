@@ -1,26 +1,30 @@
 # Aezakmi Hybrid Cloud + Local Edge Setup
 
-Aezakmi is intentionally **hybrid** rather than cloud-only.
+Aezakmi remains hybrid:
 
 ```text
 Vercel Admin → Supabase → local Edge → Customer Electron
                          ↘ SQLite
 ```
 
-The Edge is not replaced by Supabase. It is the branch runtime that keeps the café operational during internet outages.
+The Edge is the branch runtime and operational authority. Supabase provides the multi-tenant cloud control plane.
 
-## Cloud owner workflow
+## Approval-only Cloud owner workflow
 
-1. Sign in to the Vercel Admin using Supabase Auth.
-2. Create the organization and first branch.
-3. Add more branches if the subscription permits it.
-4. For each branch, generate a one-time Edge pairing code.
-5. Enter that code in the branch's local Emergency Admin.
-6. Add/bulk-add Customer PCs through Admin and pair each physical Customer installation to the local Edge.
+```text
+Business owner requests access
+→ Aezakmi developer reviews
+→ developer approves + Supabase sends invitation
+→ organization / Main Branch are provisioned
+→ owner opens invite and sets password
+→ owner pairs local Edge
+```
+
+Public users never self-create organizations.
+
+See `DEVELOPER_APPROVAL_SETUP.md` for developer bootstrap and review details.
 
 ## Local Edge configuration
-
-Required cloud values:
 
 ```env
 AEZAKMI_CLOUD_ENABLED=true
@@ -28,21 +32,24 @@ AEZAKMI_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 AEZAKMI_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
 ```
 
-The Edge does not receive a Supabase secret/service-role key. After pairing it receives a revocable device credential scoped to that Edge installation.
+The Edge never receives a Supabase secret/service-role key.
 
 ## Vercel Admin configuration
 
-Public browser variables only:
+Vercel project:
 
-```env
-VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
+```text
+Root Directory: apps/admin
+Build Command: npm run build
+Output Directory: dist
 ```
 
-Build with:
+Browser-safe variables:
 
-```powershell
-npm run build:admin
+```env
+VITE_ADMIN_MODE=cloud
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
 ```
 
 ## Supabase deployment
@@ -54,15 +61,11 @@ npx supabase db push
 npx supabase functions deploy --use-api
 ```
 
-See `DEPLOYMENT_SUPABASE_VERCEL.md` for the complete production checklist.
+Then disable public Auth signup and bootstrap the platform developer as documented in `DEVELOPER_APPROVAL_SETUP.md`.
 
 ## Customer Station rule
 
-Customer Electron **never** falls back directly to Supabase. If it cannot reach the local Edge, it remains disconnected/recovery-mode until the Edge is restored. This prevents split-brain sessions, balances, station identity, or timers.
-
-## Admin remote actions
-
-Vercel Admin actions are authorized in Supabase and queued as durable commands. The Edge receives the command and executes the existing local API/business rule. Results are acknowledged back to Supabase and reconciled into the browser UI.
+Customer Electron never falls back directly to Supabase. If the local Edge is unavailable, Customer stays disconnected/recovery-mode until the Edge returns. This prevents split-brain sessions, balances, station identity, or timers.
 
 ## Offline operation
 

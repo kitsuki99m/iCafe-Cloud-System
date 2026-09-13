@@ -5,7 +5,10 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { AppDataProvider } from './context/AppDataContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import App from './App.jsx'
+import { cloudConsumeAuthCallback } from './lib/cloudClient.js'
 import './index.css'
+
+cloudConsumeAuthCallback()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
