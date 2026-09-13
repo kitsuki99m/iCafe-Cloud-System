@@ -1,7 +1,28 @@
 import jwt from 'jsonwebtoken'
+import crypto from 'node:crypto'
 import { db, nowIso } from '../db/connection.js'
 import { env } from '../config/env.js'
 import { stationCredentialMatches } from '../utils/stationAuth.js'
+
+
+function cloudFallbackAuth(rawToken, req) {
+  const tokenHash=crypto.createHash('sha256').update(String(rawToken||'')).digest('hex')
+  const row=db.prepare(`
+    SELECT c.*,m.user_id,u.is_active,COALESCE(cm.must_change_credentials,u.must_change_credentials,0) AS must_change_credentials
+    FROM cloud_customer_auth_sessions c
+    JOIN members m ON m.id=c.member_id
+    LEFT JOIN users u ON u.id=m.user_id
+    LEFT JOIN cloud_member_credentials cm ON cm.member_id=c.member_id
+    WHERE c.token_hash=? AND c.revoked_at IS NULL AND c.expires_at>?
+    LIMIT 1
+  `).get(tokenHash,nowIso())
+  if(!row || !row.is_active) return null
+  const currentPcId=req.pc?.id??null
+  if(!currentPcId || String(row.local_station_id)!==String(currentPcId)) return null
+  const suppliedStationToken=String(req.get('x-aezakmi-station-token')||'')
+  if(!env.allowUnregisteredDevStation && !stationCredentialMatches(req.pc,suppliedStationToken)) return null
+  return {row,tokenHash,currentPcId}
+}
 
 function activeSession(row) {
   if (!row || row.revoked_at) return false
@@ -91,6 +112,13 @@ export function authenticate(req, res, next) {
     req.authSession = { ...session, pc_id:sessionPcId }
     next()
   } catch {
+    const fallback=cloudFallbackAuth(header.slice(7).trim(),req)
+    if(fallback){
+      const {row,tokenHash,currentPcId}=fallback
+      req.auth={sub:row.user_id,sessionId:`cloud:${tokenHash.slice(0,20)}`,userId:row.user_id,role:'customer',memberId:row.member_id,mustChangeCredentials:Boolean(row.must_change_credentials),pcId:currentPcId,cloudFallback:true}
+      req.authSession={id:req.auth.sessionId,user_id:row.user_id,role:'customer',member_id:row.member_id,pc_id:currentPcId,expires_at:row.expires_at,cloudFallback:true}
+      return next()
+    }
     return res.status(401).json({ success:false, code:'TOKEN_INVALID', error:'Your login session is invalid or expired.' })
   }
 }
@@ -105,7 +133,7 @@ export function requireRole(...roles) {
 }
 
 export function touchAuthSession(req) {
-  if (!req.auth?.sessionId) return
+  if (!req.auth?.sessionId || req.auth?.cloudFallback) return
   db.prepare('UPDATE auth_sessions SET last_seen_at=? WHERE id=? AND revoked_at IS NULL')
     .run(nowIso(),req.auth.sessionId)
 }

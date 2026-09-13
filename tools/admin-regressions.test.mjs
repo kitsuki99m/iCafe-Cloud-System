@@ -941,7 +941,7 @@ test('database enforces one active computer session per PC and per member', () =
 
 test('new rate-plan schema no longer carries unrelated authentication columns', () => {
   const schema = read('backend/src/db/schema.js')
-  const section = schema.slice(schema.indexOf('CREATE TABLE IF NOT EXISTS rate_plans'), schema.indexOf('CREATE TABLE IF NOT EXISTS auth_sessions'))
+  const section = schema.slice(schema.indexOf('CREATE TABLE IF NOT EXISTS rate_plans'), schema.indexOf('CREATE TABLE IF NOT EXISTS cloud_member_credentials'))
   assert.doesNotMatch(section, /must_change_credentials/)
   assert.doesNotMatch(section, /auth_method/)
 })

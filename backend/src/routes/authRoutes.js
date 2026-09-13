@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import argon2 from 'argon2'
 import jwt from 'jsonwebtoken'
+import crypto from 'node:crypto'
 import { db, nowIso, transaction } from '../db/connection.js'
 import { env } from '../config/env.js'
 import { checkpointMemberSession, closeSessionAndSaveRemaining, remainingSecondsForSession } from '../utils/sessionTime.js'
@@ -8,6 +9,7 @@ import { id, clientIp } from '../utils/helpers.js'
 import { authenticate, touchAuthSession } from '../middleware/auth.js'
 import { loginLimiter, adminCredentialLimiter } from '../middleware/rateLimiter.js'
 import { stationCredentialMatches } from '../utils/stationAuth.js'
+import { enqueueCloudEvent } from '../cloud/outbox.js'
 
 const router = Router()
 
@@ -60,6 +62,24 @@ function userView(user, member = null, pc = null) {
 }
 
 
+
+
+function makeCloudMemberCredential(memberId,username,password,mustChange=false){
+  const salt=crypto.randomBytes(16),iterations=210000
+  const hash=crypto.pbkdf2Sync(String(password),salt,iterations,32,'sha256').toString('base64')
+  return{member_id:memberId,username_ci:String(username||'').trim().toLowerCase(),password_salt:salt.toString('base64'),password_hash:hash,password_iterations:iterations,must_change_credentials:mustChange?1:0,updated_at:nowIso()}
+}
+
+function verifyCloudMemberPassword(memberId,password){
+  const cred=db.prepare('SELECT * FROM cloud_member_credentials WHERE member_id=?').get(memberId)
+  if(!cred)return null
+  try{
+    const derived=crypto.pbkdf2Sync(String(password),Buffer.from(String(cred.password_salt||''),'base64'),Number(cred.password_iterations||210000),32,'sha256').toString('base64')
+    const a=Buffer.from(derived),b=Buffer.from(String(cred.password_hash||''))
+    return a.length===b.length&&crypto.timingSafeEqual(a,b)?cred:false
+  }catch{return false}
+}
+
 function passwordError(password) {
   if (typeof password !== 'string' || password.length === 0) {
     return 'Password is required.'
@@ -110,9 +130,16 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         LIMIT 1
       `).get(String(username).trim())
 
-      if (!candidate || !(await argon2.verify(candidate.password_hash, String(password)))) {
+      let cloudCredential=null
+      let passwordValid=false
+      if(candidate){
+        cloudCredential=verifyCloudMemberPassword(candidate.member_id,String(password))
+        passwordValid=cloudCredential===null ? await argon2.verify(candidate.password_hash,String(password)) : Boolean(cloudCredential)
+      }
+      if (!candidate || !passwordValid) {
         return res.status(401).json({ success:false, code:'INVALID_CREDENTIALS', error:'We couldn’t find a member with those details.' })
       }
+      if(cloudCredential&&cloudCredential!==true) candidate.must_change_credentials=Number(cloudCredential.must_change_credentials||0)
 
       const member = db.prepare('SELECT wallet_balance,status FROM members WHERE id=?').get(candidate.member_id)
       if (!member || member.status !== 'active') {
@@ -274,11 +301,17 @@ router.post('/complete-customer-password-setup', authenticate, async (req,res,ne
 
     const hash = await argon2.hash(String(newPassword))
     const changedAt = nowIso()
+    let cloudCredential=null
     transaction(() => {
       db.prepare("UPDATE users SET password_hash=?,must_change_credentials=0,updated_at=? WHERE id=? AND role='customer'")
         .run(hash,changedAt,current.id)
       db.prepare('UPDATE members SET password_hash=?,updated_at=? WHERE id=?')
         .run(hash,changedAt,current.member_id)
+      if(db.prepare('SELECT 1 FROM cloud_member_credentials WHERE member_id=?').get(current.member_id)){
+        cloudCredential=makeCloudMemberCredential(current.member_id,current.username,String(newPassword),false)
+        db.prepare(`INSERT INTO cloud_member_credentials(member_id,username_ci,password_salt,password_hash,password_iterations,must_change_credentials,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(member_id) DO UPDATE SET username_ci=excluded.username_ci,password_salt=excluded.password_salt,password_hash=excluded.password_hash,password_iterations=excluded.password_iterations,must_change_credentials=excluded.must_change_credentials,updated_at=excluded.updated_at`)
+          .run(cloudCredential.member_id,cloudCredential.username_ci,cloudCredential.password_salt,cloudCredential.password_hash,cloudCredential.password_iterations,cloudCredential.must_change_credentials,cloudCredential.updated_at)
+      }
       db.prepare("UPDATE auth_sessions SET revoked_at=?,ended_at=?,end_reason='password_changed' WHERE user_id=? AND id<>? AND revoked_at IS NULL")
         .run(changedAt,changedAt,current.id,req.auth.sessionId)
       db.prepare(`
@@ -286,6 +319,7 @@ router.post('/complete-customer-password-setup', authenticate, async (req,res,ne
         VALUES (?,?,?,?,?,?,?,?)
       `).run(id(),current.id,'customer.password_setup','user',current.id,req.auth.pcId ?? null,JSON.stringify({temporaryPasswordReplaced:true}),changedAt)
     })
+    if(cloudCredential)enqueueCloudEvent('member_credential.upsert',{...cloudCredential,_authority:'edge'},{entityType:'member_credential',entityId:current.member_id,occurredAt:changedAt})
 
     const fresh = db.prepare('SELECT * FROM users WHERE id=?').get(current.id)
     const member = db.prepare('SELECT * FROM members WHERE id=?').get(current.member_id)

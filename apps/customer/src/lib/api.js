@@ -4,6 +4,8 @@ import {
   cloudStationFeatureEnabled,
   cloudStationPaired,
   setFallbackTransportActive,
+  cloudStationTransport,
+  getCloudStationCredential,
 } from './cloudStation.js'
 
 export function createOperationKey() { return crypto.randomUUID() }
@@ -18,6 +20,12 @@ export function setToken(token) {
   localStorage.removeItem('aezakmi.auth.token')
   if (token) sessionStorage.setItem('aezakmi.auth.token', token)
   else sessionStorage.removeItem('aezakmi.auth.token')
+}
+
+
+function isLocalOnlyStationPath(path) {
+  const base=String(path||'').split('?')[0]
+  return base === '/public/station/enroll' || /^\/public\/station-control(?:\/[^/]+\/ack)?$/.test(base)
 }
 
 function shouldFallback(error) {
@@ -37,8 +45,10 @@ async function localApiFetch(path, options = {}) {
   try {
     const stationIp = window.aezakmiClient?.getLocalIPv4?.() || import.meta.env.VITE_CLIENT_IP || ''
     if (stationIp) headers.set('X-Aezakmi-Client-IP', stationIp)
-    const stationToken = window.aezakmiClient?.getStationCredential?.() || localStorage.getItem('aezakmi.dev.station-token') || ''
+    const cloudToken = getCloudStationCredential()?.stationToken || ''
+    const stationToken = cloudToken || window.aezakmiClient?.getStationCredential?.() || localStorage.getItem('aezakmi.dev.station-token') || ''
     if (stationToken) headers.set('X-Aezakmi-Station-Token', stationToken)
+    if (cloudStationTransport() === 'fallback') headers.set('X-Aezakmi-Cloud-Fallback', '1')
   } catch {}
 
   const response = await fetch(`${getApiBase()}${path}`, { ...fetchOptions, headers })
@@ -59,7 +69,9 @@ export async function apiFetch(path, options = {}) {
   let body={}
   if(fetchOptions.body!=null){try{body=typeof fetchOptions.body==='string'?JSON.parse(fetchOptions.body):fetchOptions.body}catch{body={}}}
 
-  if (cloudStationFeatureEnabled() && cloudStationPaired() && path !== '/public/station/enroll') {
+  // Emergency hidden-shortcut authorization deliberately remains local: the Admin
+  // management PIN is never uploaded to Supabase. Everything else uses Cloud first.
+  if (cloudStationFeatureEnabled() && cloudStationPaired() && !isLocalOnlyStationPath(path)) {
     try {
       const data=await cloudStationApiFetch(path,{method,body,operationKey:operationKey || (method!=='GET'?createOperationKey():null),localAuthToken:getToken()||''})
       setFallbackTransportActive(false)

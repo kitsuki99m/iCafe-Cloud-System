@@ -520,12 +520,24 @@ async function cloudDirectRead(path, branchId) {
     ]);
     const memberMap = new Map((members || []).map((m) => [String(m.local_id), m.name]));
     const pcMap = new Map(pcs.map((pc) => [String(pc.id), pc]));
-    return { success: true, topUpRequests: (rows || []).map((row) => {
+    return { success: true, topUpRequests: (rows || []).filter((row) => !Boolean(row.data?.archived || row.data?.archivedAt)).map((row) => {
       const data = camelizeObject(row.data || {}), pc = pcMap.get(String(data.pcId || row.data?.pc_id || ""));
-      return { id: row.local_id, status: data.status || "pending", createdAt: epoch(row.requested_at || data.requestedAt), customerId: data.memberId || null, customerName: memberMap.get(String(data.memberId || "")) || "Member", pcId: data.pcId || null, pcLabel: pc?.label || "Unknown PC", pcIp: pc?.ipAddress || null, amount: Number(data.amount || 0), method: data.paymentMethod || "cash", gcashNumber: data.refNo || null };
+      return { id: row.local_id, status: data.status || "pending", createdAt: epoch(row.requested_at || data.requestedAt), customerId: data.memberId || null, customerName: memberMap.get(String(data.memberId || "")) || "Member", pcId: data.pcId || null, pcLabel: pc?.label || "Unknown PC", pcIp: pc?.ipAddress || null, amount: Number(data.amount || 0), method: data.paymentMethod || "cash", gcashNumber: data.gcashNumber || data.refNo || null };
     }) };
   }
-  if (route === "/support") return { success:true, supportRequests:[] };
+  if (route === "/support") {
+    const [rows, members, pcs] = await Promise.all([
+      rest(`branch_support_requests?select=*&branch_id=eq.${encoded}&order=created_at.desc`),
+      rest(`branch_members?select=local_id,name,username&branch_id=eq.${encoded}`),
+      cloudPcs(branchId),
+    ]);
+    const memberMap = new Map((members || []).map((m) => [String(m.local_id), m]));
+    const pcMap = new Map(pcs.map((pc) => [String(pc.id), pc]));
+    return { success:true, supportRequests:(rows || []).map((row) => {
+      const member = memberMap.get(String(row.member_id || "")), pc = pcMap.get(String(row.pc_id || ""));
+      return { id:row.local_id, memberId:row.member_id || null, pcId:row.pc_id || null, pcLabel:pc?.label || "Unknown PC", pcIp:pc?.ipAddress || null, customerName:row.customer_name || member?.name || member?.username || "Guest", message:row.message || "Customer needs assistance.", status:row.status || "open", createdAt:epoch(row.created_at), readAt:row.read_at ? epoch(row.read_at) : null, resolvedBy:row.resolved_by || null };
+    }) };
+  }
   if (route === "/session-extensions") {
     const [rows, pcs, members, sessions] = await Promise.all([
       rest(`branch_session_extensions?select=*&branch_id=eq.${encoded}&order=requested_at.desc`),
@@ -551,9 +563,26 @@ async function cloudDirectRead(path, branchId) {
     return { success: true, logs: (rows || []).map((row) => ({ id:row.id, action:row.action, entityType:row.entity_type || row.details?.entityType || "cloud", entityId:row.entity_id || row.details?.entityId || null, pcId:row.details?.pcId || row.details?.stationId || null, details:row.details || {}, createdAt:row.created_at })) };
   }
   if (route === "/feedback") {
-    const rows = await rest(`branch_feedback?select=*&branch_id=eq.${encoded}&order=created_at.desc`);
-    const items=(rows || []).map((row)=>({ id:row.local_id, ...camelizeObject(row.data || {}), createdAt:row.created_at }));
-    return { success:true, feedback:items, items, total:items.length, page:1, pages:1 };
+    const archived = url.searchParams.get("archived") === "1";
+    const status = ["resolved", "unresolved"].includes(url.searchParams.get("status")) ? url.searchParams.get("status") : null;
+    const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "50", 10) || 50));
+    const [rows, members, pcs] = await Promise.all([
+      rest(`branch_feedback?select=*&branch_id=eq.${encoded}&order=created_at.desc`),
+      rest(`branch_members?select=local_id,username,name&branch_id=eq.${encoded}`),
+      cloudPcs(branchId),
+    ]);
+    const memberMap = new Map((members || []).map((m) => [String(m.local_id), m]));
+    const pcMap = new Map(pcs.map((pc) => [String(pc.id), pc]));
+    let normalized = (rows || []).map((row) => {
+      const data = camelizeObject(row.data || {}), memberId=data.memberId || row.data?.member_id || null, pcId=data.pcId || row.data?.pc_id || null;
+      const member=memberMap.get(String(memberId || "")), pc=pcMap.get(String(pcId || ""));
+      const isArchived=Boolean(data.archived || data.archivedAt || row.data?.archived_at), itemStatus=String(data.status || "unresolved");
+      return { id:row.local_id, ...data, member_id:memberId, pc_id:pcId, username:member?.username || null, customer_name:data.customerName || row.data?.customer_name || member?.name || "Guest", pc_label:pc?.label || null, account_count:1, status:itemStatus, archived:isArchived, archived_at:data.archivedAt || row.data?.archived_at || null, created_at:row.created_at || data.createdAt || row.data?.created_at || null, createdAt:row.created_at || data.createdAt || row.data?.created_at || null };
+    });
+    normalized = normalized.filter((item) => Boolean(item.archived) === archived && (!status || item.status === status));
+    const total=normalized.length, start=(page-1)*limit, items=normalized.slice(start,start+limit);
+    return { success:true, feedback:items, items, pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}, total, page, pages:Math.max(1,Math.ceil(total/limit)) };
   }
   return null;
 }

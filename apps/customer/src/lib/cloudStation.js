@@ -106,7 +106,9 @@ async function pollCommands() {
 async function heartbeat() {
   if (!cloudStationPaired()) return
   try {
-    await cloudStationRuntime('heartbeat',{recoveredFromFallback:usedFallback,usedFallback})
+    let localIp=''
+    try { localIp=String(window.aezakmiClient?.getLocalIPv4?.()||'') } catch {}
+    await cloudStationRuntime('heartbeat',{recoveredFromFallback:usedFallback,usedFallback,localIp})
     if(transport!=='cloud') { markCloudStationOnline(); connectWakeSocket(); void pollCommands() }
   } catch(error){ markCloudStationFallback(error?.message||'Cloud unavailable') }
 }
