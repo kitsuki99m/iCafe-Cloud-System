@@ -50,3 +50,17 @@ test('developer lifecycle controls remain usable on phone widths',()=>{
   assert.match(page,/sm:grid-cols-2/)
   assert.match(page,/Type \{selected\.business_name\} to confirm/)
 })
+
+
+test('Cloud login, registration, and invite setup own a scrollable 100dvh viewport on phones and tablets', () => {
+  const css=read('apps/admin/src/index.css')
+  const login=read('apps/admin/src/components/auth/AdminLoginForm.jsx')
+  const invite=read('apps/admin/src/components/cloud/CloudInviteSetup.jsx')
+  assert.match(css, /@media \(max-width: 1023px\)[\s\S]*?\.admin-login-shell[\s\S]*?height: 100dvh[\s\S]*?overflow-y: scroll/)
+  assert.match(css, /scrollbar-gutter: stable/)
+  assert.match(css, /\.admin-login-card input,[\s\S]*?font-size: 16px/)
+  assert.match(css, /\.admin-auth-single/)
+  assert.match(login, /admin-login-feature-list/)
+  assert.match(login, /admin-login-security-note/)
+  assert.match(invite, /admin-auth-single/)
+})

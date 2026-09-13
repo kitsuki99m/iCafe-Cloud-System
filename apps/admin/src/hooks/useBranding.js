@@ -10,7 +10,7 @@ function normalizeBranding(value) {
   return {
     ...raw,
     logoUrl: isCloudAdmin()
-      ? null
+      ? (raw.logoUrl ? String(raw.logoUrl) : null)
       : (raw.logoUrl ? apiUrl(String(raw.logoUrl).replace(/^\/api/, '')) : null),
   }
 }
@@ -24,8 +24,8 @@ function cachedBranding() {
 }
 
 async function loadBranding() {
-  // Preserve the local Edge contract explicitly. Cloud Admin reaches the same
-  // settings through the authenticated Supabase -> Edge admin bridge.
+  // Cloud Admin reads branding from the branch configuration mirror in Supabase.
+  // Emergency Admin keeps the existing local Edge public-settings contract.
   const response = isCloudAdmin()
     ? await apiGet('/settings')
     : await apiGet('/public/settings')
@@ -44,7 +44,7 @@ export function useBranding() {
       const requestId = ++requestSequenceRef.current
       const immediateLogoUrl = event?.detail?.logoUrl
 
-      if (immediateLogoUrl && active && !isCloudAdmin()) {
+      if (immediateLogoUrl && active) {
         setBranding((current) => {
           const next = normalizeBranding({ ...current, logoUrl: immediateLogoUrl })
           cached = next
@@ -59,7 +59,7 @@ export function useBranding() {
             cafeName: raw.cafeName,
             branch: raw.branch,
             branchLocation: raw.branchLocation,
-            logoUrl: isCloudAdmin() ? null : (raw.logoUrl || null),
+            logoUrl: raw.logoUrl || null,
           }))
           cached = next
           setBranding(next)

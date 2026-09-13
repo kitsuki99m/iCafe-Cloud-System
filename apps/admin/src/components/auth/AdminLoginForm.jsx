@@ -133,7 +133,7 @@ export default function AdminLoginForm() {
       <div className="admin-login-grid">
         <section className="admin-login-context">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="admin-login-brand flex items-center gap-3">
               <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-soft-white/15 bg-soft-white/10 p-2">
                 <img
                   src={branding.logoUrl || logo}
@@ -153,7 +153,7 @@ export default function AdminLoginForm() {
                 </h1>
               </div>
             </div>
-            <div className="mt-10 max-w-sm">
+            <div className="admin-login-intro mt-10 max-w-sm">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-new-wool">
                 Admin workspace
               </p>
@@ -166,7 +166,7 @@ export default function AdminLoginForm() {
               </p>
             </div>
           </div>
-          <div className="mt-8 space-y-2.5">
+          <div className="admin-login-feature-list mt-8 space-y-2.5">
             {CONTEXT_ITEMS.map(({ icon: Icon, title, copy }) => (
               <div
                 key={title}
@@ -186,7 +186,7 @@ export default function AdminLoginForm() {
               </div>
             ))}
           </div>
-          <div className="mt-auto pt-8">
+          <div className="admin-login-security-note mt-auto pt-8">
             <div className="flex items-center gap-2 text-[11px] text-new-wool">
               <ShieldCheck size={14} />
               <span>Secure access for authorized staff only</span>

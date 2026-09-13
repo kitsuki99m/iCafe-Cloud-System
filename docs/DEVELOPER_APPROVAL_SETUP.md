@@ -202,3 +202,9 @@ Every destructive lifecycle action requires a developer-entered reason and is re
 ### SMTP fallback
 
 `Approve & invite` still uses Supabase Auth email invitations. Configure custom SMTP for production delivery. If email is unavailable, use **Copy activation link** and send that link to the verified owner through a trusted channel. The activation link redirects to `AEZAKMI_ADMIN_URL` with the activation marker and the owner still chooses their own password.
+
+## Automatic invitation email delivery
+
+`Approve & send invite` calls Supabase Auth `inviteUserByEmail()` and only completes the approval when the Auth API accepts the invitation email. The invite uses `AEZAKMI_ADMIN_URL/?aezakmi=activate` as the redirect so the owner lands directly in the password-setup flow.
+
+For production owners, configure **Authentication → SMTP Settings** in Supabase. The built-in Supabase SMTP service is development-only and refuses delivery to addresses that are not members of the Supabase project team. When an invitation is already outstanding, **Resend invite email** sends a fresh activation/password email. **Copy activation link** remains a manual fallback only.

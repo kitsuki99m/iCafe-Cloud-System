@@ -185,7 +185,7 @@ test('developer console is visible only to platform developers',()=>{
   const app=read('apps/admin/src/App.jsx'),layout=read('apps/admin/src/components/layout/MainLayout.jsx'),page=read('apps/admin/src/pages/DeveloperConsolePage.jsx')
   assert.match(app,/user\.cloudDeveloper/)
   assert.match(layout,/cloudDeveloper/)
-  assert.match(page,/Approve & invite/)
+  assert.match(page,/Approve & send invite/)
   assert.match(page,/cloudDeveloperRegistrations/)
 })
 
@@ -238,9 +238,12 @@ test('developer business lifecycle controls preserve local operation while enfor
   assert.match(sql,/o\.lifecycle_status in\('active','grace_period'\)/)
   assert.match(sql,/using\(user_id=auth\.uid\(\)\)/)
 
-  for(const action of['cancel_invite','grace_period','suspend','reactivate','terminate','delete_owner','purge_business','copy_activation_link'])assert.match(developer,new RegExp(`action===['"]${action}['"]|includes\\(action\\)`),action)
+  for(const action of['cancel_invite','resend_invite','grace_period','suspend','reactivate','terminate','delete_owner','purge_business','copy_activation_link'])assert.match(developer,new RegExp(`action===['"]${action}['"]|includes\\(action\\)`),action)
   assert.match(developer,/admin\.auth\.admin\.deleteUser/)
   assert.match(developer,/generateLink/)
+  assert.match(developer,/inviteUserByEmail/)
+  assert.match(developer,/resetPasswordForEmail/)
+  assert.match(developer,/emailSent:true/)
   assert.match(developer,/localEdgeUnaffected:true/)
   assert.match(developer,/purgeEligibleAt:addDays\(now,30\)/)
   assert.match(developer,/Terminate the business before deleting the owner login/)
@@ -257,6 +260,8 @@ test('developer business lifecycle controls preserve local operation while enfor
   assert.match(page,/Delete owner login/)
   assert.match(page,/Permanently delete data/)
   assert.match(page,/Copy activation link/)
+  assert.match(page,/Resend invite email/)
+  assert.match(page,/Invitation email sent automatically/)
 })
 
 
@@ -322,4 +327,20 @@ test('cloud station API relay reuses local Edge business rules and supports auth
   assert.match(edge,/\/auth\\\/\(login\|heartbeat\|logout\|me\|complete-customer-password-setup\)/)
   assert.match(commands,/station_api/)
   assert.match(commands,/station_state/)
+})
+
+test('Cloud Admin management pages are Supabase-native before any Cafe Edge lookup',()=>{
+  const fn=read('supabase/functions/admin-api/index.ts')
+  const branding=read('apps/admin/src/hooks/useBranding.js')
+  const settings=read('apps/admin/src/pages/SettingsPage.jsx')
+  const nativeIndex=fn.indexOf('const native=await cloudNative')
+  const edgeIndex=fn.indexOf("admin.from('edge_servers')",nativeIndex)
+  assert.ok(nativeIndex>=0&&edgeIndex>nativeIndex,'cloud-native routing must run before Edge lookup')
+  for(const marker of ["route==='/settings'","route==='/branding/logo'","route==='/rate-plans'","route==='/analytics'","route==='/earnings'","route==='/expenses'","route==='/announcements'","route==='/members'"]){
+    assert.match(fn,new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')))
+  }
+  assert.match(fn,/refreshManagedConfig/)
+  assert.match(branding,/isCloudAdmin\(\)[\s\S]{0,120}String\(raw\.logoUrl\)/)
+  assert.match(settings,/Customer Stations are cloud-primary/)
+  assert.doesNotMatch(settings,/Customer Stations connect only to the local Edge/)
 })

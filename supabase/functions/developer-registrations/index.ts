@@ -15,9 +15,12 @@ function note(value:unknown){return String(value||'').trim().slice(0,2000)||null
 function requiredReason(value:unknown){const valueText=note(value);if(!valueText)throw Object.assign(new Error('Enter a reason for this developer action.'),{status:400,code:'REASON_REQUIRED'});return valueText}
 function addDays(iso:string|Date,days:number){const d=new Date(iso);d.setUTCDate(d.getUTCDate()+days);return d.toISOString()}
 async function audit(admin:SupabaseClient,requestId:string,actor:string,action:string,details:Record<string,unknown>={}){const{error}=await admin.from('registration_audit_logs').insert({registration_request_id:requestId,actor_user_id:actor,action,details});if(error)throw error}
-async function activationLink(admin:SupabaseClient,email:string){
+function activationRedirect(){
   const base=String(Deno.env.get('AEZAKMI_ADMIN_URL')||'').trim().replace(/\/+$/,'')
-  const redirectTo=base?`${base}?aezakmi=activate`:undefined
+  return base?`${base}/?aezakmi=activate`:undefined
+}
+async function activationLink(admin:SupabaseClient,email:string){
+  const redirectTo=activationRedirect()
   const params:any={type:'recovery',email}
   if(redirectTo)params.options={redirectTo}
   const{data,error}=await admin.auth.admin.generateLink(params)
@@ -26,6 +29,22 @@ async function activationLink(admin:SupabaseClient,email:string){
   return String(props.action_link||props.actionLink||'')||null
 }
 async function maybeActivationLink(admin:SupabaseClient,email:string){try{return await activationLink(admin,email)}catch{return null}}
+async function sendInviteEmail(admin:SupabaseClient,registration:any){
+  const options:any={data:{name:registration.owner_name,business_name:registration.business_name,aezakmi_registration_id:registration.id}}
+  const redirectTo=activationRedirect();if(redirectTo)options.redirectTo=redirectTo
+  const{data,error}=await admin.auth.admin.inviteUserByEmail(registration.email,options)
+  if(error)throw Object.assign(new Error(error.message||'Unable to send invitation email.'),{status:409,code:'INVITE_EMAIL_FAILED'})
+  const userId=data.user?.id||null
+  if(!userId)throw Object.assign(new Error('Supabase did not return the invited user.'),{status:500,code:'INVITE_USER_MISSING'})
+  return userId
+}
+async function resendActivationEmail(email:string){
+  const key=publishableKey();if(!key)throw Object.assign(new Error('Supabase publishable key unavailable.'),{status:500,code:'SUPABASE_KEY_MISSING'})
+  const client=createClient(projectUrl(),key,{auth:{persistSession:false,autoRefreshToken:false}})
+  const redirectTo=activationRedirect()
+  const{error}=await client.auth.resetPasswordForEmail(email,redirectTo?{redirectTo}:undefined)
+  if(error)throw Object.assign(new Error(error.message||'Unable to resend activation email.'),{status:409,code:'INVITE_EMAIL_FAILED'})
+}
 async function lifecycle(admin:SupabaseClient,organizationId:string){const{data,error}=await admin.from('organizations').select('id,name,lifecycle_status,lifecycle_reason,lifecycle_updated_at,suspended_at,terminated_at').eq('id',organizationId).maybeSingle();if(error)throw error;return data}
 
 Deno.serve(async req=>{
@@ -69,25 +88,30 @@ Deno.serve(async req=>{
 
     if(action==='approve'){
       if(r.status==='activated')return json({success:true,request:r,alreadyApproved:true})
-      if(r.status==='invited')return json({success:true,request:r,alreadyApproved:true,activationLink:await maybeActivationLink(admin,r.email)})
+      if(r.status==='invited')return json({success:true,request:r,alreadyApproved:true,emailSent:true,email:r.email})
       if(r.status==='rejected')throw Object.assign(new Error('Reopen the application before approving it.'),{status:409,code:'REGISTRATION_REJECTED'})
       let authUserId=r.auth_user_id as string|null
-      if(!authUserId){
-        const redirectTo=String(Deno.env.get('AEZAKMI_ADMIN_URL')||'').trim()
-        const options:any={data:{name:r.owner_name,business_name:r.business_name,aezakmi_registration_id:r.id}}
-        if(redirectTo)options.redirectTo=redirectTo
-        const{data:invite,error:inviteError}=await admin.auth.admin.inviteUserByEmail(r.email,options)
-        if(inviteError)throw Object.assign(new Error(inviteError.message||'Unable to send invitation.'),{status:409,code:'INVITE_FAILED'})
-        authUserId=invite.user?.id||null
-        if(!authUserId)throw Object.assign(new Error('Supabase did not return the invited user.'),{status:500,code:'INVITE_USER_MISSING'})
-        const{error:markError}=await admin.from('registration_requests').update({status:'approved',auth_user_id:authUserId,reviewed_by:user.id,reviewed_at:new Date().toISOString(),review_notes:reviewNotes,invite_sent_at:new Date().toISOString(),invite_cancelled_at:null,owner_deleted_at:null,updated_at:new Date().toISOString()}).eq('id',requestId)
-        if(markError)throw markError
-      }
+      const inviteSentAt=new Date().toISOString()
+      if(!authUserId)authUserId=await sendInviteEmail(admin,r)
+      else await resendActivationEmail(r.email)
+      const{error:markError}=await admin.from('registration_requests').update({status:'approved',auth_user_id:authUserId,reviewed_by:user.id,reviewed_at:inviteSentAt,review_notes:reviewNotes,invite_sent_at:inviteSentAt,invite_cancelled_at:null,owner_deleted_at:null,updated_at:inviteSentAt}).eq('id',requestId)
+      if(markError)throw markError
       const{data:finalized,error:finalizeError}=await admin.rpc('aezakmi_finalize_registration_approval',{p_request_id:requestId,p_auth_user_id:authUserId,p_reviewer_id:user.id,p_review_notes:reviewNotes})
       if(finalizeError)throw finalizeError
       const tenant=Array.isArray(finalized)?finalized[0]:finalized
       const{data:updated}=await admin.from('registration_requests').select('*').eq('id',requestId).single()
-      return json({success:true,request:updated,tenant,activationLink:await maybeActivationLink(admin,r.email)})
+      await audit(admin,requestId,user.id,'invite_email_sent',{email:r.email,automatic:true})
+      return json({success:true,request:updated,tenant,emailSent:true,email:r.email})
+    }
+
+    if(action==='resend_invite'){
+      if(!['approved','invited'].includes(r.status)||!r.auth_user_id||r.activated_at)throw Object.assign(new Error('Only an outstanding invitation can be resent.'),{status:409,code:'INVITE_NOT_ACTIVE'})
+      await resendActivationEmail(r.email)
+      const now=new Date().toISOString()
+      const{data,error}=await admin.from('registration_requests').update({invite_sent_at:now,updated_at:now}).eq('id',requestId).select('*').single()
+      if(error)throw error
+      await audit(admin,requestId,user.id,'invite_email_resent',{email:r.email})
+      return json({success:true,request:data,emailSent:true,email:r.email,resent:true})
     }
 
     if(action==='copy_activation_link'){

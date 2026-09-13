@@ -11,7 +11,7 @@ export default function CloudInviteSetup(){
   const[password,setPassword]=useState(''),[confirm,setConfirm]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('')
   const valid=password.length>=8&&password===confirm
   async function submit(e){e.preventDefault();if(!valid||busy)return;setBusy(true);setError('');const result=await completeCloudInvitation(password);setBusy(false);if(!result.ok)setError(result.error||'Unable to activate the account.')}
-  return <main className="admin-login-shell"><div className="mx-auto flex min-h-screen max-w-xl items-center p-5"><section className="admin-login-card w-full">
+  return <main className="admin-login-shell"><div className="admin-auth-single mx-auto max-w-xl"><section className="admin-login-card w-full">
     <span className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-midnight/8 text-gold-dim"><ShieldCheck size={20}/></span>
     <p className="eyebrow">Approved invitation</p>
     <h1 className="mt-1 font-display text-2xl font-semibold text-ink-900">Secure your Aezakmi Cloud account</h1>

@@ -34,7 +34,7 @@ export default function SettingsPage() {
   const [decimalPlaces, setDecimalPlaces] = useState(3)
   const [saving, setSaving] = useState('')
   const [saveError,setSaveError]=useState('')
-  const [logoUrl,setLogoUrl]=useState(()=>cloudMode ? fallbackLogo : (settings.logoUrl ? apiUrl(settings.logoUrl.replace(/^\/api/,'')) : apiUrl('/public/branding/logo')))
+  const [logoUrl,setLogoUrl]=useState(()=>cloudMode ? (settings.logoUrl || fallbackLogo) : (settings.logoUrl ? apiUrl(settings.logoUrl.replace(/^\/api/,'')) : apiUrl('/public/branding/logo')))
   const [pendingLogoDataUrl,setPendingLogoDataUrl]=useState('')
   const [logoWarning,setLogoWarning]=useState('')
   const [security,setSecurity]=useState({currentPin:'',currentPassword:'',newPin:'',newPassword:'',confirmPassword:'',authMethod:user?.authMethod || 'pin'})
@@ -72,7 +72,7 @@ export default function SettingsPage() {
     setStation((current)=>!previous || (current.defaultBilling===(previous.defaultBilling ?? 'prepaid')&&current.lowTimeWarningMinutes===String(previous.lowTimeWarningMinutes ?? 5)) ? nextStation : current)
     setNumberFormat((current)=>!previous || current===(previous.numberFormat === 'whole' ? 'whole' : 'decimal') ? nextFormat : current)
     setDecimalPlaces((current)=>!previous || current===Math.max(1,Math.min(3,Number(previous.decimalPlaces)||3)) ? nextDecimals : current)
-    if(!pendingLogoDataUrl && settings.logoUrl && !cloudMode)setLogoUrl(apiUrl(settings.logoUrl.replace(/^\/api/,'')))
+    if(!pendingLogoDataUrl && settings.logoUrl)setLogoUrl(cloudMode ? settings.logoUrl : apiUrl(settings.logoUrl.replace(/^\/api/,'')))
     previousServerSettingsRef.current={...settings}
   }, [settings,pendingLogoDataUrl])
   const profileDirty = useMemo(() => profile.cafeName !== (settings.cafeName ?? '') || profile.branch !== (settings.branch ?? '')||profile.branchLocation!==(settings.branchLocation??'') || numberFormat !== (settings.numberFormat === 'whole' ? 'whole' : 'decimal') || decimalPlaces !== Math.max(1,Math.min(3,Number(settings.decimalPlaces)||3)), [profile, numberFormat, decimalPlaces, settings])
@@ -128,7 +128,7 @@ export default function SettingsPage() {
     setCloudBusy('pair');setCloudError('');setCloudMessage('')
     try{
       if(cloudMode){const branchId=cloudBranchId();if(!branchId)throw new Error('Select a branch first.');const result=await cloudInvoke('create-pairing-code',{branchId});setCloudPairingCode(result.pairingCode||'');setCloudMessage(`Pairing code generated. It expires ${result.expiresAt?new Date(result.expiresAt).toLocaleString():'in 15 minutes'}. Enter it in the local Emergency Admin → Settings → Aezakmi Cloud.`);return}
-      const code=cloudPairingCode.trim().toUpperCase();if(!code)return;const result=await apiPost('/cloud/pair',{pairingCode:code});setCloud(result.cloud||null);setCloudPairingCode('');setCloudMessage('Edge server paired. Local café operation remains authoritative and cloud sync now runs in the background.')
+      const code=cloudPairingCode.trim().toUpperCase();if(!code)return;const result=await apiPost('/cloud/pair',{pairingCode:code});setCloud(result.cloud||null);setCloudPairingCode('');setCloudMessage('Edge server paired. Café Edge paired successfully and is now available as the branch fallback and synchronization peer.')
     }catch(error){setCloudError(error?.message||'Unable to pair this Edge server.')}finally{setCloudBusy('')}
   }
   async function syncCloud(){setCloudBusy('sync');setCloudError('');setCloudMessage('');try{if(cloudMode){await loadCloudStatus();setCloudMessage('Cloud Edge status refreshed.');return}const result=await apiPost('/cloud/sync-now',{});setCloud(result.status||result.cloud||cloud);setCloudMessage(result.skipped?'Cloud sync was skipped.':'Cloud heartbeat, outbox, and branch configuration sync completed.')}catch(error){setCloudError(error?.message||'Cloud sync failed.')}finally{setCloudBusy('')}}
@@ -195,13 +195,13 @@ export default function SettingsPage() {
                 <Field label="Branch pairing code" hint="Create the one-time code from Aezakmi Cloud. Codes use the XXXX-XXXX format and expire automatically."><input value={cloudPairingCode} onChange={e=>setCloudPairingCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,9))} placeholder="ABCD-2345" autoComplete="off" className={inputClass}/></Field>
                 <div className="flex items-end"><Button className="w-full" icon={Link2} disabled={cloudBusy==='pair'||!cloudPairingCode.trim()} onClick={pairCloud}>{cloudBusy==='pair'?'Pairing…':'Pair branch'}</Button></div>
               </>}
-              <div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-3 text-[11px] leading-5 text-slate-soft">Customer Stations connect only to the local Edge. Supabase never becomes the station/session authority, so internet outages do not stop the café.</div>
+              <div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-3 text-[11px] leading-5 text-slate-soft">Customer Stations are cloud-primary and connect to Supabase during normal operation. Café Edge remains the LAN fallback and local recovery authority when Cloud is unavailable.</div>
             </>}
             {cloud?.paired&&<>
               {(cloudMode?[['Branch',cloudBranchId()],['Edge server',cloud.edgeId],['Version',cloud.softwareVersion],['Last sync',cloud.lastSyncAt?new Date(cloud.lastSyncAt).toLocaleString():'—']]:[['Organization',cloud.organizationId],['Branch',cloud.branchId],['Edge server',cloud.edgeId],['Installation',cloud.installationId]]).map(([label,value])=><div key={label} className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">{label}</p><p className="break-all font-mono text-[10px] leading-4 text-ink-900">{value||'—'}</p></div>)}
               <div className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">Cloud status</p><p className="text-xs font-semibold text-teal-dim">Paired</p><p className="mt-1 text-[11px] text-slate-soft">Last heartbeat: {cloud.lastSeenAt?new Date(cloud.lastSeenAt).toLocaleString():'Not yet synced'}</p></div>
               <div className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">Synchronization</p><p className="text-xs font-semibold text-ink-900">{cloudMode?'Supabase ↔ Edge':'Outbox'}</p><p className="mt-1 text-[11px] text-slate-soft">{cloudMode?'Operational data is mirrored in the background.':`${cloud.sync?.pending??0} pending · ${cloud.sync?.failed??0} failed`}</p></div>
-              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface p-3"><p className="text-[11px] leading-5 text-slate-soft">Cloud outages do not stop Customer login, timers, wallets, local station control, or the Emergency Admin. The Edge remains operational authority.</p><Button variant="danger" size="sm" icon={Unplug} disabled={Boolean(cloudBusy)||!cloudPrivileged} onClick={unpairCloud}>{cloudBusy==='unpair'?(cloudMode?'Revoking…':'Unpairing…'):(cloudMode?'Revoke Edge':'Unpair cloud')}</Button></div>
+              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface p-3"><p className="text-[11px] leading-5 text-slate-soft">Cloud is the primary control and data plane. If Cloud is unavailable, Café Edge keeps local sessions and station control available until synchronization is restored.</p><Button variant="danger" size="sm" icon={Unplug} disabled={Boolean(cloudBusy)||!cloudPrivileged} onClick={unpairCloud}>{cloudBusy==='unpair'?(cloudMode?'Revoking…':'Unpairing…'):(cloudMode?'Revoke Edge':'Unpair cloud')}</Button></div>
             </>}
             {cloudError&&<div className="sm:col-span-2 rounded-xl border border-ember/30 bg-ember/10 px-3 py-2 text-xs font-medium text-ember-dim">{cloudError}</div>}
             {cloudMessage&&<div className="sm:col-span-2 rounded-xl border border-teal/30 bg-teal/10 px-3 py-2 text-xs font-medium text-teal-dim">{cloudMessage}</div>}

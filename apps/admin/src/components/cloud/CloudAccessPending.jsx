@@ -5,7 +5,7 @@ import Button from '../common/Button.jsx'
 export default function CloudAccessPending({suspended=false}){
   const{user,logout}=useAuth()
   const terminated=user?.cloudBusinessStatus==='terminated'
-  if(suspended)return <main className="admin-login-shell"><div className="mx-auto flex min-h-screen max-w-xl items-center p-5"><section className="admin-login-card w-full text-center">
+  if(suspended)return <main className="admin-login-shell"><div className="admin-auth-single mx-auto max-w-xl"><section className="admin-login-card w-full text-center">
     <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-ember/10 text-ember-dim"><Ban size={22}/></span>
     <p className="eyebrow">Cloud access unavailable</p>
     <h1 className="mt-1 font-display text-2xl font-semibold text-ink-900">{terminated?'Business access terminated':'Business access suspended'}</h1>
@@ -15,7 +15,7 @@ export default function CloudAccessPending({suspended=false}){
     <Button className="mt-5 w-full" variant="secondary" icon={LogOut} onClick={logout}>Sign out</Button>
   </section></div></main>
 
-  return <main className="admin-login-shell"><div className="mx-auto flex min-h-screen max-w-xl items-center p-5"><section className="admin-login-card w-full text-center">
+  return <main className="admin-login-shell"><div className="admin-auth-single mx-auto max-w-xl"><section className="admin-login-card w-full text-center">
     <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gold/10 text-gold-dim"><ShieldAlert size={22}/></span>
     <p className="eyebrow">Approval required</p>
     <h1 className="mt-1 font-display text-2xl font-semibold text-ink-900">No approved business workspace</h1>
