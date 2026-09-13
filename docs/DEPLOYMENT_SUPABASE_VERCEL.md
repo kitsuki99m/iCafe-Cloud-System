@@ -71,9 +71,9 @@ Never put a Supabase secret key in Vercel browser variables, Customer Electron, 
 Install/authenticate the Supabase CLI, then from the repository root:
 
 ```powershell
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-supabase db push
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
 ```
 
 `db push` applies the migrations under `supabase/migrations/`, including the multi-tenant cloud schema and cloud-command idempotency migration.
@@ -83,7 +83,7 @@ supabase db push
 From the repository root:
 
 ```powershell
-supabase functions deploy
+npx supabase functions deploy --use-api
 ```
 
 Functions in this release include:
@@ -290,3 +290,20 @@ Also perform live integration testing with the actual Supabase/Vercel/Windows en
 12. Emergency Admin operation while cloud is unavailable.
 
 A local/static green test suite does not replace these live deployment checks.
+
+## Edge Function bundling note (Windows / API deploy)
+
+The Edge Functions in this release are intentionally **single-file**: every function directory contains only `index.ts`. CORS, response handling, Supabase auth/client setup, Edge authentication, hashing, and realtime wake-up helpers are inlined into that entrypoint. There are no `./cors.ts`, `./response.ts`, or `_shared` filesystem imports, so Docker-free API deployment does not depend on the CLI uploading sibling files.
+
+Deploy with the project-local CLI:
+
+```powershell
+npx supabase functions deploy --use-api
+```
+
+If a deployment still reports a bundle error, update the CLI and retry one function with debug output:
+
+```powershell
+npm update supabase --save-dev
+npx supabase functions deploy update-branch-config --debug
+```

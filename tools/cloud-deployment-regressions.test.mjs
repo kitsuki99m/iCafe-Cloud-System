@@ -47,15 +47,15 @@ test('all required Supabase functions exist',()=>{
 })
 
 test('privileged Edge RPCs are denied to browser roles and service-role-only',()=>{
-  const sql=read('supabase/migrations/20260913_000001_aezakmi_cloud_base.sql')
+  const sql=read('supabase/migrations/20260913000001_aezakmi_cloud_base.sql')
   assert.match(sql,/revoke all on function public\.aezakmi_verify_edge\(uuid,text\) from public, anon, authenticated/)
   assert.match(sql,/grant execute on function public\.aezakmi_verify_edge\(uuid,text\) to service_role/)
   assert.match(sql,/revoke all on function public\.aezakmi_ingest_edge_events\(uuid,jsonb\) from public, anon, authenticated/)
 })
 
 test('pairing-code secrets are RLS protected and service-role-only',()=>{
-  const sql=read('supabase/migrations/20260913_000001_aezakmi_cloud_base.sql')
-  const upgrade=read('supabase/migrations/20260913_000003_pairing_code_security.sql')
+  const sql=read('supabase/migrations/20260913000001_aezakmi_cloud_base.sql')
+  const upgrade=read('supabase/migrations/20260913000003_pairing_code_security.sql')
   for(const text of[sql,upgrade]){
     assert.match(text,/edge_pairing_codes enable row level security/)
     assert.match(text,/revoke all on table public\.edge_pairing_codes from public, anon, authenticated/)
@@ -92,7 +92,7 @@ test('cloud Admin actions reuse local REST business rules and valid local auth s
 test('Vercel mutation retries carry idempotency from browser through Supabase',()=>{
   const browser=read('apps/admin/src/lib/api.js')+read('apps/admin/src/lib/cloudClient.js')
   const fn=read('supabase/functions/admin-api/index.ts')
-  const sql=read('supabase/migrations/20260913_000002_cloud_admin_idempotency.sql')
+  const sql=read('supabase/migrations/20260913000002_cloud_admin_idempotency.sql')
   assert.match(browser,/operationKey/)
   assert.match(fn,/idempotency_key/)
   assert.match(fn,/23505/)
@@ -148,4 +148,24 @@ test('cloud admin launcher avoids direct npm.cmd spawning on modern Windows Node
   assert.match(source, /process\.execPath/)
   assert.doesNotMatch(source, /spawn\(npmCommand/)
   assert.doesNotMatch(source, /const npmCommand = process\.platform === ['"]win32['"] \? ['"]npm\.cmd['"]/)
+})
+
+test('Supabase Edge Functions are single-file for Docker-free API bundling',()=>{
+  const functionNames=['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge']
+  assert.equal(exists('supabase/functions/_shared'),false,'shared filesystem helpers must not be required by API deployment')
+  for(const name of functionNames){
+    const dir=`supabase/functions/${name}`
+    const index=read(`${dir}/index.ts`)
+    const files=walk(dir).filter(f=>f.endsWith('.ts'))
+    assert.deepEqual(files,[`${dir}/index.ts`],`${name} must deploy from index.ts alone`)
+    assert.doesNotMatch(index,/from\s*['"]\.\.?\//,`${name} must not use local filesystem imports`)
+    assert.match(index,/npm:@supabase\/supabase-js@2/,`${name} may only rely on remotely resolvable Supabase client import`)
+  }
+})
+
+
+test('release readiness normalizes Windows paths before validating single-file Supabase functions', () => {
+  const release = read('tools/release-readiness.mjs')
+  assert.match(release, /split\(path\.sep\)\.join\(['"]\/['"]\)/)
+  assert.match(release, /normalizeRel\(path\.join\(dir,e\.name\)\)/)
 })

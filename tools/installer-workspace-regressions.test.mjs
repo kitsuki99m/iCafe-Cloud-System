@@ -39,7 +39,7 @@ test('installer builder accepts electron-builder hoisted to the workspace root',
   const result = spawnSync(process.execPath, [path.join(scriptsDir, 'build-installer.mjs'), 'customer'], {
     cwd: appDir,
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${fakePath}${path.delimiter}${process.env.PATH || ''}` }
+    env: { ...process.env, npm_execpath: '', PATH: `${fakePath}${path.delimiter}${process.env.PATH || ''}` }
   })
 
   assert.equal(result.status, 0, result.stderr || result.stdout)

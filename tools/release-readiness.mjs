@@ -13,20 +13,29 @@ const required=[
   'apps/admin/package.json','apps/admin/.env.cloud.example','apps/admin/electron/main.cjs',
   'apps/customer/package.json','apps/customer/electron/main.cjs',
   'backend/package.json','backend/.env.example','backend/src/cloud/syncWorker.js',
-  'supabase/config.toml','supabase/migrations/20260913_000001_aezakmi_cloud_base.sql',
-  'supabase/migrations/20260913_000002_cloud_admin_idempotency.sql',
-  'supabase/migrations/20260913_000003_pairing_code_security.sql',
-  'supabase/functions/admin-api/index.ts','supabase/functions/edge-sync/index.ts',
+  'supabase/config.toml','supabase/migrations/20260913000001_aezakmi_cloud_base.sql',
+  'supabase/migrations/20260913000002_cloud_admin_idempotency.sql',
+  'supabase/migrations/20260913000003_pairing_code_security.sql',
+  'supabase/functions/admin-api/index.ts',
+  'supabase/functions/edge-sync/index.ts',
   'docs/DEPLOYMENT_SUPABASE_VERCEL.md'
 ]
 for(const p of required)check(exists(p),`Missing required release file: ${p}`)
 check(!exists('apps/cloud'),'Legacy apps/cloud must be removed; apps/admin is the single Admin codebase.')
 check(!exists('render.yaml'),'Render configuration must not be present.')
 check(!exists('services/cloud-api'),'Legacy Render cloud API must not be present.')
+check(!exists('supabase/functions/_shared'),'Supabase functions must be single-file for Docker-free API deployment.')
+for(const name of ['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge']){
+  const dir=`supabase/functions/${name}`
+  const tsFiles=walk(dir).filter(p=>p.endsWith('.ts'))
+  check(tsFiles.length===1&&tsFiles[0]===`${dir}/index.ts`,`${name} must contain only index.ts for API bundling.`)
+  if(exists(`${dir}/index.ts`))check(!/from\s*['"]\.\.?\//.test(read(`${dir}/index.ts`)),`${name} must not import local filesystem modules.`)
+}
 
 const secretPatterns=[/sb_secret_[A-Za-z0-9_-]+/g,/SUPABASE_SERVICE_ROLE_KEY\s*=\s*[^\s#]+/g,/SUPABASE_SECRET_KEY\s*=\s*[^\s#]+/g]
 const sourceRoots=['apps','backend','supabase','scripts','tools','docs']
-function walk(dir){if(!exists(dir))return[];return fs.readdirSync(path.join(root,dir),{withFileTypes:true}).flatMap(e=>{const rel=path.join(dir,e.name);if(e.isDirectory()){if(['node_modules','dist','installer','.temp'].includes(e.name))return[];return walk(rel)}return[rel]})}
+function normalizeRel(p){return p.split(path.sep).join('/')}
+function walk(dir){if(!exists(dir))return[];return fs.readdirSync(path.join(root,dir),{withFileTypes:true}).flatMap(e=>{const rel=normalizeRel(path.join(dir,e.name));if(e.isDirectory()){if(['node_modules','dist','installer','.temp'].includes(e.name))return[];return walk(rel)}return[rel]})}
 for(const file of sourceRoots.flatMap(walk)){
   if(!/\.(?:js|jsx|mjs|cjs|ts|tsx|json|md|txt|toml|example)$/i.test(file))continue
   const text=read(file)

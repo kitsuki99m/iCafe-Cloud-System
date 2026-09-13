@@ -48,10 +48,10 @@ npm run build:admin
 ## Supabase deployment
 
 ```powershell
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-supabase db push
-supabase functions deploy
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
+npx supabase functions deploy --use-api
 ```
 
 See `DEPLOYMENT_SUPABASE_VERCEL.md` for the complete production checklist.
