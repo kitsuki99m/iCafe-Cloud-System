@@ -27,24 +27,27 @@ test('Customer Server button is PIN gated and saved server details are not mount
   assert.doesNotMatch(login, /onClick=\{\(\) => setServerConnectionOpen\(true\)\}/)
 })
 
-test('Customer recovery verifies the same Admin PIN against a candidate server before opening or saving server config', () => {
+test('Customer Server settings use an offline-safe master setup PIN instead of contacting the saved server', () => {
   const gate = read('apps/customer/src/components/common/AdminPinGateModal.jsx')
   const config = read('apps/customer/src/lib/serverConfig.js')
-  assert.match(gate, /recoveryMode/)
-  assert.match(gate, /Server IP \/ Hostname/)
-  assert.match(gate, /verifyAdminPinAtServer/)
-  assert.match(gate, /onVerified/)
-  assert.match(config, /export async function verifyAdminPinAtServer/)
-  assert.match(config, /\/public\/verify-admin-pin/)
-  assert.match(config, /X-Aezakmi-Station-Token/)
-  assert.match(config, /SERVER_TEST_TIMEOUT_MS/)
+  const main = read('apps/customer/electron/main.cjs')
+  const preload = read('apps/customer/electron/preload.cjs')
+  assert.match(gate, /verifyStationSetupMasterPin/)
+  assert.doesNotMatch(gate, /recoveryMode|verifyAdminPinAtServer|Server IP \/ Hostname/)
+  assert.match(config, /verifyStationSetupMasterPin/)
+  assert.match(preload, /verifyStationSetupMasterPin/)
+  assert.match(main, /STATION_SETUP_MASTER_PIN/)
+  assert.match(main, /062321/)
+  assert.match(main, /client:verify-setup-master-pin/)
 })
 
-test('Customer PIN gate does not create or persist a second local PIN', () => {
+test('Customer master setup PIN is not persisted in renderer storage or sent to the backend', () => {
   const gate = read('apps/customer/src/components/common/AdminPinGateModal.jsx')
   const config = read('apps/customer/src/lib/serverConfig.js')
-  assert.doesNotMatch(gate, /localStorage|sessionStorage/)
-  assert.doesNotMatch(config, /management.*pin.*localStorage|admin.*pin.*localStorage/i)
+  const api = read('apps/customer/src/lib/api.js')
+  assert.doesNotMatch(gate, /localStorage|sessionStorage|062321/)
+  assert.doesNotMatch(config, /localStorage.*062321|sessionStorage.*062321/)
+  assert.doesNotMatch(api, /062321/)
 })
 
 test('Admin exposes authenticated credential management for PIN, password, and login method', () => {

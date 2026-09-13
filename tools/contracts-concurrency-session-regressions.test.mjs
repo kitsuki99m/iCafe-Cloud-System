@@ -93,12 +93,12 @@ test('GCash extension payments are linked to the exact extension id instead of m
   assert.doesNotMatch(api,/SELECT id FROM payments WHERE member_id=\? AND amount=\? AND status='pending'/)
 })
 
-test('station disconnect pauses any active session and reconnect resumes station_offline pauses for members and guests',()=>{
+test('station disconnect releases active sessions after a grace period and never auto-resumes a logged-out station',()=>{
   const server=read('backend/src/server.js')
-  assert.match(server,/activeSession.*billing_type/s)
-  assert.match(server,/pauseActiveSession\(pcId,\{reason:'station_offline'/)
-  assert.doesNotMatch(server,/pause\?\.reason === 'station_offline' && activeSession\?\.member_id == null/)
-  assert.match(server,/pause\?\.reason === 'station_offline'/)
+  assert.match(server,/STATION_DISCONNECT_GRACE_MS = 3000/)
+  assert.match(server,/releaseStationSession\(pcId,\{reason:'station_disconnect',at:disconnectedAt,markAvailable:false\}\)/)
+  assert.match(server,/UPDATE auth_sessions SET revoked_at=/)
+  assert.doesNotMatch(server,/resumeActiveSession\(presencePcId/)
 })
 
 test('prepaid extensions share pause-aware backend accounting instead of anchoring to wall clock',()=>{

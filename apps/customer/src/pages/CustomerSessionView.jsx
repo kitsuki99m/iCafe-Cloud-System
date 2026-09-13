@@ -235,11 +235,14 @@ export default function CustomerSessionView() {
     !hasActiveSession &&
     pc?.status === "available" &&
     savedSessionSeconds > 0;
+  const hasPurchasableSelfServiceRate = selfServicePlans.length > 0;
   const canSelfStart =
     !isGuest &&
     !hasActiveSession &&
     pc?.status === "available" &&
-    (canResumeSavedTime || (wallet > 0 && selfServicePlans.length > 0));
+    (canResumeSavedTime || wallet > 0);
+  const canStartImmediately =
+    canResumeSavedTime || (wallet > 0 && hasPurchasableSelfServiceRate);
   const cost = hasActiveSession
     ? session.billing === "prepaid"
       ? (session.amount ?? 0)
@@ -296,6 +299,11 @@ export default function CustomerSessionView() {
       if (activeStateKey.current !== stateKey) {
         activeStateKey.current = stateKey;
         c.activateSession?.({
+          sessionId: session?.id || null,
+          memberId: user?.memberId || session?.customerId || null,
+          role: user?.role || (session?.customerId ? "customer" : "guest"),
+          billing: session?.billing || null,
+          startedAt: session?.startedAt || null,
           username: user?.username || user?.name || "Guest",
           balance: wallet,
           pcLabel: pc?.label || "Customer Station",
@@ -409,8 +417,7 @@ export default function CustomerSessionView() {
             if (!idleTriggered.current) {
               idleTriggered.current = true;
               const shutdown = window.aezakmiClient?.shutdownClient;
-              if (shutdown) shutdown();
-              else logout();
+              logout({ reason:"idle_shutdown", allowDeferred:true }).finally(() => { if (shutdown) shutdown(); });
             }
             return 0;
           }
@@ -655,11 +662,13 @@ export default function CustomerSessionView() {
                   <p className="mt-1 max-w-xl text-[12px] leading-5 text-slate-soft">
                     {isGuest
                       ? "A guest session must be started by staff. Ask for help when you are ready."
-                      : canSelfStart
+                      : canStartImmediately
                         ? "Choose Start Session to use your wallet or resume saved time."
-                        : pc
-                          ? "Top up your wallet or ask staff for help before starting."
-                          : "This PC is still waiting to be registered with the cafe server."}
+                        : canSelfStart
+                          ? "Your wallet is available. Open Start Session to choose a customer rate; if none appears, ask staff to enable a self-service rate."
+                          : pc
+                            ? "Top up your wallet or ask staff for help before starting."
+                            : "This PC is still waiting to be registered with the cafe server."}
                   </p>
                 </div>
                 <div className="hidden rounded-2xl bg-midnight/8 p-3 text-ink-900 sm:block">
@@ -969,11 +978,15 @@ export default function CustomerSessionView() {
             <Button variant="ghost" onClick={() => setPowerConfirm(null)}>Cancel</Button>
             <Button
               variant="danger"
-              onClick={() => {
+              onClick={async () => {
                 const command = powerConfirm;
                 setPowerConfirm(null);
-                if (command === "restart") window.aezakmiClient?.restartClient?.();
-                else window.aezakmiClient?.shutdownClient?.();
+                try {
+                  await logout({ reason:command, allowDeferred:true });
+                } finally {
+                  if (command === "restart") window.aezakmiClient?.restartClient?.();
+                  else window.aezakmiClient?.shutdownClient?.();
+                }
               }}
             >
               {powerConfirm === "restart" ? "Restart PC" : "Shut Down PC"}

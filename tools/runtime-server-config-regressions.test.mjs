@@ -59,6 +59,25 @@ test('admin and customer login screens expose runtime Server Connection controls
     assert.match(read(`apps/${appName}/src/lib/serverConfig.js`), /\/health/)
     assert.match(modal, /window\.location\.reload\(\)/)
     assert.match(login, /ServerConnectionModal/)
-    if (appName === 'customer') assert.match(login, /source === ["']not configured["']/)
+    if (appName === 'customer') assert.match(login, /serverPinGateOpen, setServerPinGateOpen\] = useState\(false\)/)
   }
+})
+
+
+test('Customer Station defaults to its bundled localhost Café Edge and packages the backend runtime', () => {
+  const main = read('apps/customer/electron/main.cjs')
+  const preload = read('apps/customer/electron/preload.cjs')
+  const config = read('apps/customer/src/lib/serverConfig.js')
+  const pkg = JSON.parse(read('apps/customer/package.json'))
+  const identity = read('backend/src/middleware/clientIdentity.js')
+  assert.match(main, /LOCAL_BACKEND_HOST = ['"]127\.0\.0\.1['"]/)
+  assert.match(main, /source: ['"]local-default['"]/)
+  assert.match(main, /ensureLocalBackend/)
+  assert.match(main, /AEZAKMI_EMBEDDED_CUSTOMER_SERVER/)
+  assert.match(preload, /ensureLocalBackend/)
+  assert.match(config, /isLocalServerHost/)
+  assert.ok(pkg.build.extraResources.some((item) => typeof item === 'object' && item.to === 'backend'))
+  assert.equal(pkg.build.afterPack, 'scripts/afterPack.cjs')
+  assert.match(identity, /embeddedCustomerServer/)
+  assert.match(identity, /x-aezakmi-installation-id/)
 })

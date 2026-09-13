@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, session, safeStorage } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
+const net = require('node:net')
 const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
@@ -8,6 +9,9 @@ const crypto = require('node:crypto')
 const isDev = !app.isPackaged
 const DEV_URL = process.env.AEZAKMI_CUSTOMER_DEV_URL || 'http://localhost:5173'
 const CUSTOMER_LOCAL_DATA_DIR = '.aezakmi-customer'
+const LOCAL_BACKEND_HOST = '127.0.0.1'
+const LOCAL_BACKEND_PORT = 3000
+const STATION_SETUP_MASTER_PIN = String(process.env.AEZAKMI_STATION_SETUP_MASTER_PIN || '062321')
 
 // Customer-local fallback state must stay with the Customer Station install.
 // This is intentionally configured before the single-instance lock, BrowserWindow,
@@ -115,6 +119,8 @@ let appIsQuitting = false
 let hookRestartTimer = null
 let sessionStartTransitionPending = false
 let remoteLockSnapshot = null
+let localBackendProcess = null
+let localBackendLogStream = null
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
@@ -149,7 +155,14 @@ function readServerConfig() {
       console.warn('Unable to read server config:', error?.message || error)
     }
   }
-  return { host: '', port: 3000, origin: '', apiBase: '', configured: false, source: 'not-configured' }
+  return {
+    host: LOCAL_BACKEND_HOST,
+    port: LOCAL_BACKEND_PORT,
+    origin: `http://${LOCAL_BACKEND_HOST}:${LOCAL_BACKEND_PORT}`,
+    apiBase: `http://${LOCAL_BACKEND_HOST}:${LOCAL_BACKEND_PORT}/api`,
+    configured: false,
+    source: 'local-default',
+  }
 }
 
 function writeServerConfig(value) {
@@ -160,6 +173,128 @@ function writeServerConfig(value) {
   fs.writeFileSync(temp, JSON.stringify({ host: normalized.host, port: normalized.port }, null, 2), { mode: 0o600 })
   fs.renameSync(temp, file)
   return normalized
+}
+
+function isLoopbackHost(host) {
+  const value = String(host || '').trim().toLowerCase()
+  return value === '127.0.0.1' || value === 'localhost' || value === '::1'
+}
+
+function verifyStationSetupMasterPin(value) {
+  const supplied = Buffer.from(String(value || '').trim())
+  const expected = Buffer.from(STATION_SETUP_MASTER_PIN)
+  if (supplied.length !== expected.length) return false
+  return crypto.timingSafeEqual(supplied, expected)
+}
+
+function tcpReachable(host = LOCAL_BACKEND_HOST, port = LOCAL_BACKEND_PORT, timeoutMs = 500) {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({ host, port })
+    let settled = false
+    const done = (value) => {
+      if (settled) return
+      settled = true
+      try { socket.destroy() } catch {}
+      resolve(value)
+    }
+    socket.once('connect', () => done(true))
+    socket.once('error', () => done(false))
+    socket.setTimeout(timeoutMs, () => done(false))
+  })
+}
+
+async function waitForLocalBackend(timeoutMs = 7000) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await tcpReachable(LOCAL_BACKEND_HOST, LOCAL_BACKEND_PORT, 450)) return true
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  const error = new Error(`Local backend did not become ready on ${LOCAL_BACKEND_HOST}:${LOCAL_BACKEND_PORT}.`)
+  error.code = 'LOCAL_BACKEND_START_TIMEOUT'
+  throw error
+}
+
+function localBackendPaths() {
+  const backendRoot = isDev
+    ? path.resolve(__dirname, '../../../backend')
+    : path.join(process.resourcesPath, 'backend')
+  return { backendRoot, backendEntry:path.join(backendRoot, 'src', 'server.js') }
+}
+
+function ensureLocalBackendSecret() {
+  const secretPath = path.join(customerDataRoot, 'backend-jwt-secret')
+  let secret = ''
+  try { secret = fs.readFileSync(secretPath, 'utf8').trim() } catch {}
+  if (secret.length >= 32) return secret
+  secret = crypto.randomBytes(48).toString('hex')
+  fs.writeFileSync(secretPath, secret, { encoding:'utf8', mode:0o600 })
+  return secret
+}
+
+async function ensureLocalBackend() {
+  if (await tcpReachable()) return { ok:true, alreadyRunning:true, host:LOCAL_BACKEND_HOST, port:LOCAL_BACKEND_PORT }
+  if (localBackendProcess && localBackendProcess.exitCode === null) {
+    await waitForLocalBackend()
+    return { ok:true, alreadyRunning:false, host:LOCAL_BACKEND_HOST, port:LOCAL_BACKEND_PORT }
+  }
+
+  const { backendRoot, backendEntry } = localBackendPaths()
+  if (!fs.existsSync(backendEntry)) {
+    const error = new Error(`Bundled local backend was not found at ${backendEntry}.`)
+    error.code = 'LOCAL_BACKEND_MISSING'
+    throw error
+  }
+
+  const dataDir = path.join(customerDataRoot, 'backend-data')
+  fs.mkdirSync(dataDir, { recursive:true })
+  const jwtSecret = ensureLocalBackendSecret()
+  const logPath = path.join(customerDataRoot, 'local-backend.log')
+  localBackendLogStream?.end?.()
+  localBackendLogStream = fs.createWriteStream(logPath, { flags:'a' })
+  localBackendLogStream.write(`\n--- local backend start ${new Date().toISOString()} ---\n`)
+
+  const command = isDev ? (process.env.npm_node_execpath || process.env.NODE || 'node') : process.execPath
+  const env = {
+    ...process.env,
+    NODE_ENV: 'production',
+    HOST: '0.0.0.0',
+    PORT: String(LOCAL_BACKEND_PORT),
+    AEZAKMI_DESKTOP_BACKEND: '1',
+    AEZAKMI_EMBEDDED_CUSTOMER_SERVER: '1',
+    DATABASE_PATH: path.join(dataDir, 'aezakmi.sqlite'),
+    JWT_SECRET: jwtSecret,
+    CORS_ORIGIN: 'http://localhost:5173,http://127.0.0.1:5173,null',
+  }
+  if (!isDev) env.ELECTRON_RUN_AS_NODE = '1'
+
+  localBackendProcess = spawn(command, [backendEntry], {
+    cwd: backendRoot,
+    env,
+    stdio:['ignore','pipe','pipe'],
+    windowsHide:true,
+  })
+  localBackendProcess.stdout?.on('data', (data) => localBackendLogStream?.write(`[stdout] ${data}`))
+  localBackendProcess.stderr?.on('data', (data) => localBackendLogStream?.write(`[stderr] ${data}`))
+  localBackendProcess.once('error', (error) => {
+    localBackendLogStream?.write(`[spawn-error] ${error?.stack || error}\n`)
+    localBackendProcess = null
+  })
+  localBackendProcess.once('exit', (code, signal) => {
+    localBackendLogStream?.write(`[exit] code=${code} signal=${signal}\n`)
+    localBackendProcess = null
+  })
+
+  await waitForLocalBackend()
+  return { ok:true, alreadyRunning:false, host:LOCAL_BACKEND_HOST, port:LOCAL_BACKEND_PORT }
+}
+
+function stopLocalBackend() {
+  if (localBackendProcess) {
+    try { localBackendProcess.kill() } catch {}
+    localBackendProcess = null
+  }
+  try { localBackendLogStream?.end?.() } catch {}
+  localBackendLogStream = null
 }
 
 function isTrustedRenderer(event) {
@@ -208,6 +343,15 @@ function readCloudStationCredential() { try { const data=fs.readFileSync(cloudSt
 function writeCloudStationCredential(value) { const text=String(value||'');if(!text){try{fs.unlinkSync(cloudStationCredentialPath())}catch{};return true}const data=safeStorage.isEncryptionAvailable()?safeStorage.encryptString(text):Buffer.from(text);fs.writeFileSync(cloudStationCredentialPath(),data,{mode:0o600});return true }
 function installationIdPath(){return path.join(app.getPath('userData'),'station-installation-id.txt')}
 function readInstallationId(){try{const value=fs.readFileSync(installationIdPath(),'utf8').trim();if(value)return value}catch{}const value=crypto.randomUUID();fs.writeFileSync(installationIdPath(),value,{encoding:'utf8',mode:0o600});return value}
+
+function sessionLifecyclePath(){return path.join(app.getPath('userData'),'session-lifecycle.json')}
+function readSessionLifecycleMarker(){try{const value=JSON.parse(fs.readFileSync(sessionLifecyclePath(),'utf8'));return value&&typeof value==='object'?value:null}catch{return null}}
+function writeSessionLifecycleMarker(value){const file=sessionLifecyclePath();const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2),{encoding:'utf8',mode:0o600});fs.renameSync(temp,file);return value}
+function markActiveSession(data={}){const stamp=new Date().toISOString();return writeSessionLifecycleMarker({active:true,sessionId:data?.sessionId||data?.id||null,memberId:data?.memberId||null,role:data?.role||null,billing:data?.billing||null,startedAt:data?.startedAt||null,markedAt:stamp,lastSeenAt:stamp,exitReason:null,exitRequestedAt:null})}
+let lifecycleTouchAt=0
+function touchSessionLifecycle(){const nowMs=Date.now();if(nowMs-lifecycleTouchAt<4000)return true;const current=readSessionLifecycleMarker();if(!current?.active)return true;lifecycleTouchAt=nowMs;writeSessionLifecycleMarker({...current,lastSeenAt:new Date(nowMs).toISOString()});return true}
+function markSessionExit(data={}){const current=readSessionLifecycleMarker()||{};const existingAt=current.exitRequestedAt||null;return writeSessionLifecycleMarker({...current,active:true,exitReason:String(data?.reason||current.exitReason||'station_exit'),exitRequestedAt:existingAt||String(data?.interruptedAt||new Date().toISOString())})}
+function clearSessionLifecycleMarker(){try{fs.unlinkSync(sessionLifecyclePath())}catch{}return true}
 
 function isLocked() { return windowState === WINDOW_STATES.LOCKED }
 function isActive() { return windowState === WINDOW_STATES.ACTIVE }
@@ -551,6 +695,8 @@ async function executeRemoteCommand(command) {
 
 async function executeEmergencyCommand(command) {
   if (String(command || '').toLowerCase() === 'quit') {
+    markSessionExit({reason:'app_exit'})
+    mainWindow?.webContents.send('station:app-exit-requested',{reason:'app_exit'})
     appIsQuitting = true
     setTimeout(()=>app.quit(),3000)
     return true
@@ -578,6 +724,11 @@ function createWindow() {
       sandbox:true,
     },
   })
+  mainWindow.on('query-session-end', () => {
+    markSessionExit({reason:'shutdown'})
+    mainWindow?.webContents.send('station:app-exit-requested',{reason:'shutdown'})
+  })
+  mainWindow.on('session-end', () => { markSessionExit({reason:'shutdown'}) })
 
   mainWindow.webContents.on('before-input-event', (event,input) => {
     if (isActive()) return
@@ -655,7 +806,7 @@ app.on('second-instance', () => {
   else applyLockedWindowMode()
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   if (!isDev) app.setLoginItemSettings({openAtLogin:true,openAsHidden:false})
   app.setAppUserModelId('com.icafe.customer')
@@ -664,15 +815,18 @@ app.whenReady().then(() => {
   handleTrusted('client:unlock', () => applyAuthenticatedWindowMode())
   handleTrusted('client:show-idle-dashboard', () => showIdleDashboard())
   handleTrusted('client:unlock-only', () => { setWindowsKeyLocked(false); return true })
-  handleTrusted('client:activate-session', () => enterActiveState())
+  handleTrusted('client:activate-session', (_event, data) => { markActiveSession(data || {}); return enterActiveState() })
   handleTrusted('client:begin-session-start', () => beginSessionStartTransition())
   handleTrusted('client:complete-session-start', () => completeSessionStartTransition())
   handleTrusted('client:cancel-session-start', () => showIdleDashboard())
   handleTrusted('client:hide-dashboard', () => hideMiniDashboard())
   handleTrusted('client:show-dashboard', () => showMiniDashboard())
-  handleTrusted('client:update-widget', () => true)
+  handleTrusted('client:update-widget', () => touchSessionLifecycle())
   handleTrusted('client:lock', () => lockClientWindow())
   handleTrusted('client:deactivate-session', () => lockClientWindow())
+  ipcMain.on('client:get-session-lifecycle-marker', event => { if (!isTrustedRenderer(event)) { event.returnValue=null; return } event.returnValue=readSessionLifecycleMarker() })
+  handleTrusted('client:mark-session-exit', (_event, data) => markSessionExit(data || {}))
+  handleTrusted('client:clear-session-lifecycle-marker', () => clearSessionLifecycleMarker())
   handleTrusted('client:remote-command', (_event, command) => executeRemoteCommand(command))
   handleTrusted('client:shutdown', () => executeRemoteCommand('shutdown'))
   handleTrusted('client:restart', () => executeRemoteCommand('reboot'))
@@ -681,7 +835,13 @@ app.whenReady().then(() => {
     if (!isTrustedRenderer(event)) { event.returnValue = null; return }
     event.returnValue = readServerConfig()
   })
-  handleTrusted('client:server-config:set', (_event, value) => writeServerConfig(value))
+  handleTrusted('client:server-config:set', async (_event, value) => {
+    const saved = writeServerConfig(value)
+    if (isLoopbackHost(saved.host) && Number(saved.port) === LOCAL_BACKEND_PORT) await ensureLocalBackend()
+    return saved
+  })
+  handleTrusted('client:local-backend:ensure', () => ensureLocalBackend())
+  handleTrusted('client:verify-setup-master-pin', (_event, value) => ({ verified:verifyStationSetupMasterPin(value) }))
   ipcMain.on('client:get-local-ipv4', event => {
     if (!isTrustedRenderer(event)) { event.returnValue=null; return }
     event.returnValue=getLocalIPv4()
@@ -706,6 +866,12 @@ app.whenReady().then(() => {
   handleTrusted('client:set-cloud-station-credential', (_event, value) => writeCloudStationCredential(String(value || '').slice(0, 16384)))
   handleTrusted('client:clear-cloud-station-credential', () => writeCloudStationCredential(''))
 
+  const startupServer = readServerConfig()
+  if (isLoopbackHost(startupServer.host) && Number(startupServer.port) === LOCAL_BACKEND_PORT) {
+    try { await ensureLocalBackend() }
+    catch (error) { console.error('Unable to start Customer Station local backend:', error?.message || error) }
+  }
+
   createTray()
   createWindow()
   windowState = WINDOW_STATES.LOCKED
@@ -722,6 +888,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   appIsQuitting=true
+  stopLocalBackend()
   if (hookRestartTimer) clearTimeout(hookRestartTimer)
   try {
     if (windowsKeyHook?.stdin && !windowsKeyHook.stdin.destroyed && !windowsKeyHook.stdin.writableEnded) windowsKeyHook.stdin.write('stop\n')

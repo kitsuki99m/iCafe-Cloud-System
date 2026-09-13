@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   getLocalDataPath:() => ipcRenderer.sendSync('client:get-local-data-path'),
   getServerConfig:() => ipcRenderer.sendSync('client:server-config:get'),
   setServerConfig:value => ipcRenderer.invoke('client:server-config:set',value),
+  ensureLocalBackend:() => ipcRenderer.invoke('client:local-backend:ensure'),
+  verifyStationSetupMasterPin:value => ipcRenderer.invoke('client:verify-setup-master-pin',value),
   setStationCredential:value => ipcRenderer.invoke('client:set-station-credential',value),
   setCloudStationCredential:value => ipcRenderer.invoke('client:set-cloud-station-credential',value),
   clearCloudStationCredential:() => ipcRenderer.invoke('client:clear-cloud-station-credential'),
@@ -21,6 +23,9 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   unlockClientOnly:() => ipcRenderer.invoke('client:unlock-only'),
   showIdleDashboard:() => ipcRenderer.invoke('client:show-idle-dashboard'),
   deactivateSession:() => ipcRenderer.invoke('client:deactivate-session'),
+  getSessionLifecycleMarker:() => ipcRenderer.sendSync('client:get-session-lifecycle-marker'),
+  markSessionExit:data => ipcRenderer.invoke('client:mark-session-exit', data),
+  clearSessionLifecycleMarker:() => ipcRenderer.invoke('client:clear-session-lifecycle-marker'),
   executeRemoteCommand:command => ipcRenderer.invoke('client:remote-command', command),
   shutdownClient:() => ipcRenderer.invoke('client:shutdown'),
   restartClient:() => ipcRenderer.invoke('client:restart'),
@@ -56,5 +61,10 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
     const listener=(_event,payload)=>handler(payload)
     ipcRenderer.on('station:power-command-result',listener)
     return ()=>ipcRenderer.removeListener('station:power-command-result',listener)
+  },
+  onAppExitRequested:handler => {
+    const listener=(_event,payload)=>handler(payload)
+    ipcRenderer.on('station:app-exit-requested',listener)
+    return ()=>ipcRenderer.removeListener('station:app-exit-requested',listener)
   },
 })

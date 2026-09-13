@@ -14,7 +14,9 @@
     "kill:electron": "taskkill /F /IM electron.exe /T 2>nul || exit 0",
     "kill:customer": "taskkill /F /IM \"iCafe Customer Station.exe\" /T 2>nul || exit 0",
     "wait:release": "timeout /t 2 /nobreak >nul 2>&1 || exit 0",
-    "dist:win": "node ../../scripts/build-installer.mjs customer"
+    "dist:win": "node ../../scripts/build-installer.mjs customer",
+    "rebuild:backend": "npm install --prefix ../../backend && npx --yes @electron/rebuild --version 39.0.0 --arch x64 --module-dir ../../backend --force --only better-sqlite3,argon2",
+    "restore:backend": "npm rebuild --prefix ../../backend better-sqlite3 argon2"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",
@@ -47,7 +49,17 @@
     ],
     "icon": "electron/app-icon.ico",
     "extraResources": [
-      "electron/windows-key-hook.ps1"
+      "electron/windows-key-hook.ps1",
+      {
+        "from": "../../backend",
+        "to": "backend",
+        "filter": [
+          "src/**/*",
+          "package.json",
+          ".env.example",
+          "node_modules/**/*"
+        ]
+      }
     ],
     "win": {
       "target": "nsis",
@@ -59,7 +71,8 @@
       "license": "TERMS_AND_CONDITIONS.txt",
       "runAfterFinish": true,
       "include": "installer.nsh"
-    }
+    },
+    "afterPack": "scripts/afterPack.cjs"
   },
   "main": "electron/main.cjs"
 }

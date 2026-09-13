@@ -6,6 +6,7 @@ import { showToast } from '../lib/toast.js'
 import { playBroadcastChime } from '../lib/sound.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { acknowledgeCloudStationCommand, cloudStationFeatureEnabled, cloudStationPaired, cloudStationTransport } from '../lib/cloudStation.js'
+import { clearStationLifecycleMarker, releaseStationLifecycle } from '../lib/sessionLifecycle.js'
 
 const AppDataContext = createContext(null)
 const handledRemoteCommands = new Set()
@@ -48,8 +49,44 @@ function normalizePc(pc) {
   }
 }
 
+function normalizeBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  return ['true', '1', 'yes', 'on'].includes(String(value).trim().toLowerCase())
+}
+
+function nullableNumber(value) {
+  if (value === undefined || value === null || value === '') return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
 function normalizeRatePlan(plan) {
-  return plan ? { ...plan, id:plan.id != null ? String(plan.id) : plan.id } : plan
+  if (!plan) return plan
+  const eligibleRaw = plan.eligible
+  return {
+    ...plan,
+    id:plan.id != null ? String(plan.id) : plan.id,
+    isActive:normalizeBoolean(plan.isActive ?? plan.is_active, true),
+    customerSelfService:normalizeBoolean(plan.customerSelfService ?? plan.customer_self_service, false),
+    customerTier:String(plan.customerTier ?? plan.customer_tier ?? 'Regular'),
+    pesoUnit:nullableNumber(plan.pesoUnit ?? plan.peso_unit),
+    minutesPerUnit:nullableNumber(plan.minutesPerUnit ?? plan.minutes_per_unit),
+    minAmount:nullableNumber(plan.minAmount ?? plan.min_amount),
+    amount:nullableNumber(plan.amount),
+    minutes:nullableNumber(plan.minutes),
+    baseMinutes:nullableNumber(plan.baseMinutes ?? plan.base_minutes),
+    bonusMinutes:nullableNumber(plan.bonusMinutes ?? plan.bonus_minutes),
+    promoKind:String(plan.promoKind ?? plan.promo_kind ?? 'none'),
+    startsAt:plan.startsAt ?? plan.starts_at ?? null,
+    endsAt:plan.endsAt ?? plan.ends_at ?? null,
+    timeStart:plan.timeStart ?? plan.time_start ?? null,
+    timeEnd:plan.timeEnd ?? plan.time_end ?? null,
+    daysOfWeek:plan.daysOfWeek ?? plan.days_of_week ?? null,
+    graceMinutes:Number(plan.graceMinutes ?? plan.grace_minutes ?? 0) || 0,
+    ...(eligibleRaw === undefined ? {} : { eligible:normalizeBoolean(eligibleRaw, false) }),
+  }
 }
 
 function normalizeMember(member) {
@@ -234,6 +271,9 @@ export function AppDataProvider({ children }) {
           return
         }
         await ack('running',{ received:true, warningSeconds, warningExpiresAt, expiresAt })
+        if (['shutdown','reboot'].includes(String(payload.command).toLowerCase())) {
+          await releaseStationLifecycle(String(payload.command).toLowerCase(), { allowDeferred:true })
+        }
         const bridge = window.aezakmiClient?.executeRemoteCommand
         const executed = bridge ? await bridge({ command:payload.command, warningSeconds, warningExpiresAt, expiresAt }) : false
         await ack(executed === false ? 'failed' : 'completed',{ executed:executed !== false, developmentSimulation:!bridge })
@@ -326,7 +366,7 @@ export function AppDataProvider({ children }) {
     const sessionId=pc.session.id
     const path = user?.role === 'guest' ? `/public/sessions/${sessionId}/end` : `/sessions/${sessionId}/end`
     optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>sameId(item.id,pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item),currentClientPc:sameId(current.currentClientPc?.id,pc.id)?{...current.currentClientPc,status:'available',session:null,pendingSessionEnd:sessionId}:current.currentClientPc}))
-    return apiPost(path).then((data)=>{refresh();return data}).catch((error)=>{refresh();throw error})
+    return apiPost(path).then(async(data)=>{await clearStationLifecycleMarker();refresh();return data}).catch((error)=>{refresh();throw error})
   }
 
   function getMemberWallet(memberId) {

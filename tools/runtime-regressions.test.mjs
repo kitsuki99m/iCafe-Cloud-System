@@ -106,9 +106,9 @@ test('admin tray uses one attached context menu instead of manually popping a se
   assert.doesNotMatch(source, /tray\.popUpContextMenu\(/)
 })
 
-test('dynamic admin installer rebuilds native backend modules and always restores them after packaging', () => {
+test('dynamic desktop installers rebuild native backend modules and always restore them after packaging', () => {
   const source = read('scripts/build-installer.mjs')
-  assert.match(source, /appName === ['"]admin['"][\s\S]*rebuild:backend/)
+  assert.match(source, /process\.platform === ['"]win32['"][\s\S]*rebuild:backend/)
   assert.match(source, /finally[\s\S]*restore:backend/)
   assert.doesNotMatch(source, /process\.exit\(/)
 })

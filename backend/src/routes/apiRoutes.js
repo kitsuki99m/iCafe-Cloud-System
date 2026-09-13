@@ -38,6 +38,7 @@ import {
   extendPrepaidSession,
   pauseActiveSession,
   resumeActiveSession,
+  releaseStationSession,
 } from "../utils/sessionTime.js";
 import crypto from "node:crypto";
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, statSync } from "node:fs";
@@ -1353,6 +1354,51 @@ router.get("/client/context", (req, res) => {
         }
       : null,
   });
+});
+
+router.post("/public/station/lifecycle", requirePairedStation, (req, res, next) => {
+  try {
+    const pc = req.pc;
+    if (!pc) return res.status(404).json({ success:false, code:"PC_NOT_REGISTERED", error:"This PC is not registered with the cafe server." });
+    const rawReason = String(req.body?.event || req.body?.reason || "station_exit").trim().toLowerCase();
+    const reason = ["logout","shutdown","restart","reboot","station_disconnect","startup_recovery","app_exit","crash_recovery","session_expired"].includes(rawReason)
+      ? rawReason
+      : "station_exit";
+    const requestedAt = req.body?.interruptedAt || req.body?.interrupted_at || nowIso();
+    const interruptedAtMs = new Date(requestedAt).getTime();
+    const interruptedAt = Number.isFinite(interruptedAtMs) ? new Date(Math.min(Date.now(), interruptedAtMs)).toISOString() : nowIso();
+    const markAvailable = ["logout","session_expired","startup_recovery"].includes(reason);
+    const result = transaction(() => {
+      const released = releaseStationSession(pc.id, { reason, at:interruptedAt, markAvailable });
+      const revoked = db.prepare("UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,?) WHERE pc_id=? AND revoked_at IS NULL")
+        .run(interruptedAt,interruptedAt,reason,pc.id).changes;
+      return { released, revoked };
+    });
+    if (result.released?.released) {
+      emitSessionUpdated(result.released.id, {
+        pcId:pc.id,
+        memberId:result.released.member_id || null,
+        reason:"station_session_released",
+        endReason:reason,
+        remainingSeconds:result.released.remainingSeconds,
+        amountDue:result.released.amountDue,
+        settlementPending:result.released.settlementPending,
+        locked:true,
+      });
+    }
+    emitDataChanged({ method:"LIFECYCLE", path:"/public/station/lifecycle", pcId:pc.id, reason });
+    res.json({
+      success:true,
+      released:Boolean(result.released?.released),
+      sessionId:result.released?.id || null,
+      remainingSeconds:Number(result.released?.remainingSeconds || 0),
+      amountDue:Number(result.released?.amountDue || 0),
+      settlementPending:Boolean(result.released?.settlementPending),
+      revokedSessions:result.revoked,
+      pcStatus:pc.status === "maintenance" ? "maintenance" : (markAvailable ? "available" : pc.status),
+      presencePendingOffline:!markAvailable && pc.status !== "maintenance",
+    });
+  } catch (error) { next(error); }
 });
 
 router.get("/guest/session", requirePairedStation, (req, res) => {
@@ -4447,6 +4493,113 @@ router.get("/sessions/current", auth, (req, res) => {
     )
     .get(memberId ?? pcId);
   res.json({ success: true, session: s ?? null });
+});
+
+
+router.get("/sessions/interrupted", auth, requireRole("admin"), (req, res) => {
+  const rows = db.prepare(`
+    SELECT cs.*,p.label AS pc_label,p.ip_address AS pc_ip,
+           m.name AS member_name,m.username AS member_username,m.wallet_balance AS member_wallet_balance
+    FROM computer_sessions cs
+    LEFT JOIN pcs p ON p.id=cs.pc_id
+    LEFT JOIN members m ON m.id=cs.member_id
+    WHERE cs.status='ended' AND (
+      (cs.billing_type='postpaid' AND COALESCE(cs.settlement_pending,0)=1)
+      OR (cs.billing_type='prepaid' AND cs.member_id IS NULL AND COALESCE(cs.saved_remaining_seconds,0)>0)
+    )
+    ORDER BY cs.ended_at DESC
+  `).all();
+  const pendingSettlements = rows.filter((row) => row.billing_type === "postpaid" && Number(row.settlement_pending || 0) === 1).map((row) => ({
+    id: row.id,
+    pcId: row.pc_id,
+    pcLabel: row.pc_label || row.pc_id || "Station",
+    pcIp: row.pc_ip || null,
+    memberId: row.member_id || null,
+    customerName: row.customer_name || row.member_name || row.member_username || "Guest",
+    amountDue: Math.max(0, Number(row.unsettled_amount_due || 0)),
+    endedAt: row.ended_at,
+    endReason: row.end_reason || "station_exit",
+    walletBalance: row.member_id ? Number(row.member_wallet_balance || 0) : null,
+    paymentMethods: row.member_id ? ["cash", "wallet"] : ["cash"],
+  }));
+  const recoverableGuestSessions = rows.filter((row) => row.billing_type === "prepaid" && !row.member_id && Number(row.saved_remaining_seconds || 0) > 0).map((row) => ({
+    id: row.id,
+    pcId: row.pc_id,
+    pcLabel: row.pc_label || row.pc_id || "Station",
+    pcIp: row.pc_ip || null,
+    customerName: row.customer_name || "Guest",
+    remainingSeconds: Math.max(0, Number(row.saved_remaining_seconds || 0)),
+    endedAt: row.ended_at,
+    endReason: row.end_reason || "station_exit",
+  }));
+  res.json({ success:true, pendingSettlements, recoverableGuestSessions });
+});
+
+router.post("/sessions/:id/settle-interrupted", auth, requireRole("admin"), (req, res, next) => {
+  try {
+    const paymentMethod = String(req.body?.paymentMethod || "").toLowerCase();
+    if (!["cash", "wallet"].includes(paymentMethod)) return res.status(400).json({ success:false, code:"PAYMENT_METHOD_REQUIRED", error:"Choose cash or member wallet." });
+    const result = transaction(() => {
+      const session = db.prepare("SELECT * FROM computer_sessions WHERE id=? AND status='ended' AND billing_type='postpaid' AND COALESCE(settlement_pending,0)=1").get(req.params.id);
+      if (!session) throw Object.assign(new Error("This interrupted session is no longer pending settlement."), { status:409, code:"SETTLEMENT_NOT_PENDING", expose:true });
+      const amountDue = Math.max(0, Number(session.unsettled_amount_due || 0));
+      const settledAt = nowIso();
+      let walletBalance = null;
+      if (paymentMethod === "wallet") {
+        if (!session.member_id) throw Object.assign(new Error("Guest postpaid sessions must be settled with cash."), { status:400, code:"MEMBER_REQUIRED", expose:true });
+        const member = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(session.member_id);
+        if (!member) throw Object.assign(new Error("Member account was not found."), { status:404, code:"MEMBER_NOT_FOUND", expose:true });
+        const before = Number(member.wallet_balance || 0);
+        if (before < amountDue) throw Object.assign(new Error("The member wallet does not have enough balance."), { status:402, code:"INSUFFICIENT_BALANCE", expose:true });
+        walletBalance = before - amountDue;
+        db.prepare("UPDATE members SET wallet_balance=?,updated_at=? WHERE id=?").run(walletBalance, settledAt, session.member_id);
+        if (amountDue > 0) db.prepare("INSERT INTO wallet_transactions(id,member_id,type,amount,balance_before,balance_after,reference_type,reference_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
+          .run(id(),session.member_id,"postpaid_settlement",-amountDue,before,walletBalance,"computer_session",session.id,settledAt);
+      } else if (amountDue > 0) {
+        recordRevenue("postpaid_settlement","computer_session",session.id,amountDue,req.auth.userId,settledAt,{ paymentMethod:"cash",memberId:session.member_id,pcId:session.pc_id,metadata:{ interrupted:true } });
+      }
+      const changed = db.prepare("UPDATE computer_sessions SET amount_paid=?,settlement_method=?,settlement_pending=0 WHERE id=? AND status='ended' AND settlement_pending=1")
+        .run(amountDue,paymentMethod,session.id);
+      if (changed.changes !== 1) throw Object.assign(new Error("This interrupted session was already settled."), { status:409, code:"SETTLEMENT_NOT_PENDING", expose:true });
+      db.prepare("INSERT INTO payments(id,reference,member_id,amount,method,status,created_at,confirmed_at,confirmed_by) VALUES(?,?,?,?,?,'confirmed',?,?,?)")
+        .run(id(),`SESSION-INT-${session.id}`,session.member_id,amountDue,paymentMethod,settledAt,settledAt,req.auth.userId);
+      log(req.auth.userId,"session.settle_interrupted","computer_session",session.id,session.pc_id,{ amount:amountDue,paymentMethod,endReason:session.end_reason });
+      return { session, amountDue, walletBalance };
+    });
+    if (result.session.member_id && paymentMethod === "wallet") emitWalletUpdated(result.session.member_id,{ balance:Number(result.walletBalance || 0),reason:"postpaid_interrupted_settlement",amount:result.amountDue });
+    emitSessionUpdated(result.session.id,{ pcId:result.session.pc_id,memberId:result.session.member_id,reason:"session_interrupted_settled",amountDue:result.amountDue,paymentMethod });
+    emitDataChanged({ method:"POST",path:`/sessions/${result.session.id}/settle-interrupted`,pcId:result.session.pc_id,memberId:result.session.member_id });
+    res.json({ success:true,sessionId:result.session.id,amountDue:result.amountDue,paymentMethod,walletBalance:result.walletBalance });
+  } catch (e) { next(e); }
+});
+
+router.post("/sessions/:id/restore-interrupted-guest", auth, requireRole("admin"), (req, res, next) => {
+  try {
+    const result = transaction(() => {
+      const oldSession = db.prepare("SELECT * FROM computer_sessions WHERE id=? AND status='ended' AND billing_type='prepaid' AND member_id IS NULL AND COALESCE(saved_remaining_seconds,0)>0").get(req.params.id);
+      if (!oldSession) throw Object.assign(new Error("This guest session has no recoverable saved time."), { status:409, code:"GUEST_TIME_NOT_RECOVERABLE", expose:true });
+      const pc = db.prepare("SELECT * FROM pcs WHERE id=?").get(oldSession.pc_id);
+      if (!pc) throw Object.assign(new Error("The original station no longer exists."), { status:404, code:"PC_NOT_FOUND", expose:true });
+      if (String(pc.status || "").toLowerCase() === "maintenance") throw Object.assign(new Error("Take the station out of Maintenance before restoring the guest session."), { status:409, code:"PC_MAINTENANCE", expose:true });
+      if (db.prepare("SELECT 1 FROM computer_sessions WHERE pc_id=? AND status='active' LIMIT 1").get(oldSession.pc_id)) throw Object.assign(new Error("The original station already has an active session."), { status:409, code:"PC_NOT_AVAILABLE", expose:true });
+      const remainingSeconds = Math.max(0, Number(oldSession.saved_remaining_seconds || 0));
+      const originalSeconds = Math.max(0, Number(oldSession.prepaid_seconds || 0));
+      const carriedAmount = originalSeconds > 0 ? Math.round(Math.max(0, Number(oldSession.amount_paid || 0)) * (remainingSeconds / originalSeconds) * 100) / 100 : 0;
+      const startedAt = nowIso();
+      const expiresAt = new Date(new Date(startedAt).getTime() + remainingSeconds * 1000).toISOString();
+      const newSessionId = id();
+      db.prepare(`INSERT INTO computer_sessions(id,member_id,pc_id,rate_plan_id,customer_name,billing_type,amount_paid,prepaid_seconds,postpaid_rate_per_minute,prepaid_rate_snapshot,started_at,expires_at,last_heartbeat_at,status)
+        VALUES(?,NULL,?,?,?,?,?,?,NULL,?,?,?,?, 'active')`)
+        .run(newSessionId,oldSession.pc_id,oldSession.rate_plan_id,oldSession.customer_name || "Guest","prepaid",carriedAmount,remainingSeconds,oldSession.prepaid_rate_snapshot,startedAt,expiresAt,startedAt);
+      db.prepare("UPDATE computer_sessions SET saved_remaining_seconds=0,end_reason=COALESCE(end_reason,'station_exit')||':recovered' WHERE id=? AND status='ended'").run(oldSession.id);
+      db.prepare("UPDATE pcs SET status='occupied',updated_at=? WHERE id=?").run(startedAt,oldSession.pc_id);
+      log(req.auth.userId,"session.restore_interrupted_guest","computer_session",newSessionId,oldSession.pc_id,{ resumedFromSessionId:oldSession.id,remainingSeconds,amount:carriedAmount });
+      return { oldSession,newSessionId,remainingSeconds,expiresAt,carriedAmount };
+    });
+    emitSessionUpdated(result.newSessionId,{ pcId:result.oldSession.pc_id,memberId:null,reason:"guest_session_restored",remainingSeconds:result.remainingSeconds,resumedFromSessionId:result.oldSession.id });
+    emitDataChanged({ method:"POST",path:`/sessions/${result.oldSession.id}/restore-interrupted-guest`,pcId:result.oldSession.pc_id });
+    res.status(201).json({ success:true,sessionId:result.newSessionId,resumedFromSessionId:result.oldSession.id,pcId:result.oldSession.pc_id,remainingSeconds:result.remainingSeconds,expiresAt:result.expiresAt,amount:result.carriedAmount });
+  } catch (e) { next(e); }
 });
 
 router.get("/sessions/:id/settlement-preview", auth, (req, res) => {

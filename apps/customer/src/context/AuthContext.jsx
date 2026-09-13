@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { apiGet, apiPost, setToken, getToken } from "../lib/api.js";
 import { cloudStationFeatureEnabled, cloudStationPaired, pairCloudStation, startCloudStationRuntime, clearCloudStationCredential } from "../lib/cloudStation.js";
+import { clearStationLifecycleMarker, hasPendingStationLifecycle, recoverPendingStationLifecycle, releaseStationLifecycle } from "../lib/sessionLifecycle.js";
 
 const C = createContext(null);
 const CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN = "aezakmi.customer.password-setup.deferred-token";
@@ -58,6 +59,16 @@ export function AuthProvider({ children }) {
       } catch {}
 
       if (cancelled) return;
+      const recovery = await recoverPendingStationLifecycle();
+      if (!recovery?.ok) {
+        // Do not silently restore an old member/guest session after a crash or
+        // reboot. Keep the login screen locked until Cloud/Edge can checkpoint
+        // the previous session; a retry effect below finishes recovery.
+        setToken(null);
+        setUser(null);
+        setLoading(false);
+        return;
+      }
       if (!getToken()) {
         sessionStorage.removeItem(CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN);
         setPasswordSetupDeferred(false);
@@ -122,19 +133,32 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    const clearAndLock = () => {
+    const lock = () => {
       setToken(null);
       sessionStorage.removeItem(CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN);
       setPasswordSetupDeferred(false);
       setUser(null);
       window.aezakmiClient?.lockClient?.();
     };
-    window.addEventListener("aezakmi:auth-invalid", clearAndLock);
-    window.addEventListener("aezakmi:session-expired", clearAndLock);
-    return () => {
-      window.removeEventListener("aezakmi:auth-invalid", clearAndLock);
-      window.removeEventListener("aezakmi:session-expired", clearAndLock);
+    const onAuthInvalid = () => {
+      if (hasPendingStationLifecycle()) releaseStationLifecycle("auth_invalid", { allowDeferred:true }).catch(() => {});
+      lock();
     };
+    const onSessionExpired = () => { clearStationLifecycleMarker(); lock(); };
+    window.addEventListener("aezakmi:auth-invalid", onAuthInvalid);
+    window.addEventListener("aezakmi:session-expired", onSessionExpired);
+    return () => {
+      window.removeEventListener("aezakmi:auth-invalid", onAuthInvalid);
+      window.removeEventListener("aezakmi:session-expired", onSessionExpired);
+    };
+  }, []);
+
+  useEffect(() => {
+    const bridge=window.aezakmiClient?.onAppExitRequested;
+    if (!bridge) return undefined;
+    return bridge((payload) => {
+      if (hasPendingStationLifecycle()) releaseStationLifecycle(payload?.reason || "app_exit", { allowDeferred:true }).catch(() => {});
+    });
   }, []);
 
   useEffect(() => {
@@ -145,6 +169,45 @@ export function AuthProvider({ children }) {
     );
     return () => clearInterval(t);
   }, [user]);
+
+  useEffect(() => {
+    if (stationPairingRequired) return undefined;
+    let cancelled=false;
+    const retry = async () => {
+      if (!hasPendingStationLifecycle()) return;
+      const result=await recoverPendingStationLifecycle();
+      if (!cancelled && result?.ok) {
+        setToken(null);
+        setUser(null);
+      }
+    };
+    retry();
+    const timer=setInterval(retry,5000);
+    return () => { cancelled=true; clearInterval(timer); };
+  }, [stationPairingRequired]);
+
+  // Admin-started guest sessions must switch the Customer station immediately
+  // into Guest mode. The login screen polls only while nobody is signed in.
+  useEffect(() => {
+    if (authLoading || stationPairingRequired || user) return undefined;
+    let cancelled=false, running=false;
+    const detect = async () => {
+      if (running || hasPendingStationLifecycle()) return;
+      running=true;
+      try {
+        const d=await apiGet("/guest/session");
+        if (!cancelled && d?.session) {
+          setToken(null);
+          clearDeferredPasswordSetup();
+          window.aezakmiClient?.unlockClient?.();
+          setUser({ role:"guest", name:d.session.customerName || "Guest", pcId:d.pc.id, pcIp:d.pc.ipAddress });
+        }
+      } catch {} finally { running=false; }
+    };
+    detect();
+    const timer=setInterval(detect,1000);
+    return () => { cancelled=true; clearInterval(timer); };
+  }, [authLoading, stationPairingRequired, user]);
 
   async function loginCustomerCredentials(username, password) {
     try {
@@ -231,14 +294,24 @@ export function AuthProvider({ children }) {
     setToken(null);
   }
 
-  async function logout() {
+  async function logout(options = {}) {
+    const reason=String(options?.reason || "logout");
+    const allowDeferred=Boolean(options?.allowDeferred);
+    let lifecycle={ ok:true, skipped:true };
+    if (hasPendingStationLifecycle()) {
+      lifecycle=await releaseStationLifecycle(reason,{ allowDeferred });
+      if (!lifecycle?.ok && !allowDeferred) throw lifecycle?.error || new Error("Unable to save the current session before logout.");
+    }
     try {
-      if (getToken()) await apiPost("/auth/logout");
-    } catch {}
+      if (getToken() && lifecycle?.ok) await apiPost("/auth/logout", { event:reason, interruptedAt:new Date().toISOString() });
+    } catch (error) {
+      if (!allowDeferred) throw error;
+    }
     setToken(null);
     clearDeferredPasswordSetup();
     setUser(null);
     window.aezakmiClient?.lockClient?.();
+    return lifecycle;
   }
 
   const showCustomerPasswordSetup = Boolean(

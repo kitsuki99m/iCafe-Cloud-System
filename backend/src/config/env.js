@@ -22,6 +22,7 @@ export const env = {
   serverName: process.env.SERVER_NAME ?? 'Aezakmi Cafe Server',
   trustProxy: bool(process.env.TRUST_PROXY),
   allowUnregisteredDevStation: bool(process.env.AEZAKMI_ALLOW_UNREGISTERED_DEV_STATION) && nodeEnv !== 'production',
+  embeddedCustomerServer: bool(process.env.AEZAKMI_EMBEDDED_CUSTOMER_SERVER),
   cloudEnabled: bool(process.env.AEZAKMI_CLOUD_ENABLED),
   supabaseUrl: String(process.env.AEZAKMI_SUPABASE_URL ?? '').trim().replace(/\/+$/, ''),
   supabasePublishableKey: String(process.env.AEZAKMI_SUPABASE_PUBLISHABLE_KEY ?? '').trim(),

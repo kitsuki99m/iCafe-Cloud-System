@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'node:crypto'
 import { db, nowIso, transaction } from '../db/connection.js'
 import { env } from '../config/env.js'
-import { checkpointMemberSession, closeSessionAndSaveRemaining, remainingSecondsForSession } from '../utils/sessionTime.js'
+import { checkpointMemberSession, releaseStationSession, remainingSecondsForSession } from '../utils/sessionTime.js'
 import { id, clientIp } from '../utils/helpers.js'
 import { authenticate, touchAuthSession } from '../middleware/auth.js'
 import { loginLimiter, adminCredentialLimiter } from '../middleware/rateLimiter.js'
@@ -472,8 +472,7 @@ router.post('/logout', (req,res,next) => {
       if (paired) {
         const active = db.prepare("SELECT id,pc_id FROM computer_sessions WHERE member_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(logoutSession.member_id)
         if (active && (!logoutSession.pc_id || String(active.pc_id) === String(logoutSession.pc_id))) {
-          const closed = closeSessionAndSaveRemaining(active.id)
-          if (closed?.pc_id) db.prepare("UPDATE pcs SET status='available',updated_at=? WHERE id=? AND status='occupied'").run(now,closed.pc_id)
+          releaseStationSession(active.pc_id, { reason:'logout', at:now, expectedMemberId:logoutSession.member_id })
         } else {
           checkpointMemberSession(logoutSession.member_id)
         }

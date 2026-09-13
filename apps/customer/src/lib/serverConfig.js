@@ -10,6 +10,11 @@ function bridge() {
   return typeof window !== 'undefined' ? window.aezakmiClient : null
 }
 
+export function isLocalServerHost(host) {
+  const value = String(host || '').trim().toLowerCase()
+  return value === '127.0.0.1' || value === 'localhost' || value === '::1'
+}
+
 function parseApiBase(apiBase) {
   try {
     const url = new URL(apiBase)
@@ -73,6 +78,8 @@ function stationRequestHeaders() {
     if (stationIp) headers.set('X-Aezakmi-Client-IP', stationIp)
     const stationToken = bridge()?.getStationCredential?.() || localStorage.getItem('aezakmi.dev.station-token') || ''
     if (stationToken) headers.set('X-Aezakmi-Station-Token', stationToken)
+    const installationId = bridge()?.getInstallationId?.() || ''
+    if (installationId) headers.set('X-Aezakmi-Installation-Id', installationId)
   } catch {}
   return headers
 }
@@ -170,6 +177,10 @@ export function normalizeServerDraft(hostValue, portValue) {
 
 export async function testServerConfig(host, port, options = {}) {
   const candidate = normalizeServerDraft(host, port)
+  if (isLocalServerHost(candidate.host) && Number(candidate.port) === DEFAULT_PORT) {
+    const ensure = bridge()?.ensureLocalBackend
+    if (ensure) await ensure()
+  }
   await probeApiBase(candidate.apiBase, options)
   return { ok: true, ...candidate }
 }
@@ -185,6 +196,22 @@ export async function saveRuntimeServerConfig(host, port) {
   const setter = bridge()?.setServerConfig
   if (!setter) throw new Error('Runtime server settings are available in the Electron app.')
   return setter({ host: candidate.host, port: candidate.port })
+}
+
+export async function verifyStationSetupMasterPin(pin) {
+  const verifier = bridge()?.verifyStationSetupMasterPin
+  if (!verifier) {
+    const error = new Error('Protected station setup is available only in the installed Customer Station app.')
+    error.code = 'STATION_SETUP_PIN_UNAVAILABLE'
+    throw error
+  }
+  const result = await verifier(String(pin || ''))
+  if (!result?.verified) {
+    const error = new Error('Incorrect master setup PIN.')
+    error.code = 'STATION_SETUP_PIN_INVALID'
+    throw error
+  }
+  return { ok:true, verified:true }
 }
 
 export async function verifyAdminPinAtCurrentServer(pin, options = {}) {

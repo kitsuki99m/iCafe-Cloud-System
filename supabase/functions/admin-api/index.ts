@@ -108,6 +108,42 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   if(memberMatch&&method==='DELETE'){
     const localId=decodeURIComponent(memberMatch[1]),{error}=await admin.from('branch_members').delete().eq('branch_id',branchId).eq('local_id',localId);if(error)throw error;await audit(admin,branch,user.id,'cloud.member.delete','member',localId,{});await refreshManagedConfig(admin,branchId,user.id);return result({success:true});
   }
+  if(route==='/sessions/interrupted'&&method==='GET'){
+    const [{data:sessions,error:sessionError},{data:stations,error:stationError},{data:members,error:memberError}]=await Promise.all([
+      admin.from('branch_sessions').select('local_id,member_id,pc_id,customer_name,billing_type,ended_at,settlement_method,data').eq('branch_id',branchId).eq('status','ended').order('ended_at',{ascending:false}),
+      admin.from('branch_stations').select('local_id,label,ip_address').eq('branch_id',branchId),
+      admin.from('branch_members').select('local_id,name,username,wallet_balance').eq('branch_id',branchId),
+    ]);
+    if(sessionError)throw sessionError;if(stationError)throw stationError;if(memberError)throw memberError;
+    const stationMap=new Map((stations||[]).map((row:any)=>[String(row.local_id),row]));
+    const memberMap=new Map((members||[]).map((row:any)=>[String(row.local_id),row]));
+    const interrupted=(sessions||[]).filter((row:any)=>{
+      const data=row.data&&typeof row.data==='object'?row.data:{};
+      const pending=row.billing_type==='postpaid'&&(String(row.settlement_method||'').toLowerCase()==='pending'||data.settlementPending===true||data.settlement_pending===true||String(data.settlementPending??data.settlement_pending??'').toLowerCase()==='true');
+      const guestTime=row.billing_type==='prepaid'&&!row.member_id&&n(data.savedRemainingSeconds??data.saved_remaining_seconds)>0&&data.interruptionRecovered!==true&&data.interruption_recovered!==true&&String(data.interruptionRecovered??data.interruption_recovered??'').toLowerCase()!=='true';
+      return pending||guestTime;
+    });
+    const pendingSettlements=interrupted.filter((row:any)=>row.billing_type==='postpaid').map((row:any)=>{const data=row.data||{},pc=stationMap.get(String(row.pc_id||'')),member=memberMap.get(String(row.member_id||''));return{id:row.local_id,pcId:row.pc_id||null,pcLabel:pc?.label||row.pc_id||'Station',pcIp:pc?.ip_address||null,memberId:row.member_id||null,customerName:row.customer_name||member?.name||member?.username||'Guest',amountDue:Math.max(0,n(data.unsettledAmountDue??data.unsettled_amount_due)),endedAt:row.ended_at||data.interruptedAt||null,endReason:data.endReason||data.end_reason||'station_exit',walletBalance:row.member_id?n(member?.wallet_balance):null,paymentMethods:row.member_id?['cash','wallet']:['cash']}});
+    const recoverableGuestSessions=interrupted.filter((row:any)=>row.billing_type==='prepaid'&&!row.member_id).map((row:any)=>{const data=row.data||{},pc=stationMap.get(String(row.pc_id||''));return{id:row.local_id,pcId:row.pc_id||null,pcLabel:pc?.label||row.pc_id||'Station',pcIp:pc?.ip_address||null,customerName:row.customer_name||'Guest',remainingSeconds:Math.max(0,n(data.savedRemainingSeconds??data.saved_remaining_seconds)),endedAt:row.ended_at||data.interruptedAt||null,endReason:data.endReason||data.end_reason||'station_exit'}});
+    return result({pendingSettlements,recoverableGuestSessions});
+  }
+  const interruptedSettleMatch=route.match(/^\/sessions\/([^/]+)\/settle-interrupted$/);
+  if(interruptedSettleMatch&&method==='POST'){
+    const sessionId=decodeURIComponent(interruptedSettleMatch[1]);
+    const{data,error}=await admin.rpc('aezakmi_settle_interrupted_session',{p_branch_id:branchId,p_session_id:sessionId,p_payment_method:String(body?.paymentMethod||''),p_actor_id:user.id});
+    if(error)throw error;const out=data&&typeof data==='object'?data:{};if(out.success===false)return json({success:false,status:Number(out.status||400),code:out.code||'SETTLEMENT_FAILED',error:out.error||'Unable to settle interrupted session.',data:out},200);
+    await audit(admin,branch,user.id,'session.settle_interrupted','computer_session',sessionId,{pcId:out.pcId||null,memberId:out.memberId||null,amount:out.amountDue||0,paymentMethod:out.paymentMethod||null});
+    return result(out,Number(out.status||200));
+  }
+  const interruptedRestoreMatch=route.match(/^\/sessions\/([^/]+)\/restore-interrupted-guest$/);
+  if(interruptedRestoreMatch&&method==='POST'){
+    const sessionId=decodeURIComponent(interruptedRestoreMatch[1]);
+    const{data,error}=await admin.rpc('aezakmi_restore_interrupted_guest_session',{p_branch_id:branchId,p_session_id:sessionId,p_actor_id:user.id});
+    if(error)throw error;const out=data&&typeof data==='object'?data:{};if(out.success===false)return json({success:false,status:Number(out.status||400),code:out.code||'GUEST_RESTORE_FAILED',error:out.error||'Unable to restore guest time.',data:out},200);
+    await audit(admin,branch,user.id,'session.restore_interrupted_guest','computer_session',out.sessionId||sessionId,{pcId:out.pcId||null,resumedFromSessionId:sessionId,remainingSeconds:out.remainingSeconds||0});
+    return result(out,Number(out.status||201));
+  }
+
   // Cloud-authoritative live session / wallet transaction engine.
   const settlementMatch=route.match(/^\/sessions\/([^/]+)\/settlement-preview$/);
   if(settlementMatch&&method==='GET')return cloudExecute(admin,branchId,'session.preview',{sessionId:decodeURIComponent(settlementMatch[1])},user.id,operationKey);

@@ -1,0 +1,137 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+const root=process.cwd()
+const read=(file)=>readFileSync(resolve(root,file),'utf8')
+
+test('Cloud lifecycle migration checkpoints prepaid time and freezes postpaid debt before releasing the station',()=>{
+  const sql=read('supabase/migrations/20260913000008_station_session_lifecycle.sql')
+  assert.match(sql,/aezakmi_station_release_session/)
+  assert.match(sql,/aezakmi_cloud_remaining_seconds/)
+  assert.match(sql,/aezakmi_cloud_elapsed_seconds/)
+  assert.match(sql,/'unsettledAmountDue',amount_due/)
+  assert.match(sql,/'settlementPending',s\.billing_type='postpaid'/)
+  assert.match(sql,/session_seconds_remaining=remaining/)
+  assert.match(sql,/mark_available:=reason_text in \('logout','session_expired','startup_recovery'\)/)
+  assert.match(sql,/when mark_available then 'available' else 'offline' end/)
+})
+
+test('Cloud station API releases the active station session before logout and exposes an unauthenticated station lifecycle endpoint',()=>{
+  const src=read('supabase/functions/station-api/index.ts')
+  assert.ok(src.includes('/^\\/public\\/station\\/lifecycle$/'))
+  assert.match(src,/releaseStationLifecycle/)
+  assert.match(src,/aezakmi_station_release_session/)
+  assert.match(src,/base==='\/auth\/logout'[\s\S]*releaseStationLifecycle/)
+  assert.match(src,/base==='\/public\/station\/lifecycle'[\s\S]*branch_customer_auth_sessions/)
+})
+
+test('Customer Electron persists active-session lifecycle beside the installed client for crash/reboot recovery',()=>{
+  const main=read('apps/customer/electron/main.cjs')
+  const preload=read('apps/customer/electron/preload.cjs')
+  assert.match(main,/session-lifecycle\.json/)
+  assert.match(main,/markActiveSession/)
+  assert.match(main,/markSessionExit/)
+  assert.match(main,/client:get-session-lifecycle-marker/)
+  assert.match(main,/query-session-end/)
+  assert.match(preload,/getSessionLifecycleMarker/)
+  assert.match(preload,/markSessionExit/)
+  assert.match(preload,/clearSessionLifecycleMarker/)
+})
+
+test('Customer startup recovers an interrupted session before auth and auto-detects newly started guest sessions',()=>{
+  const src=read('apps/customer/src/context/AuthContext.jsx')
+  assert.match(src,/await recoverPendingStationLifecycle\(\)/)
+  assert.match(src,/hasPendingStationLifecycle\(\)/)
+  assert.match(src,/apiGet\("\/guest\/session"\)/)
+  assert.match(src,/const timer=setInterval\(detect,1000\)/)
+  assert.match(src,/role:"guest"/)
+})
+
+test('Customer logout and power paths preserve the active session before clearing identity or powering Windows',()=>{
+  const auth=read('apps/customer/src/context/AuthContext.jsx')
+  const data=read('apps/customer/src/context/AppDataContext.jsx')
+  const page=read('apps/customer/src/pages/CustomerSessionView.jsx')
+  assert.match(auth,/releaseStationLifecycle\(reason,\{ allowDeferred \}\)/)
+  assert.match(data,/\['shutdown','reboot'\][\s\S]*releaseStationLifecycle/)
+  assert.match(page,/logout\(\{ reason:command, allowDeferred:true \}\)/)
+  assert.match(page,/sessionId: session\?\.id/)
+  assert.match(page,/billing: session\?\.billing/)
+})
+
+test('Café Edge release logic stores postpaid unsettled amount and prepaid remaining time without forcing shutdown presence to Available',()=>{
+  const util=read('backend/src/utils/sessionTime.js')
+  const api=read('backend/src/routes/apiRoutes.js')
+  const schema=read('backend/src/db/schema.js')
+  assert.match(util,/export function releaseStationSession/)
+  assert.match(util,/unsettled_amount_due=\?,settlement_pending=\?/)
+  assert.match(util,/session_seconds_remaining=\?,updated_at=\?/)
+  assert.match(util,/markAvailable=true/)
+  assert.match(util,/if \(markAvailable\) db\.prepare\("UPDATE pcs SET status='available'/)
+  assert.match(api,/\/public\/station\/lifecycle/)
+  assert.match(schema,/settlement_pending INTEGER NOT NULL DEFAULT 0/)
+})
+
+test('Interrupted postpaid debt remains owner-settleable after the PC has been released',()=>{
+  const sql=read('supabase/migrations/20260913000008_station_session_lifecycle.sql')
+  const adminApi=read('supabase/functions/admin-api/index.ts')
+  const edgeApi=read('backend/src/routes/apiRoutes.js')
+  const logs=read('apps/admin/src/pages/LogsPage.jsx')
+  assert.match(sql,/aezakmi_settle_interrupted_session/)
+  assert.match(sql,/settlementPending',false/)
+  assert.match(adminApi,/\/sessions\/interrupted/)
+  assert.match(adminApi,/aezakmi_settle_interrupted_session/)
+  assert.match(edgeApi,/\/sessions\/:id\/settle-interrupted/)
+  assert.match(logs,/pendingSettlements/)
+  assert.match(logs,/settleInterrupted/)
+})
+
+test('Interrupted prepaid guest time is recoverable without a second charge',()=>{
+  const sql=read('supabase/migrations/20260913000008_station_session_lifecycle.sql')
+  const adminApi=read('supabase/functions/admin-api/index.ts')
+  const edgeApi=read('backend/src/routes/apiRoutes.js')
+  const logs=read('apps/admin/src/pages/LogsPage.jsx')
+  assert.match(sql,/aezakmi_restore_interrupted_guest_session/)
+  assert.match(sql,/'resumedInterruptedGuest',true/)
+  assert.doesNotMatch(sql,/aezakmi_restore_interrupted_guest_session[\s\S]*branch_revenue_events[\s\S]*end\$\$;/)
+  assert.match(adminApi,/restore-interrupted-guest/)
+  assert.match(edgeApi,/restore-interrupted-guest/)
+  assert.match(logs,/Restore guest/)
+})
+
+test('Hard power-loss recovery uses a recent persisted lifecycle heartbeat instead of the original session start time',()=>{
+  const main=read('apps/customer/electron/main.cjs')
+  const lifecycle=read('apps/customer/src/lib/sessionLifecycle.js')
+  const cloudSql=read('supabase/migrations/20260913000008_station_session_lifecycle.sql')
+  const edgeUtil=read('backend/src/utils/sessionTime.js')
+  assert.match(main,/lastSeenAt/)
+  assert.match(main,/touchSessionLifecycle/)
+  assert.match(main,/client:update-widget'[\s\S]*touchSessionLifecycle/)
+  assert.match(lifecycle,/marker\.exitRequestedAt \|\| marker\.lastSeenAt \|\| marker\.markedAt/)
+  assert.match(cloudSql,/coalesce\(s\.last_heartbeat_at,s\.started_at,now\(\)\)/)
+  assert.match(edgeUtil,/session\?\.last_heartbeat_at/)
+})
+
+
+test('Station presence uses a three-second offline window in both Café Edge and Cloud Admin',()=>{
+  const server=read('backend/src/server.js')
+  const cloudStation=read('apps/customer/src/lib/cloudStation.js')
+  const cloudAdmin=read('apps/admin/src/lib/cloudClient.js')
+  assert.match(server,/STATION_DISCONNECT_GRACE_MS = 3000/)
+  assert.match(server,/releaseStationSession\(pcId,\{reason:'station_disconnect',at:disconnectedAt,markAvailable:false\}\)/)
+  assert.match(cloudStation,/heartbeatTimer=setInterval\(\(\)=>void heartbeat\(\),1000\)/)
+  assert.match(cloudAdmin,/cloud_last_seen_at\)\.getTime\(\) < 3_000/)
+  assert.match(cloudAdmin,/!cloudSeen && row\.station_device_id \? "offline" : session \? "occupied"/)
+  assert.match(cloudAdmin,/cloudConnectionStatus: cloudSeen \? "online" : \(row\.station_device_id \? "offline" : "unpaired"\)/)
+})
+
+test('Explicit logout may return a powered-on station to Available, while shutdown/restart waits for presence loss',()=>{
+  const edgeApi=read('backend/src/routes/apiRoutes.js')
+  const edgeUtil=read('backend/src/utils/sessionTime.js')
+  const cloudSql=read('supabase/migrations/20260913000008_station_session_lifecycle.sql')
+  assert.match(edgeApi,/const markAvailable = \["logout","session_expired","startup_recovery"\]\.includes\(reason\)/)
+  assert.match(edgeApi,/releaseStationSession\(pc\.id, \{ reason, at:interruptedAt, markAvailable \}\)/)
+  assert.match(edgeUtil,/markAvailable=true/)
+  assert.match(cloudSql,/mark_available:=reason_text in \('logout','session_expired','startup_recovery'\)/)
+  assert.match(cloudSql,/when mark_available then 'available' else 'offline' end/)
+})

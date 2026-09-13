@@ -102,16 +102,62 @@ export function checkpointMemberSession(memberId, sessionId = null, nowMs = Date
   return remaining
 }
 
+export function releaseStationSession(pcId, { reason='station_exit', at=nowIso(), expectedMemberId=undefined, markAvailable=true } = {}) {
+  if (!pcId) return null
+  const session = db.prepare("SELECT * FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(pcId)
+  const releasedAtMs = Math.min(Date.now(), Math.max(
+    session?.started_at ? new Date(session.started_at).getTime() : 0,
+    session?.last_heartbeat_at ? new Date(session.last_heartbeat_at).getTime() : 0,
+    Number.isFinite(new Date(at).getTime()) ? new Date(at).getTime() : Date.now(),
+  ))
+  const releasedAt = new Date(releasedAtMs).toISOString()
+
+  if (!session) {
+    if (markAvailable) db.prepare("UPDATE pcs SET status='available',updated_at=? WHERE id=? AND status NOT IN ('maintenance','reserved')").run(releasedAt, pcId)
+    return { released:false, pcId, releasedAt, reason, markAvailable }
+  }
+  if (expectedMemberId !== undefined && String(session.member_id || '') !== String(expectedMemberId || '')) return null
+
+  const remaining = session.billing_type === 'prepaid' ? remainingSecondsForSession(session, releasedAtMs) : 0
+  const elapsed = session.billing_type === 'postpaid' ? elapsedBillableSeconds(session, releasedAtMs) : 0
+  const amountDue = session.billing_type === 'postpaid'
+    ? Math.max(0, Math.round((elapsed / 60) * Number(session.postpaid_rate_per_minute || 0) * 100) / 100)
+    : 0
+
+  const activePause = activeSessionPause(session.id)
+  if (activePause) {
+    const resumedAt = new Date(Math.max(new Date(activePause.paused_at).getTime(), releasedAtMs)).toISOString()
+    db.prepare('UPDATE session_pauses SET resumed_at=? WHERE id=? AND resumed_at IS NULL').run(resumedAt, activePause.id)
+  }
+
+  if (session.member_id && session.billing_type === 'prepaid') {
+    db.prepare('UPDATE members SET session_seconds_remaining=?,updated_at=? WHERE id=?').run(remaining, releasedAt, session.member_id)
+  }
+
+  db.prepare(`UPDATE computer_sessions
+    SET status='ended',ended_at=?,last_heartbeat_at=?,end_reason=?,saved_remaining_seconds=?,
+        unsettled_amount_due=?,settlement_pending=?,settlement_method=CASE WHEN ?=1 THEN 'pending' ELSE settlement_method END
+    WHERE id=? AND status='active'`)
+    .run(releasedAt,releasedAt,String(reason||'station_exit'),remaining,amountDue,session.billing_type==='postpaid'?1:0,session.billing_type==='postpaid'?1:0,session.id)
+  if (markAvailable) db.prepare("UPDATE pcs SET status='available',updated_at=? WHERE id=? AND status NOT IN ('maintenance','reserved')").run(releasedAt, pcId)
+
+  return {
+    ...session,
+    released:true,
+    releasedAt,
+    reason,
+    remainingSeconds:remaining,
+    elapsedBillableSeconds:elapsed,
+    amountDue,
+    settlementPending:session.billing_type === 'postpaid',
+    markAvailable,
+  }
+}
+
 export function closeSessionAndSaveRemaining(sessionId, nowMs = Date.now()) {
   const session = db.prepare("SELECT * FROM computer_sessions WHERE id=? AND status='active'").get(sessionId)
   if (!session) return null
-  const remaining = remainingSecondsForSession(session, nowMs)
-  const endedAt = new Date(nowMs).toISOString()
-  if (session.member_id) {
-    db.prepare('UPDATE members SET session_seconds_remaining=?, updated_at=? WHERE id=?').run(remaining, endedAt, session.member_id)
-  }
-  db.prepare("UPDATE computer_sessions SET status='ended', ended_at=? WHERE id=? AND status='active'").run(endedAt, sessionId)
-  return { ...session, remainingSeconds: remaining, endedAt }
+  return releaseStationSession(session.pc_id, { reason:'session_end_save', at:new Date(nowMs).toISOString(), expectedMemberId:session.member_id ?? undefined })
 }
 
 export function clearExpiredMemberSession(memberId, nowMs = Date.now()) {

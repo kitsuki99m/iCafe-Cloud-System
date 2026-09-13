@@ -19,7 +19,6 @@ import PasswordInput from "../common/PasswordInput.jsx";
 import ServerConnectionModal from "../common/ServerConnectionModal.jsx";
 import AdminPinGateModal from "../common/AdminPinGateModal.jsx";
 import { apiPost } from "../../lib/api.js";
-import { getServerConnectionDefaults } from "../../lib/serverConfig.js";
 import logo from "../../assets/aktura-logo.svg";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useAppData } from "../../context/AppDataContext.jsx";
@@ -41,8 +40,7 @@ export default function CustomerLoginForm() {
   const [serverConnectionOpen, setServerConnectionOpen] = useState(false);
   const [serverConnectionUnlocked, setServerConnectionUnlocked] = useState(false);
   const [serverConnectionCandidate, setServerConnectionCandidate] = useState(null);
-  const [serverPinGateOpen, setServerPinGateOpen] = useState(() => getServerConnectionDefaults().source === "not configured");
-  const [serverRecoveryRequired, setServerRecoveryRequired] = useState(() => getServerConnectionDefaults().source === "not configured");
+  const [serverPinGateOpen, setServerPinGateOpen] = useState(false);
   const [amount, setAmount] = useState("100");
   const [method, setMethod] = useState("cash");
   const [gcashNumber, setGcashNumber] = useState("");
@@ -172,7 +170,6 @@ export default function CustomerLoginForm() {
             onClick={() => {
               setServerConnectionCandidate(null);
               setServerConnectionUnlocked(false);
-              setServerRecoveryRequired(false);
               setServerPinGateOpen(true);
             }}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-surface-line bg-surface px-3.5 text-xs font-semibold text-ink-900 transition-colors hover:bg-dance/35"
@@ -589,14 +586,11 @@ export default function CustomerLoginForm() {
       </Modal>
       <AdminPinGateModal
         open={serverPinGateOpen}
-        forceRecovery={serverRecoveryRequired}
         onClose={() => {
           setServerPinGateOpen(false);
-          setServerRecoveryRequired(false);
         }}
         onVerified={(candidate) => {
           setServerPinGateOpen(false);
-          setServerRecoveryRequired(false);
           setServerConnectionCandidate(candidate);
           setServerConnectionUnlocked(true);
           setServerConnectionOpen(true);

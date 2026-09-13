@@ -71,11 +71,12 @@ test('member session-time transfers publish pcId for both active source and dest
   assert.match(section,/pcId:\s*result\.destinationPcId/)
 })
 
-test('station disconnect pauses active prepaid sessions for members as well as guests and reconnect resumes them',()=>{
+test('station disconnect checkpoints members and guests, revokes station auth, and requires a fresh login after reconnect',()=>{
   const src=read('backend/src/server.js')
-  assert.doesNotMatch(src,/pause\.reason === 'station_offline' && activeSession\?\.member_id == null/)
-  assert.match(src,/pause\?\.reason === 'station_offline'/)
-  assert.match(src,/pauseActiveSession\(pcId,\{reason:'station_offline'/)
+  assert.match(src,/releaseStationSession\(pcId,\{reason:'station_disconnect',at:disconnectedAt,markAvailable:false\}\)/)
+  assert.match(src,/end_reason=COALESCE\(end_reason,'station_disconnect'\)/)
+  assert.match(src,/status='offline'/)
+  assert.doesNotMatch(src,/reason:'station_offline'/)
 })
 
 test('prepaid extensions use the shared pause-aware session extension helper',()=>{

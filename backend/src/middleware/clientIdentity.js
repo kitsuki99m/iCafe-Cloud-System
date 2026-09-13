@@ -24,8 +24,9 @@ export function attachClientIdentity(req, res, next) {
     ? db.prepare('SELECT * FROM pcs WHERE ip_address = ?').get(socketIp)
     : null
   const localDevelopmentPeer = socketIp === '127.0.0.1' && env.nodeEnv !== 'production'
+  const localEmbeddedCustomerPeer = socketIp === '127.0.0.1' && env.embeddedCustomerServer
   const advertisedMatchesPeer = advertisedIp && advertisedIp === socketIp
-  const canTrustAdvertisedIp = localDevelopmentPeer || advertisedMatchesPeer
+  const canTrustAdvertisedIp = localDevelopmentPeer || localEmbeddedCustomerPeer || advertisedMatchesPeer
   const advertisedPc = canTrustAdvertisedIp && isValidIpv4(advertisedIp)
     ? db.prepare('SELECT * FROM pcs WHERE ip_address = ?').get(advertisedIp)
     : null
@@ -53,6 +54,28 @@ export function attachClientIdentity(req, res, next) {
     db.prepare(`INSERT OR IGNORE INTO pcs (id,pc_number,label,ip_address,spec,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`)
       .run(devId, 'DEV-LOCAL', 'Development Station', devIp, 'Local development station', 'available', timestamp, timestamp)
     pc = db.prepare('SELECT * FROM pcs WHERE id=?').get(devId)
+  }
+  // When the Customer Station itself hosts Café Edge, localhost is a trusted
+  // process boundary: Electron supplies both the real LAN IP and a persistent
+  // installation id. Bootstrap exactly one local PC row so first launch can
+  // enroll itself without requiring a separate Admin/server PC first.
+  if (!pc && localEmbeddedCustomerPeer) {
+    const embeddedIp = advertisedIp && isValidIpv4(advertisedIp) ? advertisedIp : '127.0.0.1'
+    const rawInstallationId = String(req.get('x-aezakmi-installation-id') || '').trim()
+    const safeInstallationId = rawInstallationId.replace(/[^a-zA-Z0-9-]/g, '').slice(0, 64)
+    const embeddedId = `local-station-${safeInstallationId || embeddedIp.replace(/[^0-9]/g, '-')}`
+    const timestamp = new Date().toISOString()
+    const existingById = db.prepare('SELECT * FROM pcs WHERE id=?').get(embeddedId)
+    if (existingById) {
+      if (existingById.ip_address !== embeddedIp) {
+        const collision = db.prepare('SELECT id FROM pcs WHERE ip_address=? AND id<>?').get(embeddedIp, embeddedId)
+        if (!collision) db.prepare('UPDATE pcs SET ip_address=?,updated_at=? WHERE id=?').run(embeddedIp, timestamp, embeddedId)
+      }
+    } else {
+      db.prepare(`INSERT OR IGNORE INTO pcs (id,pc_number,label,ip_address,spec,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)`)
+        .run(embeddedId, 'LOCAL-EDGE', 'Local Customer Station', embeddedIp, 'Customer-hosted local Café Edge', 'available', timestamp, timestamp)
+    }
+    pc = db.prepare('SELECT * FROM pcs WHERE id=?').get(embeddedId) || db.prepare('SELECT * FROM pcs WHERE ip_address=?').get(embeddedIp) || null
   }
   req.clientIp = pc?.ip_address ?? socketIp
   req.pc = pc

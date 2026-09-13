@@ -57,7 +57,7 @@ try {
   }
   fs.rmSync(path.join(appDir, 'installer'), { recursive: true, force: true })
 
-  if (appName === 'admin') {
+  if (process.platform === 'win32') {
     runNpm(['run', 'rebuild:backend'])
     backendRebuilt = true
   }
@@ -68,7 +68,7 @@ try {
   runNpm(['exec', '--yes=false', '--', 'electron-builder', '--win', 'nsis', '--config', configPath])
 } finally {
   try { fs.unlinkSync(configPath) } catch {}
-  if (appName === 'admin' && backendRebuilt) {
+  if (backendRebuilt) {
     runNpm(['run', 'restore:backend'])
   }
 }

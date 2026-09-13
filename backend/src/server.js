@@ -7,7 +7,7 @@ import { ensureBootstrapAdmin } from './db/bootstrapAdmin.js'
 import { Server as SocketIOServer } from 'socket.io'
 import { setRealtime, emitSessionUpdated, emitDataChanged, emitPcPresence } from './realtime.js'
 import jwt from 'jsonwebtoken'
-import { activeSessionPause, closeSessionAndSaveRemaining, isSessionHeartbeatStale, pauseActiveSession, remainingSecondsForSession, resumeActiveSession } from './utils/sessionTime.js'
+import { activeSessionPause, closeSessionAndSaveRemaining, isSessionHeartbeatStale, remainingSecondsForSession, releaseStationSession } from './utils/sessionTime.js'
 import { normalizeIp, isValidIpv4 } from './middleware/clientIdentity.js'
 import { stationCredentialMatches } from './utils/stationAuth.js'
 import { startCloudSyncWorker, stopCloudSyncWorker } from './cloud/syncWorker.js'
@@ -71,6 +71,8 @@ startCloudSyncWorker()
 if (env.cloudEnabled) console.log(`Aezakmi Cloud sync enabled: ${env.supabaseUrl}`)
 const io=new SocketIOServer(server,{cors:{origin:env.corsOrigin==='*'?true:env.corsOrigin.split(',').map(x=>x.trim()).filter(Boolean)}})
 setRealtime(io)
+const stationDisconnectTimers = new Map()
+const STATION_DISCONNECT_GRACE_MS = 3000
 
 // Presence is independent from a session's billing state.  A station that
 // reconnects while its guest session is active must immediately become busy
@@ -84,7 +86,7 @@ io.on('connection', (socket) => {
   const token = socket.handshake.auth?.token
   const advertisedIp = normalizeIp(socket.handshake.auth?.clientIp)
   const peerIp = normalizeIp(socket.handshake.address)
-  const trustedAdvertisedIp = advertisedIp && isValidIpv4(advertisedIp) && ((peerIp === '127.0.0.1' && env.nodeEnv !== 'production') || advertisedIp === peerIp) ? advertisedIp : ''
+  const trustedAdvertisedIp = advertisedIp && isValidIpv4(advertisedIp) && ((peerIp === '127.0.0.1' && (env.nodeEnv !== 'production' || env.embeddedCustomerServer)) || advertisedIp === peerIp) ? advertisedIp : ''
   const stationIp = trustedAdvertisedIp || (isValidIpv4(peerIp) ? peerIp : '')
   const suppliedStationToken=String(socket.handshake.auth?.stationToken||'')
   let auth = null
@@ -152,18 +154,23 @@ io.on('connection', (socket) => {
   }
 
   if (presencePcId) {
+    const pendingDisconnect = stationDisconnectTimers.get(presencePcId)
+    if (pendingDisconnect) {
+      clearTimeout(pendingDisconnect)
+      stationDisconnectTimers.delete(presencePcId)
+    }
     const activeSession=db.prepare("SELECT id,member_id,billing_type FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(presencePcId)
     const pause=activeSession ? activeSessionPause(activeSession.id) : null
-    if (pause?.reason === 'reboot') {
-      const reboot= pause.command_id ? db.prepare("SELECT status FROM remote_commands WHERE id=? AND command='reboot'").get(pause.command_id) : null
-      if (reboot?.status === 'completed') {
-        resumeActiveSession(presencePcId,{commandId:pause.command_id})
-        emitSessionUpdated(activeSession.id,{pcId:presencePcId,memberId:activeSession.member_id,reason:'session_resumed_after_reboot',locked:false})
-      }
-    }
-    if (pause?.reason === 'station_offline') {
-      resumeActiveSession(presencePcId)
-      emitSessionUpdated(activeSession.id,{pcId:presencePcId,memberId:activeSession.member_id,reason:'station_session_resumed',locked:false})
+    // Legacy builds paused sessions on reboot/offline and silently resumed them
+    // when the station came back. The Customer lifecycle now treats a real PC
+    // exit as logout: save prepaid time (or freeze postpaid debt), release the
+    // seat, and require a fresh member/guest session after restart.
+    if (activeSession && (pause?.reason === 'reboot' || pause?.reason === 'station_offline')) {
+      const released = releaseStationSession(presencePcId,{ reason:`legacy_${pause.reason}_recovery`, at:pause.paused_at })
+      const revokedAt = new Date().toISOString()
+      db.prepare("UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,'station_restart') WHERE pc_id=? AND revoked_at IS NULL")
+        .run(revokedAt,revokedAt,presencePcId)
+      if (released?.released) emitSessionUpdated(activeSession.id,{pcId:presencePcId,memberId:activeSession.member_id,reason:'station_session_released',endReason:pause.reason,remainingSeconds:released.remainingSeconds,amountDue:released.amountDue,settlementPending:released.settlementPending,locked:true})
     }
     const replayNow=new Date().toISOString()
     const expiredReplay=db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE pc_id=? AND status IN ('queued','running') AND ((expires_at IS NOT NULL AND expires_at<=?) OR (expires_at IS NULL AND julianday(requested_at)<=julianday('now','-30 seconds')) OR (status='queued' AND command IN ('shutdown','reboot') AND warning_expires_at IS NOT NULL AND warning_expires_at<=?))")
@@ -196,30 +203,33 @@ io.on('connection', (socket) => {
   }, 15000) : null
 
   socket.emit('realtime:ready', { serverTime:Date.now(), authenticated:Boolean(auth) })
-  socket.on('disconnect', async (reason) => {
+  socket.on('disconnect', (reason) => {
     if (sessionCheck) clearInterval(sessionCheck)
     const pcId = presencePcId || socket.data.auth?.pcId || socket.data.guestPcId
     if (!pcId || (socket.data.auth?.role && socket.data.auth.role !== 'customer')) return
-    try {
-      const peers = await io.in(`pc:${pcId}`).fetchSockets()
-      if (peers.length > 0) return
-      const activeSession=db.prepare("SELECT id,member_id,billing_type FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(pcId)
-      if (activeSession) {
-        const paused=pauseActiveSession(pcId,{reason:'station_offline'})
-        if (paused?.created) {
-          const remaining=activeSession.billing_type==='prepaid' ? remainingSecondsForSession(paused.session) : null
-          if(activeSession.member_id && activeSession.billing_type==='prepaid') db.prepare('UPDATE members SET session_seconds_remaining=?,updated_at=? WHERE id=?').run(Number(remaining||0),new Date().toISOString(),activeSession.member_id)
-          emitSessionUpdated(activeSession.id,{pcId,memberId:activeSession.member_id,reason:'station_session_paused',remainingSeconds:remaining,locked:true})
-        }
+    const disconnectedAt = new Date().toISOString()
+    const previous = stationDisconnectTimers.get(pcId)
+    if (previous) clearTimeout(previous)
+    const timer = setTimeout(async () => {
+      stationDisconnectTimers.delete(pcId)
+      try {
+        const peers = await io.in(`pc:${pcId}`).fetchSockets()
+        if (peers.length > 0) return
+        const activeSession=db.prepare("SELECT id,member_id,billing_type FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(pcId)
+        const released = activeSession ? releaseStationSession(pcId,{reason:'station_disconnect',at:disconnectedAt,markAvailable:false}) : null
+        db.prepare("UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,'station_disconnect') WHERE pc_id=? AND revoked_at IS NULL")
+          .run(disconnectedAt,disconnectedAt,pcId)
+        db.prepare("UPDATE pcs SET status='offline',updated_at=? WHERE id=? AND status<>'maintenance'").run(new Date().toISOString(), pcId)
+        if (released?.released) emitSessionUpdated(activeSession.id,{pcId,memberId:activeSession.member_id,reason:'station_session_released',endReason:'station_disconnect',remainingSeconds:released.remainingSeconds,amountDue:released.amountDue,settlementPending:released.settlementPending,locked:true})
+        emitPcPresence(pcId, false, { reason })
+        emitDataChanged({ method:'SOCKET', path:'/pcs/presence', pcId, online:false })
+      } catch (error) {
+        console.warn('Unable to update PC presence:', error?.message || error)
       }
-      db.prepare("UPDATE pcs SET status='offline',updated_at=? WHERE id=? AND status<>'maintenance'").run(new Date().toISOString(), pcId)
-      emitPcPresence(pcId, false, { reason })
-      emitDataChanged({ method:'SOCKET', path:'/pcs/presence', pcId, online:false })
-    } catch (error) {
-      console.warn('Unable to update PC presence:', error?.message || error)
-    }
+    }, STATION_DISCONNECT_GRACE_MS)
+    stationDisconnectTimers.set(pcId,timer)
   })
 })
-const cleanup=()=>{try{clearInterval(cleanupTimer)
+const cleanup=()=>{try{clearInterval(cleanupTimer);for(const timer of stationDisconnectTimers.values())clearTimeout(timer);stationDisconnectTimers.clear()
   stopCloudSyncWorker();io.close();server.close(()=>{db.close();process.exit(0)})}catch{process.exit(0)}}
 process.on('SIGINT',cleanup);process.on('SIGTERM',cleanup)

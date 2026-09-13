@@ -48,6 +48,8 @@ async function localApiFetch(path, options = {}) {
     const cloudToken = getCloudStationCredential()?.stationToken || ''
     const stationToken = cloudToken || window.aezakmiClient?.getStationCredential?.() || localStorage.getItem('aezakmi.dev.station-token') || ''
     if (stationToken) headers.set('X-Aezakmi-Station-Token', stationToken)
+    const installationId = window.aezakmiClient?.getInstallationId?.() || ''
+    if (installationId) headers.set('X-Aezakmi-Installation-Id', installationId)
     if (cloudStationTransport() === 'fallback') headers.set('X-Aezakmi-Cloud-Fallback', '1')
   } catch {}
 

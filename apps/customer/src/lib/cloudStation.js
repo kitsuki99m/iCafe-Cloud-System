@@ -126,7 +126,7 @@ function connectWakeSocket() {
 export function startCloudStationRuntime() {
   if (!cloudStationFeatureEnabled() || !cloudStationPaired()) return
   if (!pollTimer) pollTimer=setInterval(()=>void pollCommands(),5000)
-  if (!heartbeatTimer) heartbeatTimer=setInterval(()=>void heartbeat(),10000)
+  if (!heartbeatTimer) heartbeatTimer=setInterval(()=>void heartbeat(),1000)
   connectWakeSocket();void heartbeat();void pollCommands()
 }
 export function resumeCloudStationRuntime() { transport='cloud';startCloudStationRuntime() }

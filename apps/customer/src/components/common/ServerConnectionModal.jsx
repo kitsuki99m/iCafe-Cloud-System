@@ -93,7 +93,7 @@ export default function ServerConnectionModal({ open, onClose, initialConfig = n
       onClose={closeModal}
       eyebrow="Station setup"
       title="Server Connection"
-      description="Change which cafe server this station uses without rebuilding. Tests stop after 4 seconds, and you can close the window while a test is being cancelled."
+      description="Choose this PC for standalone/local Café Edge, or point the station to another café server on the LAN. Local mode uses 127.0.0.1:3000 and starts the bundled backend automatically."
       maxWidth="max-w-lg"
       busy={isSaving}
       zIndexClass="z-[900]"
@@ -118,6 +118,19 @@ export default function ServerConnectionModal({ open, onClose, initialConfig = n
             <span>{status.message}</span>
           </div>
         )}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface-raised/50 px-3.5 py-3">
+          <div>
+            <p className="text-xs font-semibold text-ink-900">Use this Customer PC as the server</p>
+            <p className="mt-0.5 text-[11px] leading-5 text-slate-soft">Standalone mode · 127.0.0.1:3000</p>
+          </div>
+          <Button
+            variant="subtle"
+            disabled={Boolean(action)}
+            onClick={() => { setHost('127.0.0.1'); setPort('3000'); clearVerification() }}
+          >
+            Use This PC
+          </Button>
+        </div>
         <div className="grid gap-4 sm:grid-cols-[1fr_120px]">
           <div>
             <label className="eyebrow mb-2 block">Server IP / Hostname</label>
@@ -125,7 +138,7 @@ export default function ServerConnectionModal({ open, onClose, initialConfig = n
               autoFocus
               value={host}
               onChange={(event) => { setHost(event.target.value); clearVerification() }}
-              placeholder="192.168.254.126"
+              placeholder="127.0.0.1 or 192.168.1.10"
               autoComplete="off"
               spellCheck="false"
               className="min-h-11 w-full rounded-xl border border-surface-line customer-neutral-surface px-3.5 text-sm text-ink-900 placeholder:text-slate-soft outline-none focus:border-gold/50"
@@ -143,7 +156,7 @@ export default function ServerConnectionModal({ open, onClose, initialConfig = n
           </div>
         </div>
         <p className="text-[11px] leading-5 text-slate-soft">
-          Example: <span className="font-semibold text-ink-900">192.168.254.126</span> on port <span className="font-semibold text-ink-900">3000</span>. Test the connection before Save & Reload becomes available.
+          Local server: <span className="font-semibold text-ink-900">127.0.0.1</span> on port <span className="font-semibold text-ink-900">3000</span>. For a separate server PC, enter its LAN IP instead. Test the connection before Save & Reload becomes available.
         </p>
       </div>
     </Modal>

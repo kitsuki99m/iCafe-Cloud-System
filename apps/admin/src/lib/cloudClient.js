@@ -397,9 +397,9 @@ async function cloudPcs(branchId) {
   }
   return (stations || []).map((row) => {
     const session = sessionsByPc.get(String(row.local_id));
-    const cloudSeen = row.cloud_last_seen_at ? Date.now() - new Date(row.cloud_last_seen_at).getTime() < 30_000 : false;
+    const cloudSeen = row.cloud_last_seen_at ? Date.now() - new Date(row.cloud_last_seen_at).getTime() < 3_000 : false;
     const maintenance = String(row.status || "").toLowerCase() === "maintenance";
-    const status = session ? "occupied" : maintenance ? "maintenance" : cloudSeen ? "available" : (row.status || "offline");
+    const status = maintenance ? "maintenance" : !cloudSeen && row.station_device_id ? "offline" : session ? "occupied" : cloudSeen ? "available" : (row.status || "offline");
     return {
       id: String(row.local_id),
       pcNumber: row.pc_number ?? row.local_id,
@@ -411,7 +411,7 @@ async function cloudPcs(branchId) {
       session: cloudSessionView(session),
       stationDeviceId: row.station_device_id || null,
       cloudLastSeenAt: row.cloud_last_seen_at || null,
-      cloudConnectionStatus: row.cloud_connection_status || (row.station_device_id ? "offline" : "unpaired"),
+      cloudConnectionStatus: cloudSeen ? "online" : (row.station_device_id ? "offline" : "unpaired"),
       cloudOnline: cloudSeen,
       edgeId: row.edge_id || null,
       createdAt: row.created_at || null,
