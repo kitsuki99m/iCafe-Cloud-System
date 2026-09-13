@@ -12,7 +12,7 @@ const auth=authenticate
 const REMOTE_COMMAND_TIMEOUT_MS=15000
 const POS_ORDER_RESERVATION_MS=15*60*1000
 
-function recordPosRevenue(order,userId){const cents=Math.round(Number(order.total||0)*100);if(cents<=0||order.payment_method==='wallet')return;db.prepare("INSERT OR IGNORE INTO revenue_events(id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by,category,payment_method,member_id,pc_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(id(),'pos_sale','pos_order',order.id,cents,nowIso(),userId,'pos',order.payment_method,order.member_id,order.pc_id)}
+function recordPosRevenue(order,userId){const cents=Math.round(Number(order.total||0)*100);if(cents<=0)return;db.prepare("INSERT OR IGNORE INTO revenue_events(id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by,category,payment_method,member_id,pc_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(id(),'pos_sale','pos_order',order.id,cents,nowIso(),userId,'pos',order.payment_method,order.member_id,order.pc_id)}
 
 function applyCompletedCommand(command) {
   const now=nowIso()

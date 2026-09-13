@@ -368,22 +368,39 @@ function taxPolicyView() {
   };
 }
 
+function earningsRevenueRows(start, end) {
+  // Earned revenue is recognized when a service/product is consumed or
+  // settled. Wallet top-ups and starting wallet credits are stored customer
+  // value (a liability) until that value is actually spent, so legacy top-up
+  // revenue events are intentionally excluded from every earnings snapshot.
+  return db
+    .prepare(
+      `SELECT *
+       FROM revenue_events
+       WHERE occurred_at BETWEEN ? AND ?
+         AND event_type NOT IN ('wallet_top_up','member_initial_wallet')
+       ORDER BY occurred_at,id`,
+    )
+    .all(start, end);
+}
+
 function earningsSnapshot(period = "monthly", dateValue = null) {
   const bounds = reportBounds(period, dateValue);
-  const revenue = db
-    .prepare(
-      "SELECT * FROM revenue_events WHERE occurred_at BETWEEN ? AND ? ORDER BY occurred_at,id",
-    )
-    .all(bounds.start, bounds.end);
+  const revenue = earningsRevenueRows(bounds.start, bounds.end);
   const expenses = db
     .prepare(
       "SELECT * FROM expense_records WHERE voided_at IS NULL AND recorded_at BETWEEN ? AND ? ORDER BY recorded_at,id",
     )
     .all(bounds.start, bounds.end);
   const grossCents = revenue.reduce(
-    (sum, row) => sum + Number(row.amount_centavos || 0),
+    (sum, row) => sum + Math.max(0, Number(row.amount_centavos || 0)),
     0,
   );
+  const refundCents = revenue.reduce(
+    (sum, row) => sum + Math.max(0, -Number(row.amount_centavos || 0)),
+    0,
+  );
+  const netRevenueCents = grossCents - refundCents;
   const expenseCents = expenses.reduce(
     (sum, row) =>
       sum + Math.round(Number((row.signed_amount ?? row.amount) || 0) * 100),
@@ -409,9 +426,10 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
       )
       .get().total || 0,
   );
-  // Wallet-funded usage is a ledger metric, not revenue. Read the actual
-  // wallet debits at the time they occurred so prepaid starts/extensions and
-  // postpaid settlements are attributed to the selected earnings period.
+  // Keep wallet-funded usage as a separate reconciliation view. The revenue
+  // event ledger above is the source of truth for gross income; these wallet
+  // debits simply explain how much of that earned revenue was funded from
+  // stored member credit during the selected reporting period.
   const usage = db
     .prepare(
       `SELECT
@@ -438,18 +456,32 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
       (sum, row) => sum + Number(row.signed_amount ?? row.amount ?? 0),
       0,
     );
+  const walletFunding = Number(
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(amount),0) total
+         FROM wallet_transactions
+         WHERE created_at BETWEEN ? AND ?
+           AND amount > 0
+           AND type IN ('top_up','admin_top_up','paid_deposit')`,
+      )
+      .get(bounds.start, bounds.end).total || 0,
+  );
   const walletRevenue =
-    Number(walletUsage.prepaid || 0) +
-    Number(walletUsage.postpaid || 0) +
-    walletBalances;
+    Number(walletUsage.prepaid || 0) + Number(walletUsage.postpaid || 0);
   return {
     bounds,
     summary: {
       gross: grossCents / 100,
+      refunds: refundCents / 100,
+      netRevenue: netRevenueCents / 100,
       expenses: expenseCents / 100,
-      net: (grossCents - expenseCents) / 100,
+      net: (netRevenueCents - expenseCents) / 100,
       walletBalances,
+      walletFunding,
       taxProvision,
+      // Backward-compatible context field: wallet-funded session revenue that
+      // has actually been consumed/settled in this reporting window.
       walletRevenue,
     },
     categories,
@@ -481,12 +513,9 @@ function taxEstimate(dateValue = null, rateOverride = null) {
   const start = manilaIso(year, 1, 1),
     end = manilaIso(year, month, day, true);
   const grossYtd =
-    Number(
-      db
-        .prepare(
-          "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE occurred_at BETWEEN ? AND ?",
-        )
-        .get(start, end).cents || 0,
+    earningsRevenueRows(start, end).reduce(
+      (sum, row) => sum + Math.max(0, Number(row.amount_centavos || 0)),
+      0,
     ) / 100;
   const taxableGross = Math.max(0, grossYtd - policy.annualReduction);
   const liability = Math.round(taxableGross * (ratePercent / 100) * 100) / 100;
@@ -1912,16 +1941,6 @@ router.post("/members", auth, requireRole("admin"), async (req, res, next) => {
           startingWallet,
           "member_create",
           now,
-        );
-      if (startingWallet > 0)
-        recordRevenue(
-          "member_initial_wallet",
-          "member",
-          memberId,
-          startingWallet,
-          req.auth.userId,
-          now,
-          { paymentMethod: "cash", memberId },
         );
       log(req.auth.userId, "member.create", "member", memberId, null);
     });
@@ -3623,13 +3642,13 @@ router.get(
       Number(
         db
           .prepare(
-            "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE occurred_at>=?",
+            "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet')",
           )
           .get(today).cents,
       ) / 100;
     const analytics = db
       .prepare(
-        `SELECT date(datetime(occurred_at,'+8 hours')) day,COALESCE(SUM(amount_centavos),0)/100.0 revenue FROM revenue_events WHERE occurred_at>=? GROUP BY day ORDER BY day`,
+        `SELECT date(datetime(occurred_at,'+8 hours')) day,COALESCE(SUM(amount_centavos),0)/100.0 revenue FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet') GROUP BY day ORDER BY day`,
       )
       .all(week);
     const feedback = db
@@ -3685,7 +3704,7 @@ router.get("/analytics", auth, requireRole("admin"), (req, res) => {
     Number(
       db
         .prepare(
-          "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE occurred_at>=?",
+          "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet')",
         )
         .get(start).cents,
     ) / 100;
@@ -3701,7 +3720,7 @@ router.get("/analytics", auth, requireRole("admin"), (req, res) => {
     .all(start);
   const revenueSeries = db
     .prepare(
-      "SELECT date(datetime(occurred_at,'+8 hours')) day,SUM(amount_centavos)/100.0 revenue FROM revenue_events WHERE occurred_at>=? GROUP BY day ORDER BY day",
+      "SELECT date(datetime(occurred_at,'+8 hours')) day,SUM(amount_centavos)/100.0 revenue FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet') GROUP BY day ORDER BY day",
     )
     .all(start);
   const expenseSeries = db
@@ -4183,20 +4202,6 @@ router.post(
           "admin",
           nowIso(),
         );
-        if (delta > 0 && ["top_up", "paid_deposit"].includes(type))
-          recordRevenue(
-            "wallet_top_up",
-            "wallet_adjustment",
-            `${memberId}:${nowIso()}`,
-            delta,
-            req.auth.userId,
-            nowIso(),
-            {
-              paymentMethod: "cash",
-              memberId,
-              metadata: { adjustmentType: type },
-            },
-          );
         log(req.auth.userId, "wallet.adjust", "member", memberId, null, {
           amount: delta,
           type,
@@ -4407,19 +4412,6 @@ router.patch(
           "UPDATE top_up_requests SET status=?,processed_at=?,processed_by=? WHERE id=? AND status='pending'",
         ).run("approved", nowIso(), req.auth.userId, r.id);
         if (topUpChanged.changes !== 1) throw Object.assign(new Error("Top-up request state changed while processing."), { status:409, code:"TOPUP_STATE_CONFLICT", expose:true });
-        recordRevenue(
-          "wallet_top_up",
-          "top_up_request",
-          r.id,
-          Number(r.amount),
-          req.auth.userId,
-          nowIso(),
-          {
-            paymentMethod: r.payment_method,
-            memberId: r.member_id,
-            pcId: r.pc_id,
-          },
-        );
         log(req.auth.userId, "topup.approve", "top_up_request", r.id, r.pc_id, {
           amount: r.amount,
         });
@@ -4545,6 +4537,7 @@ router.post("/sessions/:id/settle-interrupted", auth, requireRole("admin"), (req
       const amountDue = Math.max(0, Number(session.unsettled_amount_due || 0));
       const settledAt = nowIso();
       let walletBalance = null;
+      let walletRevenueTransactionId = null;
       if (paymentMethod === "wallet") {
         if (!session.member_id) throw Object.assign(new Error("Guest postpaid sessions must be settled with cash."), { status:400, code:"MEMBER_REQUIRED", expose:true });
         const member = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(session.member_id);
@@ -4553,8 +4546,12 @@ router.post("/sessions/:id/settle-interrupted", auth, requireRole("admin"), (req
         if (before < amountDue) throw Object.assign(new Error("The member wallet does not have enough balance."), { status:402, code:"INSUFFICIENT_BALANCE", expose:true });
         walletBalance = before - amountDue;
         db.prepare("UPDATE members SET wallet_balance=?,updated_at=? WHERE id=?").run(walletBalance, settledAt, session.member_id);
-        if (amountDue > 0) db.prepare("INSERT INTO wallet_transactions(id,member_id,type,amount,balance_before,balance_after,reference_type,reference_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
-          .run(id(),session.member_id,"postpaid_settlement",-amountDue,before,walletBalance,"computer_session",session.id,settledAt);
+        if (amountDue > 0) {
+          walletRevenueTransactionId = id();
+          db.prepare("INSERT INTO wallet_transactions(id,member_id,type,amount,balance_before,balance_after,reference_type,reference_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
+            .run(walletRevenueTransactionId,session.member_id,"postpaid_settlement",-amountDue,before,walletBalance,"computer_session",session.id,settledAt);
+          recordRevenue("postpaid_settlement","wallet_transaction",walletRevenueTransactionId,amountDue,req.auth.userId,settledAt,{ paymentMethod:"wallet",memberId:session.member_id,pcId:session.pc_id,metadata:{ interrupted:true,computerSessionId:session.id } });
+        }
       } else if (amountDue > 0) {
         recordRevenue("postpaid_settlement","computer_session",session.id,amountDue,req.auth.userId,settledAt,{ paymentMethod:"cash",memberId:session.member_id,pcId:session.pc_id,metadata:{ interrupted:true } });
       }
@@ -4875,6 +4872,7 @@ router.post("/sessions/start", auth, (req, res, next) => {
       const sid = id();
       let walletUsed = 0;
       let cashDue = effectiveAmount;
+      let walletRevenueTransactionId = null;
       if (!resumed && billing === "prepaid" && memberId) {
         const before = Number(member.wallet_balance);
         if (req.auth.role === "customer" && before < effectiveAmount)
@@ -4896,10 +4894,11 @@ router.post("/sessions/start", auth, (req, res, next) => {
           db.prepare(
             "UPDATE members SET wallet_balance=?,session_seconds_remaining=0,updated_at=? WHERE id=?",
           ).run(after, nowIso(), memberId);
+          walletRevenueTransactionId = id();
           db.prepare(
             `INSERT INTO wallet_transactions (id,member_id,type,amount,balance_before,balance_after,reference_type,reference_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
           ).run(
-            id(),
+            walletRevenueTransactionId,
             memberId,
             "session_start",
             -walletUsed,
@@ -4907,7 +4906,7 @@ router.post("/sessions/start", auth, (req, res, next) => {
             after,
             "computer_session",
             sid,
-            nowIso(),
+            started,
           );
         } else {
           db.prepare(
@@ -4948,6 +4947,16 @@ router.post("/sessions/start", auth, (req, res, next) => {
       if (!resumed && effectiveBilling === 'prepaid' && plan && String(plan.promo_kind || 'none') !== 'none') {
         recordPromoRedemption({ plan, memberId, pcId, sessionId: sid, customerName: resolvedCustomerName, redeemedAt: started });
       }
+      if (!resumed && effectiveBilling === "prepaid" && walletUsed > 0 && walletRevenueTransactionId)
+        recordRevenue(
+          "session_start",
+          "wallet_transaction",
+          walletRevenueTransactionId,
+          walletUsed,
+          req.auth.userId,
+          started,
+          { paymentMethod: "wallet", memberId, pcId, metadata: { computerSessionId: sid } },
+        );
       if (!resumed && effectiveBilling === "prepaid" && cashDue > 0)
         recordRevenue(
           "session_start",
@@ -5077,6 +5086,7 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
       let closed;
       let amountDue = 0;
       let walletBalance = null;
+      let walletRevenueTransactionId = null;
       if (disposition === "settle") {
         const endedAt = nowIso();
         const elapsedSeconds = elapsedBillableSeconds(s);
@@ -5105,11 +5115,12 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
           db.prepare(
             "UPDATE members SET wallet_balance=?,session_seconds_remaining=0,updated_at=? WHERE id=?",
           ).run(walletBalance, endedAt, s.member_id);
-          if (amountDue > 0)
+          if (amountDue > 0) {
+            walletRevenueTransactionId = id();
             db.prepare(
               "INSERT INTO wallet_transactions(id,member_id,type,amount,balance_before,balance_after,reference_type,reference_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
             ).run(
-              id(),
+              walletRevenueTransactionId,
               s.member_id,
               "postpaid_settlement",
               -amountDue,
@@ -5119,6 +5130,7 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
               s.id,
               endedAt,
             );
+          }
         } else if (s.member_id)
           db.prepare(
             "UPDATE members SET session_seconds_remaining=0,updated_at=? WHERE id=?",
@@ -5147,15 +5159,15 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
           endedAt,
           req.auth.userId,
         );
-        if (paymentMethod !== "wallet")
+        if (amountDue > 0)
           recordRevenue(
             "postpaid_settlement",
-            "computer_session",
-            s.id,
+            paymentMethod === "wallet" ? "wallet_transaction" : "computer_session",
+            paymentMethod === "wallet" ? walletRevenueTransactionId : s.id,
             amountDue,
             req.auth.userId,
             endedAt,
-            { paymentMethod, memberId: s.member_id, pcId: s.pc_id },
+            { paymentMethod, memberId: s.member_id, pcId: s.pc_id, metadata: paymentMethod === "wallet" ? { computerSessionId: s.id } : undefined },
           );
         closed = { ...s, remainingSeconds: 0, endedAt };
       } else if (disposition === "forfeit") {
@@ -5344,23 +5356,33 @@ router.post(
             destination: s.member_id ? "wallet" : "cash",
           },
         );
-        const receivedCents = Number(
+        const recognizedCents = Number(
           db
             .prepare(
-              "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE source_type='computer_session' AND source_id=?",
+              `SELECT COALESCE(SUM(re.amount_centavos),0) cents
+               FROM revenue_events re
+               LEFT JOIN wallet_transactions wt
+                 ON re.source_type='wallet_transaction' AND re.source_id=wt.id
+               LEFT JOIN session_extensions se
+                 ON re.source_type='session_extension' AND re.source_id=se.id
+               WHERE (re.source_type='computer_session' AND re.source_id=?)
+                  OR (re.source_type='wallet_transaction'
+                      AND wt.reference_id=?
+                      AND wt.type IN ('session_start','session_extension'))
+                  OR (re.source_type='session_extension' AND se.computer_session_id=?)`,
             )
-            .get(s.id)?.cents || 0,
+            .get(s.id, s.id, s.id)?.cents || 0,
         );
-        const cashRefund = Math.min(
+        const revenueRefund = Math.min(
           refundAmount,
-          Math.max(0, receivedCents / 100),
+          Math.max(0, recognizedCents / 100),
         );
-        if (cashRefund > 0)
+        if (revenueRefund > 0)
           recordRevenue(
             "session_refund",
             "computer_session_refund",
             s.id,
-            -cashRefund,
+            -revenueRefund,
             req.auth.userId,
             endedAt,
             {
@@ -5577,13 +5599,14 @@ router.post("/session-extensions", auth, (req, res, next) => {
           );
         const before = Number(m.wallet_balance),
           after = before - numeric;
+        const walletRevenueTransactionId = id();
         db.prepare(
           "UPDATE members SET wallet_balance=?,updated_at=? WHERE id=?",
         ).run(after, nowIso(), s.member_id);
         db.prepare(
           `INSERT INTO wallet_transactions (id,member_id,type,amount,balance_before,balance_after,reference_type,reference_id,created_at) VALUES (?,?,?,?,?,?,?,?,?)`,
         ).run(
-          id(),
+          walletRevenueTransactionId,
           s.member_id,
           "session_extension",
           -numeric,
@@ -5615,6 +5638,15 @@ router.post("/session-extensions", auth, (req, res, next) => {
         if (String(plan.promo_kind || 'none') !== 'none') {
           recordPromoRedemption({ plan, memberId:s.member_id, pcId:s.pc_id, sessionId:s.id, customerName:s.customer_name });
         }
+        recordRevenue(
+          "session_extension",
+          "wallet_transaction",
+          walletRevenueTransactionId,
+          numeric,
+          req.auth.userId,
+          nowIso(),
+          { paymentMethod: "wallet", memberId: s.member_id, pcId: s.pc_id, metadata: { computerSessionId: s.id, extensionId: extId } },
+        );
         log(
           req.auth.userId,
           "session.extend.wallet",
@@ -5768,7 +5800,7 @@ router.post("/session-extensions/:id/confirm", auth, requireRole("admin"), (req,
         .run(approvedAt,req.auth.userId,ext.id);
       if(changed.changes!==1) throw Object.assign(new Error('Extension is no longer pending.'),{status:409,code:'EXTENSION_STATE_CONFLICT',expose:true});
       if(String(promoPlan?.promo_kind || 'none') !== 'none') recordPromoRedemption({plan:promoPlan,memberId:s.member_id,pcId:s.pc_id,sessionId:s.id,customerName:s.customer_name});
-      if(ext.payment_method!=='wallet') recordRevenue('session_extension','session_extension',ext.id,Number(ext.amount),req.auth.userId,approvedAt,{paymentMethod:ext.payment_method,memberId:ext.member_id,pcId:s.pc_id});
+      recordRevenue('session_extension','session_extension',ext.id,Number(ext.amount),req.auth.userId,approvedAt,{paymentMethod:ext.payment_method,memberId:ext.member_id,pcId:s.pc_id});
       if(ext.payment_method==='gcash') {
         const payment=db.prepare("SELECT id FROM payments WHERE reference=? AND status='pending'").get(`EXT-${ext.id}`);
         if(payment) db.prepare("UPDATE payments SET status='confirmed',confirmed_at=?,confirmed_by=? WHERE id=? AND status='pending'").run(approvedAt,req.auth.userId,payment.id);

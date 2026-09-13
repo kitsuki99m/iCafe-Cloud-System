@@ -479,9 +479,25 @@ export function migrate() {
     FROM computer_sessions cs
     WHERE cs.amount_paid IS NOT NULL AND cs.amount_paid > 0
       AND NOT EXISTS (
-        SELECT 1 FROM revenue_events recorded
-        WHERE recorded.source_type='computer_session' AND recorded.source_id=cs.id
+        SELECT 1
+        FROM revenue_events recorded
+        LEFT JOIN wallet_transactions wt
+          ON recorded.source_type='wallet_transaction' AND recorded.source_id=wt.id
+        LEFT JOIN session_extensions se
+          ON recorded.source_type='session_extension' AND recorded.source_id=se.id
+        WHERE (
+          recorded.source_type='computer_session'
+          AND recorded.source_id=cs.id
           AND recorded.event_type IN ('session_start','postpaid_settlement','session_total')
+        ) OR (
+          recorded.source_type='wallet_transaction'
+          AND wt.reference_id=cs.id
+          AND recorded.event_type IN ('session_start','session_extension','postpaid_settlement')
+        ) OR (
+          recorded.source_type='session_extension'
+          AND se.computer_session_id=cs.id
+          AND recorded.event_type='session_extension'
+        )
       );
     INSERT OR IGNORE INTO revenue_events(id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by)
     SELECT 'legacy-refund-' || id,'session_refund','computer_session',COALESCE(reference_id,id),-ROUND(amount*100),created_at,NULL
@@ -538,6 +554,71 @@ export function migrate() {
   if (!revenueCols.includes('pc_id')) db.exec('ALTER TABLE revenue_events ADD COLUMN pc_id TEXT')
   if (!revenueCols.includes('metadata')) db.exec('ALTER TABLE revenue_events ADD COLUMN metadata TEXT')
   if (!revenueCols.includes('reversed_event_id')) db.exec('ALTER TABLE revenue_events ADD COLUMN reversed_event_id TEXT')
+
+  // Gross earnings follow consumed services/products, not stored wallet credit.
+  // Backfill wallet-funded usage from the immutable wallet ledger so existing
+  // installations immediately report historical member usage correctly after
+  // this migration. A legacy session_total already represents the whole session,
+  // so wallet rows for that session are skipped to avoid double counting.
+  db.exec(`
+    INSERT OR IGNORE INTO revenue_events(
+      id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by,
+      category,payment_method,member_id,pc_id,metadata,reversed_event_id
+    )
+    SELECT
+      'wallet-earned-' || wt.id,
+      wt.type,
+      'wallet_transaction',
+      wt.id,
+      CAST(ROUND((-wt.amount) * 100) AS INTEGER),
+      wt.created_at,
+      NULL,
+      CASE
+        WHEN wt.type='session_start' THEN 'prepaid'
+        WHEN wt.type='session_extension' THEN 'extension'
+        WHEN wt.type='postpaid_settlement' THEN 'postpaid'
+      END,
+      'wallet',
+      wt.member_id,
+      cs.pc_id,
+      NULL,
+      NULL
+    FROM wallet_transactions wt
+    LEFT JOIN computer_sessions cs ON cs.id=wt.reference_id
+    WHERE wt.amount < 0
+      AND wt.type IN ('session_start','session_extension','postpaid_settlement')
+      AND wt.reference_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM revenue_events legacy
+        WHERE legacy.event_type='session_total'
+          AND legacy.source_type='computer_session'
+          AND legacy.source_id=wt.reference_id
+      );
+
+    INSERT OR IGNORE INTO revenue_events(
+      id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by,
+      category,payment_method,member_id,pc_id,metadata,reversed_event_id
+    )
+    SELECT
+      'wallet-pos-' || po.id,
+      'pos_sale',
+      'pos_order',
+      po.id,
+      CAST(ROUND(po.total * 100) AS INTEGER),
+      COALESCE(po.completed_at,po.created_at),
+      po.completed_by,
+      'pos',
+      'wallet',
+      po.member_id,
+      po.pc_id,
+      NULL,
+      NULL
+    FROM pos_orders po
+    WHERE po.status='completed'
+      AND po.payment_method='wallet'
+      AND po.total > 0;
+  `)
+
   const extensionCols = db.prepare('PRAGMA table_info(session_extensions)').all().map(c => c.name)
   if (!extensionCols.includes('rate_plan_id')) db.exec('ALTER TABLE session_extensions ADD COLUMN rate_plan_id TEXT')
   // Existing installations may contain more than one pending request for a session.

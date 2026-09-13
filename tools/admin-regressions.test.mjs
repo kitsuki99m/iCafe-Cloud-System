@@ -323,6 +323,67 @@ test('Earnings wallet-funded usage is derived from wallet ledger debits by usage
   assert.doesNotMatch(section, /settlement_method='wallet'/)
 })
 
+test('Earnings recognizes consumed wallet value instead of top-ups or remaining wallet balances', () => {
+  const source = read('backend/src/routes/apiRoutes.js')
+  const helperStart = source.indexOf('function earningsRevenueRows')
+  const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
+  const helper = source.slice(helperStart, helperEnd)
+  const snapshotStart = source.indexOf('function earningsSnapshot')
+  const snapshotEnd = source.indexOf('\nfunction taxEstimate', snapshotStart)
+  const snapshot = source.slice(snapshotStart, snapshotEnd)
+
+  assert.match(helper, /event_type NOT IN \('wallet_top_up','member_initial_wallet'\)/)
+  assert.match(snapshot, /const grossCents = revenue\.reduce/)
+  assert.match(snapshot, /Math\.max\(0, Number\(row\.amount_centavos \|\| 0\)\)/)
+  assert.match(snapshot, /type IN \('top_up','admin_top_up','paid_deposit'\)/)
+  assert.match(snapshot, /const walletRevenue =\s*Number\(walletUsage\.prepaid \|\| 0\) \+ Number\(walletUsage\.postpaid \|\| 0\)/)
+  assert.doesNotMatch(snapshot, /const walletRevenue\s*=\s*[^;\n]*walletBalances/)
+})
+
+test('wallet-funded sessions, extensions and settlements write earned revenue events', () => {
+  const source = read('backend/src/routes/apiRoutes.js')
+  assert.match(source, /"session_start",\s*"wallet_transaction",\s*walletRevenueTransactionId,\s*walletUsed/s)
+  assert.match(source, /"session_extension",\s*"wallet_transaction",\s*walletRevenueTransactionId,\s*numeric/s)
+  assert.match(source, /"postpaid_settlement",\s*paymentMethod === "wallet" \? "wallet_transaction" : "computer_session"/s)
+  assert.match(source, /"postpaid_settlement","wallet_transaction",walletRevenueTransactionId,amountDue/s)
+})
+
+test('wallet top-ups stay in the wallet ledger and are not recorded as immediate revenue', () => {
+  const source = read('backend/src/routes/apiRoutes.js')
+  const calls = [...source.matchAll(/recordRevenue\([\s\S]{0,160}?\)/g)].map((match) => match[0]).join('\n')
+  assert.doesNotMatch(calls, /["']wallet_top_up["']/)
+  assert.doesNotMatch(calls, /["']member_initial_wallet["']/)
+})
+
+test('wallet POS sales are recognized when the order is completed', () => {
+  const source = read('backend/src/routes/operationsRoutes.js')
+  const start = source.indexOf('function recordPosRevenue')
+  const end = source.indexOf('\n\nfunction applyCompletedCommand', start)
+  const section = source.slice(start, end)
+  assert.match(section, /if\(cents<=0\)return/)
+  assert.doesNotMatch(section, /payment_method===['"]wallet['"]/)
+  assert.match(section, /['"]pos_sale['"]/)
+})
+
+test('historical wallet-funded usage is backfilled without double-counting legacy session totals', () => {
+  const source = read('backend/src/db/schema.js')
+  assert.match(source, /wt\.type IN \('session_start','session_extension','postpaid_settlement'\)/)
+  assert.match(source, /legacy\.event_type='session_total'/)
+  assert.match(source, /'wallet-' \|\| wt\.id|wallet_transaction/)
+  assert.match(source, /payment_method[\s\S]*'wallet'/)
+})
+
+test('session refunds reverse recognized cash or wallet session revenue', () => {
+  const source = read('backend/src/routes/apiRoutes.js')
+  const start = source.indexOf('const recognizedCents = Number(')
+  const end = source.indexOf('return { balance };', start)
+  const section = source.slice(start, end)
+  assert.match(section, /LEFT JOIN wallet_transactions wt/)
+  assert.match(section, /wt\.type IN \('session_start','session_extension'\)/)
+  assert.match(section, /LEFT JOIN session_extensions se/)
+  assert.match(section, /-revenueRefund/)
+})
+
 test('Earnings page refreshes its snapshot when realtime data changes', () => {
   const source = read('apps/admin/src/pages/EarningsPage.jsx')
   assert.match(source, /connectSocket/)
