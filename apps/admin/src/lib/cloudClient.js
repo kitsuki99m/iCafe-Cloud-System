@@ -369,7 +369,12 @@ function cloudSessionView(row) {
     billing,
     amount: Number(raw.amount ?? raw.amountPaid ?? row.amount_paid ?? 0),
     prepaidSeconds: Number(raw.prepaidSeconds ?? row.prepaid_seconds ?? 0) || null,
-    postpaidRatePerMinute: raw.postpaidRatePerMinute ?? row.postpaid_rate_per_minute ?? null,
+    postpaidRatePerMinute: (() => {
+      const value = raw.postpaidRatePerMinute ?? row.postpaid_rate_per_minute;
+      if (value === null || value === undefined || value === "") return null;
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    })(),
     startedAt,
     expiresAt,
     status: row.status || raw.status || "active",
@@ -416,11 +421,21 @@ async function cloudPcs(branchId) {
 }
 function cloudRatePlan(row) {
   const data = camelizeObject(row?.data || {});
+  const optionalNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  };
   return {
     ...data,
     id: String(row.local_id ?? data.id ?? ""),
     isActive: data.isActive ?? Boolean(data.is_active ?? true),
     customerSelfService: data.customerSelfService ?? Boolean(data.customer_self_service),
+    pesoUnit: optionalNumber(data.pesoUnit),
+    minutesPerUnit: optionalNumber(data.minutesPerUnit),
+    minAmount: optionalNumber(data.minAmount),
+    amount: optionalNumber(data.amount),
+    minutes: optionalNumber(data.minutes),
   };
 }
 function cloudMember(row) {

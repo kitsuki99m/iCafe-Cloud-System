@@ -33,8 +33,25 @@ function normalizePc(pc) {
       id: pc.session.id != null ? String(pc.session.id) : pc.session.id,
       customerId: pc.session.customerId ?? pc.session.customer_id ?? null,
       ratePlanId: pc.session.ratePlanId ?? pc.session.rate_plan_id ?? null,
+      amount: finiteOr(pc.session.amount ?? pc.session.amount_paid, 0),
+      prepaidSeconds: finiteOrNull(pc.session.prepaidSeconds ?? pc.session.prepaid_seconds),
+      pausedRemainingSeconds: finiteOrNull(pc.session.pausedRemainingSeconds ?? pc.session.paused_remaining_seconds),
+      remainingSeconds: finiteOrNull(pc.session.remainingSeconds ?? pc.session.remaining_seconds),
+      accruedAmount: finiteOrNull(pc.session.accruedAmount ?? pc.session.accrued_amount),
+      postpaidRatePerMinute: finiteOrNull(pc.session.postpaidRatePerMinute ?? pc.session.postpaid_rate_per_minute),
     } : null,
   }
+}
+
+function finiteOr(value, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
+
+function finiteOrNull(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
 }
 
 function normalizeRatePlan(plan) {
@@ -44,13 +61,33 @@ function normalizeRatePlan(plan) {
     id: plan.id != null ? String(plan.id) : plan.id,
     isActive: plan.isActive ?? Boolean(plan.is_active ?? true),
     customerSelfService: plan.customerSelfService ?? Boolean(plan.customer_self_service),
+    pesoUnit: finiteOrNull(plan.pesoUnit ?? plan.peso_unit),
+    minutesPerUnit: finiteOrNull(plan.minutesPerUnit ?? plan.minutes_per_unit),
+    minAmount: finiteOrNull(plan.minAmount ?? plan.min_amount),
+    amount: finiteOrNull(plan.amount),
+    minutes: finiteOrNull(plan.minutes),
   }
 }
 
 function normalizeMember(member) {
   if (!member) return member
-  const wallet = Number(member.wallet ?? member.walletBalance ?? 0)
-  return { ...member, wallet, walletBalance: wallet }
+  const wallet = finiteOr(member.wallet ?? member.walletBalance, 0)
+  return {
+    ...member,
+    wallet,
+    walletBalance: wallet,
+    sessionSecondsRemaining: finiteOr(member.sessionSecondsRemaining ?? member.session_seconds_remaining, 0),
+  }
+}
+
+function normalizeSettings(settings = {}) {
+  return {
+    ...EMPTY_SETTINGS,
+    ...settings,
+    postpaidMinutesPerPeso: finiteOr(settings.postpaidMinutesPerPeso ?? settings.postpaid_minutes_per_peso, EMPTY_SETTINGS.postpaidMinutesPerPeso),
+    lowTimeWarningMinutes: finiteOr(settings.lowTimeWarningMinutes ?? settings.low_time_warning_minutes, EMPTY_SETTINGS.lowTimeWarningMinutes),
+    decimalPlaces: finiteOr(settings.decimalPlaces ?? settings.decimal_places, EMPTY_SETTINGS.decimalPlaces),
+  }
 }
 
 function normalizeSessionExtension(extension) {
@@ -145,7 +182,7 @@ export function AppDataProvider({ children }) {
         supportRequests = (supportData.supportRequests ?? []).map((request) => ({ ...request }))
         sessionExtensions = (extensionsData.extensions ?? []).map(normalizeSessionExtension)
         announcements = announcementsData.announcements ?? []
-        settings = { ...EMPTY_SETTINGS, ...(settingsData.settings ?? {}) }
+        settings = normalizeSettings(settingsData.settings ?? {})
       } else {
         const [memberData, settingsData, announcementsData] = await Promise.all([
           apiGet('/members/me'),
@@ -153,7 +190,7 @@ export function AppDataProvider({ children }) {
           apiGet('/announcements'),
         ])
         members = memberData.member ? [normalizeMember(memberData.member)] : []
-        settings = { ...EMPTY_SETTINGS, ...(settingsData.settings ?? {}) }
+        settings = normalizeSettings(settingsData.settings ?? {})
         announcements = announcementsData.announcements ?? []
       }
 

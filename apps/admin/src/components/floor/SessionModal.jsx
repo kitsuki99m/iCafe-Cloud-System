@@ -10,8 +10,9 @@ const QUICK_AMOUNTS = [5, 10, 15]
 const TIER_RANK = { Regular: 0, Gold: 1, VIP: 2 }
 const planTierRank = (plan) => TIER_RANK[String(plan?.customerTier ?? 'Regular')] ?? 0
 
-function peso(n) {
-  return `₱${(n ?? 0).toFixed(2)}`
+function peso(value) {
+  const number = Number(value)
+  return `₱${(Number.isFinite(number) ? number : 0).toFixed(2)}`
 }
 
 function formatDuration(totalMinutes) {
@@ -542,11 +543,11 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
             <div className="rounded-lg border border-teal/20 bg-teal/5 px-3 py-2.5">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-slate-soft">Wallet applied</span>
-                <span className="stat-figure font-semibold text-teal-dim">₱{walletApplied.toFixed(2)}</span>
+                <span className="stat-figure font-semibold text-teal-dim">{peso(walletApplied)}</span>
               </div>
               <div className="mt-1 flex items-center justify-between gap-3 text-xs">
                 <span className="text-slate-soft">Cash due at counter</span>
-                <span className="stat-figure font-semibold text-ink-900">₱{cashDue.toFixed(2)}</span>
+                <span className="stat-figure font-semibold text-ink-900">{peso(cashDue)}</span>
               </div>
               <p className="mt-1.5 text-[10px] text-slate-soft">The member wallet is automatically used first for prepaid session time. Any remaining amount is collected at the counter.</p>
             </div>
