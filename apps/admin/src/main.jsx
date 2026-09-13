@@ -7,8 +7,10 @@ import { ThemeProvider } from './context/ThemeContext.jsx'
 import App from './App.jsx'
 import { cloudConsumeAuthCallback } from './lib/cloudClient.js'
 import './index.css'
+import { registerAdminPwa } from './lib/pwa.js'
 
 cloudConsumeAuthCallback()
+registerAdminPwa()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

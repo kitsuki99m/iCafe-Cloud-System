@@ -15,6 +15,7 @@ import Button from '../common/Button.jsx'
 import CloudBranchPicker from '../cloud/CloudBranchPicker.jsx'
 import { isCloudAdmin, cloudVerifyPassword } from '../../lib/cloudClient.js'
 import AdminSectionManual, { hasSectionManual } from '../admin/AdminSectionManual.jsx'
+import PwaInstallButton from '../common/PwaInstallButton.jsx'
 
 const BASE_NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -260,6 +261,7 @@ export default function MainLayout({ children }) {
             </div>
           </nav>
           <div className="shrink-0 border-t border-[var(--admin-ui-border)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <PwaInstallButton />
             <div className="admin-sidebar-status mb-3 flex items-center gap-2.5 rounded-xl px-3 py-2.5">
               <span className={`h-2 w-2 shrink-0 rounded-full ${serverError?'bg-ember':'bg-teal'}`}/>
               <div className="min-w-0"><p className="text-[11px] font-semibold text-ink-900">{serverError?(cloud?'Edge Offline':'Server Offline'):(cloud?'Edge Online':'Server Online')}</p><p className="mt-0.5 truncate text-[9px] text-slate-soft">{cloud?'Supabase ↔ Edge':'Local network'}</p></div>
