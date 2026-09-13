@@ -4,24 +4,27 @@ import fs from 'node:fs'
 
 const read=(file)=>fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8')
 
-test('guest forfeit/refund waits for Customer Station exit acknowledgement',()=>{
+test('member and guest forfeit/refund wait for Customer Station exit acknowledgement',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
-  assert.match(admin,/prepareGuestSessionClose/)
+  assert.match(admin,/prepareSessionClose/)
   assert.match(admin,/waitForStationCommand/)
   assert.match(admin,/sessionClose:true/)
-  assert.match(admin,/await prepareGuestSessionClose\(pc, 'forfeit'\)/)
-  assert.match(admin,/await prepareGuestSessionClose\(pc, 'refund'\)/)
+  assert.match(admin,/await prepareSessionClose\(pc, 'forfeit'\)/)
+  assert.match(admin,/await prepareSessionClose\(pc, 'refund'\)/)
+  assert.match(admin,/command:'game_update'/)
   assert.match(admin,/No forfeit or refund was committed/)
 })
 
-test('Customer Station ACKs close only after local guest UI is released',()=>{
+test('Customer Station ACKs close only after the Electron kiosk is locally protected',()=>{
   const customer=read('apps/customer/src/context/AppDataContext.jsx')
   assert.match(customer,/const sessionClose=Boolean\(payload\?\.payload\?\.sessionClose\)/)
-  const clear=customer.indexOf('await clearStationLifecycleMarker()',customer.indexOf('const sessionClose='))
-  const interrupt=customer.indexOf("aezakmi:admin-session-interruption",clear)
-  const ack=customer.indexOf("await ack('completed'",interrupt)
-  assert.ok(clear>0 && interrupt>clear && ack>interrupt)
+  const start=customer.indexOf('const sessionClose=')
+  const lock=customer.indexOf("executeRemoteCommand",start)
+  const ack=customer.indexOf("await ack('completed'",lock)
+  assert.ok(lock>start && ack>lock)
+  assert.match(customer,/command:'lock'/)
   assert.match(customer,/sessionExitReady:true/)
+  assert.doesNotMatch(customer.slice(start,ack),/clearStationLifecycleMarker/)
 })
 
 test('refund UI is mutually exclusive with other session actions',()=>{
@@ -29,7 +32,7 @@ test('refund UI is mutually exclusive with other session actions',()=>{
   assert.match(modal,/function RefundControl\(\{ pc, refundableAmount, onRefund, busy = false \}\)/)
   assert.match(modal,/const disabled = refundableAmount <= 0 \|\| busy/)
   assert.match(modal,/busy=\{!!sessionAction\}/)
-  assert.match(modal,/Waiting for Customer Station to return to the login kiosk/)
+  assert.match(modal,/Protecting Customer Station and waiting for its close acknowledgement/)
 })
 
 test('command status can be polled locally and through Cloud Admin',()=>{

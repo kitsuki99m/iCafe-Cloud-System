@@ -263,156 +263,9 @@ function markActiveSession(data={}){const stamp=new Date().toISOString();return 
 let lifecycleTouchAt=0
 function touchSessionLifecycle(data={}){const nowMs=Date.now();if(nowMs-lifecycleTouchAt<3000)return true;const current=readSessionLifecycleMarker();if(!current?.active)return true;lifecycleTouchAt=nowMs;const next={...current,lastSeenAt:new Date(nowMs).toISOString(),checkpointedAt:new Date(nowMs).toISOString()};if(data?.username!=null)next.username=String(data.username);if(data?.pcLabel!=null)next.pcLabel=String(data.pcLabel);if(Number.isFinite(Number(data?.balance)))next.balance=Number(data.balance);if(Number.isFinite(Number(data?.remainingSeconds)))next.remainingSeconds=Math.max(0,Math.floor(Number(data.remainingSeconds)));writeSessionLifecycleMarker(next);return true}
 function markSessionExit(data={}){const current=readSessionLifecycleMarker()||{};const existingAt=current.exitRequestedAt||null;return writeSessionLifecycleMarker({...current,active:true,runtimeInstanceId:current.runtimeInstanceId||lifecycleRuntimeId,exitReason:String(data?.reason||current.exitReason||'station_exit'),exitRequestedAt:existingAt||String(data?.interruptedAt||new Date().toISOString())})}
-function clearSessionLifecycleMarker(){try{fs.unlinkSync(sessionLifecyclePath())}catch{}void tryInstallPendingUpdate();return true}
+function clearSessionLifecycleMarker(){try{fs.unlinkSync(sessionLifecyclePath())}catch{}return true}
 
-const updateRuntime={status:'managed',currentVersion:app.getVersion(),availableVersion:null,downloadedVersion:null,progress:null,lastCheckedAt:null,error:null,installerPath:null,releaseNotes:null,installWhenIdle:false,managedByAdmin:true}
-let updateInstallTimer=null
-let updateDownloadPromise=null
-let activeUpdateController=null
-function updateConfigPath(){return path.join(app.getPath('userData'),'update-config.json')}
-function updateDeploymentPath(){return path.join(app.getPath('userData'),'update-deployment.json')}
-function readUpdateConfig(){
-  let saved={}
-  try{saved=JSON.parse(fs.readFileSync(updateConfigPath(),'utf8'))||{}}catch{}
-  const manifestUrl=String(process.env.AEZAKMI_CUSTOMER_UPDATE_MANIFEST_URL||saved.manifestUrl||saved.url||'').trim()
-  const allowInsecure=String(process.env.AEZAKMI_ALLOW_INSECURE_UPDATE_URL??saved.allowInsecure??'false').toLowerCase()==='true'
-  return{manifestUrl,allowInsecure}
-}
-function readUpdateDeployment(){try{const value=JSON.parse(fs.readFileSync(updateDeploymentPath(),'utf8'));return value&&typeof value==='object'?value:{}}catch{return{}}}
-function writeUpdateDeployment(value={}){const file=updateDeploymentPath();const temp=`${file}.tmp`;try{fs.writeFileSync(temp,JSON.stringify(value,null,2),{encoding:'utf8',mode:0o600});fs.renameSync(temp,file)}catch{}return value}
-function clearUpdateDeployment(){try{fs.rmSync(updateDeploymentPath(),{force:true})}catch{}}
-function publicUpdateInfo(){return{status:updateRuntime.status,currentVersion:updateRuntime.currentVersion,availableVersion:updateRuntime.availableVersion,downloadedVersion:updateRuntime.downloadedVersion,progress:updateRuntime.progress,lastCheckedAt:updateRuntime.lastCheckedAt,error:updateRuntime.error,releaseNotes:updateRuntime.releaseNotes,installWhenIdle:Boolean(updateRuntime.installWhenIdle),managedByAdmin:true}}
-function sendUpdateState(){try{if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('customer:update-state',publicUpdateInfo())}catch{}}
-function setUpdateState(patch){Object.assign(updateRuntime,patch);sendUpdateState();return publicUpdateInfo()}
-function parseVersion(value){const text=String(value||'0.0.0').trim().replace(/^v/i,'').split('+')[0],parts=text.split('-',2),core=parts[0].split('.').map(part=>Number.parseInt(part,10)||0),pre=parts.length>1?parts[1].split('.'):[];return{core:[core[0]||0,core[1]||0,core[2]||0],pre}}
-function compareVersions(a,b){const av=parseVersion(a),bv=parseVersion(b);for(let i=0;i<3;i++){if(av.core[i]!==bv.core[i])return av.core[i]>bv.core[i]?1:-1}if(!av.pre.length&&!bv.pre.length)return 0;if(!av.pre.length)return 1;if(!bv.pre.length)return-1;for(let i=0;i<Math.max(av.pre.length,bv.pre.length);i++){const x=av.pre[i],y=bv.pre[i];if(x==null)return-1;if(y==null)return 1;if(x===y)continue;const xn=/^\d+$/.test(x),yn=/^\d+$/.test(y);if(xn&&yn)return Number(x)>Number(y)?1:-1;if(xn!==yn)return xn?-1:1;return x>y?1:-1}return 0}
-function updateUrlAllowed(raw,allowInsecure=false){try{const parsed=new URL(raw);if(parsed.protocol==='https:')return true;if(allowInsecure&&parsed.protocol==='http:')return true;return false}catch{return false}}
-function safeUpdateFileName(value){const base=path.basename(String(value||''));if(!base||base!==String(value||'')||!base.toLowerCase().endsWith('.exe'))throw new Error('Update manifest contains an invalid installer file name.');return base}
-async function sha256File(file){return await new Promise((resolve,reject)=>{const hash=crypto.createHash('sha256'),stream=fs.createReadStream(file);stream.on('data',chunk=>hash.update(chunk));stream.on('error',reject);stream.on('end',()=>resolve(hash.digest('hex')))})}
-function stationHasProtectedSession(){
-  if(windowState===WINDOW_STATES.ACTIVE||sessionStartTransitionPending||remoteLockSnapshot?.windowState===WINDOW_STATES.ACTIVE)return true
-  const marker=readSessionLifecycleMarker()
-  return Boolean(marker?.active)
-}
-function updateInstallSafe(){return process.platform==='win32'&&windowState===WINDOW_STATES.LOCKED&&!stationHasProtectedSession()&&!appIsQuitting}
-function resolveUpdateSource(explicitUrl='',explicitAllowInsecure=null){
-  const config=readUpdateConfig(),manifestUrl=String(explicitUrl||config.manifestUrl||'').trim()
-  const allowInsecure=explicitAllowInsecure==null?config.allowInsecure:Boolean(explicitAllowInsecure)
-  if(!manifestUrl)throw Object.assign(new Error('Admin did not provide a Customer update source.'),{code:'UPDATE_SOURCE_MISSING'})
-  if(!updateUrlAllowed(manifestUrl,allowInsecure))throw Object.assign(new Error('Customer update manifest must use HTTPS unless Admin explicitly selected a trusted LAN source.'),{code:'UPDATE_URL_INSECURE'})
-  return{manifestUrl,allowInsecure}
-}
-async function downloadCustomerUpdate(manifest,manifestUrl,{allowInsecure=false}={}){
-  if(updateDownloadPromise)return updateDownloadPromise
-  updateDownloadPromise=(async()=>{
-    const file=safeUpdateFileName(manifest.file),targetDir=path.join(app.getPath('userData'),'updates',String(manifest.version)),target=path.join(targetDir,file),partial=`${target}.part`
-    fs.mkdirSync(targetDir,{recursive:true})
-    setUpdateState({status:'downloading',progress:0,error:null,availableVersion:String(manifest.version)})
-    const source=new URL(file,manifestUrl).toString()
-    if(!updateUrlAllowed(source,allowInsecure))throw Object.assign(new Error('Update installer URL must use HTTPS unless Admin selected a trusted LAN source.'),{code:'UPDATE_URL_INSECURE'})
-    const controller=new AbortController();activeUpdateController=controller
-    const timeout=setTimeout(()=>controller.abort('timeout'),5*60_000)
-    try{
-      const response=await fetch(source,{cache:'no-store',signal:controller.signal})
-      if(!response.ok||!response.body)throw new Error(`Update download failed (${response.status}).`)
-      const total=Number(response.headers.get('content-length')||manifest.size||0)
-      let received=0,lastEmit=0
-      const sourceStream=Readable.fromWeb(response.body)
-      sourceStream.on('data',chunk=>{received+=chunk.length;const now=Date.now();if(now-lastEmit>400){lastEmit=now;setUpdateState({progress:total>0?Math.min(100,Math.round(received/total*100)):null})}})
-      await pipeline(sourceStream,fs.createWriteStream(partial,{flags:'w'}))
-    }finally{clearTimeout(timeout);if(activeUpdateController===controller)activeUpdateController=null}
-    const expected=String(manifest.sha256||'').trim().toLowerCase()
-    if(!/^[a-f0-9]{64}$/.test(expected))throw new Error('Update manifest is missing a valid SHA-256 checksum.')
-    const actual=String(await sha256File(partial)).toLowerCase()
-    if(actual!==expected){try{fs.rmSync(partial,{force:true})}catch{};throw Object.assign(new Error('Update checksum verification failed.'),{code:'UPDATE_CHECKSUM_FAILED'})}
-    try{fs.rmSync(target,{force:true})}catch{}
-    fs.renameSync(partial,target)
-    setUpdateState({status:updateRuntime.installWhenIdle&&!updateInstallSafe()?'waiting_idle':'ready',downloadedVersion:String(manifest.version),installerPath:target,progress:100,error:null})
-    return true
-  })().catch(error=>{
-    const cancelled=error?.name==='AbortError'||String(error?.message||'').toLowerCase().includes('abort')
-    setUpdateState({status:cancelled?'cancelled':'error',error:cancelled?'Update download cancelled by Admin.':(error?.message||String(error)),progress:null})
-    return false
-  }).finally(()=>{updateDownloadPromise=null})
-  return updateDownloadPromise
-}
-async function checkCustomerUpdate({manifestUrl='',allowInsecure=null,download=false,targetVersion=''}={}){
-  if(isDev)return setUpdateState({status:'development',lastCheckedAt:new Date().toISOString(),error:null})
-  if(updateRuntime.status==='installing')return publicUpdateInfo()
-  const source=resolveUpdateSource(manifestUrl,allowInsecure)
-  setUpdateState({status:'checking',error:null})
-  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),20000)
-  try{
-    const response=await fetch(source.manifestUrl,{cache:'no-store',headers:{'Accept':'application/json'},signal:controller.signal})
-    if(!response.ok)throw new Error(`Update manifest request failed (${response.status}).`)
-    const manifest=await response.json()
-    const version=String(manifest?.version||'').trim()
-    if(!version)throw new Error('Update manifest does not contain a version.')
-    if(targetVersion&&String(targetVersion)!==version)throw Object.assign(new Error(`Admin requested ${targetVersion}, but this release feed currently provides ${version}.`),{code:'UPDATE_VERSION_MISMATCH'})
-    const lastCheckedAt=new Date().toISOString()
-    if(compareVersions(version,app.getVersion())<=0){clearUpdateDeployment();return setUpdateState({status:'current',availableVersion:null,downloadedVersion:null,installerPath:null,releaseNotes:null,lastCheckedAt,error:null,progress:null,installWhenIdle:false})}
-    setUpdateState({status:'available',availableVersion:version,releaseNotes:String(manifest?.releaseNotes||''),lastCheckedAt,error:null})
-    if(download)await downloadCustomerUpdate(manifest,source.manifestUrl,{allowInsecure:source.allowInsecure})
-    return publicUpdateInfo()
-  }catch(error){return setUpdateState({status:'error',lastCheckedAt:new Date().toISOString(),error:error?.name==='AbortError'?'Update check timed out.':(error?.message||String(error))})}
-  finally{clearTimeout(timeout)}
-}
-function launchPendingInstaller(){
-  if(!updateRuntime.installerPath||!fs.existsSync(updateRuntime.installerPath)||!updateInstallSafe())return false
-  const installer=updateRuntime.installerPath,installDir=customerInstallRoot(),currentExe=process.execPath
-  const ps=(value)=>`'${String(value).replace(/'/g,"''")}'`
-  const script=`Wait-Process -Id ${process.pid} -ErrorAction SilentlyContinue; $p=Start-Process -FilePath ${ps(installer)} -ArgumentList @('/S',${ps(`/D=${installDir}`)}) -Wait -PassThru; if ($p.ExitCode -eq 0 -and (Test-Path ${ps(currentExe)})) { Start-Process -FilePath ${ps(currentExe)} }`
-  try{
-    const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-WindowStyle','Hidden','-ExecutionPolicy','Bypass','-Command',script],{detached:true,stdio:'ignore',windowsHide:true})
-    child.unref();clearUpdateDeployment();appIsQuitting=true;setTimeout(()=>app.quit(),400);return true
-  }catch(error){setUpdateState({status:'error',error:`Unable to launch updater: ${error?.message||error}`});return false}
-}
-async function tryInstallPendingUpdate(){
-  if(!updateRuntime.installWhenIdle||!['ready','waiting_idle'].includes(updateRuntime.status)||!updateRuntime.installerPath||!fs.existsSync(updateRuntime.installerPath))return false
-  if(!updateInstallSafe()){if(updateRuntime.status!=='waiting_idle')setUpdateState({status:'waiting_idle'});return false}
-  setUpdateState({status:'installing',error:null})
-  // Give the renderer enough time to acknowledge the Admin command before the
-  // Electron process exits and NSIS replaces the application files.
-  setTimeout(()=>{if(!launchPendingInstaller())setUpdateState({status:'error',error:updateRuntime.error||'Unable to start Customer update installer.'})},1800)
-  return true
-}
-async function handleAdminUpdateCommand(input={}){
-  const action=String(input.action||input.command||'').toLowerCase()
-  const manifestUrl=String(input.manifestUrl||input.manifest_url||'').trim()
-  const allowInsecure=input.allowInsecure??input.allow_insecure??null
-  const targetVersion=String(input.targetVersion||input.version||'').trim()
-  if(action==='customer_update_cancel'){
-    try{activeUpdateController?.abort()}catch{}
-    updateRuntime.installWhenIdle=false;clearUpdateDeployment()
-    return setUpdateState({status:updateRuntime.downloadedVersion?'ready':'managed',error:null,installWhenIdle:false})
-  }
-  if(action==='customer_update_check')return checkCustomerUpdate({manifestUrl,allowInsecure,targetVersion})
-  if(action==='customer_update_download')return checkCustomerUpdate({manifestUrl,allowInsecure,download:true,targetVersion})
-  if(action==='customer_update_install_when_idle'||action==='customer_update_install_now'){
-    updateRuntime.installWhenIdle=true
-    writeUpdateDeployment({installWhenIdle:true,manifestUrl,targetVersion,allowInsecure:Boolean(allowInsecure),requestedAt:new Date().toISOString()})
-    if(!updateRuntime.downloadedVersion||!updateRuntime.installerPath||!fs.existsSync(updateRuntime.installerPath)||(targetVersion&&String(updateRuntime.downloadedVersion)!==targetVersion)){
-      await checkCustomerUpdate({manifestUrl,allowInsecure,download:true,targetVersion})
-    }
-    if(updateRuntime.status==='current'){updateRuntime.installWhenIdle=false;clearUpdateDeployment();return publicUpdateInfo()}
-    if(!updateRuntime.downloadedVersion||!updateRuntime.installerPath||!fs.existsSync(updateRuntime.installerPath))return publicUpdateInfo()
-    if(action==='customer_update_install_now'&&!updateInstallSafe()){
-      updateRuntime.installWhenIdle=false;clearUpdateDeployment()
-      throw Object.assign(new Error('Install Now is blocked while a member/guest session or protected station state is active. Use Install When Idle instead.'),{code:'UPDATE_NOT_SAFE'})
-    }
-    setUpdateState({status:updateInstallSafe()?'ready':'waiting_idle',installWhenIdle:true,error:null})
-    void tryInstallPendingUpdate()
-    return publicUpdateInfo()
-  }
-  throw Object.assign(new Error('Unsupported Customer update command.'),{code:'INVALID_UPDATE_COMMAND'})
-}
-function startCustomerUpdater(){
-  if(isDev){setUpdateState({status:'development'});return}
-  setUpdateState({status:'managed',managedByAdmin:true,error:null})
-  updateInstallTimer=setInterval(()=>void tryInstallPendingUpdate(),3000)
-  const pending=readUpdateDeployment()
-  if(pending?.installWhenIdle){setTimeout(()=>void handleAdminUpdateCommand({action:'customer_update_install_when_idle',manifestUrl:pending.manifestUrl,targetVersion:pending.targetVersion,allowInsecure:pending.allowInsecure}).catch(error=>setUpdateState({status:'error',error:error?.message||String(error)})),6000)}
-}
+function publicSoftwareInfo(){return{currentVersion:app.getVersion()}}
 
 function isLocked() { return windowState === WINDOW_STATES.LOCKED }
 function isActive() { return windowState === WINDOW_STATES.ACTIVE }
@@ -667,6 +520,10 @@ function notifyStationLocked(locked) {
 
 function lockClientWindow({ preserveState = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return false
+  // A normal/final lock (logout, terminal guest close, boot) must never retain
+  // a prior prepared-close snapshot. Otherwise the next login could restore an
+  // already-ended ACTIVE window. Only an explicit preserveState lock may keep it.
+  if (!preserveState) remoteLockSnapshot = null
   // Only a lock that interrupts a live/idle session (i.e. triggered remotely
   // by staff or the emergency shortcut) should surface the in-app "session is
   // locked" overlay. A lock that happens while already locked (e.g. the
@@ -756,7 +613,6 @@ async function executeRemoteCommand(command) {
       throw error
     }
   }
-  if (action.startsWith('customer_update_')) return handleAdminUpdateCommand({ action, ...(descriptor.payload && typeof descriptor.payload === 'object' ? descriptor.payload : {}) })
   if (action === 'game_update') return false
   return false
 }
@@ -923,15 +779,13 @@ app.whenReady().then(async () => {
   })
   ipcMain.on('client:get-software-info', event => {
     if (!isTrustedRenderer(event)) { event.returnValue=null; return }
-    event.returnValue=publicUpdateInfo()
+    event.returnValue=publicSoftwareInfo()
   })
-  handleTrusted('client:check-update', () => checkCustomerUpdate({manual:true}))
   handleTrusted('client:set-cloud-station-credential', (_event, value) => writeCloudStationCredential(String(value || '').slice(0, 16384)))
   handleTrusted('client:clear-cloud-station-credential', () => writeCloudStationCredential(''))
 
   createTray()
   createWindow()
-  startCustomerUpdater()
   windowState = WINDOW_STATES.LOCKED
   setWindowsKeyLocked(true)
   applyLockedWindowMode()
@@ -947,7 +801,6 @@ app.whenReady().then(async () => {
 app.on('will-quit', () => {
   appIsQuitting=true
   if (hookRestartTimer) clearTimeout(hookRestartTimer)
-  if (updateInstallTimer) clearInterval(updateInstallTimer)
   stopFocusEnforcement()
   try {
     if (windowsKeyHook?.stdin && !windowsKeyHook.stdin.destroyed && !windowsKeyHook.stdin.writableEnded) windowsKeyHook.stdin.write('stop\n')

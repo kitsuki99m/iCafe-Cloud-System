@@ -137,10 +137,6 @@ async function heartbeat() {
       usedFallback,
       localIp,
       softwareVersion:String(software.currentVersion||'').slice(0,64),
-      updateState:String(software.status||'').slice(0,40),
-      updateVersion:String(software.downloadedVersion||software.availableVersion||'').slice(0,64),
-      updateProgress:Number.isFinite(Number(software.progress))?Math.max(0,Math.min(100,Number(software.progress))):null,
-      updateInstallWhenIdle:Boolean(software.installWhenIdle),
     })
     if(transport!=='cloud') { markCloudStationOnline(); connectWakeSocket(); void pollCommands() }
   } catch(error){ markCloudStationFallback(error?.message||'Cloud unavailable') }

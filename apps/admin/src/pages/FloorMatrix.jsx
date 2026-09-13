@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Clock3, CloudDownload, Copy, Link2, LockKeyhole, Monitor, MonitorCheck, MonitorPlay, Plus, Search, WifiOff, Wrench } from 'lucide-react'
+import { AlertTriangle, Clock3, Copy, Link2, LockKeyhole, Monitor, MonitorCheck, MonitorPlay, Plus, Search, WifiOff, Wrench } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import PcCard from '../components/floor/PcCard.jsx'
 import SessionModal from '../components/floor/SessionModal.jsx'
@@ -24,7 +24,6 @@ import { remainingSessionSeconds } from '../lib/sessionTime.js'
 import { runBulkMutation } from '../lib/bulkMutation.js'
 import { createOperationKey } from '../lib/api.js'
 import { cloudStationAdmin, isCloudAdmin } from '../lib/cloudClient.js'
-import CustomerUpdateCenter from '../components/updates/CustomerUpdateCenter.jsx'
 
 const CLIENT_STATUS_FILTERS = ['all','occupied','available','reserved','locked','maintenance','offline']
 const TIER_RANK = { Regular: 0, Gold: 1, VIP: 2 }
@@ -92,7 +91,6 @@ export default function FloorMatrix() {
   const [stationPairingResult,setStationPairingResult]=useState(null)
   const [stationPairingBusy,setStationPairingBusy]=useState(false)
   const [stationPairingError,setStationPairingError]=useState('')
-  const [updateCenterOpen,setUpdateCenterOpen]=useState(false)
 
   useEffect(() => { const timer=setInterval(()=>setNow(Date.now()),1000); return ()=>clearInterval(timer) }, [])
   const requestedStatus=searchParams.get('status')
@@ -359,7 +357,7 @@ export default function FloorMatrix() {
     setTimeAction(null)
     closePopover()
   }
-  const toolbarActions=<div className="flex flex-wrap items-center gap-2"><Button icon={CloudDownload} variant="subtle" size="sm" onClick={()=>setUpdateCenterOpen(true)}>Software updates</Button>{isCloudAdmin()&&<Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>Pair Customer PC</Button>}<BulkActionsDropdown items={[{id:'wallet',icon:'wallet',label:'Top up wallets',hint:'Select multiple members'},{id:'session',icon:'session',label:'Add session time',hint:`${bulkSessionTargets.length} active session${bulkSessionTargets.length===1?'':'s'}`},{id:'lock',icon:'lock',label:'Lock stations',hint:'Pause active sessions'},{id:'unlock',icon:'unlock',label:'Unlock stations',hint:'Resume locked sessions'},{id:'restart',icon:'restart',label:'Restart stations',hint:'Shows a 5-second station warning'},{id:'shutdown',icon:'shutdown',label:'Shutdown stations',hint:'Shows a 5-second station warning'},{id:'remove',icon:'remove',label:'Remove PCs',hint:`${removablePcTargets.length} removable station${removablePcTargets.length===1?'':'s'}`}]} onAction={(id)=>{if(id==='wallet'){setBulkWalletOperationKey(createOperationKey());setBulkWalletOpen(true)}else if(id==='session'){setBulkSessionOperationKey(createOperationKey());setBulkSessionOpen(true)}else setBulkPower(id)}} /><Button icon={Monitor} variant="ghost" size="sm" onClick={() => setBulkAddOpen(true)}>Bulk add</Button><Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>Add PC</Button></div>
+  const toolbarActions=<div className="flex flex-wrap items-center gap-2">{isCloudAdmin()&&<Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>Pair Customer PC</Button>}<BulkActionsDropdown items={[{id:'wallet',icon:'wallet',label:'Top up wallets',hint:'Select multiple members'},{id:'session',icon:'session',label:'Add session time',hint:`${bulkSessionTargets.length} active session${bulkSessionTargets.length===1?'':'s'}`},{id:'lock',icon:'lock',label:'Lock stations',hint:'Pause active sessions'},{id:'unlock',icon:'unlock',label:'Unlock stations',hint:'Resume locked sessions'},{id:'restart',icon:'restart',label:'Restart stations',hint:'Shows a 5-second station warning'},{id:'shutdown',icon:'shutdown',label:'Shutdown stations',hint:'Shows a 5-second station warning'},{id:'remove',icon:'remove',label:'Remove PCs',hint:`${removablePcTargets.length} removable station${removablePcTargets.length===1?'':'s'}`}]} onAction={(id)=>{if(id==='wallet'){setBulkWalletOperationKey(createOperationKey());setBulkWalletOpen(true)}else if(id==='session'){setBulkSessionOperationKey(createOperationKey());setBulkSessionOpen(true)}else setBulkPower(id)}} /><Button icon={Monitor} variant="ghost" size="sm" onClick={() => setBulkAddOpen(true)}>Bulk add</Button><Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>Add PC</Button></div>
 
 
 
@@ -476,12 +474,6 @@ export default function FloorMatrix() {
         </div>
       </Modal>
 
-      <CustomerUpdateCenter
-        open={updateCenterOpen}
-        onClose={()=>setUpdateCenterOpen(false)}
-        pcs={pcs}
-        onCommand={(pc,command,payload)=>powerCommand(pc,command,{payload,suppressToast:true})}
-      />
 
       <PcFormModal
         open={pcFormOpen}

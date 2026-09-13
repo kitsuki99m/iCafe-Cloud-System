@@ -209,11 +209,6 @@ function pcView(p, suppliedActive) {
     spec: p.spec,
     status: p.status,
     customerVersion: p.customer_version || null,
-    customerUpdateState: p.customer_update_state || null,
-    customerUpdateVersion: p.customer_update_version || null,
-    customerUpdateProgress: p.customer_update_progress == null ? null : Number(p.customer_update_progress),
-    customerUpdateInstallWhenIdle: Boolean(p.customer_update_install_when_idle),
-    customerUpdateCheckedAt: p.customer_update_checked_at || null,
     session,
   };
 }
@@ -909,7 +904,7 @@ router.post(
   async (req, res, next) => {
     try {
       const command = String(req.body?.command || "").toLowerCase();
-      const pin = String(req.body?.pin || "");
+      const pin = String(req.body?.pin || "").trim();
       if (!req.pc && !env.allowUnregisteredDevStation)
         return res
           .status(403)
@@ -934,35 +929,26 @@ router.post(
             code: "INVALID_COMMAND",
             error: "Invalid station command.",
           });
-      const admins = db
-        .prepare(
-          "SELECT id,pin_hash FROM users WHERE role='admin' AND is_active=1 AND pin_hash IS NOT NULL",
-        )
-        .all();
-      if (!admins.length)
-        return res
-          .status(409)
-          .json({
-            success: false,
-            code: "ADMIN_PIN_NOT_CONFIGURED",
-            error:
-              "Configure an active Admin PIN before using station emergency controls.",
-          });
-      let admin = null;
-      for (const candidate of admins) {
-        if (await argon2.verify(candidate.pin_hash, pin)) {
-          admin = candidate;
-          break;
-        }
-      }
-      if (!admin)
+
+      // These hidden Customer Station shortcuts are protected by the Station
+      // Setup Master PIN, not by an Admin user's management/login PIN. Electron
+      // verifies the same PIN locally first; Café Edge verifies it again here so
+      // lock/unlock/quit can still checkpoint billing and session lifecycle
+      // before the local window/process transition executes.
+      const suppliedPin = Buffer.from(pin);
+      const expectedPin = Buffer.from(env.stationSetupMasterPin);
+      const masterPinValid =
+        suppliedPin.length === expectedPin.length &&
+        crypto.timingSafeEqual(suppliedPin, expectedPin);
+      if (!masterPinValid)
         return res
           .status(401)
           .json({
             success: false,
-            code: "ADMIN_PIN_REQUIRED",
-            error: "Enter a valid Admin PIN to use this emergency control.",
+            code: "STATION_SETUP_MASTER_PIN_INVALID",
+            error: "Incorrect Station Setup Master PIN.",
           });
+
       const controlId = id(),
         createdAt = nowIso(),
         expiresAt = new Date(Date.now() + 30000).toISOString();
@@ -973,15 +959,15 @@ router.post(
         req.pc?.id || null,
         command,
         "authorized",
-        admin.id,
+        null,
         createdAt,
         expiresAt,
       );
-      // Hidden Admin controls can block paid use just as surely as dashboard
-      // controls. Checkpoint at authorization time instead of waiting for the
-      // renderer ACK so the warning/lock interval is never billable.
+      // Hidden master-PIN controls can block paid use just as surely as
+      // dashboard controls. Checkpoint at authorization time instead of waiting
+      // for the renderer ACK so the warning/lock interval is never billable.
       if (req.pc?.id && command === "lock") {
-        const paused = pauseActiveSession(req.pc.id, { reason:"emergency_lock", commandId:controlId, userId:admin.id, at:createdAt });
+        const paused = pauseActiveSession(req.pc.id, { reason:"emergency_lock", commandId:controlId, userId:null, at:createdAt });
         if (paused?.session) emitSessionUpdated(paused.session.id, { pcId:req.pc.id, memberId:paused.session.member_id || null, reason:"session_paused", remainingSeconds:Number(paused.remainingSeconds || 0), amountDue:Number(paused.amountDue || 0), locked:true });
       }
       if (req.pc?.id && command === "quit") {
@@ -996,13 +982,14 @@ router.post(
       }
       emitDataChanged({ method:"INTERRUPT", path:"/public/station-control", pcId:req.pc?.id || null, command });
       log(
-        admin.id,
+        null,
         `station.${command}.authorized`,
         "pc",
         req.pc?.id ?? null,
         req.pc?.id ?? null,
         {
           source: "hidden_shortcut",
+          authorization: "station_setup_master_pin",
           developmentUnregistered: !req.pc,
           controlId,
         },

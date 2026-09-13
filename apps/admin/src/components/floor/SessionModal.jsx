@@ -604,8 +604,8 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
 
           {s.billing === 'postpaid' && <SettlementControl pc={pc} amountDue={amountDue} walletBalance={members?.find((member) => String(member.id)===String(s.customerId))?.wallet ?? 0} onSettle={(paymentMethod) => runSessionAction('settle', { paymentMethod })} />}
 
-          {sessionAction && !s.customerId && (sessionAction === 'forfeit' || sessionAction === 'refund') && (
-            <p className="rounded-lg border border-gold/25 bg-gold/5 px-3 py-2 text-xs text-gold-dim">Waiting for Customer Station to return to the login kiosk before {sessionAction === 'refund' ? 'committing the refund' : 'discarding the remaining time'}…</p>
+          {sessionAction && (sessionAction === 'forfeit' || sessionAction === 'refund') && (
+            <p className="rounded-lg border border-gold/25 bg-gold/5 px-3 py-2 text-xs text-gold-dim">Protecting Customer Station and waiting for its close acknowledgement before {sessionAction === 'refund' ? 'committing the refund' : 'discarding the remaining time'}…</p>
           )}
           {localError && <p className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-xs text-ember-dim">{localError}</p>}
           <PowerControl pc={pc} onPowerCommand={onPowerCommand} />

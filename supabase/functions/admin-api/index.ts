@@ -171,7 +171,13 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     return response;
   }
   const sessionRefundMatch=route.match(/^\/sessions\/([^/]+)\/refund$/);
-  if(sessionRefundMatch&&method==='POST')return cloudExecute(admin,branchId,'session.refund',{...body,sessionId:decodeURIComponent(sessionRefundMatch[1])},user.id,operationKey);
+  if(sessionRefundMatch&&method==='POST'){
+    const sessionId=decodeURIComponent(sessionRefundMatch[1]);
+    const{data:targetSession}=await admin.from('branch_sessions').select('pc_id').eq('branch_id',branchId).eq('local_id',sessionId).maybeSingle();
+    const response=await cloudExecute(admin,branchId,'session.refund',{...body,sessionId},user.id,operationKey);
+    if(targetSession?.pc_id)await broadcastStationWakeup(admin,branchId,String(targetSession.pc_id),{kind:'session_changed',reason:'session_refunded',sessionId});
+    return response;
+  }
   const cloudWalletMatch=route.match(/^\/members\/([^/]+)\/wallet$/);
   if(cloudWalletMatch&&method==='PATCH')return cloudExecute(admin,branchId,'wallet.set',{...body,memberId:decodeURIComponent(cloudWalletMatch[1])},user.id,operationKey);
   if(route==='/wallet/adjustments'&&method==='POST')return cloudExecute(admin,branchId,'wallet.adjust',body,user.id,operationKey);

@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
-import crypto from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 
 const appName = process.argv[2]
@@ -67,26 +66,6 @@ try {
   runNpm(['run', 'build'])
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
   runNpm(['exec', '--yes=false', '--', 'electron-builder', '--win', 'nsis', '--config', configPath])
-
-  if (appName === 'customer') {
-    const installerDir = path.join(appDir, 'installer')
-    const installerFile = fs.readdirSync(installerDir).find((name) => /\.exe$/i.test(name) && /setup/i.test(name))
-    if (!installerFile) throw new Error('Customer installer EXE was not found; update manifest was not generated.')
-    const installerPath = path.join(installerDir, installerFile)
-    const bytes = fs.readFileSync(installerPath)
-    const manifest = {
-      schema: 1,
-      channel: String(process.env.AEZAKMI_UPDATE_CHANNEL || 'stable'),
-      version: String(packageJson.version),
-      publishedAt: new Date().toISOString(),
-      file: installerFile,
-      sha256: crypto.createHash('sha256').update(bytes).digest('hex'),
-      size: bytes.length,
-      releaseNotes: String(process.env.AEZAKMI_RELEASE_NOTES || '').trim(),
-    }
-    fs.writeFileSync(path.join(installerDir, 'latest.json'), JSON.stringify(manifest, null, 2))
-    console.log(`Customer update manifest: ${path.join(installerDir, 'latest.json')}`)
-  }
 } finally {
   try { fs.unlinkSync(configPath) } catch {}
   if (backendRebuilt) {

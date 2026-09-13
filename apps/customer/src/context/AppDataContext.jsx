@@ -311,10 +311,10 @@ export function AppDataProvider({ children }) {
       const reason=String(payload?.reason || '').toLowerCase()
       const belongsToPc=!payload?.pcId || sameId(payload.pcId,user?.pcId)
       const belongsToMember=!payload?.memberId || sameId(payload.memberId,user?.memberId)
-      if (reason === 'session_forfeited' && belongsToPc) {
+      if (['session_forfeited','session_refunded'].includes(reason) && belongsToPc) {
         clearStationLifecycleMarker().catch?.(() => {})
         if (user?.role === 'guest') {
-          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason:'session_forfeited' } }))
+          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason } }))
           return
         }
       }
@@ -356,17 +356,16 @@ export function AppDataProvider({ children }) {
         const commandName=String(payload.command).toLowerCase()
         const sessionClose=Boolean(payload?.payload?.sessionClose)
         if (sessionClose) {
-          // Admin close/refund is a two-phase operation. Customer Station exits
-          // the active Guest UI first, then ACKs. The Admin only commits the
-          // destructive forfeit/refund after this acknowledgement, so the
-          // station lifecycle endpoint cannot race the accounting mutation.
-          await clearStationLifecycleMarker()
-          if (user?.role === 'guest') {
-            window.dispatchEvent(new CustomEvent('aezakmi:admin-session-interruption',{detail:{reason:'admin_session_close',commandId:payload.id,disposition:payload?.payload?.disposition || null}}))
-          } else {
-            queueRefresh()
-          }
-          await ack('completed',{ executed:true, sessionExitReady:true, sessionId:payload?.payload?.sessionId || null, disposition:payload?.payload?.disposition || null })
+          // Phase 1 of an Admin forfeit/refund: freeze the local kiosk without
+          // touching the authoritative session, pause rows, auth identity, or
+          // lifecycle marker. The Admin commits the destructive accounting
+          // change only after this local lock has completed and been ACKed.
+          // executeRemoteCommand('lock') preserves the pre-close window state so
+          // an uncommitted close cannot expose the desktop or keep billing alive.
+          const bridge = window.aezakmiClient?.executeRemoteCommand
+          const locallyLocked = bridge ? await bridge({ command:'lock' }) : false
+          if (bridge && locallyLocked === false) throw Object.assign(new Error('Customer Station could not enter the protected close state.'),{code:'STATION_CLOSE_LOCK_FAILED'})
+          await ack('completed',{ executed:true, sessionExitReady:true, stationProtected:Boolean(bridge), sessionId:payload?.payload?.sessionId || null, disposition:payload?.payload?.disposition || null })
           return
         }
         if (['shutdown','reboot'].includes(commandName)) {
@@ -442,10 +441,12 @@ export function AppDataProvider({ children }) {
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
     const onCloudWakeup = (event) => {
       const reason=String(event?.detail?.reason || '').toLowerCase()
-      if (reason === 'session_forfeited' && user?.role === 'guest') {
+      if (['session_forfeited','session_refunded'].includes(reason)) {
         clearStationLifecycleMarker().catch?.(() => {})
-        window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason:'session_forfeited', source:'cloud' } }))
-        return
+        if (user?.role === 'guest') {
+          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason, source:'cloud' } }))
+          return
+        }
       }
       queueRefresh()
     }

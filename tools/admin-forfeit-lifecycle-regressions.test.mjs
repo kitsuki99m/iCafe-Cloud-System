@@ -43,7 +43,7 @@ test('Guest active forfeiture immediately exits Customer Guest mode locally and 
   const app=read('apps/customer/src/context/AppDataContext.jsx')
   const cloud=read('apps/customer/src/lib/cloudStation.js')
   const adminApi=read('supabase/functions/admin-api/index.ts')
-  assert.match(app,/reason === 'session_forfeited'/)
+  assert.match(app,/\['session_forfeited','session_refunded'\]\.includes\(reason\)/)
   assert.match(app,/aezakmi:guest-session-ended/)
   assert.match(cloud,/aezakmi:cloud-station-wakeup/)
   assert.match(adminApi,/broadcastStationWakeup/)

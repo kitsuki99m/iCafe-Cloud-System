@@ -43,18 +43,22 @@ test('Customer Server settings use an offline-safe master setup PIN instead of c
 
 
 
-test('Quit Customer Station supersedes unregistered/unpaired station state with the offline setup master PIN', () => {
+test('Quit, Lock, and Unlock Customer Station use the Station Setup Master PIN instead of the Admin PIN', () => {
   const guard = read('apps/customer/src/components/common/EmergencyControlGuard.jsx')
-  assert.match(guard, /stationPairingRequired/)
-  assert.match(guard, /command === 'quit' && stationPairingRequired/)
+  const api = read('backend/src/routes/apiRoutes.js')
+  const env = read('backend/src/config/env.js')
   assert.match(guard, /verifyStationSetupMasterPin/)
-  assert.match(guard, /PC_NOT_REGISTERED/)
-  assert.match(guard, /STATION_NOT_PAIRED/)
-  assert.match(guard, /executeEmergencyCommand\?\.\('quit'\)/)
-  assert.match(guard, /Lock\/unlock never get this/)
+  assert.match(guard, /Confirm with Master PIN/)
+  assert.match(guard, /Admin login and management PINs are not accepted here/)
+  assert.match(guard, /\['PC_NOT_REGISTERED','STATION_NOT_PAIRED'\]/)
+  assert.match(guard, /executeEmergencyCommand/)
+  assert.match(api, /STATION_SETUP_MASTER_PIN_INVALID/)
+  assert.match(api, /env\.stationSetupMasterPin/)
+  assert.match(api, /authorization: \"station_setup_master_pin\"/)
+  assert.match(env, /AEZAKMI_STATION_SETUP_MASTER_PIN/)
 })
 
-test('Customer master setup PIN is not persisted in renderer storage or sent to the backend', () => {
+test('Customer master setup PIN is not persisted in renderer storage', () => {
   const gate = read('apps/customer/src/components/common/AdminPinGateModal.jsx')
   const config = read('apps/customer/src/lib/serverConfig.js')
   const api = read('apps/customer/src/lib/api.js')

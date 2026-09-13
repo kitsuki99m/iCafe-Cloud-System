@@ -33,20 +33,10 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admi
   if(action==='heartbeat'){
     const recovered=Boolean(body.recoveredFromFallback)
     const softwareVersion=String(body.softwareVersion||'').trim().slice(0,64)
-    const updateState=String(body.updateState||'').trim().toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,40)
-    const updateVersion=String(body.updateVersion||'').trim().slice(0,64)
-    const rawUpdateProgress=Number(body.updateProgress)
-    const updateProgress=Number.isFinite(rawUpdateProgress)?Math.max(0,Math.min(100,rawUpdateProgress)):null
-    const updateInstallWhenIdle=Boolean(body.updateInstallWhenIdle)
     const patch:any={status:'online',cloud_last_seen_at:now,updated_at:now}
     if(recovered)patch.last_sync_restored_at=now
     if(body.usedFallback)patch.last_fallback_at=now
     if(softwareVersion)patch.software_version=softwareVersion
-    if(updateState)patch.update_state=updateState
-    patch.update_version=updateVersion||null
-    patch.update_progress=updateProgress
-    patch.update_install_when_idle=updateInstallWhenIdle
-    if(softwareVersion||updateState||updateVersion||updateProgress!=null||updateInstallWhenIdle)patch.update_checked_at=now
     const deviceUpdate=await admin.from('station_devices').update(patch).eq('id',station.id)
     if(deviceUpdate.error)throw deviceUpdate.error
     await cloudSessionAction(admin,station,'session.heartbeat',{pcId:station.local_station_id},null)
@@ -63,10 +53,6 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admi
     const localIp=String(body.localIp||'').trim()
     if(/^(?:\d{1,3}\.){3}\d{1,3}$/.test(localIp)&&localIp.split('.').every((part:string)=>Number(part)>=0&&Number(part)<=255))stationPatch.ip_address=localIp
     if(softwareVersion)stationPatch.customer_version=softwareVersion
-    if(updateState)stationPatch.customer_update_state=updateState
-    stationPatch.customer_update_version=updateVersion||null
-    stationPatch.customer_update_progress=updateProgress
-    stationPatch.customer_update_install_when_idle=updateInstallWhenIdle
     const branchUpdate=await admin.from('branch_stations').update(stationPatch).eq('branch_id',station.branch_id).eq('local_id',station.local_station_id)
     if(branchUpdate.error)throw branchUpdate.error
     return json({success:true,station:{id:station.id,organizationId:station.organization_id,branchId:station.branch_id,localStationId:station.local_station_id,name:station.station_name},serverTime:now,powerTransition:Boolean(pendingPower)})

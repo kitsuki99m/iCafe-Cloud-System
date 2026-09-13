@@ -456,15 +456,19 @@ export function AppDataProvider({ children }) {
     throw error
   }
 
-  async function prepareGuestSessionClose(pc, disposition) {
-    if (!pc?.session?.id || pc.session?.customerId) return null
+  async function prepareSessionClose(pc, disposition) {
+    if (!pc?.session?.id) return null
     // If presence is definitively offline there is no renderer that can race
     // this action. The interrupted-session path already owns persistence.
     if (String(pc.status || '').toLowerCase() === 'offline' || pc.stationOnline === false || pc.isOnline === false || pc.cloudConnectionStatus === 'offline') return null
-    const transportCommand = (pc.session?.isPaused || pc.session?.isLocked) ? 'game_update' : 'lock'
+    // Session close preparation must never mutate billing state. Using the real
+    // Lock command here used to create a server-side pause before forfeit/refund
+    // committed, which allowed the old paused session to race back into the UI.
+    // game_update is only a transport envelope; Customer Station intercepts the
+    // sessionClose payload and locks its local kiosk before ACKing.
     const queued=await apiPost('/remote-commands', {
       pcId:pc.id,
-      command:transportCommand,
+      command:'game_update',
       payload:{ sessionClose:true, sessionId:pc.session.id, disposition, requestedAt:new Date().toISOString() },
     })
     if (!queued?.commandId) throw Object.assign(new Error('Customer Station close command was not created.'),{code:'STATION_EXIT_COMMAND_MISSING'})
@@ -475,7 +479,7 @@ export function AppDataProvider({ children }) {
     if (!pc?.session?.id) return
     const sessionId=pc.session.id
     try {
-      if (disposition === 'forfeit' && !pc.session?.customerId) await prepareGuestSessionClose(pc, 'forfeit')
+      if (disposition === 'forfeit') await prepareSessionClose(pc, 'forfeit')
       const result=await apiPost(`/sessions/${sessionId}/end`, { disposition, ...options })
       optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
       playAdminSound('success', { dedupeKey:`session-end:${pc.id}` })
@@ -491,7 +495,7 @@ export function AppDataProvider({ children }) {
   async function refundSession(pc) {
     if (!pc?.session?.id) return
     try {
-      if (!pc.session?.customerId) await prepareGuestSessionClose(pc, 'refund')
+      await prepareSessionClose(pc, 'refund')
       const result=await apiPost(`/sessions/${pc.session.id}/refund`)
       await refresh()
       showToast({ title:'Session refunded', message:`₱${Number(result.refundAmount||0).toFixed(2)} returned by ${result.destination}.` })

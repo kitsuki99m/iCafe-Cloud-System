@@ -30,6 +30,10 @@ export const env = {
   cloudSyncBatchSize: Number(process.env.AEZAKMI_CLOUD_SYNC_BATCH_SIZE ?? 100),
   cloudRequestTimeoutMs: Number(process.env.AEZAKMI_CLOUD_REQUEST_TIMEOUT_MS ?? 8000),
   edgeVersion: process.env.AEZAKMI_EDGE_VERSION ?? '1.0.0',
+  // Shared operator/developer master PIN used by the installed Customer Station
+  // for protected local station controls. Keep this value identical on Café
+  // Edge and Customer Station when overriding the built-in default.
+  stationSetupMasterPin: String(process.env.AEZAKMI_STATION_SETUP_MASTER_PIN ?? '062321').trim(),
 }
 
 if (!Number.isFinite(env.port) || env.port < 1 || env.port > 65535) {
@@ -52,6 +56,9 @@ if (env.cloudEnabled && !/^https:\/\/[^/]+\.supabase\.co$/i.test(env.supabaseUrl
 }
 if (env.cloudEnabled && !env.supabasePublishableKey.startsWith('sb_publishable_')) {
   throw new Error('AEZAKMI_SUPABASE_PUBLISHABLE_KEY must be a Supabase publishable key when cloud integration is enabled.')
+}
+if (!/^\d{4,8}$/.test(env.stationSetupMasterPin)) {
+  throw new Error('AEZAKMI_STATION_SETUP_MASTER_PIN must contain 4 to 8 digits.')
 }
 if (!isDevelopment) {
   if (env.jwtSecret === 'development-only-change-me' || env.jwtSecret.length < 32) {

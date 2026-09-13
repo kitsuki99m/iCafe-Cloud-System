@@ -6,7 +6,6 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   getInstallationId:() => ipcRenderer.sendSync('client:get-installation-id'),
   getLocalDataPath:() => ipcRenderer.sendSync('client:get-local-data-path'),
   getSoftwareInfo:() => ipcRenderer.sendSync('client:get-software-info'),
-  checkForUpdates:() => ipcRenderer.invoke('client:check-update'),
   getServerConfig:() => ipcRenderer.sendSync('client:server-config:get'),
   setServerConfig:value => ipcRenderer.invoke('client:server-config:set',value),
   verifyStationSetupMasterPin:value => ipcRenderer.invoke('client:verify-setup-master-pin',value),
@@ -68,10 +67,5 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
     const listener=(_event,payload)=>handler(payload)
     ipcRenderer.on('station:app-exit-requested',listener)
     return ()=>ipcRenderer.removeListener('station:app-exit-requested',listener)
-  },
-  onUpdateState:handler => {
-    const listener=(_event,payload)=>handler(payload)
-    ipcRenderer.on('customer:update-state',listener)
-    return ()=>ipcRenderer.removeListener('customer:update-state',listener)
   },
 })
