@@ -15,18 +15,38 @@ function note(value:unknown){return String(value||'').trim().slice(0,2000)||null
 function requiredReason(value:unknown){const valueText=note(value);if(!valueText)throw Object.assign(new Error('Enter a reason for this developer action.'),{status:400,code:'REASON_REQUIRED'});return valueText}
 function addDays(iso:string|Date,days:number){const d=new Date(iso);d.setUTCDate(d.getUTCDate()+days);return d.toISOString()}
 
-const SUBSCRIPTION_PACKAGES:Record<string,number|null>={bronze:50,silver:100,gold:200,platinum:350,diamond:500,ultra:null}
-function subscriptionPackage(planValue:unknown,customValue:unknown,expectedStations=1){
+async function packageCatalog(admin:SupabaseClient){
+  const{data,error}=await admin.from('platform_subscription_packages').select('id,label,display_order,max_stations,monthly_price,price_suffix,description,is_active,updated_at').eq('is_active',true).order('display_order',{ascending:true})
+  if(error)throw error
+  return data||[]
+}
+async function pricingSettings(admin:SupabaseClient){
+  const{data,error}=await admin.from('platform_pricing_settings').select('currency,deployment_fee_min,deployment_fee_max,quote_valid_days,updated_at').eq('singleton',true).maybeSingle()
+  if(error)throw error
+  return data||{currency:'PHP',deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14}
+}
+async function subscriptionPackage(admin:SupabaseClient,planValue:unknown,customValue:unknown,expectedStations=1){
+  const catalog:any[]=await packageCatalog(admin)
+  if(!catalog.length)throw Object.assign(new Error('Subscription package catalog is empty.'),{status:500,code:'PACKAGE_CATALOG_EMPTY'})
   let plan=String(planValue||'').trim().toLowerCase()
-  if(!plan){const expected=Math.max(1,Number(expectedStations)||1);plan=expected<=50?'bronze':expected<=100?'silver':expected<=200?'gold':expected<=350?'platinum':expected<=500?'diamond':'ultra'}
-  if(!Object.prototype.hasOwnProperty.call(SUBSCRIPTION_PACKAGES,plan))throw Object.assign(new Error('Choose Bronze, Silver, Gold, Platinum, Diamond, or Ultra.'),{status:400,code:'INVALID_SUBSCRIPTION_PLAN'})
-  const fixed=SUBSCRIPTION_PACKAGES[plan]
-  const maxStations=fixed===null?Math.floor(Number(customValue)):fixed
-  if(plan==='ultra'&&(!Number.isInteger(maxStations)||maxStations<1||maxStations>10000))throw Object.assign(new Error('Ultra requires a custom station limit from 1 to 10,000.'),{status:400,code:'INVALID_ULTRA_STATION_LIMIT'})
-  return{plan,maxStations:Number(maxStations)}
+  const expected=Math.max(1,Math.floor(Number(expectedStations)||1))
+  if(!plan){
+    const fixed=catalog.find((item:any)=>item.max_stations!==null&&expected<=Number(item.max_stations))
+    plan=String(fixed?.id||catalog.find((item:any)=>item.id==='ultra')?.id||catalog.at(-1)?.id||'bronze')
+  }
+  const selected:any=catalog.find((item:any)=>String(item.id)===plan)
+  if(!selected)throw Object.assign(new Error('Choose Bronze, Silver, Gold, or Ultra.'),{status:400,code:'INVALID_SUBSCRIPTION_PLAN'})
+  const fixed=selected.max_stations==null?null:Number(selected.max_stations)
+  let maxStations=fixed
+  if(plan==='ultra'||fixed===null){
+    const requested=Math.floor(Number(customValue))
+    maxStations=Number.isInteger(requested)&&requested>0?requested:expected
+  }
+  if(!Number.isInteger(maxStations)||Number(maxStations)<1||Number(maxStations)>10000)throw Object.assign(new Error('Station limit must be between 1 and 10,000.'),{status:400,code:'INVALID_STATION_LIMIT'})
+  return{plan,maxStations:Number(maxStations),package:selected}
 }
 async function organizationStationCount(admin:SupabaseClient,organizationId:string){const{data:branches,error:branchError}=await admin.from('branches').select('id').eq('organization_id',organizationId);if(branchError)throw branchError;const ids=(branches||[]).map((x:any)=>x.id);if(!ids.length)return 0;const{count,error}=await admin.from('branch_stations').select('local_id',{count:'exact',head:true}).in('branch_id',ids);if(error)throw error;return Number(count||0)}
-async function applySubscription(admin:SupabaseClient,organizationId:string,planValue:unknown,customValue:unknown,expectedStations=1){const pkg=subscriptionPackage(planValue,customValue,expectedStations),used=await organizationStationCount(admin,organizationId);if(used>pkg.maxStations)throw Object.assign(new Error(`This business already has ${used} stations. Choose a package that supports at least ${used}.`),{status:409,code:'SUBSCRIPTION_BELOW_USAGE'});const{data,error}=await admin.from('subscriptions').update({plan:pkg.plan,max_stations:pkg.maxStations,updated_at:new Date().toISOString()}).eq('organization_id',organizationId).select('plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').single();if(error)throw error;return{...data,station_count:used}}
+async function applySubscription(admin:SupabaseClient,organizationId:string,planValue:unknown,customValue:unknown,expectedStations=1){const pkg=await subscriptionPackage(admin,planValue,customValue,expectedStations),used=await organizationStationCount(admin,organizationId);if(used>pkg.maxStations)throw Object.assign(new Error(`This business already has ${used} stations. Choose a package that supports at least ${used}.`),{status:409,code:'SUBSCRIPTION_BELOW_USAGE'});const{data,error}=await admin.from('subscriptions').update({plan:pkg.plan,max_stations:pkg.maxStations,updated_at:new Date().toISOString()}).eq('organization_id',organizationId).select('plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').single();if(error)throw error;return{...data,station_count:used}}
 async function audit(admin:SupabaseClient,requestId:string,actor:string,action:string,details:Record<string,unknown>={}){const{error}=await admin.from('registration_audit_logs').insert({registration_request_id:requestId,actor_user_id:actor,action,details});if(error)throw error}
 function activationRedirect(){
   const base=String(Deno.env.get('AEZAKMI_ADMIN_URL')||'').trim().replace(/\/+$/,'')
@@ -59,6 +79,27 @@ async function resendActivationEmail(email:string){
   const{error}=await client.auth.resetPasswordForEmail(email,redirectTo?{redirectTo}:undefined)
   if(error)throw Object.assign(new Error(error.message||'Unable to resend activation email.'),{status:409,code:'INVITE_EMAIL_FAILED'})
 }
+
+function htmlEscape(value:unknown){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch))}
+function peso(value:unknown){return `₱${Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:0,maximumFractionDigits:2})}`}
+function quoteHtml(input:any){
+  const logoUrl=String(Deno.env.get('AEZAKMI_BRAND_LOGO_URL')||'').trim()
+  const noteHtml=input.message?`<div style="margin-top:22px;padding:16px;border-radius:14px;background:#f4f1e8;color:#4b5563;font-size:14px;line-height:1.6"><strong style="color:#111827">Message from Aezakmi</strong><br>${htmlEscape(input.message).replace(/\n/g,'<br>')}</div>`:''
+  const logo=logoUrl?`<img src="${htmlEscape(logoUrl)}" width="48" height="48" alt="Aezakmi Café" style="display:block;border-radius:12px;object-fit:contain;background:#ffffff">`:`<div style="width:48px;height:48px;border-radius:12px;background:#E8A33D;color:#0B1017;font-weight:800;font-size:22px;line-height:48px;text-align:center">A</div>`
+  return `<!doctype html><html><body style="margin:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif;color:#111827"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f2;padding:28px 12px"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb"><tr><td style="background:#0B1017;padding:24px 28px"><table role="presentation" width="100%"><tr><td width="60">${logo}</td><td><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700">Aezakmi Café</div><div style="margin-top:4px;font-size:22px;color:#ffffff;font-weight:700">Business quotation</div></td></tr></table></td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 8px;font-size:15px">Hello ${htmlEscape(input.recipientName||'there')},</p><p style="margin:0;color:#4b5563;font-size:14px;line-height:1.7">Thank you for considering Aezakmi Café for <strong style="color:#111827">${htmlEscape(input.businessName)}</strong>. Based on the information provided, here is a tailored estimate for your café.</p><div style="margin:24px 0 0;padding:18px;border:1px solid #e5e7eb;border-radius:16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Quotation</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.quoteNumber)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Package</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.packageLabel)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">PCs</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.stationCount)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Branches</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.branchCount)}</td></tr><tr><td style="padding:12px 0 7px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px">Monthly subscription</td><td align="right" style="padding:12px 0 7px;border-top:1px solid #e5e7eb;font-size:18px;color:#0B1017;font-weight:800">${htmlEscape(input.monthlyLabel||`${peso(input.monthlyPrice)} / month`)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Initial deployment</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${peso(input.deploymentFeePerBranch)} × ${htmlEscape(input.branchCount)} branch${Number(input.branchCount)===1?'':'es'}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Deployment total</td><td align="right" style="padding:7px 0;font-size:16px;color:#E8A33D;font-weight:800">${peso(input.deploymentFeeTotal)}</td></tr></table></div>${noteHtml}<div style="margin-top:24px;padding:16px 18px;border-left:4px solid #E8A33D;background:#fffaf0;color:#4b5563;font-size:13px;line-height:1.6">This quotation is valid until <strong style="color:#111827">${htmlEscape(input.validUntilLabel)}</strong>. Final pricing may change if the requested PC count, number of branches, onsite requirements, networking, or deployment scope changes.</div><p style="margin:24px 0 0;color:#4b5563;font-size:13px;line-height:1.7">If you would like to proceed, simply reply to this email and we can finalize the deployment scope and onboarding schedule.</p><p style="margin:24px 0 0;font-size:13px;color:#111827"><strong>Aezakmi Café</strong><br><span style="color:#6b7280">Cloud café management · Customer Stations · Branch operations</span></p></td></tr></table><div style="max-width:640px;padding:16px 8px;color:#9ca3af;font-size:11px;line-height:1.5;text-align:center">This quotation was generated by the Aezakmi developer console for ${htmlEscape(input.businessName)}.</div></td></tr></table></body></html>`
+}
+async function sendQuotationEmail(input:any){
+  const apiKey=String(Deno.env.get('RESEND_API_KEY')||'').trim()
+  const from=String(Deno.env.get('AEZAKMI_EMAIL_FROM')||'').trim()
+  if(!apiKey||!from)throw Object.assign(new Error('Quotation email is not configured. Set RESEND_API_KEY and AEZAKMI_EMAIL_FROM in Supabase Edge Function secrets.'),{status:503,code:'QUOTE_EMAIL_NOT_CONFIGURED'})
+  const replyTo=String(Deno.env.get('AEZAKMI_REPLY_TO')||'').trim()
+  const payload:any={from,to:[input.recipientEmail],subject:`Aezakmi Café quotation — ${input.businessName}`,html:quoteHtml(input)}
+  if(replyTo)payload.reply_to=replyTo
+  const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  const data=await response.json().catch(()=>({}))
+  if(!response.ok)throw Object.assign(new Error(String(data?.message||data?.error||'Email provider rejected the quotation.')),{status:502,code:'QUOTE_EMAIL_FAILED'})
+  return String(data?.id||'')||null
+}
 async function lifecycle(admin:SupabaseClient,organizationId:string){const{data,error}=await admin.from('organizations').select('id,name,lifecycle_status,lifecycle_reason,lifecycle_updated_at,suspended_at,terminated_at').eq('id',organizationId).maybeSingle();if(error)throw error;return data}
 
 Deno.serve(async req=>{
@@ -83,7 +124,33 @@ Deno.serve(async req=>{
       }
       const orgMap=new Map(orgs.map((x:any)=>[x.id,x])),subMap=new Map(subs.map((x:any)=>[x.organization_id,x]))
       const merged=(requests||[]).map((r:any)=>{const org:any=r.organization_id?orgMap.get(r.organization_id):null,sub:any=r.organization_id?subMap.get(r.organization_id):null;return{...r,organization_status:org?.lifecycle_status||null,organization_reason:org?.lifecycle_reason||null,lifecycle_updated_at:org?.lifecycle_updated_at||null,suspended_at:org?.suspended_at||null,terminated_at:org?.terminated_at||null,subscription_plan:sub?.plan||null,subscription_status:sub?.status||null,subscription_max_stations:sub?.max_stations??null,subscription_max_branches:sub?.max_branches??null,grace_until:sub?.grace_until||null,current_period_end:sub?.current_period_end||null,purge_eligible_at:org?.terminated_at?addDays(org.terminated_at,30):null}})
-      return json({success:true,requests:merged})
+      const[packages,pricing]=await Promise.all([packageCatalog(admin),pricingSettings(admin)])
+      return json({success:true,requests:merged,packageCatalog:packages,pricingSettings:pricing})
+    }
+
+    if(action==='update_package'){
+      const packageId=String(b.packageId||'').trim().toLowerCase()
+      if(!['bronze','silver','gold','ultra'].includes(packageId))throw Object.assign(new Error('Unknown package.'),{status:400,code:'INVALID_SUBSCRIPTION_PLAN'})
+      const monthlyPrice=Number(b.monthlyPrice),maxStations=b.maxStations==null||b.maxStations===''?null:Math.floor(Number(b.maxStations))
+      if(!Number.isFinite(monthlyPrice)||monthlyPrice<0||monthlyPrice>1000000)throw Object.assign(new Error('Enter a valid monthly price.'),{status:400,code:'INVALID_PACKAGE_PRICE'})
+      if(packageId!=='ultra'&&(!Number.isInteger(maxStations)||Number(maxStations)<1||Number(maxStations)>10000))throw Object.assign(new Error('Enter a station cap from 1 to 10,000.'),{status:400,code:'INVALID_STATION_LIMIT'})
+      const description=note(b.description)
+      if(packageId!=='ultra'){
+        const current:any[]=await packageCatalog(admin)
+        const candidate=Object.fromEntries(current.filter((item:any)=>['bronze','silver','gold'].includes(String(item.id))).map((item:any)=>[String(item.id),Number(item.id===packageId?maxStations:item.max_stations)]))
+        if(!(candidate.bronze>=1&&candidate.bronze<candidate.silver&&candidate.silver<candidate.gold))throw Object.assign(new Error('PC limits must increase from Bronze to Silver to Gold.'),{status:400,code:'PACKAGE_LIMIT_ORDER_INVALID'})
+      }
+      const{data,error}=await admin.from('platform_subscription_packages').update({monthly_price:monthlyPrice,max_stations:packageId==='ultra'?null:maxStations,description,updated_at:new Date().toISOString()}).eq('id',packageId).select('*').single()
+      if(error)throw error
+      return json({success:true,package:data})
+    }
+    if(action==='update_pricing_settings'){
+      const min=Number(b.deploymentFeeMin),max=Number(b.deploymentFeeMax),days=Math.floor(Number(b.quoteValidDays))
+      if(!Number.isFinite(min)||min<0||!Number.isFinite(max)||max<min)throw Object.assign(new Error('Deployment fee range is invalid.'),{status:400,code:'INVALID_DEPLOYMENT_FEES'})
+      if(!Number.isInteger(days)||days<1||days>90)throw Object.assign(new Error('Quotation validity must be from 1 to 90 days.'),{status:400,code:'INVALID_QUOTE_VALIDITY'})
+      const{data,error}=await admin.from('platform_pricing_settings').update({deployment_fee_min:min,deployment_fee_max:max,quote_valid_days:days,updated_at:new Date().toISOString()}).eq('singleton',true).select('*').single()
+      if(error)throw error
+      return json({success:true,pricingSettings:data})
     }
 
     if(!requestId)throw Object.assign(new Error('Registration request is required.'),{status:400,code:'REQUEST_REQUIRED'})
@@ -100,11 +167,32 @@ Deno.serve(async req=>{
       return json({success:true,request:data})
     }
 
+    if(action==='send_quote'){
+      const pkg=await subscriptionPackage(admin,b.subscriptionPlan,b.ultraStationLimit||b.stationCount,r.expected_station_count)
+      const settings:any=await pricingSettings(admin)
+      const stationCount=Math.max(1,Math.min(10000,Math.floor(Number(b.stationCount)||Number(r.expected_station_count)||1)))
+      const branchCount=Math.max(1,Math.min(1000,Math.floor(Number(b.branchCount)||1)))
+      const monthlyPrice=Number.isFinite(Number(b.monthlyPrice))?Math.max(0,Number(b.monthlyPrice)):Number(pkg.package?.monthly_price||0)
+      const deploymentFeePerBranch=Number.isFinite(Number(b.deploymentFeePerBranch))?Math.max(0,Number(b.deploymentFeePerBranch)):Number(settings.deployment_fee_min||2500)
+      const deploymentFeeTotal=deploymentFeePerBranch*branchCount
+      const validDays=Math.max(1,Math.min(90,Math.floor(Number(b.validDays)||Number(settings.quote_valid_days)||14)))
+      const validUntil=new Date(Date.now()+validDays*86400000)
+      const quoteNumber=`AEZ-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${crypto.randomUUID().slice(0,8).toUpperCase()}`
+      const message=note(b.message)
+      const suffix=String(pkg.package?.price_suffix||'/month').trim();const monthlyLabel=`${peso(monthlyPrice)}${suffix?(suffix.startsWith('+')?suffix:` ${suffix}`):''}`
+      const emailInput={quoteNumber,recipientEmail:r.email,recipientName:r.owner_name,businessName:r.business_name,packageLabel:String(pkg.package?.label||pkg.plan),stationCount,branchCount,monthlyPrice,monthlyLabel,deploymentFeePerBranch,deploymentFeeTotal,message,validUntilLabel:validUntil.toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric',timeZone:'Asia/Manila'})}
+      const providerMessageId=await sendQuotationEmail(emailInput)
+      const{data:quotation,error:quoteError}=await admin.from('platform_quotations').insert({quote_number:quoteNumber,registration_request_id:r.id,recipient_email:r.email,recipient_name:r.owner_name,business_name:r.business_name,package_id:pkg.plan,station_count:stationCount,branch_count:branchCount,monthly_price:monthlyPrice,deployment_fee_per_branch:deploymentFeePerBranch,deployment_fee_total:deploymentFeeTotal,valid_until:validUntil.toISOString().slice(0,10),message,provider_message_id:providerMessageId,status:'sent',created_by:user.id,sent_at:new Date().toISOString()}).select('*').single()
+      if(quoteError)throw quoteError
+      await audit(admin,requestId,user.id,'quotation_sent',{quoteNumber,email:r.email,package:pkg.plan,stationCount,branchCount,monthlyPrice,deploymentFeePerBranch})
+      return json({success:true,emailSent:true,email:r.email,quotation})
+    }
+
     if(action==='approve'){
       if(r.status==='activated')return json({success:true,request:r,alreadyApproved:true})
       if(r.status==='invited')return json({success:true,request:r,alreadyApproved:true,emailSent:true,email:r.email})
       if(r.status==='rejected')throw Object.assign(new Error('Reopen the application before approving it.'),{status:409,code:'REGISTRATION_REJECTED'})
-      const pkg=subscriptionPackage(b.subscriptionPlan,b.ultraStationLimit,r.expected_station_count)
+      const pkg=await subscriptionPackage(admin,b.subscriptionPlan,b.ultraStationLimit,r.expected_station_count)
       let authUserId=r.auth_user_id as string|null
       const inviteSentAt=new Date().toISOString()
       if(!authUserId)authUserId=await sendInviteEmail(admin,r,pkg)

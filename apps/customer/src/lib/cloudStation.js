@@ -129,9 +129,17 @@ async function pollCommands() {
 async function heartbeat() {
   if (!cloudStationPaired()) return
   try {
-    let localIp=''
+    let localIp='',software={}
     try { localIp=String(window.aezakmiClient?.getLocalIPv4?.()||'') } catch {}
-    await cloudStationRuntime('heartbeat',{recoveredFromFallback:usedFallback,usedFallback,localIp})
+    try { software=window.aezakmiClient?.getSoftwareInfo?.()||{} } catch {}
+    await cloudStationRuntime('heartbeat',{
+      recoveredFromFallback:usedFallback,
+      usedFallback,
+      localIp,
+      softwareVersion:String(software.currentVersion||'').slice(0,64),
+      updateState:String(software.status||'').slice(0,40),
+      updateVersion:String(software.downloadedVersion||software.availableVersion||'').slice(0,64),
+    })
     if(transport!=='cloud') { markCloudStationOnline(); connectWakeSocket(); void pollCommands() }
   } catch(error){ markCloudStationFallback(error?.message||'Cloud unavailable') }
 }

@@ -4,7 +4,8 @@ import fs from 'node:fs'
 
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
-const migration = read('supabase/migrations/20260913000014_subscription_packages_station_caps.sql')
+const capMigration = read('supabase/migrations/20260913000014_subscription_packages_station_caps.sql')
+const pricingMigration = read('supabase/migrations/20260914000017_platform_pricing_quotes_and_customer_updates.sql')
 const developer = read('supabase/functions/developer-registrations/index.ts')
 const stationAdmin = read('supabase/functions/station-admin/index.ts')
 const developerUi = read('apps/admin/src/pages/DeveloperConsolePage.jsx')
@@ -12,42 +13,47 @@ const settings = read('apps/admin/src/pages/SettingsPage.jsx')
 const invite = read('supabase/templates/invite.html')
 const recovery = read('supabase/templates/recovery.html')
 
-const expected = { bronze: 50, silver: 100, gold: 200, platinum: 350, diamond: 500 }
+const expected = { bronze:[10,499], silver:[25,799], gold:[50,1299] }
 
-test('subscription packages use the requested fixed station caps and Ultra custom limits', () => {
-  for (const [plan, cap] of Object.entries(expected)) {
-    assert.match(developer, new RegExp(`${plan}:${cap}`))
-    assert.match(migration, new RegExp(`lower\\(plan\\)='${plan}'.*max_stations=${cap}`))
+test('commercial catalog defaults to Bronze, Silver, Gold, and Ultra and remains developer editable', () => {
+  for (const [plan, [cap, price]] of Object.entries(expected)) {
+    assert.match(pricingMigration, new RegExp(`\\('${plan}','[^']+',\\d+,${cap},${price}`))
   }
-  assert.match(developer, /ultra:null/)
-  assert.match(developer, /10,000/)
-  assert.match(migration, /lower\(plan\)='ultra' and max_stations between 1 and 10000/)
+  assert.match(pricingMigration, /\('ultra','Ultra',40,null,1999,'\+ \/ month'/)
+  assert.match(pricingMigration, /platform_subscription_packages/)
+  assert.match(developer, /update_package/)
+  assert.match(developer, /PC limits must increase from Bronze to Silver to Gold/)
+  assert.doesNotMatch(developerUi, /Platinum|Diamond/)
 })
 
-test('station cap is enforced in both Edge validation and a race-safe database trigger', () => {
+test('station cap stays enforced by the race-safe organization-wide database trigger', () => {
   assert.match(stationAdmin, /requireStationCapacity/)
   assert.match(stationAdmin, /STATION_LIMIT_REACHED/)
-  assert.match(migration, /for update/)
-  assert.match(migration, /branch_stations_subscription_limit/)
-  assert.match(migration, /exists\(select 1 from public\.branch_stations where branch_id=new\.branch_id and local_id=new\.local_id\)/)
+  assert.match(capMigration, /for update/)
+  assert.match(capMigration, /branch_stations_subscription_limit/)
+  assert.match(capMigration, /exists\(select 1 from public\.branch_stations where branch_id=new\.branch_id and local_id=new\.local_id\)/)
+  assert.match(pricingMigration, /lower\(plan\) in \('bronze','silver','gold','ultra'\) and max_stations between 1 and 10000/)
 })
 
-test('developer console owns package assignment and protects downgrades below usage', () => {
-  assert.match(developerUi, /SUBSCRIPTION_PACKAGES/)
+test('developer console owns package assignment, editable pricing, and branded quotations', () => {
   assert.match(developerUi, /set_subscription/)
-  assert.match(developerUi, /Ultra station limit/)
+  assert.match(developerUi, /savePricingEditor/)
+  assert.match(developerUi, /Send branded quotation/)
   assert.match(developer, /SUBSCRIPTION_BELOW_USAGE/)
   assert.match(developer, /subscription_package_changed/)
+  assert.match(developer, /send_quote/)
+  assert.match(developer, /RESEND_API_KEY/)
+  assert.match(pricingMigration, /platform_quotations/)
 })
 
-test('business owner settings exposes package and organization station usage', () => {
+test('business owner settings exposes dynamic package and organization station usage', () => {
   assert.match(settings, /cloudGetSubscriptionOverview/)
   assert.match(settings, /Subscription/)
   assert.match(settings, /stationCount/)
-  assert.match(settings, /Package changes are assigned by the Aezakmi platform developer/)
+  assert.match(settings, /platform developer/)
 })
 
-test('owner invitation and resend templates are Aezakmi branded and package aware', () => {
+test('owner invitation and resend templates remain Aezakmi branded and package aware', () => {
   for (const template of [invite, recovery]) {
     assert.match(template, /AEZAKMI CAFÉ/)
     assert.match(template, /\.Data\.business_name/)

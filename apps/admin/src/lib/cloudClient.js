@@ -304,7 +304,11 @@ export function cloudOrganizationId() {
 }
 export async function cloudGetSubscriptionOverview(organizationId = cloudOrganizationId()) {
   if (!organizationId) return null;
-  const rows = await rest(`subscriptions?select=organization_id,plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end&organization_id=eq.${encodeURIComponent(organizationId)}&limit=1`);
+  const [rows, packageRows, pricingRows] = await Promise.all([
+    rest(`subscriptions?select=organization_id,plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end&organization_id=eq.${encodeURIComponent(organizationId)}&limit=1`),
+    rest(`platform_subscription_packages?select=id,label,display_order,max_stations,monthly_price,price_suffix,description,is_active&is_active=eq.true&order=display_order.asc`).catch(() => []),
+    rest(`platform_pricing_settings?select=currency,deployment_fee_min,deployment_fee_max,quote_valid_days&singleton=eq.true&limit=1`).catch(() => []),
+  ]);
   const subscription = rows?.[0] || null;
   if (!subscription) return null;
   const branches = await rest(`branches?select=id&organization_id=eq.${encodeURIComponent(organizationId)}&is_active=eq.true`);
@@ -321,6 +325,8 @@ export async function cloudGetSubscriptionOverview(organizationId = cloudOrganiz
     trialEndsAt: subscription.trial_ends_at || null,
     graceUntil: subscription.grace_until || null,
     currentPeriodEnd: subscription.current_period_end || null,
+    packageCatalog: Array.isArray(packageRows) ? packageRows : [],
+    pricingSettings: pricingRows?.[0] || null,
   };
 }
 export function cloudSelectBranch(branch) {
@@ -484,6 +490,9 @@ async function cloudPcs(branchId) {
       cloudConnectionStatus: !row.station_device_id ? "unpaired" : cloudDegraded ? "reconnecting" : cloudOnline ? "online" : "offline",
       cloudOnline,
       cloudDegraded,
+      customerVersion: row.customer_version || null,
+      customerUpdateState: row.customer_update_state || null,
+      customerUpdateVersion: row.customer_update_version || null,
       edgeId: row.edge_id || null,
       createdAt: row.created_at || null,
       updatedAt: row.updated_at || null,

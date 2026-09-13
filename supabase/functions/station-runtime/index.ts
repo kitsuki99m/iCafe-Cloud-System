@@ -31,8 +31,40 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admi
     return json({success:true,unpaired:true,stationId:station.id,localStationId:station.local_station_id})
   }
   if(action==='heartbeat'){
-    const recovered=Boolean(body.recoveredFromFallback);const patch:any={status:'online',cloud_last_seen_at:now,updated_at:now};if(recovered)patch.last_sync_restored_at=now;if(body.usedFallback)patch.last_fallback_at=now;await admin.from('station_devices').update(patch).eq('id',station.id);await cloudSessionAction(admin,station,'session.heartbeat',{pcId:station.local_station_id},null);const[{data:stationRow,error:stationError},{data:active,error:activeError},{data:pendingPower,error:pendingPowerError}]=await Promise.all([admin.from('branch_stations').select('status').eq('branch_id',station.branch_id).eq('local_id',station.local_station_id).maybeSingle(),admin.from('branch_sessions').select('local_id').eq('branch_id',station.branch_id).eq('pc_id',station.local_station_id).eq('status','active').limit(1).maybeSingle(),admin.from('station_commands').select('id').eq('station_device_id',station.id).in('command',['reboot','shutdown']).in('status',['queued','running']).gt('expires_at',now).limit(1).maybeSingle()]);if(stationError)throw stationError;if(activeError)throw activeError;if(pendingPowerError)throw pendingPowerError;const persisted=String(stationRow?.status||'').toLowerCase();const stationPatch:any={station_device_id:station.id,cloud_last_seen_at:now,cloud_connection_status:'online',updated_at:now,status:pendingPower?'offline':active?'occupied':(['maintenance','reserved'].includes(persisted)?persisted:'available')};const localIp=String(body.localIp||'').trim();if(/^(?:\d{1,3}\.){3}\d{1,3}$/.test(localIp)&&localIp.split('.').every((part:string)=>Number(part)>=0&&Number(part)<=255))stationPatch.ip_address=localIp;await admin.from('branch_stations').update(stationPatch).eq('branch_id',station.branch_id).eq('local_id',station.local_station_id);return json({success:true,station:{id:station.id,organizationId:station.organization_id,branchId:station.branch_id,localStationId:station.local_station_id,name:station.station_name},serverTime:now,powerTransition:Boolean(pendingPower)})
+    const recovered=Boolean(body.recoveredFromFallback)
+    const softwareVersion=String(body.softwareVersion||'').trim().slice(0,64)
+    const updateState=String(body.updateState||'').trim().toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,40)
+    const updateVersion=String(body.updateVersion||'').trim().slice(0,64)
+    const patch:any={status:'online',cloud_last_seen_at:now,updated_at:now}
+    if(recovered)patch.last_sync_restored_at=now
+    if(body.usedFallback)patch.last_fallback_at=now
+    if(softwareVersion)patch.software_version=softwareVersion
+    if(updateState)patch.update_state=updateState
+    patch.update_version=updateVersion||null
+    if(softwareVersion||updateState||updateVersion)patch.update_checked_at=now
+    const deviceUpdate=await admin.from('station_devices').update(patch).eq('id',station.id)
+    if(deviceUpdate.error)throw deviceUpdate.error
+    await cloudSessionAction(admin,station,'session.heartbeat',{pcId:station.local_station_id},null)
+    const[{data:stationRow,error:stationError},{data:active,error:activeError},{data:pendingPower,error:pendingPowerError}]=await Promise.all([
+      admin.from('branch_stations').select('status').eq('branch_id',station.branch_id).eq('local_id',station.local_station_id).maybeSingle(),
+      admin.from('branch_sessions').select('local_id').eq('branch_id',station.branch_id).eq('pc_id',station.local_station_id).eq('status','active').limit(1).maybeSingle(),
+      admin.from('station_commands').select('id').eq('station_device_id',station.id).in('command',['reboot','shutdown']).in('status',['queued','running']).gt('expires_at',now).limit(1).maybeSingle()
+    ])
+    if(stationError)throw stationError
+    if(activeError)throw activeError
+    if(pendingPowerError)throw pendingPowerError
+    const persisted=String(stationRow?.status||'').toLowerCase()
+    const stationPatch:any={station_device_id:station.id,cloud_last_seen_at:now,cloud_connection_status:'online',updated_at:now,status:pendingPower?'offline':active?'occupied':(['maintenance','reserved'].includes(persisted)?persisted:'available')}
+    const localIp=String(body.localIp||'').trim()
+    if(/^(?:\d{1,3}\.){3}\d{1,3}$/.test(localIp)&&localIp.split('.').every((part:string)=>Number(part)>=0&&Number(part)<=255))stationPatch.ip_address=localIp
+    if(softwareVersion)stationPatch.customer_version=softwareVersion
+    if(updateState)stationPatch.customer_update_state=updateState
+    stationPatch.customer_update_version=updateVersion||null
+    const branchUpdate=await admin.from('branch_stations').update(stationPatch).eq('branch_id',station.branch_id).eq('local_id',station.local_station_id)
+    if(branchUpdate.error)throw branchUpdate.error
+    return json({success:true,station:{id:station.id,organizationId:station.organization_id,branchId:station.branch_id,localStationId:station.local_station_id,name:station.station_name},serverTime:now,powerTransition:Boolean(pendingPower)})
   }
+
   if(action==='poll'){
     const{data:expired,error:expiredError}=await admin.from('station_commands').select('id,command,status').eq('station_device_id',station.id).in('status',['queued','running']).lte('expires_at',now);if(expiredError)throw expiredError;for(const command of expired||[]){if(command.command==='lock')await rollbackLockCheckpoint(admin,station,command.id);if(command.command==='reboot'||command.command==='shutdown')await restoreStationAvailable(admin,station);const{error:updateExpiredError}=await admin.from('station_commands').update({status:'expired',acknowledged_at:now,result:{error:'Station command expired before delivery.',code:'COMMAND_EXPIRED'}}).eq('id',command.id).eq('status',command.status);if(updateExpiredError)throw updateExpiredError}const{data,error}=await admin.from('station_commands').select('id,command,payload,status,requested_at,expires_at').eq('station_device_id',station.id).in('status',['queued','running']).gt('expires_at',now).order('requested_at',{ascending:true}).limit(20);if(error)throw error;return json({success:true,commands:data||[],serverTime:now})
   }

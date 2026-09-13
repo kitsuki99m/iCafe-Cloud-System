@@ -1,45 +1,44 @@
 # Subscription Packages + Branded Owner Invitations
 
-## Packages
+> Updated 2026-09-14: the former six fixed station tiers were replaced by an editable four-tier commercial catalog.
 
-Aezakmi Cloud now supports organization-wide station packages:
+## Current packages
 
-| Package | Maximum stations |
-| --- | ---: |
-| Bronze | 50 |
-| Silver | 100 |
-| Gold | 200 |
-| Platinum | 350 |
-| Diamond | 500 |
-| Ultra | Custom (1–10,000) |
+| Package | Default maximum stations | Default monthly price |
+| --- | ---: | ---: |
+| Bronze | 10 | ₱499/month |
+| Silver | 25 | ₱799/month |
+| Gold | 50 | ₱1,299/month |
+| Ultra | Custom | ₱1,999+ / month |
 
-The limit applies across all active branches belonging to the organization. Developer approvals can choose the package before sending the owner invitation, and provisioned businesses can be upgraded/downgraded from Developer Approvals. Downgrades below current station usage are rejected.
+Ultra is intended for larger/custom or multi-branch deployments. Bronze, Silver, and Gold limits and all monthly prices are editable by the platform developer in **Developer Approvals → Pricing**. The deployment recommendation defaults to **₱2,500–₱5,000 per branch**.
 
-Station creation is guarded in `station-admin` for a friendly error and in PostgreSQL with a serialized trigger for race-safe enforcement. Existing station upserts do not consume a second seat.
+The organization-wide station limit is still enforced by the existing PostgreSQL station-cap trigger. Existing organizations retain their assigned cap until a developer explicitly changes their package.
 
 ## Business owner view
 
-Cloud Settings shows the current package, subscription status, stations used / maximum stations, active branch count, a usage bar, and the available package catalog. Package changes remain platform-developer controlled.
+Cloud Settings shows the current package, subscription status, stations used / maximum stations, active branch count, usage bar, and the live platform package catalog. Package changes remain platform-developer controlled.
 
-## Branded invitation email
+## Branded owner invitation email
 
-`supabase/templates/invite.html` and `supabase/templates/recovery.html` use Aezakmi Café branding and owner/business/package metadata. Both templates are required because the first approval uses Supabase Invite User while an invitation resend uses the recovery/password flow for the already-created owner Auth account.
+`supabase/templates/invite.html` and `supabase/templates/recovery.html` remain the Aezakmi-branded Auth templates for business-owner onboarding.
 
-For local Supabase, `supabase/config.toml` references the templates directly.
-
-For hosted Supabase, Auth templates are project settings. Apply them in **Authentication → Email Templates**, or run:
+For hosted Supabase, apply them from **Authentication → Email Templates**, or run:
 
 ```bash
 SUPABASE_ACCESS_TOKEN=... SUPABASE_PROJECT_REF=... npm run deploy:auth-templates
 ```
 
-The deployment script uses the Supabase Management API and never stores the access token in the repository.
+## Branded quotations
 
-For production email delivery, configure custom SMTP in Supabase Auth. Supabase's built-in SMTP is intended for testing and has recipient restrictions.
+Developer Approvals now includes **Send quotation** for a registration/prospect. Quotation emails use the Aezakmi transactional template implemented in `developer-registrations` and are stored as immutable snapshots in `platform_quotations`.
+
+See `CUSTOMER_AUTO_UPDATE_PRICING_AND_QUOTATIONS_2026-09-14.md` for Resend secrets and the complete deployment/update guide.
 
 ## Deployment
 
-1. Apply `20260913000014_subscription_packages_station_caps.sql`.
-2. Redeploy `developer-registrations` and `station-admin` Edge Functions.
+1. Apply migrations through `20260914000017_platform_pricing_quotes_and_customer_updates.sql`.
+2. Redeploy `developer-registrations`, `station-runtime`, and any already-required station/admin Edge Functions.
 3. Rebuild/redeploy the Admin frontend.
-4. Apply the hosted Auth Invite + Recovery templates (Dashboard or `npm run deploy:auth-templates`).
+4. Configure quotation email secrets if quotation sending will be used.
+5. Apply the hosted Auth Invite + Recovery templates for owner onboarding.

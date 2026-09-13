@@ -1,0 +1,6 @@
+{
+  "manifestUrl": "https://updates.example.com/customer/stable/latest.json",
+  "checkIntervalMinutes": 5,
+  "autoDownload": true,
+  "allowInsecure": false
+}
