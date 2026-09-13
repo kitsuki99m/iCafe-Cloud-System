@@ -17,6 +17,24 @@ async function authUser(req:Request){const authorization=req.headers.get('author
 async function requireBranch(admin:SupabaseClient,userId:string,branchId:string,roles=['owner','admin','manager']){const{data:branch,error}=await admin.from('branches').select('id,organization_id,name').eq('id',branchId).maybeSingle();if(error)throw error;if(!branch)throw Object.assign(new Error('Branch not found.'),{status:404,code:'BRANCH_NOT_FOUND'});const{data:member,error:memberError}=await admin.from('organization_members').select('role').eq('organization_id',branch.organization_id).eq('user_id',userId).maybeSingle();if(memberError)throw memberError;if(!member||!roles.includes(member.role))throw Object.assign(new Error('Forbidden.'),{status:403,code:'FORBIDDEN'});const{data:org,error:orgError}=await admin.from('organizations').select('name,lifecycle_status').eq('id',branch.organization_id).maybeSingle();if(orgError)throw orgError;if(!org||!['active','grace_period'].includes(String(org.lifecycle_status||'active')))throw Object.assign(new Error(org?.lifecycle_status==='terminated'?'This business has been terminated.':'Cloud access for this business is suspended.'),{status:403,code:org?.lifecycle_status==='terminated'?'BUSINESS_TERMINATED':'BUSINESS_SUSPENDED'});return{branch,org,member}}
 async function ownerEmail(admin:SupabaseClient,organizationId:string){const{data:owner,error}=await admin.from('organization_members').select('user_id').eq('organization_id',organizationId).eq('role','owner').order('created_at',{ascending:true}).limit(1).maybeSingle();if(error)throw error;if(!owner?.user_id)throw Object.assign(new Error('Business owner account is unavailable.'),{status:409,code:'OWNER_MISSING'});const{data,error:authError}=await admin.auth.admin.getUserById(owner.user_id);if(authError)throw authError;const email=String(data.user?.email||'').trim().toLowerCase();if(!email)throw Object.assign(new Error('Business owner email is unavailable.'),{status:409,code:'OWNER_EMAIL_MISSING'});return{userId:owner.user_id,email}}
 async function broadcast(topicKey:string,payload:any){if(!topicKey)return;try{await fetch(`${projectUrl()}/realtime/v1/api/broadcast/${encodeURIComponent(`station-wakeup:${topicKey}`)}/events/sync`,{method:'POST',headers:{apikey:secretKey(),'Content-Type':'application/json'},body:JSON.stringify(payload||{})})}catch{}}
+async function checkpointAdminInterruption(admin:SupabaseClient,branchId:string,stationId:string,stationDeviceId:string,command:string,commandId:string,actorId:string){
+  const now=new Date().toISOString()
+  if(command==='lock'){
+    const{data,error}=await admin.rpc('aezakmi_station_pause_session',{p_branch_id:branchId,p_pc_id:stationId,p_reason:'admin_lock',p_command_id:commandId,p_actor_id:actorId,p_paused_at:now})
+    if(error)throw error
+    return data&&typeof data==='object'?data:{success:true,paused:false}
+  }
+  if(command==='reboot'||command==='shutdown'){
+    const{data,error}=await admin.rpc('aezakmi_station_release_session',{p_branch_id:branchId,p_pc_id:stationId,p_reason:command,p_interrupted_at:now,p_expected_member_id:null})
+    if(error)throw error
+    const out=data&&typeof data==='object'?data:{}
+    if(out.success===false)throw Object.assign(new Error(out.error||'Unable to save the active station session.'),{status:Number(out.status||400),code:out.code||'STATION_INTERRUPTION_FAILED'})
+    const revoked=await admin.from('branch_customer_auth_sessions').update({revoked_at:now}).eq('branch_id',branchId).eq('station_device_id',stationDeviceId).is('revoked_at',null)
+    if(revoked.error)throw revoked.error
+    return {...out,revokedAuth:true}
+  }
+  return {success:true,skipped:true}
+}
 
 Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user=await authUser(req),admin=adminClient(),body=await req.json().catch(()=>({})),action=String(body.action||'');
   if(action==='create'){
@@ -37,7 +55,28 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user
     const branchId=String(body.branchId||''),stationId=String(body.stationId||'');await requireBranch(admin,user.id,branchId);const now=new Date().toISOString();await admin.from('station_devices').update({status:'revoked',revoked_at:now,updated_at:now}).eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null);await admin.from('branch_stations').update({station_device_id:null,cloud_connection_status:'unpaired',cloud_last_seen_at:null}).eq('branch_id',branchId).eq('local_id',stationId);return json({success:true})
   }
   if(action==='command'){
-    const branchId=String(body.branchId||''),stationId=String(body.stationId||''),command=String(body.command||'');const{branch}=await requireBranch(admin,user.id,branchId);if(!['lock','unlock','reboot','shutdown','game_update','refresh'].includes(command))throw Object.assign(new Error('Unsupported station command.'),{status:400,code:'INVALID_COMMAND'});const{data:device,error}=await admin.from('station_devices').select('id,realtime_topic_key,revoked_at').eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null).maybeSingle();if(error)throw error;if(!device)throw Object.assign(new Error('This PC is not paired to Aezakmi Cloud yet.'),{status:409,code:'STATION_NOT_PAIRED'});const expiresAt=new Date(Date.now()+30_000).toISOString(),idempotencyKey=String(body.idempotencyKey||'').trim()||null;const payload:any={organization_id:branch.organization_id,branch_id:branchId,station_device_id:device.id,local_station_id:stationId,command,payload:body.payload&&typeof body.payload==='object'?body.payload:{},requested_by:user.id,expires_at:expiresAt,idempotency_key:idempotencyKey};let commandRow:any=null;const inserted=await admin.from('station_commands').insert(payload).select('id,status,requested_at,expires_at').single();if(inserted.error){if(inserted.error.code==='23505'&&idempotencyKey){const{data:existing,error:existingError}=await admin.from('station_commands').select('id,status,requested_at,expires_at').eq('station_device_id',device.id).eq('requested_by',user.id).eq('idempotency_key',idempotencyKey).maybeSingle();if(existingError)throw existingError;commandRow=existing}else throw inserted.error}else commandRow=inserted.data;await admin.from('cloud_audit_logs').insert({organization_id:branch.organization_id,branch_id:branchId,actor_user_id:user.id,action:`station.command.${command}`,details:{stationId,stationCommandId:commandRow.id}});await broadcast(device.realtime_topic_key,{stationCommandId:commandRow.id,kind:'station_command'});return json({success:true,commandId:commandRow.id,status:commandRow.status||'queued',expiresAt:commandRow.expires_at},201)
+    const branchId=String(body.branchId||''),stationId=String(body.stationId||''),command=String(body.command||'');
+    const{branch}=await requireBranch(admin,user.id,branchId);
+    if(!['lock','unlock','reboot','shutdown','game_update','refresh'].includes(command))throw Object.assign(new Error('Unsupported station command.'),{status:400,code:'INVALID_COMMAND'});
+    const{data:device,error}=await admin.from('station_devices').select('id,realtime_topic_key,revoked_at').eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null).maybeSingle();
+    if(error)throw error;if(!device)throw Object.assign(new Error('This PC is not paired to Aezakmi Cloud yet.'),{status:409,code:'STATION_NOT_PAIRED'});
+    const expiresAt=new Date(Date.now()+30_000).toISOString(),idempotencyKey=String(body.idempotencyKey||'').trim()||null;
+    const payload:any={organization_id:branch.organization_id,branch_id:branchId,station_device_id:device.id,local_station_id:stationId,command,payload:body.payload&&typeof body.payload==='object'?body.payload:{},requested_by:user.id,expires_at:expiresAt,idempotency_key:idempotencyKey};
+    let commandRow:any=null,created=false;
+    const inserted=await admin.from('station_commands').insert(payload).select('id,status,requested_at,expires_at').single();
+    if(inserted.error){
+      if(inserted.error.code==='23505'&&idempotencyKey){const{data:existing,error:existingError}=await admin.from('station_commands').select('id,status,requested_at,expires_at').eq('station_device_id',device.id).eq('requested_by',user.id).eq('idempotency_key',idempotencyKey).maybeSingle();if(existingError)throw existingError;commandRow=existing}
+      else throw inserted.error
+    }else{commandRow=inserted.data;created=true}
+    if(!commandRow)throw Object.assign(new Error('Unable to create station command.'),{status:500,code:'COMMAND_CREATE_FAILED'});
+    let interruption:any={success:true,skipped:true};
+    if(created&&(command==='lock'||command==='reboot'||command==='shutdown')){
+      try{interruption=await checkpointAdminInterruption(admin,branchId,stationId,device.id,command,commandRow.id,user.id)}
+      catch(interruptError){await admin.from('station_commands').update({status:'failed',acknowledged_at:new Date().toISOString(),result:{error:'Unable to checkpoint active session before station control.',code:'SESSION_CHECKPOINT_FAILED'}}).eq('id',commandRow.id).eq('status','queued');throw interruptError}
+    }
+    await admin.from('cloud_audit_logs').insert({organization_id:branch.organization_id,branch_id:branchId,actor_user_id:user.id,action:`station.command.${command}`,details:{stationId,stationCommandId:commandRow.id,sessionInterruption:interruption}});
+    await broadcast(device.realtime_topic_key,{stationCommandId:commandRow.id,kind:'station_command',sessionInterrupted:command==='lock'||command==='reboot'||command==='shutdown'});
+    return json({success:true,commandId:commandRow.id,status:commandRow.status||'queued',expiresAt:commandRow.expires_at,interruption},201)
   }
   return json({success:false,code:'INVALID_ACTION',error:'Unsupported station admin action.'},400)
 }catch(e){return fail(e,'Unable to manage Customer Station.')}})

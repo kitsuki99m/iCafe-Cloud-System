@@ -102,6 +102,32 @@ export function eligibleCustomerPlans(ratePlans = [], tier = "Regular") {
     });
 }
 
+
+export function eligibleWalletStartPlans(ratePlans = [], tier = "Regular") {
+  const normalizedTier = String(tier || "Regular");
+  return (Array.isArray(ratePlans) ? ratePlans : [])
+    .filter((plan) => plan?.isActive !== false)
+    .filter((plan) => {
+      if (plan?.walletStartEligible !== undefined) return Boolean(plan.walletStartEligible);
+      // Cloud rate-plan reads are intentionally broad. When the server has not
+      // attached a wallet-start eligibility bit, keep the UI conservative on
+      // tier while the transaction engine remains authoritative for promo and
+      // schedule validation. Customer Self-Service is NOT required for wallet
+      // funded starts.
+      return planVisibleForTier(plan, normalizedTier);
+    })
+    .sort((a, b) => {
+      const order = { Regular: 0, Gold: 1, VIP: 2 };
+      const tierDelta =
+        (order[String(b.customerTier || "Regular")] ?? 0) -
+        (order[String(a.customerTier || "Regular")] ?? 0);
+      if (tierDelta) return tierDelta;
+      if (String(a.mode || "linear") !== String(b.mode || "linear"))
+        return String(a.mode || "linear") === "linear" ? -1 : 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+}
+
 export function isTierPromo(plan, tier = "Regular") {
   const promoKind = String(plan?.promoKind || plan?.promo_kind || "none");
   const planTier = String(

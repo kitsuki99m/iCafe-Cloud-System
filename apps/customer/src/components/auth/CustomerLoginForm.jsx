@@ -607,7 +607,7 @@ export default function CustomerLoginForm() {
       />}
       {idleSeconds !== null && (
         <div
-          className="fixed bottom-4 right-4 z-[600] w-[min(300px,calc(100vw-2rem))] rounded-xl border border-ember/40 bg-surface p-3.5 shadow-2xl"
+          className="fixed bottom-4 left-4 z-[600] w-[min(300px,calc(100vw-2rem))] rounded-xl border border-ember/40 bg-surface p-3.5 shadow-2xl"
           role="status"
           aria-live="polite"
         >

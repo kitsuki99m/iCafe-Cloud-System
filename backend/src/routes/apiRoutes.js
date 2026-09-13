@@ -968,6 +968,24 @@ router.post(
         createdAt,
         expiresAt,
       );
+      // Hidden Admin controls can block paid use just as surely as dashboard
+      // controls. Checkpoint at authorization time instead of waiting for the
+      // renderer ACK so the warning/lock interval is never billable.
+      if (req.pc?.id && command === "lock") {
+        const paused = pauseActiveSession(req.pc.id, { reason:"emergency_lock", commandId:controlId, userId:admin.id, at:createdAt });
+        if (paused?.session) emitSessionUpdated(paused.session.id, { pcId:req.pc.id, memberId:paused.session.member_id || null, reason:"session_paused", remainingSeconds:Number(paused.remainingSeconds || 0), amountDue:Number(paused.amountDue || 0), locked:true });
+      }
+      if (req.pc?.id && command === "quit") {
+        const released = transaction(() => {
+          const result=releaseStationSession(req.pc.id, { reason:"app_exit", at:createdAt, markAvailable:false });
+          db.prepare("UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,'app_exit') WHERE pc_id=? AND revoked_at IS NULL").run(createdAt,createdAt,req.pc.id);
+          db.prepare("UPDATE pcs SET status='offline',updated_at=? WHERE id=? AND status<>'maintenance'").run(createdAt,req.pc.id);
+          return result;
+        });
+        if (released?.released) emitSessionUpdated(released.id, { pcId:req.pc.id, memberId:released.member_id || null, reason:"session_interrupted", endReason:"app_exit", remainingSeconds:Number(released.remainingSeconds || 0), amountDue:Number(released.amountDue || 0), settlementPending:Boolean(released.settlementPending), locked:true });
+        getIO()?.to(`pc:${req.pc.id}`).emit('auth:revoked',{reason:'app_exit',pcId:req.pc.id,immediate:true});
+      }
+      emitDataChanged({ method:"INTERRUPT", path:"/public/station-control", pcId:req.pc?.id || null, command });
       log(
         admin.id,
         `station.${command}.authorized`,
@@ -1017,23 +1035,10 @@ router.patch("/public/station-control/:id/ack", requirePairedStation, (req, res,
         });
     const ok = req.body?.status === "completed";
     if (ok && request.pc_id) {
-      if (request.command === "lock")
-        pauseActiveSession(request.pc_id, {
-          reason: "emergency_lock",
-          commandId: request.id,
-          userId: request.authorized_by,
-        });
+      // Lock/quit were checkpointed before dispatch. Only a successfully
+      // executed unlock may restart billing.
       if (request.command === "unlock")
         resumeActiveSession(request.pc_id, { commandId: request.id });
-      if (request.command === "quit") {
-        const session = db
-          .prepare(
-            "SELECT id,member_id FROM computer_sessions WHERE pc_id=? AND status='active' LIMIT 1",
-          )
-          .get(request.pc_id);
-        if (session?.member_id)
-          checkpointMemberSession(session.member_id, session.id);
-      }
     }
     db.prepare(
       "UPDATE station_control_requests SET status=?,completed_at=?,result=? WHERE id=?",
@@ -2871,16 +2876,24 @@ router.get("/rate-plans", auth, (req, res) => {
       .prepare("SELECT tier,birthdate FROM members WHERE id=?")
       .get(req.auth.memberId);
     const tier = member?.tier ?? "Regular";
+    // Signed-in members receive every active plan. `eligible` keeps the
+    // existing Customer Self-Service rule for Add Time, while
+    // `walletStartEligible` intentionally ignores that toggle: once a member
+    // has wallet credit, they may start a prepaid session with any active rate
+    // they are otherwise eligible to use.
     const rows = db
-      .prepare(
-        `SELECT * FROM rate_plans WHERE is_active=1 AND customer_self_service=1 ORDER BY name`,
-      )
+      .prepare(`SELECT * FROM rate_plans WHERE is_active=1 ORDER BY name`)
       .all();
     const ratePlans = rows.map((row) => {
       const eligibility = ratePlanEligibility(row, member);
+      const walletStartEligibility = ratePlanEligibility(row, member, new Date(), {
+        requireSelfService: false,
+      });
       return {
         ...planView(row),
         ...eligibility,
+        walletStartEligible: walletStartEligibility.eligible,
+        walletStartReason: walletStartEligibility.reason,
         promo:
           (row.promo_kind ?? "none") !== "none" ||
           (row.customer_tier === tier && tier !== "Regular"),
@@ -4806,7 +4819,12 @@ router.post("/sessions/start", auth, (req, res, next) => {
             expose: true,
           });
         if (req.auth.role === "customer") {
-          const eligibility = ratePlanEligibility(plan, member);
+          // Wallet-funded Start Session is a member-authorized purchase. It
+          // does not depend on the Add Time / Customer Self-Service toggle,
+          // but tier, active-state and promo/schedule eligibility still apply.
+          const eligibility = ratePlanEligibility(plan, member, new Date(), {
+            requireSelfService: false,
+          });
           if (!eligibility.eligible)
             throw Object.assign(
               new Error(
@@ -5024,6 +5042,97 @@ router.post("/sessions/start", auth, (req, res, next) => {
     res.status(201).json({ success: true, ...result });
   } catch (e) {
     next(e);
+  }
+});
+
+// Customer Guest prepaid expiry/end. Cloud Station API already exposes the
+// equivalent public route; Café Edge must provide the same contract so local
+// fallback does not leave an expired guest session active in SQLite.
+router.post("/public/sessions/:id/end", requirePairedStation, (req, res, next) => {
+  try {
+    const pc = req.pc;
+    if (!pc)
+      return res.status(404).json({
+        success: false,
+        code: "PC_NOT_REGISTERED",
+        error: "This PC is not registered with the cafe server.",
+      });
+    if (pc.station_token_hash && !req.stationAuthenticated)
+      return res.status(403).json({
+        success: false,
+        code: "STATION_NOT_PAIRED",
+        error: "Station enrollment credential is missing or invalid.",
+      });
+
+    const session = db
+      .prepare(
+        "SELECT * FROM computer_sessions WHERE id=? AND pc_id=? AND member_id IS NULL AND status='active'",
+      )
+      .get(req.params.id, pc.id);
+    if (!session)
+      return res.status(404).json({
+        success: false,
+        code: "NO_ACTIVE_SESSION",
+        error: "Active guest session not found on this station.",
+      });
+    if (session.billing_type !== "prepaid")
+      return res.status(409).json({
+        success: false,
+        code: "SETTLEMENT_REQUIRED",
+        error: "Guest postpaid sessions must be settled by staff.",
+      });
+
+    const disposition = String(req.body?.disposition || "save").toLowerCase();
+    if (!["save", "forfeit"].includes(disposition))
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_DISPOSITION",
+        error: "Choose a valid guest session disposition.",
+      });
+
+    const beforeRemaining = remainingSecondsForSession(session);
+    const endReason = beforeRemaining <= 0 ? "session_expired" : "guest_session_end";
+    const released = transaction(() => {
+      const result = releaseStationSession(pc.id, {
+        reason: endReason,
+        at: nowIso(),
+        expectedMemberId: null,
+        markAvailable: true,
+      });
+      if (result?.released && disposition === "forfeit") {
+        db.prepare(
+          "UPDATE computer_sessions SET saved_remaining_seconds=0 WHERE id=? AND status='ended'",
+        ).run(result.id);
+        result.remainingSeconds = 0;
+      }
+      return result;
+    });
+    if (!released?.released)
+      return res.status(409).json({
+        success: false,
+        code: "SESSION_STATE_CONFLICT",
+        error: "The guest session is no longer active.",
+      });
+
+    emitSessionUpdated(released.id, {
+      pcId: pc.id,
+      memberId: null,
+      reason: endReason,
+      remainingSeconds: Number(released.remainingSeconds || 0),
+    });
+    emitDataChanged({
+      method: "POST",
+      path: `/public/sessions/${released.id}/end`,
+      pcId: pc.id,
+    });
+    return res.json({
+      success: true,
+      sessionId: released.id,
+      disposition,
+      remainingSeconds: Number(released.remainingSeconds || 0),
+    });
+  } catch (error) {
+    next(error);
   }
 });
 

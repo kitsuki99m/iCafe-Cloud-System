@@ -42,12 +42,35 @@ export function elapsedBillableSeconds(session, nowMs = Date.now()) {
 export function pauseActiveSession(pcId, { reason='admin_lock', commandId=null, userId=null, at=nowIso() } = {}) {
   const session = db.prepare("SELECT * FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(pcId)
   if (!session) return null
-  const current = activeSessionPause(session.id)
-  if (current) return { session, pause:current, created:false }
-  const pause = { id:id(), computer_session_id:session.id, reason, paused_at:at, resumed_at:null, command_id:commandId, created_by:userId }
-  db.prepare('INSERT INTO session_pauses(id,computer_session_id,reason,paused_at,resumed_at,command_id,created_by) VALUES(?,?,?,?,?,?,?)')
-    .run(pause.id,pause.computer_session_id,pause.reason,pause.paused_at,null,pause.command_id,pause.created_by)
-  return { session, pause, created:true }
+  const atMsRaw = new Date(at).getTime()
+  const atMs = Number.isFinite(atMsRaw) ? Math.min(Date.now(), Math.max(new Date(session.started_at || at).getTime(), atMsRaw)) : Date.now()
+  const checkpointAt = new Date(atMs).toISOString()
+  let pause = activeSessionPause(session.id)
+  let created = false
+  if (!pause) {
+    pause = { id:id(), computer_session_id:session.id, reason, paused_at:checkpointAt, resumed_at:null, command_id:commandId, created_by:userId }
+    db.prepare('INSERT INTO session_pauses(id,computer_session_id,reason,paused_at,resumed_at,command_id,created_by) VALUES(?,?,?,?,?,?,?)')
+      .run(pause.id,pause.computer_session_id,pause.reason,pause.paused_at,null,pause.command_id,pause.created_by)
+    created = true
+  }
+
+  // A pause is also a durable billing checkpoint. This is intentionally done
+  // when the blocking action is requested, not when the station later ACKs it,
+  // so no paid time can leak while a lock/power command is already hindering use.
+  const remainingSeconds = session.billing_type === 'prepaid' ? remainingSecondsForSession(session, atMs) : 0
+  const elapsedBillable = session.billing_type === 'postpaid' ? elapsedBillableSeconds(session, atMs) : 0
+  const amountDue = session.billing_type === 'postpaid'
+    ? Math.max(0, Math.round((elapsedBillable / 60) * Number(session.postpaid_rate_per_minute || 0) * 100) / 100)
+    : 0
+  db.prepare(`UPDATE computer_sessions
+    SET last_heartbeat_at=?,saved_remaining_seconds=?,unsettled_amount_due=?
+    WHERE id=? AND status='active'`)
+    .run(checkpointAt,remainingSeconds,amountDue,session.id)
+  if (session.member_id && session.billing_type === 'prepaid') {
+    db.prepare('UPDATE members SET session_seconds_remaining=?,updated_at=? WHERE id=?')
+      .run(remainingSeconds,checkpointAt,session.member_id)
+  }
+  return { session, pause, created, remainingSeconds, elapsedBillableSeconds:elapsedBillable, amountDue, checkpointAt }
 }
 
 export function resumeActiveSession(pcId, { commandId=null, at=nowIso() } = {}) {
@@ -60,6 +83,7 @@ export function resumeActiveSession(pcId, { commandId=null, at=nowIso() } = {}) 
     db.prepare('UPDATE computer_sessions SET expires_at=? WHERE id=?').run(new Date(new Date(session.expires_at).getTime() + pausedSeconds * 1000).toISOString(),session.id)
   }
   db.prepare('UPDATE session_pauses SET resumed_at=?,command_id=COALESCE(command_id,?) WHERE id=? AND resumed_at IS NULL').run(at,commandId,pause.id)
+  db.prepare("UPDATE computer_sessions SET saved_remaining_seconds=NULL,unsettled_amount_due=NULL WHERE id=? AND status='active'").run(session.id)
   return { session, pause, resumed:true, pausedSeconds }
 }
 

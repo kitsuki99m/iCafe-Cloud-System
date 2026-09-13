@@ -437,18 +437,27 @@ export function AppDataProvider({ children }) {
   function powerCommand(pc, command, options = {}) {
     const normalizedCommand = command === 'restart' ? 'reboot' : command
     const isSessionLockCommand = normalizedCommand === 'lock' || normalizedCommand === 'unlock'
+    const isPowerInterruption = normalizedCommand === 'reboot' || normalizedCommand === 'shutdown'
     let previousPc = null
 
-    // Lock/unlock should feel immediate at the desk.  The station still ACKs
-    // before the server commits the billing pause/resume, but we freeze/unfreeze
-    // the visible clock as soon as the command is dispatched and roll it back
-    // if the command cannot be queued.
-    if (isSessionLockCommand && pc?.session) {
+    // Admin-induced blocking is authoritative immediately. Lock freezes the
+    // visible timer while keeping the session resumable; restart/shutdown
+    // removes the live session from the desk immediately because the backend
+    // has already saved it and revoked the Customer identity before dispatch.
+    if ((isSessionLockCommand || isPowerInterruption) && pc?.session) {
       const dispatchedAt = Date.now()
       setState((current) => {
         const target = current.pcs.find((item) => String(item.id) === String(pc.id))
         if (!target?.session) return current
         previousPc = target
+        if (isPowerInterruption) {
+          return {
+            ...current,
+            pcs: current.pcs.map((item) => String(item.id) === String(pc.id)
+              ? { ...item, status:'offline', session:null, pendingPowerCommand:normalizedCommand, interruptedAt:dispatchedAt }
+              : item),
+          }
+        }
         const nextSession = normalizedCommand === 'lock'
           ? { ...target.session, isLocked:true, pausedAt:dispatchedAt, pauseReason:'admin_lock', pendingCommand:'lock' }
           : { ...target.session, isLocked:false, pausedAt:null, pauseReason:null, pendingCommand:'unlock', observedAt:dispatchedAt }
@@ -476,9 +485,9 @@ export function AppDataProvider({ children }) {
         if (previousPc) {
           setState((current) => ({
             ...current,
-            pcs: current.pcs.map((item) => String(item.id) === String(pc.id) && item.session?.pendingCommand === normalizedCommand
-              ? previousPc
-              : item),
+            pcs: current.pcs.map((item) => String(item.id) === String(pc.id) && (
+              isPowerInterruption || item.session?.pendingCommand === normalizedCommand
+            ) ? previousPc : item),
           }))
         }
         throw error

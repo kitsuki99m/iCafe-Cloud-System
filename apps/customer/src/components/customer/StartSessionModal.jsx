@@ -4,7 +4,7 @@ import Modal from '../common/Modal.jsx'
 import NumericInput from '../common/NumericInput.jsx'
 import Button from '../common/Button.jsx'
 import { useAppData } from '../../context/AppDataContext.jsx'
-import { minutesForAmount, minAmountFor, rateForId, isTierPromo, eligibleCustomerPlans } from '../../lib/rates.js'
+import { minutesForAmount, minAmountFor, rateForId, isTierPromo, eligibleWalletStartPlans } from '../../lib/rates.js'
 import { formatDuration } from '../../lib/duration.js'
 import { createOperationKey } from '../../lib/api.js'
 
@@ -12,12 +12,39 @@ function peso(n) {
   return `₱${Math.floor(Number(n ?? 0))}`
 }
 
-// Self-service Start Session: only active customer-self-service plans
-// permitted by the shared tier rule are offered here. Guest uses the Regular
-// tier, Gold inherits Regular + Gold, and VIP sees all three tiers.
+function startPresets(plan, wallet) {
+  if (!plan || plan.mode === 'package') return []
+  const balance = Math.max(0, Math.floor(Number(wallet || 0)))
+  const minimum = Math.max(1, Math.ceil(Number(minAmountFor(plan) || 1)))
+  const unit = Math.max(0, Math.floor(Number(plan.pesoUnit || 0)))
+  const candidates = [
+    unit >= 5 ? unit : null,
+    minimum >= 5 ? minimum : null,
+    20,
+    50,
+    100,
+    balance,
+  ]
+  return [...new Set(candidates.filter((value) => Number.isFinite(value) && value >= minimum && value <= balance && value > 0))]
+    .sort((a, b) => a - b)
+}
+
+function initialSpend(plan, wallet) {
+  if (!plan) return ''
+  if (plan.mode === 'package') return String(Math.floor(Number(plan.amount || 0)))
+  const presets = startPresets(plan, wallet)
+  if (presets.length) return String(presets[0])
+  const minimum = Math.max(1, Math.ceil(Number(minAmountFor(plan) || 1)))
+  const balance = Math.max(0, Math.floor(Number(wallet || 0)))
+  return balance >= minimum ? String(minimum) : ''
+}
+
+// Wallet-funded Start Session: active plans allowed by the member tier are
+// offered even when the legacy Customer Self-Service toggle is off. The
+// backend remains authoritative for schedule/promo eligibility and balance.
 export default function StartSessionModal({ open, onClose, pc, memberId, wallet, ratePlans, tier = 'Regular', savedSeconds = 0 }) {
   const { startSelfServiceSession } = useAppData()
-  const visibleRatePlans = eligibleCustomerPlans(ratePlans, tier)
+  const visibleRatePlans = eligibleWalletStartPlans(ratePlans, tier)
   const [ratePlanId, setRatePlanId] = useState(visibleRatePlans?.[0]?.id ?? null)
   const [customAmount, setCustomAmount] = useState('')
   const [result, setResult] = useState(null)
@@ -38,9 +65,10 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
     // on it made this effect refire mid-session and stomp the customer's tap
     // on another rate plan a moment after they made it — same bug already
     // fixed in ExtendSessionModal.
-    const first = visibleRatePlans?.[0]?.id ?? null
+    const firstPlan = visibleRatePlans?.[0] ?? null
+    const first = firstPlan?.id ?? null
     setRatePlanId(first)
-    setCustomAmount(first ? String(minAmountFor(visibleRatePlans, first)) : '')
+    setCustomAmount(initialSpend(firstPlan, wallet))
     setResult(null)
     setBusy(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,6 +83,7 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
   const amount = Math.floor(isPackage ? Number(plan.amount || 0) : Number(customAmount || 0))
   const minAmount = plan ? minAmountFor(visibleRatePlans, ratePlanId) : 1
   const minutes = plan ? minutesForAmount(visibleRatePlans, ratePlanId, amount) : 0
+  const presets = plan ? startPresets(plan, wallet) : []
   const affordable = !!plan && amount >= minAmount && amount <= wallet && minutes > 0
 
   function handleClose() {
@@ -91,7 +120,7 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
       onClose={handleClose}
       eyebrow={pc ? `${pc.label} · ${pc.ipAddress}` : 'Start Session'}
       title="Start Session"
-      description={hasSavedTime ? "Resume the time already saved to your account." : "Choose a rate and amount. We will show how much time you will get before you start."}
+      description={hasSavedTime ? "Resume the time already saved to your account." : "Choose a rate, tap a preset amount, or enter a custom wallet amount. We will show the time before you start."}
       busy={busy}
       onSubmit={submit}
       footer={
@@ -128,7 +157,7 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
             <div className="mb-1.5 flex items-center justify-between"><label className="eyebrow block">Choose a Rate</label><span className="rounded-full bg-teal/10 px-2 py-0.5 text-[10px] font-semibold text-teal-dim">{tier} member</span></div>
             {!visibleRatePlans.length ? (
               <div className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-3 text-xs text-gold-dim">
-                No customer rate plans are configured yet. Please ask the counter to configure a rate plan.
+                No active rate plan is currently available for your membership tier. Please ask the counter to check Rates.
               </div>
             ) : (
             <div className={`grid gap-2 ${visibleRatePlans.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
@@ -137,7 +166,7 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
                   key={p.id}
                   onClick={() => {
                     setRatePlanId(p.id)
-                    if (p.mode === 'linear') setCustomAmount(String(minAmountFor(visibleRatePlans, p.id)))
+                    setCustomAmount(initialSpend(p, wallet))
                   }}
                   className={`rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
                     ratePlanId === p.id
@@ -163,22 +192,48 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
             </div>
           ) : !hasSavedTime && plan ? (
             <div>
-              <label className="eyebrow mb-1.5 block">How much do you want to spend?</label>
+              <label className="eyebrow mb-1.5 block">Choose an amount</label>
+              {presets.length > 0 && (
+                <div className={`mb-2 grid gap-2 ${presets.length >= 4 ? 'grid-cols-4' : presets.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  {presets.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setCustomAmount(String(preset))}
+                      className={`rounded-lg border px-2 py-2 text-sm font-semibold transition-colors ${
+                        amount === preset
+                          ? 'border-gold/50 bg-gold/10 text-gold-dim'
+                          : 'border-surface-line text-slate-soft hover:text-ink-900'
+                      }`}
+                    >
+                      {peso(preset)}
+                    </button>
+                  ))}
+                </div>
+              )}
               <NumericInput
                 min={minAmount}
                 max={wallet}
+                inputMode="numeric"
                 value={customAmount}
                 onChange={(e) => setCustomAmount(e.target.value)}
-                placeholder="0"
+                placeholder={`Custom amount · minimum ${peso(minAmount)}`}
                 className="w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 placeholder:text-slate-soft focus:outline-none focus:border-gold/50"
               />
+              <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-slate-soft">
+                <span>Custom amounts use the selected rate proportionally.</span>
+                <span className="shrink-0 font-semibold text-ink-900">Max {peso(wallet)}</span>
+              </div>
               {!affordable && amount > wallet && (
                 <p className="mt-1.5 text-xs text-ember-dim">That's more than your current wallet balance.</p>
+              )}
+              {!affordable && amount > 0 && amount < minAmount && (
+                <p className="mt-1.5 text-xs text-ember-dim">Minimum spend for this rate is {peso(minAmount)}.</p>
               )}
             </div>
           ) : null}
 
-          {!hasSavedTime && !plan && <p className="text-xs text-slate-soft">You cannot start a session until an active rate plan is configured.</p>}
+          {!hasSavedTime && !plan && <p className="text-xs text-slate-soft">Your wallet is ready, but no active rate is available for this account yet.</p>}
 
           {!hasSavedTime && <div className="flex items-center justify-between rounded-lg bg-surface-raised px-3 py-2">
             <span className="text-xs text-slate-soft">Time you get</span>

@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   executeRemoteCommand:command => ipcRenderer.invoke('client:remote-command', command),
   shutdownClient:() => ipcRenderer.invoke('client:shutdown'),
   restartClient:() => ipcRenderer.invoke('client:restart'),
+  restartCustomerStation:() => ipcRenderer.invoke('client:restart-app'),
   executeEmergencyCommand:command => ipcRenderer.invoke('client:emergency-command', command),
   showMiniDashboard:() => ipcRenderer.invoke('client:show-dashboard'),
   hideMiniDashboard:() => ipcRenderer.invoke('client:hide-dashboard'),

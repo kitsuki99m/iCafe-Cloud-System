@@ -378,10 +378,15 @@ function cloudSessionView(row) {
     startedAt,
     expiresAt,
     status: row.status || raw.status || "active",
+    pausedAt: raw.pausedAt ? epoch(raw.pausedAt) : null,
+    pausedRemainingSeconds: raw.pausedRemainingSeconds ?? raw.savedRemainingSeconds ?? null,
     remainingSeconds:
-      billing === "prepaid" && expiresAt
-        ? Math.max(0, Math.ceil((Number(expiresAt) - Date.now()) / 1000))
-        : raw.remainingSeconds ?? null,
+      billing === "prepaid" && raw.isLocked && (raw.pausedRemainingSeconds ?? raw.savedRemainingSeconds) != null
+        ? Math.max(0, Number(raw.pausedRemainingSeconds ?? raw.savedRemainingSeconds))
+        : billing === "prepaid" && expiresAt
+          ? Math.max(0, Math.ceil((Number(expiresAt) - Date.now()) / 1000))
+          : raw.remainingSeconds ?? null,
+    accruedAmount: raw.accruedAmount ?? raw.accruedAmountDue ?? null,
     observedAt: Date.now(),
   };
 }

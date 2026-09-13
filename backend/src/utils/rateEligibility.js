@@ -170,8 +170,9 @@ export function planVisibleForTier(plan, tier = "Regular") {
   return tierAllowsPlan(memberTier, planTier);
 }
 
-export function ratePlanEligibility(plan, member, at = new Date()) {
-  if (!plan || !plan.is_active || !plan.customer_self_service)
+export function ratePlanEligibility(plan, member, at = new Date(), options = {}) {
+  const requireSelfService = options?.requireSelfService !== false;
+  if (!plan || !plan.is_active || (requireSelfService && !plan.customer_self_service))
     return { eligible: false, reason: "not_available" };
 
   const scheduleStatus = promoScheduleStatus(plan, at);

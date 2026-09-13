@@ -13,6 +13,7 @@ export function AuthProvider({ children }) {
   const [passwordSetupDeferred, setPasswordSetupDeferred] = useState(false);
   const [stationPairingRequired, setStationPairingRequired] = useState(false);
   const [stationPairingError, setStationPairingError] = useState("");
+  const [stationRestartRequired, setStationRestartRequired] = useState(false);
 
   function clearDeferredPasswordSetup() {
     sessionStorage.removeItem(CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN);
@@ -113,13 +114,18 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const paired = () => {
-      setStationPairingRequired(false);
+      // Do not hot-reload immediately after replacing the station identity.
+      // Keep the pairing shell mounted and require a clean Electron relaunch so
+      // Cloud runtime, local Edge enrollment, and auth bootstrap all start from
+      // the same persisted credential.
+      setStationPairingRequired(true);
       setStationPairingError("");
-      setLoading(true);
-      window.location.reload();
+      setStationRestartRequired(true);
+      setLoading(false);
     };
     const invalid = () => {
       setStationPairingRequired(true);
+      setStationRestartRequired(false);
       setStationPairingError("Cloud pairing was revoked. Pair this PC again from the business owner's Cloud Admin.");
       setUser(null);
       setLoading(false);
@@ -144,11 +150,22 @@ export function AuthProvider({ children }) {
       if (hasPendingStationLifecycle()) releaseStationLifecycle("auth_invalid", { allowDeferred:true }).catch(() => {});
       lock();
     };
+    const onAdminSessionInterruption = () => {
+      // Any station interruption that prevents the customer from continuing
+      // to use the PC is an immediate local logout boundary. Session billing is
+      // checkpointed separately through the lifecycle endpoint / recovery marker.
+      lock();
+    };
+    const onStationSessionInterruption = onAdminSessionInterruption;
     const onSessionExpired = () => { clearStationLifecycleMarker(); lock(); };
     window.addEventListener("aezakmi:auth-invalid", onAuthInvalid);
+    window.addEventListener("aezakmi:admin-session-interruption", onStationSessionInterruption);
+    window.addEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
     window.addEventListener("aezakmi:session-expired", onSessionExpired);
     return () => {
       window.removeEventListener("aezakmi:auth-invalid", onAuthInvalid);
+      window.removeEventListener("aezakmi:admin-session-interruption", onStationSessionInterruption);
+      window.removeEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
       window.removeEventListener("aezakmi:session-expired", onSessionExpired);
     };
   }, []);
@@ -157,7 +174,11 @@ export function AuthProvider({ children }) {
     const bridge=window.aezakmiClient?.onAppExitRequested;
     if (!bridge) return undefined;
     return bridge((payload) => {
-      if (hasPendingStationLifecycle()) releaseStationLifecycle(payload?.reason || "app_exit", { allowDeferred:true }).catch(() => {});
+      const reason=String(payload?.reason || "app_exit").toLowerCase();
+      if (hasPendingStationLifecycle()) releaseStationLifecycle(reason, { allowDeferred:true }).catch(() => {});
+      if (["shutdown","restart","reboot","station_disconnect","app_exit","crash_recovery"].includes(reason)) {
+        window.dispatchEvent(new CustomEvent("aezakmi:station-session-interruption", { detail:{ reason, source:"electron" } }));
+      }
     });
   }, []);
 
@@ -279,8 +300,10 @@ export function AuthProvider({ children }) {
     setStationPairingError("");
     try {
       const station = await pairCloudStation({ pairingCode });
-      setStationPairingRequired(false);
-      return { ok:true, station };
+      setStationPairingRequired(true);
+      setStationRestartRequired(true);
+      setLoading(false);
+      return { ok:true, station, restartRequired:true };
     } catch (error) {
       setStationPairingError(error?.message || "Unable to pair this Customer Station.");
       return { ok:false, error:error?.message || "Unable to pair this Customer Station.", code:error?.code };
@@ -291,6 +314,7 @@ export function AuthProvider({ children }) {
     setStationPairingError("");
     try {
       await unpairCloudStation();
+      setStationRestartRequired(false);
       setStationPairingRequired(true);
       setUser(null);
       setToken(null);
@@ -342,6 +366,7 @@ export function AuthProvider({ children }) {
         deferCustomerPasswordSetup,
         stationPairingRequired,
         stationPairingError,
+        stationRestartRequired,
         pairStationToCloud,
         resetCloudStationPairing,
       }}

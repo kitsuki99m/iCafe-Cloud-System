@@ -22,15 +22,38 @@ test('Cloud station API returns canonical rate plans and treats a connected non-
   assert.match(station,/persistedStatus==='maintenance'\?'maintenance':'available'/)
 })
 
-test('Customer Start Session remains wallet-enabled with zero saved time when an eligible self-service rate exists',()=>{
+test('Customer Start Session appears from wallet credit and offers preset/custom wallet spend',()=>{
   const page=read('apps/customer/src/pages/CustomerSessionView.jsx')
-  assert.match(page,/hasPurchasableSelfServiceRate = selfServicePlans\.length > 0/)
+  assert.match(page,/stationCanAttemptStart/)
   assert.match(page,/canResumeSavedTime \|\| wallet > 0/)
-  assert.match(page,/wallet > 0 && hasPurchasableSelfServiceRate/)
-  assert.match(page,/Your wallet is available\. Open Start Session to choose a customer rate/)
+  assert.doesNotMatch(page,/pc\?\.status === "available"/)
+  assert.match(page,/choose a preset amount or enter a custom amount/)
+  assert.match(page,/ratePlans=\{walletStartPlans\}/)
   const modal=read('apps/customer/src/components/customer/StartSessionModal.jsx')
+  assert.match(modal,/function startPresets\(plan, wallet\)/)
+  assert.match(modal,/Custom amount/)
   assert.match(modal,/amount <= wallet/)
+  assert.match(modal,/eligibleWalletStartPlans/)
   assert.match(modal,/startSelfServiceSession\(pc\.id, memberId, hasSavedTime \? null : ratePlanId, hasSavedTime \? null : amount/)
+})
+
+test('Wallet-funded start ignores Add Time self-service toggle but preserves extension gating',()=>{
+  const rates=read('apps/customer/src/lib/rates.js')
+  assert.match(rates,/function eligibleWalletStartPlans/)
+  assert.doesNotMatch(rates,/eligibleWalletStartPlans[\s\S]{0,600}customerSelfService/)
+  const api=read('backend/src/routes/apiRoutes.js')
+  assert.match(api,/walletStartEligible: walletStartEligibility\.eligible/)
+  assert.match(api,/requireSelfService: false/)
+  const eligibility=read('backend/src/utils/rateEligibility.js')
+  assert.match(eligibility,/const requireSelfService = options\?\.requireSelfService !== false/)
+  const migration=read('supabase/migrations/20260913000010_wallet_customer_self_start.sql')
+  assert.match(migration,/wallet credit may start against any active rate/)
+  assert.doesNotMatch(migration,/RATE_PLAN_NOT_AVAILABLE[^\n]+customer self-service/)
+})
+
+test('Cloud customer wallet refresh polls fast enough for approved top-ups to map Start Session promptly',()=>{
+  const data=read('apps/customer/src/context/AppDataContext.jsx')
+  assert.match(data,/setInterval\(queueRefresh,user\?\.role === 'customer' \? 1000 : 5000\)/)
 })
 
 test('Cloud Customer start ignores stale Edge offline state but server-side blocks maintenance',()=>{

@@ -411,8 +411,8 @@ function RatePlanFields({ draft, setDraft, errors = {} }) {
             Customer Self-Service
           </p>
           <p className="mt-0.5 text-xs leading-5 text-slate-soft">
-            Allow customers to use this plan from their station for starting or
-            extending a session.
+            Allow customers to choose this plan when adding time to an active session.
+            Wallet-funded Start Session can use any active rate allowed by the member tier.
           </p>
         </div>
         <button
@@ -861,7 +861,7 @@ export default function TariffsPage() {
                             throw err
                           })
                         )}
-                        title="Toggle customer self-service availability"
+                        title="Toggle customer Add Time availability"
                         className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${
                           p.customerSelfService
                             ? "bg-teal/10 text-teal-dim hover:bg-teal/20"
@@ -870,8 +870,8 @@ export default function TariffsPage() {
                       >
                         <Smartphone size={11} />
                         {p.customerSelfService
-                          ? "Self-Service Enabled"
-                          : "Self-Service Off"}
+                          ? "Add Time Enabled"
+                          : "Add Time Off"}
                       </button>
                       <span
                         className={`shrink-0 text-[11px] ${usage > 0 ? "font-medium text-gold-dim" : "text-slate-soft"}`}

@@ -6,7 +6,7 @@ import { showToast } from '../lib/toast.js'
 import { playBroadcastChime } from '../lib/sound.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { acknowledgeCloudStationCommand, cloudStationFeatureEnabled, cloudStationPaired, cloudStationTransport } from '../lib/cloudStation.js'
-import { clearStationLifecycleMarker, releaseStationLifecycle } from '../lib/sessionLifecycle.js'
+import { clearStationLifecycleMarker, hasPendingStationLifecycle, releaseStationLifecycle } from '../lib/sessionLifecycle.js'
 
 const AppDataContext = createContext(null)
 const handledRemoteCommands = new Set()
@@ -86,6 +86,10 @@ function normalizeRatePlan(plan) {
     daysOfWeek:plan.daysOfWeek ?? plan.days_of_week ?? null,
     graceMinutes:Number(plan.graceMinutes ?? plan.grace_minutes ?? 0) || 0,
     ...(eligibleRaw === undefined ? {} : { eligible:normalizeBoolean(eligibleRaw, false) }),
+    ...((plan.walletStartEligible ?? plan.wallet_start_eligible) === undefined
+      ? {}
+      : { walletStartEligible:normalizeBoolean(plan.walletStartEligible ?? plan.wallet_start_eligible, false) }),
+    walletStartReason:plan.walletStartReason ?? plan.wallet_start_reason ?? null,
   }
 }
 
@@ -118,7 +122,10 @@ export function createPublicState(overrides = {}) {
 export function AppDataProvider({ children }) {
   const { user } = useAuth()
   const [state, setState] = useState(() => createPublicState({ loading:true }))
-  const cacheKey=user ? `customer:${user.id}:${user.role}` : 'customer:public'
+  // Guest identity is derived from the currently-active station session. Never
+  // hydrate it from a previous guest snapshot: an old prepaid timer/session id
+  // can otherwise flash back in and race the newly-started guest session.
+  const cacheKey=user?.role === 'guest' ? null : (user ? `customer:${user.id}:${user.role}` : 'customer:public')
   const refreshGenerationRef=useRef(0)
 
   const refresh = useCallback(async () => {
@@ -139,7 +146,7 @@ export function AppDataProvider({ children }) {
         })
         if (generation !== refreshGenerationRef.current) return
         setState(snapshot)
-        writeSnapshot(cacheKey,snapshot)
+        if (cacheKey) writeSnapshot(cacheKey,snapshot)
         return
       }
 
@@ -164,7 +171,7 @@ export function AppDataProvider({ children }) {
         })
         if (generation !== refreshGenerationRef.current) return
         setState(snapshot)
-        writeSnapshot(cacheKey,snapshot)
+        if (cacheKey) writeSnapshot(cacheKey,snapshot)
         return
       }
 
@@ -193,7 +200,7 @@ export function AppDataProvider({ children }) {
       })
       if (generation !== refreshGenerationRef.current) return
       setState(snapshot)
-      writeSnapshot(cacheKey,snapshot)
+      if (cacheKey) writeSnapshot(cacheKey,snapshot)
     } catch (error) {
       if (generation !== refreshGenerationRef.current) return
       setState((current) => ({ ...current, loading:false, serverError:error.message || 'Backend unavailable.' }))
@@ -205,12 +212,19 @@ export function AppDataProvider({ children }) {
     let active=true
     // Identity changes must not inherit the previous account's private state.
     setState(createPublicState({ loading:true }))
-    readSnapshot(cacheKey)
-      .then((snapshot)=>{if(active&&snapshot)setState(createPublicState({ ...snapshot, loading:false, serverError:'' }))})
-      .finally(()=>{if(active)refresh()})
+    if (cacheKey) {
+      readSnapshot(cacheKey)
+        .then((snapshot)=>{if(active&&snapshot)setState(createPublicState({ ...snapshot, loading:false, serverError:'' }))})
+        .finally(()=>{if(active)refresh()})
+    } else {
+      // Guest session state must always come from the live station session.
+      // Do not render a stale prior guest while the authoritative refresh runs.
+      refresh()
+    }
 
     let socket = null
     let refreshTimer = null
+    let stationDisconnectTimer = null
     let refreshRunning = false
     let refreshTrailing = false
     const runRefresh = async () => {
@@ -220,7 +234,25 @@ export function AppDataProvider({ children }) {
       finally { refreshRunning = false }
     }
     const queueRefresh = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(runRefresh, 75) }
-    const onSocketConnect = queueRefresh
+    const onSocketConnect = () => {
+      clearTimeout(stationDisconnectTimer)
+      stationDisconnectTimer = null
+      queueRefresh()
+    }
+    const onSocketDisconnect = (socketReason) => {
+      if (user?.role !== 'customer' && user?.role !== 'guest') return
+      clearTimeout(stationDisconnectTimer)
+      // Match Café Edge's authoritative three-second offline boundary. A brief
+      // reconnect does nothing; a sustained loss logs the local UI out and
+      // checkpoints/recoverably marks any active paid session.
+      stationDisconnectTimer=setTimeout(async () => {
+        stationDisconnectTimer=null
+        if (hasPendingStationLifecycle()) {
+          await releaseStationLifecycle('station_disconnect',{allowDeferred:true}).catch(() => {})
+        }
+        window.dispatchEvent(new CustomEvent('aezakmi:station-session-interruption',{detail:{reason:'station_disconnect',socketReason}}))
+      },3000)
+    }
     const onSocketError = () => { /* REST remains authoritative while realtime reconnects. */ }
     const onAuthRevoked = (payload) => window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:payload}))
     const onChanged = (payload) => {
@@ -272,7 +304,12 @@ export function AppDataProvider({ children }) {
         }
         await ack('running',{ received:true, warningSeconds, warningExpiresAt, expiresAt })
         if (['shutdown','reboot'].includes(String(payload.command).toLowerCase())) {
-          await releaseStationLifecycle(String(payload.command).toLowerCase(), { allowDeferred:true })
+          const interruptionReason=String(payload.command).toLowerCase()
+          await releaseStationLifecycle(interruptionReason, { allowDeferred:true })
+          // The backend/Cloud already checkpointed this session when Admin
+          // issued the command. Drop the local member/guest identity before the
+          // power warning begins so the UI can never continue looking signed in.
+          window.dispatchEvent(new CustomEvent('aezakmi:admin-session-interruption',{detail:{reason:interruptionReason,commandId:payload.id}}))
         }
         const bridge = window.aezakmiClient?.executeRemoteCommand
         const executed = bridge ? await bridge({ command:payload.command, warningSeconds, warningExpiresAt, expiresAt }) : false
@@ -289,6 +326,7 @@ export function AppDataProvider({ children }) {
     function bindSocket(target) {
       if (!target) return
       target.on('connect', onSocketConnect)
+      target.on('disconnect', onSocketDisconnect)
       target.on('connect_error', onSocketError)
       target.on('data:changed', onChanged)
       target.on('rate-plans:updated', onRatePlansUpdated)
@@ -303,6 +341,7 @@ export function AppDataProvider({ children }) {
     function unbindSocket(target) {
       if (!target) return
       target.off('connect', onSocketConnect)
+      target.off('disconnect', onSocketDisconnect)
       target.off('connect_error', onSocketError)
       target.off('data:changed', onChanged)
       target.off('rate-plans:updated', onRatePlansUpdated)
@@ -331,7 +370,7 @@ export function AppDataProvider({ children }) {
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
     if (cloudPrimary) {
       if (cloudStationTransport()==='fallback') connectFallbackSocket()
-      cloudRefreshInterval=setInterval(queueRefresh,5000)
+      cloudRefreshInterval=setInterval(queueRefresh,user?.role === 'customer' ? 1000 : 5000)
       window.addEventListener('aezakmi:station-transport',onTransport)
       window.addEventListener('aezakmi:cloud-station-command',onCloudCommand)
     } else connectFallbackSocket()
@@ -346,6 +385,7 @@ export function AppDataProvider({ children }) {
       window.removeEventListener('aezakmi:cloud-station-command',onCloudCommand)
       if(cloudRefreshInterval)clearInterval(cloudRefreshInterval)
       clearTimeout(refreshTimer)
+      clearTimeout(stationDisconnectTimer)
       active=false
       if (refreshGenerationRef.current === effectGeneration) refreshGenerationRef.current += 1
     }
@@ -356,7 +396,7 @@ export function AppDataProvider({ children }) {
   function optimisticState(updater) {
     setState((current) => {
       const next=updater(current)
-      writeSnapshot(cacheKey,{...next,loading:false}).catch?.(()=>{})
+      if (cacheKey) writeSnapshot(cacheKey,{...next,loading:false}).catch?.(()=>{})
       return next
     })
   }

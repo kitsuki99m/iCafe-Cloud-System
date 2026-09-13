@@ -4,7 +4,7 @@ import { authenticate, requireRole } from '../middleware/auth.js'
 import { requirePairedStation } from '../middleware/clientIdentity.js'
 import { id } from '../utils/helpers.js'
 import { emitToRoom, emitToStaff, emitWalletUpdated, emitDataChanged } from '../realtime.js'
-import { activeSessionPause, pauseActiveSession, resumeActiveSession } from '../utils/sessionTime.js'
+import { activeSessionPause, pauseActiveSession, releaseStationSession, resumeActiveSession } from '../utils/sessionTime.js'
 import { enqueueCloudEvent } from '../cloud/outbox.js'
 
 const router=Router()
@@ -15,10 +15,27 @@ const POS_ORDER_RESERVATION_MS=15*60*1000
 function recordPosRevenue(order,userId){const cents=Math.round(Number(order.total||0)*100);if(cents<=0)return;db.prepare("INSERT OR IGNORE INTO revenue_events(id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by,category,payment_method,member_id,pc_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(id(),'pos_sale','pos_order',order.id,cents,nowIso(),userId,'pos',order.payment_method,order.member_id,order.pc_id)}
 
 function applyCompletedCommand(command) {
-  const now=nowIso()
-  if (command.command === 'lock') return pauseActiveSession(command.pc_id,{reason:'admin_lock',commandId:command.id,userId:command.requested_by,at:now})
-  if (command.command === 'unlock') return resumeActiveSession(command.pc_id,{commandId:command.id,at:now})
-  if (command.command === 'reboot' || command.command === 'shutdown') return pauseActiveSession(command.pc_id,{reason:command.command,commandId:command.id,userId:command.requested_by,at:now})
+  // Blocking commands are checkpointed before they are dispatched. Unlock is
+  // the only billing transition that waits for a successful station ACK so a
+  // failed unlock can never restart the paid clock behind a still-locked UI.
+  if (command.command === 'unlock') return resumeActiveSession(command.pc_id,{commandId:command.id,at:nowIso()})
+  return null
+}
+
+function interruptForQueuedCommand(command, at=nowIso()) {
+  if (command.command === 'lock') {
+    return pauseActiveSession(command.pc_id,{reason:'admin_lock',commandId:command.id,userId:command.requested_by,at})
+  }
+  if (command.command === 'reboot' || command.command === 'shutdown') {
+    const released=releaseStationSession(command.pc_id,{reason:command.command,at,markAvailable:false})
+    db.prepare("UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,?) WHERE pc_id=? AND revoked_at IS NULL")
+      .run(at,at,command.command,command.pc_id)
+    // The seat must never look reusable while a power command is in-flight.
+    // A successful reconnect will restore Available; an ACKed command failure
+    // below restores it immediately because the station is still alive.
+    db.prepare("UPDATE pcs SET status='offline',updated_at=? WHERE id=? AND status<>'maintenance'").run(at,command.pc_id)
+    return released?.released ? { session:released, released:true } : { session:null, released:false }
+  }
   return null
 }
 
@@ -33,6 +50,10 @@ function transitionRemoteCommand(commandId, status, result) {
       .run(status,executedAt,result?JSON.stringify(result):null,command.id,command.status)
     if (updated.changes !== 1) throw Object.assign(new Error('Command status changed before this acknowledgement was applied.'),{status:409,code:'COMMAND_STATE_CONFLICT',expose:true})
     const affected = status === 'completed' ? applyCompletedCommand(command) : null
+    if (status === 'failed' && (command.command === 'reboot' || command.command === 'shutdown')) {
+      db.prepare("UPDATE pcs SET status='available',updated_at=? WHERE id=? AND status='offline' AND NOT EXISTS (SELECT 1 FROM computer_sessions WHERE pc_id=? AND status='active')")
+        .run(executedAt || nowIso(),command.pc_id,command.pc_id)
+    }
     return { command:{...command,status,executed_at:executedAt,result:result?JSON.stringify(result):null}, affected }
   })
 }
@@ -68,8 +89,21 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
     const commandId=id(), requestedAt=nowIso(), warningSeconds=['shutdown','reboot'].includes(command) ? 5 : 0
     const warningExpiresAt = warningSeconds ? new Date(Date.now() + warningSeconds * 1000).toISOString() : null
     const expiresAt = new Date(Date.now() + Math.max(REMOTE_COMMAND_TIMEOUT_MS, warningSeconds * 1000 + 10000)).toISOString()
-    db.prepare('INSERT INTO remote_commands(id,pc_id,command,payload,status,requested_by,requested_at,warning_started_at,warning_expires_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(commandId,pcId,command,JSON.stringify(payload),'queued',req.auth.userId,requestedAt,warningSeconds ? requestedAt : null,warningExpiresAt,expiresAt)
+    const queuedCommand={id:commandId,pc_id:pcId,command,payload,requested_by:req.auth.userId}
+    const interruption=transaction(() => {
+      db.prepare('INSERT INTO remote_commands(id,pc_id,command,payload,status,requested_by,requested_at,warning_started_at,warning_expires_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(commandId,pcId,command,JSON.stringify(payload),'queued',req.auth.userId,requestedAt,warningSeconds ? requestedAt : null,warningExpiresAt,expiresAt)
+      return interruptForQueuedCommand(queuedCommand,requestedAt)
+    })
+    if (interruption?.session) {
+      const s=interruption.session
+      emitToStaff('session:updated',{sessionId:s.id,pcId,memberId:s.member_id || null,reason:interruption.released?'session_interrupted':'session_paused',endReason:interruption.released?command:null,remainingSeconds:Number(s.remainingSeconds ?? 0),amountDue:Number(s.amountDue ?? 0),settlementPending:Boolean(s.settlementPending),locked:true})
+      emitToRoom(`pc:${pcId}`,'session:updated',{sessionId:s.id,pcId,memberId:s.member_id || null,reason:interruption.released?'session_interrupted':'session_paused',endReason:interruption.released?command:null,remainingSeconds:Number(s.remainingSeconds ?? 0),amountDue:Number(s.amountDue ?? 0),settlementPending:Boolean(s.settlementPending),locked:true})
+    }
+    emitDataChanged({method:'INTERRUPT',path:'/remote-commands',pcId,command})
+    // Deliver the power command first so its async handler is already running
+    // before the immediate auth-revocation event causes React to clear identity.
     emitToRoom(`pc:${pcId}`,'remote:command',{id:commandId,command,payload,warningSeconds,warningExpiresAt,expiresAt})
+    if (['shutdown','reboot'].includes(command)) emitToRoom(`pc:${pcId}`,'auth:revoked',{reason:command,pcId,immediate:true})
     setTimeout(() => {
       const timedOut = db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE id=? AND status IN ('queued','running')").run(nowIso(),JSON.stringify({ error:'Station command acknowledgement timed out.' }),commandId)
       if (timedOut.changes) {

@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppData } from "../context/AppDataContext.jsx";
-import { findPcById, rateForId, eligibleCustomerPlans } from "../lib/rates.js";
+import { findPcById, rateForId, eligibleCustomerPlans, eligibleWalletStartPlans } from "../lib/rates.js";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
 import TopUpModal from "../components/customer/TopUpModal.jsx";
@@ -178,8 +178,9 @@ export default function CustomerSessionView() {
   );
   const session = pc?.session;
   const ratePlan = rateForId(ratePlans, session?.ratePlanId);
-  const hasActiveSession =
-    ["occupied", "offline"].includes(pc?.status) && !!session;
+  // Session presence is authoritative. A stale/mirrored PC status must never
+  // hide an already-running session or block the wallet-start UI.
+  const hasActiveSession = !!session;
   const lowTimeThresholdSeconds = (settings.lowTimeWarningMinutes ?? 5) * 60;
 
   const canExtend = hasActiveSession && session.billing === "prepaid";
@@ -230,19 +231,25 @@ export default function CustomerSessionView() {
     () => eligibleCustomerPlans(ratePlans, user?.tier || "Regular"),
     [ratePlans, user?.tier],
   );
+  const walletStartPlans = useMemo(
+    () => eligibleWalletStartPlans(ratePlans, user?.tier || "Regular"),
+    [ratePlans, user?.tier],
+  );
+  const stationCanAttemptStart =
+    !!pc && String(pc?.status || "available").toLowerCase() !== "maintenance";
   const canResumeSavedTime =
     !isGuest &&
     !hasActiveSession &&
-    pc?.status === "available" &&
+    stationCanAttemptStart &&
     savedSessionSeconds > 0;
-  const hasPurchasableSelfServiceRate = selfServicePlans.length > 0;
+  const hasPurchasableWalletRate = walletStartPlans.length > 0;
   const canSelfStart =
     !isGuest &&
     !hasActiveSession &&
-    pc?.status === "available" &&
+    stationCanAttemptStart &&
     (canResumeSavedTime || wallet > 0);
   const canStartImmediately =
-    canResumeSavedTime || (wallet > 0 && hasPurchasableSelfServiceRate);
+    canResumeSavedTime || (wallet > 0 && hasPurchasableWalletRate);
   const cost = hasActiveSession
     ? session.billing === "prepaid"
       ? (session.amount ?? 0)
@@ -417,7 +424,8 @@ export default function CustomerSessionView() {
             if (!idleTriggered.current) {
               idleTriggered.current = true;
               const shutdown = window.aezakmiClient?.shutdownClient;
-              logout({ reason:"idle_shutdown", allowDeferred:true }).finally(() => { if (shutdown) shutdown(); });
+              void logout({ reason:"idle_shutdown", allowDeferred:true }).catch(() => {});
+              if (shutdown) void shutdown();
             }
             return 0;
           }
@@ -615,13 +623,21 @@ export default function CustomerSessionView() {
               )}
 
               {isGuest ? (
-                <div className="grid grid-cols-1 gap-2 border-t border-surface-line p-3">
+                <div className="grid grid-cols-2 gap-2 border-t border-surface-line p-3">
+                  <Button
+                    variant={canExtend ? "teal" : "ghost"}
+                    icon={PlusCircle}
+                    onClick={() => canExtend && setExtendOpen(true)}
+                    disabled={!canExtend}
+                    title={canExtend ? "Add more prepaid time" : "Add Time is available during prepaid sessions"}
+                  >
+                    Add Time
+                  </Button>
                   <Button
                     variant="primary"
                     icon={Bell}
                     onClick={handleHelp}
                     disabled={assistanceSent || assistanceBusy}
-                    className="w-full"
                   >
                     {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
                   </Button>
@@ -665,7 +681,7 @@ export default function CustomerSessionView() {
                       : canStartImmediately
                         ? "Choose Start Session to use your wallet or resume saved time."
                         : canSelfStart
-                          ? "Your wallet is available. Open Start Session to choose a customer rate; if none appears, ask staff to enable a self-service rate."
+                          ? "Your wallet is ready. Open Start Session and choose a preset amount or enter a custom amount."
                           : pc
                             ? "Top up your wallet or ask staff for help before starting."
                             : "This PC is still waiting to be registered with the cafe server."}
@@ -946,7 +962,7 @@ export default function CustomerSessionView() {
           pc={pc}
           memberId={user.memberId}
           wallet={wallet}
-          ratePlans={selfServicePlans}
+          ratePlans={walletStartPlans}
           tier={user?.tier}
           savedSeconds={savedSessionSeconds}
         />
@@ -954,7 +970,7 @@ export default function CustomerSessionView() {
 
       {idleCountdown !== null && !hasActiveSession && (
         <div
-          className="fixed bottom-4 right-4 z-[600] w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-ember/35 customer-neutral-surface p-4 shadow-2xl"
+          className="fixed bottom-4 left-4 z-[600] w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-ember/35 customer-neutral-surface p-4 shadow-2xl"
           role="alertdialog"
           aria-live="assertive"
         >
@@ -981,11 +997,14 @@ export default function CustomerSessionView() {
               onClick={async () => {
                 const command = powerConfirm;
                 setPowerConfirm(null);
+                const logoutPromise = logout({ reason:command, allowDeferred:true }).catch(() => null);
                 try {
-                  await logout({ reason:command, allowDeferred:true });
+                  // Electron shows a five-second warning. Start lifecycle save +
+                  // logout now so that warning time is also persistence time.
+                  if (command === "restart") await window.aezakmiClient?.restartClient?.();
+                  else await window.aezakmiClient?.shutdownClient?.();
                 } finally {
-                  if (command === "restart") window.aezakmiClient?.restartClient?.();
-                  else window.aezakmiClient?.shutdownClient?.();
+                  await logoutPromise;
                 }
               }}
             >

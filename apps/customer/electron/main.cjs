@@ -664,6 +664,12 @@ async function executeRemoteCommand(command) {
   if (action === 'unlock' || action === 'wake') return unlockClientWindow()
   if (action === 'reboot' || action === 'shutdown') {
     if (process.platform !== 'win32') return false
+    const interruptionReason = action === 'reboot' ? 'restart' : 'shutdown'
+    // Persist the interruption before the Windows power command starts. This is
+    // the last-resort checkpoint for Start-menu shutdowns, renderer crashes, or
+    // a network loss that prevents the lifecycle HTTP request from completing.
+    markSessionExit({reason:interruptionReason})
+    mainWindow?.webContents.send('station:app-exit-requested',{reason:interruptionReason,powerCommand:true})
     try {
       const warningExpiresAt = parsedDeadline(descriptor.warningExpiresAt)
       if (warningExpiresAt !== null && Date.now() >= warningExpiresAt) throw remoteCommandExpiredError()
@@ -756,20 +762,6 @@ function createWindow() {
     else applyLockedWindowMode()
   })
 
-  // Customer Station is a kiosk surface. If Windows or another desktop
-  // briefly takes focus, reclaim it while the station is visible. Hidden
-  // active-session mode intentionally remains available through the tray.
-  mainWindow.on('blur', () => {
-    if (isActive()) return
-    if (appIsQuitting || !mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return
-    if (!isLocked() && !isIdleDashboard() && !dashboardVisible) return
-    setTimeout(() => {
-      if (appIsQuitting || !mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return
-      mainWindow.show()
-      mainWindow.focus()
-      if (isLocked() || isIdleDashboard()) mainWindow.setAlwaysOnTop(true, 'screen-saver')
-    }, 0)
-  })
 
   mainWindow.on('closed', () => { mainWindow=null })
 
@@ -830,6 +822,15 @@ app.whenReady().then(async () => {
   handleTrusted('client:remote-command', (_event, command) => executeRemoteCommand(command))
   handleTrusted('client:shutdown', () => executeRemoteCommand('shutdown'))
   handleTrusted('client:restart', () => executeRemoteCommand('reboot'))
+  handleTrusted('client:restart-app', () => {
+    // Pairing changes the station identity used by every Cloud/Edge request. A
+    // clean Electron relaunch reinitializes that identity atomically without
+    // rebooting Windows or leaving an in-place renderer reload half-bootstrapped.
+    appIsQuitting = true
+    app.relaunch()
+    app.quit()
+    return true
+  })
   handleTrusted('client:emergency-command', (_event, command) => executeEmergencyCommand(command))
   ipcMain.on('client:server-config:get', event => {
     if (!isTrustedRenderer(event)) { event.returnValue = null; return }
@@ -890,6 +891,7 @@ app.on('will-quit', () => {
   appIsQuitting=true
   stopLocalBackend()
   if (hookRestartTimer) clearTimeout(hookRestartTimer)
+  stopFocusEnforcement()
   try {
     if (windowsKeyHook?.stdin && !windowsKeyHook.stdin.destroyed && !windowsKeyHook.stdin.writableEnded) windowsKeyHook.stdin.write('stop\n')
   } catch {}

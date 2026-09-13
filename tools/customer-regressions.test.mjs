@@ -150,7 +150,7 @@ test('Electron ACTIVE mode is normal, cancel returns IDLE, and remote unlock res
   assert.match(source, /snapshot\?\.windowState === WINDOW_STATES\.IDLE[\s\S]*?showIdleDashboard\(\)/)
   assert.doesNotMatch(source, /for \(const accelerator of \['Alt\+F4','Alt\+Tab'/)
   assert.match(source, /before-input-event[\s\S]*?if \(isActive\(\)\) return/)
-  assert.match(source, /mainWindow\.on\('blur'[\s\S]*?if \(isActive\(\)\) return/)
+  assert.doesNotMatch(source, /mainWindow\.on\('blur'/)
 })
 
 test('authenticated Electron mode maps to IDLE rather than contradictory LOCKED state', () => {
