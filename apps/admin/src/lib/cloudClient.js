@@ -358,8 +358,37 @@ function cloudSessionView(row) {
   if (!row) return null;
   const raw = camelizeObject(row.data || {});
   const billing = raw.billing || raw.billingType || row.billing_type || "prepaid";
-  const expiresAt = raw.expiresAt ?? epoch(row.expires_at);
-  const startedAt = raw.startedAt ?? epoch(row.started_at);
+  const expiresAt = epoch(row.expires_at ?? raw.expiresAt);
+  const startedAt = epoch(row.started_at ?? raw.startedAt);
+  const now = Date.now();
+  const pausedAt = raw.pausedAt ? epoch(raw.pausedAt) : null;
+  const lockValue = raw.isLocked ?? raw.isPaused;
+  const isLocked = lockValue === true || lockValue === 1 || ['true','1','yes','on'].includes(String(lockValue ?? '').toLowerCase()) || (pausedAt != null && Boolean(raw.pauseReason));
+  const historicalPausedSeconds = Math.max(0, Number(row.paused_seconds ?? raw.pausedSeconds ?? 0) || 0);
+  const effectiveNow = isLocked && pausedAt != null ? Math.min(now, pausedAt) : now;
+  const calculatedBillableSeconds = startedAt == null
+    ? 0
+    : Math.max(0, Math.floor((effectiveNow - Number(startedAt)) / 1000) - historicalPausedSeconds);
+  const frozenBillable = Number(raw.elapsedBillableSeconds ?? raw.billableSeconds);
+  const billableSeconds = billing === "postpaid" && isLocked && Number.isFinite(frozenBillable)
+    ? Math.max(0, Math.floor(frozenBillable))
+    : calculatedBillableSeconds;
+  const frozenRemaining = Number(raw.pausedRemainingSeconds ?? raw.savedRemainingSeconds);
+  const calculatedRemaining = expiresAt == null
+    ? null
+    : Math.max(0, Math.ceil((Number(expiresAt) - effectiveNow) / 1000));
+  const remainingSeconds = billing === "prepaid"
+    ? (isLocked && Number.isFinite(frozenRemaining) ? Math.max(0, Math.floor(frozenRemaining)) : calculatedRemaining)
+    : null;
+  const postpaidRatePerMinute = (() => {
+    const value = raw.postpaidRatePerMinute ?? row.postpaid_rate_per_minute;
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  })();
+  const accruedAmount = billing === "postpaid"
+    ? Math.max(0, Math.round((billableSeconds / 60) * Number(postpaidRatePerMinute || 0) * 100) / 100)
+    : null;
   return {
     ...raw,
     id: String(row.local_id),
@@ -369,25 +398,21 @@ function cloudSessionView(row) {
     billing,
     amount: Number(raw.amount ?? raw.amountPaid ?? row.amount_paid ?? 0),
     prepaidSeconds: Number(raw.prepaidSeconds ?? row.prepaid_seconds ?? 0) || null,
-    postpaidRatePerMinute: (() => {
-      const value = raw.postpaidRatePerMinute ?? row.postpaid_rate_per_minute;
-      if (value === null || value === undefined || value === "") return null;
-      const number = Number(value);
-      return Number.isFinite(number) ? number : null;
-    })(),
+    postpaidRatePerMinute,
     startedAt,
     expiresAt,
     status: row.status || raw.status || "active",
-    pausedAt: raw.pausedAt ? epoch(raw.pausedAt) : null,
-    pausedRemainingSeconds: raw.pausedRemainingSeconds ?? raw.savedRemainingSeconds ?? null,
-    remainingSeconds:
-      billing === "prepaid" && raw.isLocked && (raw.pausedRemainingSeconds ?? raw.savedRemainingSeconds) != null
-        ? Math.max(0, Number(raw.pausedRemainingSeconds ?? raw.savedRemainingSeconds))
-        : billing === "prepaid" && expiresAt
-          ? Math.max(0, Math.ceil((Number(expiresAt) - Date.now()) / 1000))
-          : raw.remainingSeconds ?? null,
-    accruedAmount: raw.accruedAmount ?? raw.accruedAmountDue ?? null,
-    observedAt: Date.now(),
+    isLocked,
+    isPaused: isLocked,
+    pausedAt,
+    pauseReason: raw.pauseReason ?? null,
+    pausedSeconds: historicalPausedSeconds,
+    pausedRemainingSeconds: isLocked && remainingSeconds != null ? remainingSeconds : null,
+    remainingSeconds,
+    billableSeconds,
+    elapsedBillableSeconds: billableSeconds,
+    accruedAmount,
+    observedAt: now,
   };
 }
 async function cloudPcs(branchId) {

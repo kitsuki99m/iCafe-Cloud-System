@@ -49,17 +49,16 @@ test('Local Café Edge requests use the Edge enrollment token before any Cloud s
   assert.ok(edgePos>=0 && cloudPos>edgePos && choosePos>cloudPos)
 })
 
-test('Detected Guest prepaid/postpaid session is carried into a dedicated Guest Session UI immediately',()=>{
+test('Detected Guest prepaid session is carried into a dedicated Guest Session UI immediately',()=>{
   const auth=read('apps/customer/src/context/AuthContext.jsx')
   const page=read('apps/customer/src/pages/CustomerSessionView.jsx')
   assert.match(auth,/guestSession: session/)
   assert.match(page,/pc\?\.session \?\? \(isGuest \? user\?\.guestSession \?\? null : null\)/)
   assert.match(page,/\{isGuest \? "Guest access" : "Signed in"\}/)
-  assert.match(page,/Guest · Postpaid/)
   assert.match(page,/Guest · Prepaid/)
-  assert.match(page,/Guest postpaid session/)
   assert.match(page,/Guest prepaid session/)
   assert.match(page,/Guest Station/)
+  assert.doesNotMatch(page,/Guest · Postpaid/)
 })
 
 test('Guest session fallback remains actionable before AppData refresh completes',()=>{
@@ -67,7 +66,7 @@ test('Guest session fallback remains actionable before AppData refresh completes
   assert.match(page,/const activePc = session[\s\S]*session,/)
   assert.match(page,/endSession\(activePc\)/)
   assert.match(page,/pc=\{isGuest \? activePc : pc\}/)
-  assert.match(page,/session\.billing === "postpaid" \? "Call Staff \/ Checkout" : "Ask for Help"/)
+  assert.match(page,/legacyBillingSession \? "Call Staff" : "Ask for Help"/)
 })
 
 

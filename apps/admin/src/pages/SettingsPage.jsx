@@ -55,7 +55,7 @@ export default function SettingsPage() {
     const previous=previousServerSettingsRef.current
     const nextProfile={ cafeName:settings.cafeName ?? '', branch:settings.branch ?? '', branchLocation:settings.branchLocation ?? '' }
     const nextPayment={ gcashName:settings.gcashName ?? '', gcashNumber:settings.gcashNumber ?? '' }
-    const nextStation={ defaultBilling:settings.defaultBilling ?? 'prepaid', lowTimeWarningMinutes:String(settings.lowTimeWarningMinutes ?? 5) }
+    const nextStation={ defaultBilling:'prepaid', lowTimeWarningMinutes:String(settings.lowTimeWarningMinutes ?? 5) }
     const nextFormat=settings.numberFormat === 'whole' ? 'whole' : 'decimal'
     const nextDecimals=Math.max(1,Math.min(3,Number(settings.decimalPlaces)||3))
 
@@ -69,7 +69,7 @@ export default function SettingsPage() {
       const old={gcashName:previous?.gcashName ?? '',gcashNumber:previous?.gcashNumber ?? ''}
       return !previous || (current.gcashName===old.gcashName&&current.gcashNumber===old.gcashNumber) ? nextPayment : current
     })
-    setStation((current)=>!previous || (current.defaultBilling===(previous.defaultBilling ?? 'prepaid')&&current.lowTimeWarningMinutes===String(previous.lowTimeWarningMinutes ?? 5)) ? nextStation : current)
+    setStation((current)=>!previous || (current.defaultBilling==='prepaid'&&current.lowTimeWarningMinutes===String(previous.lowTimeWarningMinutes ?? 5)) ? nextStation : current)
     setNumberFormat((current)=>!previous || current===(previous.numberFormat === 'whole' ? 'whole' : 'decimal') ? nextFormat : current)
     setDecimalPlaces((current)=>!previous || current===Math.max(1,Math.min(3,Number(previous.decimalPlaces)||3)) ? nextDecimals : current)
     if(!pendingLogoDataUrl && settings.logoUrl)setLogoUrl(cloudMode ? settings.logoUrl : apiUrl(settings.logoUrl.replace(/^\/api/,'')))
@@ -77,7 +77,7 @@ export default function SettingsPage() {
   }, [settings,pendingLogoDataUrl])
   const profileDirty = useMemo(() => profile.cafeName !== (settings.cafeName ?? '') || profile.branch !== (settings.branch ?? '')||profile.branchLocation!==(settings.branchLocation??'') || numberFormat !== (settings.numberFormat === 'whole' ? 'whole' : 'decimal') || decimalPlaces !== Math.max(1,Math.min(3,Number(settings.decimalPlaces)||3)), [profile, numberFormat, decimalPlaces, settings])
   const paymentDirty = useMemo(() => payment.gcashName !== (settings.gcashName ?? '') || payment.gcashNumber !== (settings.gcashNumber ?? ''), [payment, settings])
-  const stationDirty=station.defaultBilling!==(settings.defaultBilling ?? 'prepaid')||station.lowTimeWarningMinutes!==String(settings.lowTimeWarningMinutes ?? 5)
+  const stationDirty=(settings.defaultBilling ?? 'prepaid')!=='prepaid'||station.lowTimeWarningMinutes!==String(settings.lowTimeWarningMinutes ?? 5)
   const stationValid=Number(station.lowTimeWarningMinutes)>0
   const gcashValid = !payment.gcashNumber || /^09\d{9}$/.test(payment.gcashNumber)
   const currentAuthMethod=cloudMode ? 'password' : (user?.authMethod || 'pin')
@@ -173,8 +173,8 @@ export default function SettingsPage() {
         </Section>
 
 
-        <Section id="settings-customer" icon={MonitorSmartphone} title="Customer Station" description="Default session behavior and time-warning presentation for customer PCs." dirty={stationDirty && stationValid} saving={saving==='station'} onSave={()=>saveSection('station',{defaultBilling:station.defaultBilling,lowTimeWarningMinutes:Number(station.lowTimeWarningMinutes)})}>
-          <Field label="Default billing"><select value={station.defaultBilling} onChange={e=>setStation({...station,defaultBilling:e.target.value})} className={inputClass}><option value="prepaid">Prepaid</option><option value="postpaid">Postpaid</option></select></Field><Field label="Low-time warning (minutes)" hint={!stationValid?'Enter a value greater than zero.':''}><input inputMode="numeric" value={station.lowTimeWarningMinutes} onChange={e=>setStation({...station,lowTimeWarningMinutes:e.target.value.replace(/\D/g,'')})} className={inputClass}/></Field><div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-3 text-[11px] leading-5 text-slate-soft">Rate pricing remains managed under <strong className="text-ink-900">Rates</strong>. These settings control the station’s default session mode and when the low-time alert begins.</div>
+        <Section id="settings-customer" icon={MonitorSmartphone} title="Customer Station" description="Default session behavior and time-warning presentation for customer PCs." dirty={stationDirty && stationValid} saving={saving==='station'} onSave={()=>saveSection('station',{defaultBilling:'prepaid',lowTimeWarningMinutes:Number(station.lowTimeWarningMinutes)})}>
+          <Field label="Billing mode"><div className="flex h-[38px] items-center rounded-lg border border-surface-line bg-surface-raised/45 px-3 text-sm font-semibold text-ink-900">Prepaid only</div></Field><Field label="Low-time warning (minutes)" hint={!stationValid?'Enter a value greater than zero.':''}><input inputMode="numeric" value={station.lowTimeWarningMinutes} onChange={e=>setStation({...station,lowTimeWarningMinutes:e.target.value.replace(/\D/g,'')})} className={inputClass}/></Field><div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-3 text-[11px] leading-5 text-slate-soft">This production build accepts prepaid sessions only. Rate pricing remains managed under <strong className="text-ink-900">Rates</strong>.</div>
         </Section>
 
         <section id="settings-cloud" className="overview-card scroll-mt-28 overflow-hidden">

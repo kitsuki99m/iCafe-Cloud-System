@@ -219,6 +219,9 @@ function settingsView() {
     if (r.key === 'ipPrefix') continue;
     out[r.key] = parseJson(r.value, r.value);
   }
+  // Production build policy: Postpaid cannot be re-enabled by stale local settings.
+  out.defaultBilling = 'prepaid';
+  out.postpaidMinutesPerPeso = 0;
   return out;
 }
 function localLogoPaths() {
@@ -3786,8 +3789,8 @@ router.get(
     res.json({
       success: true,
       billingPolicy: {
-        defaultBilling: settings.defaultBilling ?? "prepaid",
-        postpaidMinutesPerPeso: Number(settings.postpaidMinutesPerPeso ?? 0),
+        defaultBilling: "prepaid",
+        postpaidMinutesPerPeso: 0,
         lowTimeWarningMinutes: Number(settings.lowTimeWarningMinutes ?? 5),
         defaultAddTimeRatePlanId: settings.defaultAddTimeRatePlanId ?? null,
       },
@@ -3800,58 +3803,27 @@ router.patch(
   requireRole("admin"),
   (req, res, next) => {
     try {
-      const defaultBilling = String(req.body?.defaultBilling ?? "");
-      const postpaidPesoPerMinute = Number(req.body?.postpaidPesoPerMinute);
+      const requestedBilling = String(req.body?.defaultBilling ?? "prepaid").toLowerCase();
       const lowTimeWarningMinutes = Number(req.body?.lowTimeWarningMinutes);
-      if (!["prepaid", "postpaid"].includes(defaultBilling))
-        return res
-          .status(400)
-          .json({
-            success: false,
-            code: "INVALID_BILLING",
-            error: "Choose prepaid or postpaid as the default.",
-          });
-      if (
-        !(postpaidPesoPerMinute > 0) ||
-        !Number.isFinite(postpaidPesoPerMinute)
-      )
-        return res
-          .status(400)
-          .json({
-            success: false,
-            code: "INVALID_POSTPAID_RATE",
-            error: "Postpaid rate must be positive.",
-          });
-      if (
-        !(lowTimeWarningMinutes > 0) ||
-        !Number.isFinite(lowTimeWarningMinutes)
-      )
-        return res
-          .status(400)
-          .json({
-            success: false,
-            code: "INVALID_LOW_TIME_WARNING",
-            error: "Low-time warning must be positive.",
-          });
-      const values = {
-        defaultBilling,
-        postpaidPesoPerMinute,
-        lowTimeWarningMinutes,
-      };
+      if (requestedBilling !== "prepaid")
+        return res.status(410).json({
+          success: false,
+          code: "POSTPAID_DISABLED",
+          error: "Postpaid billing is disabled in this build. Use prepaid sessions.",
+        });
+      if (!(lowTimeWarningMinutes > 0) || !Number.isFinite(lowTimeWarningMinutes))
+        return res.status(400).json({
+          success: false,
+          code: "INVALID_LOW_TIME_WARNING",
+          error: "Low-time warning must be positive.",
+        });
+      const values = { defaultBilling: "prepaid", lowTimeWarningMinutes };
       const stmt = db.prepare(
         "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
       );
       transaction(() => {
-        for (const [key, value] of Object.entries(values))
-          stmt.run(key, JSON.stringify(value));
-        log(
-          req.auth.userId,
-          "billing_policy.update",
-          "settings",
-          null,
-          null,
-          values,
-        );
+        for (const [key, value] of Object.entries(values)) stmt.run(key, JSON.stringify(value));
+        log(req.auth.userId, "billing_policy.update", "settings", null, null, values);
       });
       emitDataChanged({ method: "PATCH", path: "/billing-policy" });
       res.json({ success: true, billingPolicy: values });
@@ -3872,7 +3844,7 @@ router.patch(
         ? String(req.body.defaultAddTimeRatePlanId)
         : null;
       if (
-        !["prepaid", "postpaid"].includes(defaultBilling) ||
+        defaultBilling !== "prepaid" ||
         !Number.isFinite(low) ||
         low < 1
       )
@@ -3882,7 +3854,7 @@ router.patch(
             success: false,
             code: "INVALID_SESSION_POLICY",
             error:
-              "Choose a billing mode and a low-time warning of at least one minute.",
+              "This build uses prepaid billing only, with a low-time warning of at least one minute.",
           });
       if (
         defaultAddTimeRatePlanId &&
@@ -3921,9 +3893,7 @@ router.patch(
           defaultBilling,
           lowTimeWarningMinutes: low,
           defaultAddTimeRatePlanId,
-          postpaidMinutesPerPeso: Number(
-            settingsView().postpaidMinutesPerPeso || 0,
-          ),
+          postpaidMinutesPerPeso: 0,
         },
       });
     } catch (error) {
@@ -3935,41 +3905,22 @@ router.patch(
   "/billing-policy/postpaid-rate",
   auth,
   requireRole("admin"),
-  (req, res, next) => {
-    try {
-      const minutesPerPeso = Number(req.body?.postpaidMinutesPerPeso);
-      if (!Number.isFinite(minutesPerPeso) || minutesPerPeso <= 0)
-        return res
-          .status(400)
-          .json({
-            success: false,
-            code: "INVALID_POSTPAID_RATE",
-            error: "Minutes per peso must be a positive number.",
-          });
-      db.prepare(
-        "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      ).run("postpaidMinutesPerPeso", JSON.stringify(minutesPerPeso));
-      log(
-        req.auth.userId,
-        "billing_policy.postpaid_rate",
-        "settings",
-        null,
-        null,
-        { postpaidMinutesPerPeso: minutesPerPeso },
-      );
-      emitDataChanged({
-        method: "PATCH",
-        path: "/billing-policy/postpaid-rate",
-      });
-      res.json({ success: true, postpaidMinutesPerPeso: minutesPerPeso });
-    } catch (error) {
-      next(error);
-    }
+  (_req, res) => {
+    res.status(410).json({
+      success: false,
+      code: "POSTPAID_DISABLED",
+      error: "Postpaid billing is disabled in this build. Use prepaid sessions.",
+    });
   },
 );
 router.patch("/settings", auth, requireRole("admin"), (req, res, next) => {
   try {
-    const incoming = req.body ?? {};
+    const incoming = { ...(req.body ?? {}) };
+    if (incoming.defaultBilling != null && String(incoming.defaultBilling).toLowerCase() !== "prepaid")
+      return res.status(410).json({ success:false, code:"POSTPAID_DISABLED", error:"Postpaid billing is disabled in this build. Use prepaid sessions." });
+    if (incoming.postpaidPesoPerMinute != null || incoming.postpaidMinutesPerPeso != null)
+      return res.status(410).json({ success:false, code:"POSTPAID_DISABLED", error:"Postpaid billing is disabled in this build." });
+    if (incoming.defaultBilling != null) incoming.defaultBilling = "prepaid";
     if (
       incoming.gcashNumber != null &&
       incoming.gcashNumber !== "" &&
@@ -3995,19 +3946,6 @@ router.patch("/settings", auth, requireRole("admin"), (req, res, next) => {
           success: false,
           code: "INVALID_LOW_TIME_WARNING",
           error: "Low-time warning must be at least 1 minute.",
-        });
-    }
-    if (
-      incoming.postpaidPesoPerMinute != null &&
-      (!(Number(incoming.postpaidPesoPerMinute) > 0) ||
-        !Number.isFinite(Number(incoming.postpaidPesoPerMinute)))
-    ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          code: "INVALID_POSTPAID_RATE",
-          error: "Postpaid rate must be a positive peso amount per minute.",
         });
     }
     if (
@@ -4044,6 +3982,7 @@ router.patch("/settings", auth, requireRole("admin"), (req, res, next) => {
       "gcashNumber",
       "numberFormat",
       "decimalPlaces",
+      "defaultBilling",
     ]);
     const entries = Object.entries(incoming).filter(([key]) =>
       allowed.has(key),
@@ -4692,14 +4631,12 @@ router.post("/sessions/start", auth, (req, res, next) => {
       ratePlanId = null,
       amount = null,
     } = req.body;
-    if (!["prepaid", "postpaid"].includes(billing))
-      return res
-        .status(400)
-        .json({
-          success: false,
-          code: "INVALID_BILLING",
-          error: "Billing must be prepaid or postpaid.",
-        });
+    if (String(billing).toLowerCase() !== "prepaid")
+      return res.status(410).json({
+        success: false,
+        code: "POSTPAID_DISABLED",
+        error: "Postpaid billing is disabled in this build. Use prepaid sessions.",
+      });
     const pcId =
       requestedPcId ||
       (pcIp
@@ -4800,25 +4737,9 @@ router.post("/sessions/start", auth, (req, res, next) => {
       let effectiveAmount = 0;
       let seconds = savedSeconds;
       let resumed = savedSeconds > 0;
-      let effectiveBilling = resumed ? "prepaid" : billing;
-      let postpaidRatePerMinute = null;
-      if (!resumed && billing === "postpaid") {
-        const minutesPerPeso = Number(
-          settingsView().postpaidMinutesPerPeso || 0,
-        );
-        postpaidRatePerMinute = minutesPerPeso > 0 ? 1 / minutesPerPeso : 0;
-        if (
-          !(postpaidRatePerMinute > 0) ||
-          !Number.isFinite(postpaidRatePerMinute)
-        )
-          throw Object.assign(
-            new Error(
-              "Configure a valid postpaid rate in Settings before starting a postpaid session.",
-            ),
-            { status: 409, code: "POSTPAID_RATE_NOT_CONFIGURED", expose: true },
-          );
-        seconds = 0;
-      } else if (!resumed) {
+      const effectiveBilling = "prepaid";
+      const postpaidRatePerMinute = null;
+      if (!resumed) {
         if (!ratePlanId)
           throw Object.assign(
             new Error(

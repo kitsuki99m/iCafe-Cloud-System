@@ -20,7 +20,7 @@ const MANUALS = {
     outcome: 'Every physical customer PC should map to one logical client, have the correct station identity, and show an accurate availability/session state.',
     steps: [
       { title: 'Register and pair each PC', items: ['Add a PC with a clear label/number and the correct LAN identity used by your branch.', 'For Cloud stations, generate the pairing information and complete pairing on the Customer Station.', 'Do not create duplicate logical PCs for the same physical computer; fix its metadata instead.'] },
-      { title: 'Start a customer session', items: ['Choose the target PC, then select a member or use a guest session where allowed.', 'For prepaid sessions, select the correct rate plan or saved member time. For postpaid, confirm the configured postpaid rule first.', 'Verify the customer, amount, billing type, and PC before confirming. The transaction engine treats the confirmed operation as authoritative.'] },
+      { title: 'Start a customer session', items: ['Choose the target PC, then select a member or use a guest session where allowed.', 'For every session, select the correct prepaid rate plan or use saved member time when available.', 'Verify the customer, amount, billing type, and PC before confirming. The transaction engine treats the confirmed operation as authoritative.'] },
       { title: 'Manage an active session', items: ['Use Add Time to charge against a valid rate plan.', 'Use Reduce/Transfer Time only when you intend to change the customer’s remaining entitlement.', 'Pause/resume, lock, power, maintenance, and other station actions should be used only on the intended PC.', 'When ending prepaid time, choose the correct disposition: save remaining time, forfeit it, or use the available refund flow when appropriate.'] },
       { title: 'Keep the floor clean', items: ['Use status filters to find Available, Occupied, Maintenance, Offline, Reserved, or Locked stations.', 'Put genuinely unavailable hardware into Maintenance rather than leaving it looking available.', 'Remove a PC only after confirming it has no active/reserved session and is no longer part of the branch.'] },
     ],
@@ -28,13 +28,13 @@ const MANUALS = {
     tips: ['Use Bulk Add only when deploying several PCs with a predictable addressing pattern.', 'Before moving time or money, read the member/PC name in the confirmation modal twice.'],
   },
   Rates: {
-    summary: 'Rates defines what customers can buy and how session time is calculated. It also controls tier eligibility, self-service availability, promotions, and postpaid/session policies.',
+    summary: 'Rates defines what customers can buy and how session time is calculated. It also controls tier eligibility, self-service availability, promotions, and prepaid session policies.',
     outcome: 'Staff and Customer Stations should always be offered the correct price for the customer tier and billing mode.',
     steps: [
       { title: 'Create the base Regular pricing first', items: ['Create at least one active Regular plan before opening sessions.', 'Choose Linear when pesos scale with time, or Package when the plan has a fixed amount/time bundle.', 'Set minimum amounts and units carefully so Add Time produces the expected minutes.'] },
       { title: 'Add Gold and VIP pricing', items: ['Regular customers use Regular plans.', 'Gold customers can use Regular and Gold plans.', 'VIP customers can use Regular, Gold, and VIP plans.', 'Keep premium plans inactive until you are ready to honor them operationally.'] },
       { title: 'Configure customer self-service and promos', items: ['Enable Customer self-service only for plans customers may purchase without staff selection.', 'For birthday or scheduled promotions, verify date/time/day rules and any redemption limits.', 'Test a promo with a non-production member before advertising it.'] },
-      { title: 'Set session-wide rules', items: ['Use Session Policy for defaults and Add Time behavior.', 'Configure Postpaid Rate before staff can safely start postpaid sessions.', 'Deactivate an old plan instead of deleting pricing that may be referenced by historical sessions.'] },
+      { title: 'Set session-wide rules', items: ['Use Session Policy for defaults and Add Time behavior.', 'Deactivate an old plan instead of deleting pricing that may be referenced by historical sessions.'] },
     ],
     warning: 'Changing a rate affects future transactions. Do not edit a plan just to make an old receipt “match”; historical activity should be investigated in Logs/Earnings.',
     tips: ['Keep rate names short and customer-readable.', 'After a pricing change, run one controlled test session and verify the resulting time and amount.'],

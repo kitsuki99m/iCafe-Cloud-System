@@ -92,7 +92,7 @@ export async function apiFetch(path, options = {}) {
       // moment before Cloud sync reflects them. A Cloud `session:null` is not
       // authoritative proof that this physical PC has no guest session. Probe
       // the paired Café Edge immediately and prefer its active guest session.
-      // This makes prepaid/postpaid walk-ins leave the member-login kiosk as
+      // This makes guest walk-ins leave the member-login kiosk as
       // soon as staff starts the session, while Cloud remains primary whenever
       // it already has the active session or Edge is unavailable.
       const basePath=String(path||'').split('?')[0]

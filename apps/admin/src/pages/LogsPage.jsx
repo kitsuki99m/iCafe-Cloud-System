@@ -88,7 +88,7 @@ export default function LogsPage() {
   async function settleInterrupted(item, paymentMethod) {
     if (!item?.id || processingId) return
     const label = paymentMethod === 'wallet' ? 'member wallet' : 'cash'
-    if (!window.confirm(`Settle ${item.customerName || 'this customer'}'s interrupted postpaid session for ₱${Number(item.amountDue || 0).toFixed(2)} using ${label}?`)) return
+    if (!window.confirm(`Settle ${item.customerName || 'this customer'}'s legacy interrupted session for ₱${Number(item.amountDue || 0).toFixed(2)} using ${label}?`)) return
     setProcessingId(item.id)
     setError('')
     try {
@@ -156,7 +156,7 @@ export default function LogsPage() {
       </div>
       <div className="grid gap-2 xl:grid-cols-2">
         {pendingSettlements.map((item)=><div key={`settle-${item.id}`} className="overview-soft-card flex flex-wrap items-center justify-between gap-3 p-3">
-          <div className="min-w-0"><p className="text-xs font-semibold text-ink-900">{item.customerName || 'Guest'} · {item.pcLabel || item.pcId || 'Station'}</p><p className="mt-1 text-[10px] text-slate-soft">Postpaid stopped at {formatTime(item.endedAt)} · {String(item.endReason || 'interrupted').replaceAll('_',' ')}</p><p className="stat-figure mt-1 text-sm font-semibold text-ember-dim">₱{Number(item.amountDue || 0).toFixed(2)} due</p></div>
+          <div className="min-w-0"><p className="text-xs font-semibold text-ink-900">{item.customerName || 'Guest'} · {item.pcLabel || item.pcId || 'Station'}</p><p className="mt-1 text-[10px] text-slate-soft">Legacy session stopped at {formatTime(item.endedAt)} · {String(item.endReason || 'interrupted').replaceAll('_',' ')}</p><p className="stat-figure mt-1 text-sm font-semibold text-ember-dim">₱{Number(item.amountDue || 0).toFixed(2)} due</p></div>
           <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>settleInterrupted(item,'cash')} className="rounded-lg border border-surface-line bg-surface px-3 py-2 text-[10px] font-semibold text-ink-900 disabled:opacity-50">Cash</button>{item.memberId&&<button type="button" disabled={processingId===item.id || Number(item.walletBalance || 0)<Number(item.amountDue || 0)} onClick={()=>settleInterrupted(item,'wallet')} className="rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-40">Wallet</button>}</div>
         </div>)}
         {recoverableGuestSessions.map((item)=><div key={`restore-${item.id}`} className="overview-soft-card flex flex-wrap items-center justify-between gap-3 p-3">

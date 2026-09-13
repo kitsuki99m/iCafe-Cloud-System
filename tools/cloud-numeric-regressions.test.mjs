@@ -23,7 +23,7 @@ test('Cloud rate plans are normalized to numeric fields before session UI consum
     assert.match(cloud, new RegExp(`${field}: optionalNumber\\(`), `cloudClient should normalize ${field}`)
   }
   assert.match(context, /sessionSecondsRemaining: finiteOr\(/)
-  assert.match(context, /postpaidMinutesPerPeso: finiteOr\(/)
+  assert.match(context, /postpaidMinutesPerPeso: 0,/)
 })
 
 test('Cloud session numeric fields are normalized before manage-session calculations', () => {

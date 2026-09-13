@@ -276,6 +276,20 @@
   .admin-page-content {
     @apply mx-auto w-full max-w-[1680px] p-5 sm:p-6 lg:p-8;
   }
+  .developer-console-page {
+    width: min(100%, 1480px);
+    max-width: 1480px;
+    margin-inline: auto;
+    padding: 20px 22px 28px;
+  }
+  .developer-console-page > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 16px;
+  }
+  .developer-console-standalone {
+    min-height: 100dvh;
+    padding-top: 24px;
+    padding-bottom: 32px;
+  }
   .admin-page-toolbar {
     border: 1px solid var(--admin-ui-border);
     border-radius: 16px;
@@ -748,6 +762,11 @@
     max-width: none;
     padding: 18px;
   }
+  .developer-console-page {
+    width: 100%;
+    max-width: none;
+    padding: 18px;
+  }
   .admin-page-toolbar {
     gap: 10px;
   }
@@ -780,6 +799,9 @@
   .admin-page-utility-rail,
   .overview-utility-rail,
   .admin-page-content {
+    padding: 14px;
+  }
+  .developer-console-page {
     padding: 14px;
   }
   .overview-header {

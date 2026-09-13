@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Zap, Clock, User, Users, Wrench, CheckCircle2, Power, RotateCw, Loader2, Banknote } from 'lucide-react'
+import { Zap, User, Users, Wrench, CheckCircle2, Power, RotateCw, Loader2, Banknote } from 'lucide-react'
 import Modal from '../common/Modal.jsx'
 import Button from '../common/Button.jsx'
 import NumericInput from '../common/NumericInput.jsx'
 import { minutesForAmount, amountForMinutes, minAmountFor, rateForId } from '../../lib/rates.js'
 import { getStationSessionActionMode } from '../../lib/stationActions.js'
+import { elapsedSessionSeconds, remainingSessionSeconds } from '../../lib/sessionTime.js'
 
 const QUICK_AMOUNTS = [5, 10, 15]
 const TIER_RANK = { Regular: 0, Gold: 1, VIP: 2 }
@@ -266,11 +267,11 @@ function SettlementControl({ pc, amountDue, walletBalance, onSettle }) {
   </div>
 }
 
-export default function SessionModal({ pc, ratePlans, members, settings = {}, defaultBilling = 'prepaid', onClose, onStart, onEnd, onRefund, onPreview, onSetMaintenance, onPowerCommand }) {
+export default function SessionModal({ pc, ratePlans, members, onClose, onStart, onEnd, onRefund, onPreview, onSetMaintenance, onPowerCommand }) {
   const [customerMode, setCustomerMode] = useState('walkin') // 'walkin' | 'member'
   const [customerName, setCustomerName] = useState('Guest')
   const [memberId, setMemberId] = useState('')
-  const [billing, setBilling] = useState(defaultBilling)
+  const billing = 'prepaid'
   const allActiveRatePlans = useMemo(() => (ratePlans ?? []).filter((p) => p.isActive !== false), [ratePlans])
   const selectedMember = members?.find((m) => String(m.id) === String(memberId))
   const memberTierRank = TIER_RANK[String(selectedMember?.tier ?? 'Regular')] ?? 0
@@ -334,7 +335,6 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
       setCustomerMode('walkin')
       setCustomerName('Guest')
       setMemberId('')
-      setBilling(defaultBilling)
       manualRateSelectionRef.current = false
       setRatePlanId(defaultId)
       setAmount(String(minAmountFor(allActiveRatePlans, defaultId)))
@@ -374,15 +374,6 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId, customerMode])
 
-  // Promo/package plans are prepaid-only — bail out automatically if postpaid is picked.
-  useEffect(() => {
-    const plan = rateForId(visibleRatePlans, ratePlanId)
-    if (billing === 'postpaid' && plan?.mode === 'package') {
-      const fallback = visibleRatePlans.find((p) => p.mode !== 'package')
-      if (fallback) setRatePlanId(fallback.id)
-    }
-  }, [billing, ratePlanId, visibleRatePlans])
-
   if (!pc) return null
 
   const eyebrow = `${pc.label} · ${pc.ipAddress}`
@@ -394,15 +385,15 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
     const plan = rateForId(visibleRatePlans, ratePlanId)
     const effectiveAmount = plan?.mode === 'package' ? plan.amount : Number(amount || 0)
     const minutes = minutesForAmount(visibleRatePlans, ratePlanId, effectiveAmount)
-    const walletApplied = customerMode === 'member' && billing === 'prepaid' ? Math.min(Math.max(0, memberWallet), Math.max(0, Number(effectiveAmount) || 0)) : 0
+    const walletApplied = customerMode === 'member' ? Math.min(Math.max(0, memberWallet), Math.max(0, Number(effectiveAmount) || 0)) : 0
     const cashDue = Math.max(0, (Number(effectiveAmount) || 0) - walletApplied)
     const resolvedName = customerMode === 'member' ? selectedMember?.name ?? '' : (customerName.trim() || 'Guest')
     const amountValid = plan?.mode === 'package' ? Number(plan.amount) > 0 : Number(effectiveAmount) >= Number(plan?.minAmount || 0)
     const canStart =
-      (savedSeconds > 0 || (billing === 'postpaid' ? Number(settings.postpaidMinutesPerPeso) > 0 : !!plan)) &&
+      (savedSeconds > 0 || !!plan) &&
       !!resolvedName &&
       (customerMode === 'walkin' || !!selectedMember) &&
-      (savedSeconds > 0 || billing === 'postpaid' || (amountValid && minutes > 0))
+      (savedSeconds > 0 || (amountValid && minutes > 0))
 
     return (
       <Modal
@@ -431,10 +422,10 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
                 runStart({
                   customerName: resolvedName,
                   customerId: customerMode === 'member' ? selectedMember?.id ?? null : null,
-                  billing,
-                  ...(savedSeconds > 0 || billing === 'postpaid' ? {} : { ratePlanId }),
-                  amount: savedSeconds > 0 ? null : (billing === 'prepaid' ? effectiveAmount : null),
-                  prepaidSeconds: billing === 'prepaid' ? minutes * 60 : null,
+                  billing: 'prepaid',
+                  ...(savedSeconds > 0 ? {} : { ratePlanId }),
+                  amount: savedSeconds > 0 ? null : effectiveAmount,
+                  prepaidSeconds: savedSeconds > 0 ? savedSeconds : minutes * 60,
                 })
               }
             >
@@ -496,50 +487,26 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
             )}
           </div>
 
-          <div>
-            <label className="eyebrow mb-1.5 block">Billing Type</label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setBilling('prepaid')}
-                className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  billing === 'prepaid'
-                    ? 'border-gold/50 bg-gold/10 text-gold-dim'
-                    : 'border-surface-line text-slate-soft hover:text-ink-900'
-                }`}
-              >
-                <Zap size={14} /> Prepaid
-              </button>
-              <button
-                onClick={() => setBilling('postpaid')}
-                className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                  billing === 'postpaid'
-                    ? 'border-teal/50 bg-teal/10 text-teal-dim'
-                    : 'border-surface-line text-slate-soft hover:text-ink-900'
-                }`}
-              >
-                <Clock size={14} /> Postpaid
-              </button>
+          <div className="rounded-lg border border-gold/25 bg-gold/5 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <Zap size={14} className="text-gold-dim" />
+              <div>
+                <p className="text-xs font-semibold text-ink-900">Prepaid session</p>
+                <p className="text-[10px] text-slate-soft">This production build uses prepaid billing only.</p>
+              </div>
             </div>
           </div>
 
-          {billing === 'prepaid' ? (
-            <RateAndAmount
-              ratePlans={visibleRatePlans}
-              ratePlanId={ratePlanId}
-              setRatePlanId={(nextId) => { manualRateSelectionRef.current=true; setRatePlanId(nextId) }}
-              amount={amount}
-              setAmount={setAmount}
-              allowPromo
-            />
-          ) : (
-            <div className="rounded-lg border border-teal/20 bg-teal/5 px-3 py-3">
-              <p className="eyebrow">Postpaid rate</p>
-              <div className="mt-1 flex items-end justify-between gap-3"><span className="stat-figure text-lg font-semibold text-ink-900">{Number(settings.postpaidMinutesPerPeso || 0)} min / ₱1</span><span className="text-xs text-slate-soft">prorated by second</span></div>
-              {!(Number(settings.postpaidMinutesPerPeso)>0) && <p className="mt-2 text-xs text-ember-dim">Configure Minutes per peso in Rates before starting.</p>}
-            </div>
-          )}
+          <RateAndAmount
+            ratePlans={visibleRatePlans}
+            ratePlanId={ratePlanId}
+            setRatePlanId={(nextId) => { manualRateSelectionRef.current=true; setRatePlanId(nextId) }}
+            amount={amount}
+            setAmount={setAmount}
+            allowPromo
+          />
 
-          {customerMode === 'member' && billing === 'prepaid' && selectedMember && (
+          {customerMode === 'member' && selectedMember && (
             <div className="rounded-lg border border-teal/20 bg-teal/5 px-3 py-2.5">
               <div className="flex items-center justify-between gap-3 text-xs">
                 <span className="text-slate-soft">Wallet applied</span>
@@ -568,20 +535,20 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
   if (sessionActionMode === 'manage') {
     const s = pc.session
     const plan = rateForId(ratePlans, s.ratePlanId)
-    const stationOffline = pc.stationOnline === false || pc.isOnline === false || s.isPaused === true
-    const elapsedSec = stationOffline ? 0 : Math.max(0, Math.floor((Date.now() - s.startedAt) / 1000))
+    const sessionFrozen = pc.stationOnline === false || pc.isOnline === false || s.isPaused === true || s.isLocked === true
+    const elapsedSec = elapsedSessionSeconds(s, Date.now())
 
     let amountDue = 0
     let refundableAmount = 0
     let remainingLabel = null
 
     if (s.billing === 'prepaid') {
-      const remainingSec = Math.max(0, s.prepaidSeconds - elapsedSec)
+      const remainingSec = remainingSessionSeconds(s, Date.now())
       amountDue = s.amount ?? 0
       refundableAmount = s.prepaidSeconds > 0 ? Math.max(0, amountDue * (remainingSec / s.prepaidSeconds)) : 0
-      remainingLabel = formatDuration(stationOffline ? Number(s.pausedRemainingSeconds ?? s.prepaidSeconds ?? 0) / 60 : remainingSec / 60)
+      remainingLabel = formatDuration(remainingSec / 60)
     } else {
-      amountDue = Number(preview?.amountDue ?? s.accruedAmount ?? ((elapsedSec / 60) * Number(s.postpaidRatePerMinute || 0)))
+      amountDue = Number(s.accruedAmount ?? preview?.amountDue ?? ((elapsedSec / 60) * Number(s.postpaidRatePerMinute || 0)))
     }
 
     return (
@@ -595,7 +562,7 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
           <>
             <Button variant="ghost" disabled={!!sessionAction} onClick={onClose}>Close</Button>
             {s.billing === 'prepaid' && <Button variant="danger" disabled={!!sessionAction} onClick={() => runSessionAction('forfeit')}>{sessionAction==='forfeit'?'Forfeiting…':'Forfeit Time'}</Button>}
-            {s.billing === 'prepaid' && <Button variant="primary" disabled={!!sessionAction || (stationOffline && s.isPaused)} onClick={() => runSessionAction('save')}>{stationOffline && s.isPaused ? 'Session Saved' : sessionAction==='save' ? 'Saving…' : 'Pause & Save'}</Button>}
+            {s.billing === 'prepaid' && <Button variant="primary" disabled={!!sessionAction || sessionFrozen} onClick={() => runSessionAction('save')}>{sessionFrozen ? 'Session Paused' : sessionAction==='save' ? 'Saving…' : 'Pause & Save'}</Button>}
           </>
         }
       >
@@ -609,7 +576,7 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-soft">Billing</span>
-            <span className="font-medium text-ink-900 capitalize">{s.billing}{s.billing==='prepaid' ? ` · ${plan?.name ?? '—'}` : ` · ${peso(Number(preview?.postpaidRatePerMinute ?? s.postpaidRatePerMinute ?? 0))}/min`}</span>
+            <span className="font-medium text-ink-900">{s.billing === 'prepaid' ? `Prepaid · ${plan?.name ?? '—'}` : 'Legacy session · staff checkout'}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-slate-soft">Started</span>
@@ -619,14 +586,14 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
           </div>
           {remainingLabel && (
             <div className="flex items-center justify-between">
-              <span className="text-slate-soft">{stationOffline ? 'Saved time' : 'Time remaining'}</span>
+              <span className="text-slate-soft">{sessionFrozen ? 'Paused time' : 'Time remaining'}</span>
               <span className="stat-figure text-ink-900">{remainingLabel}</span>
             </div>
           )}
           <div className="my-2 h-px bg-surface-line" />
           <div className="flex items-center justify-between rounded-lg bg-surface-raised px-3 py-2.5">
             <span className="text-xs text-slate-soft">
-              {s.billing === 'prepaid' ? 'Prepaid amount' : 'Running total'}
+              {s.billing === 'prepaid' ? 'Prepaid amount' : 'Legacy amount due'}
             </span>
             <span className="stat-figure text-base font-semibold text-ink-900">{peso(amountDue)}</span>
           </div>
@@ -645,6 +612,25 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
   }
 
   if (sessionActionMode === 'reservation') {
+    const reservationMember = pc.session?.customerId
+      ? members?.find((member) => String(member.id) === String(pc.session.customerId))
+      : null
+    const reservationTierRank = TIER_RANK[String(reservationMember?.tier ?? 'Regular')] ?? 0
+    const reservationPlans = allActiveRatePlans.filter((plan) =>
+      reservationMember
+        ? planTierRank(plan) <= reservationTierRank
+        : String(plan.customerTier ?? 'Regular') === 'Regular'
+    )
+    const reservationPlan = rateForId(reservationPlans, ratePlanId) || reservationPlans[0] || null
+    const reservationRatePlanId = reservationPlan?.id || null
+    const reservationAmount = reservationPlan?.mode === 'package'
+      ? Number(reservationPlan.amount || 0)
+      : Math.max(Number(amount || 0), Number(reservationPlan?.minAmount || 0))
+    const reservationMinutes = reservationRatePlanId
+      ? minutesForAmount(reservationPlans, reservationRatePlanId, reservationAmount)
+      : 0
+    const canCheckIn = Boolean(reservationPlan && reservationAmount > 0 && reservationMinutes > 0)
+
     return (
       <Modal
         open
@@ -658,18 +644,19 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
             <Button
               variant="primary"
               icon={CheckCircle2}
-              disabled={startBusy}
+              disabled={startBusy || !canCheckIn}
               onClick={() =>
                 runStart({
                   customerName: pc.session.customerName,
                   customerId: pc.session.customerId ?? null,
-                  billing: 'postpaid',
-                  amount: null,
-                  prepaidSeconds: null,
+                  billing: 'prepaid',
+                  ratePlanId: reservationRatePlanId,
+                  amount: reservationAmount,
+                  prepaidSeconds: reservationMinutes * 60,
                 })
               }
             >
-              {startBusy ? 'Checking in…' : 'Check In'}
+              {startBusy ? 'Checking in…' : 'Check In & Start Prepaid'}
             </Button>
           </>
         }
@@ -677,8 +664,16 @@ export default function SessionModal({ pc, ratePlans, members, settings = {}, de
         <div className="space-y-3">
           <p className="text-sm text-slate-soft">
             Reserved for <span className="font-medium text-ink-900">{pc.session.customerName}</span>.
-            Check them in once they arrive to start the timer.
+            Choose prepaid time before checking them in.
           </p>
+          <RateAndAmount
+            ratePlans={reservationPlans}
+            ratePlanId={reservationRatePlanId}
+            setRatePlanId={(nextId) => { manualRateSelectionRef.current=true; setRatePlanId(nextId) }}
+            amount={String(reservationAmount || amount)}
+            setAmount={setAmount}
+            allowPromo
+          />
           {localError && <p className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-xs text-ember-dim">{localError}</p>}
           <PowerControl pc={pc} onPowerCommand={onPowerCommand} />
         </div>

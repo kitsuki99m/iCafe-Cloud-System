@@ -64,3 +64,13 @@ test('Cloud login, registration, and invite setup own a scrollable 100dvh viewpo
   assert.match(login, /admin-login-security-note/)
   assert.match(invite, /admin-auth-single/)
 })
+
+
+test('Developer console has bounded desktop width and route gutters beside navigation',()=>{
+  const page=read('apps/admin/src/pages/DeveloperConsolePage.jsx')
+  const css=read('apps/admin/src/index.css')
+  assert.match(page,/developer-console-page/)
+  assert.match(css,/\.developer-console-page\s*\{[\s\S]*?max-width:\s*1480px[\s\S]*?padding:\s*20px 22px 28px/)
+  assert.match(css,/@media \(max-width: 1023px\)[\s\S]*?\.developer-console-page[\s\S]*?padding:\s*18px/)
+  assert.match(css,/@media \(max-width: 767px\)[\s\S]*?\.developer-console-page[\s\S]*?padding:\s*14px/)
+})

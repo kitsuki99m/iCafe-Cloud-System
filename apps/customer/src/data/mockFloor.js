@@ -66,7 +66,7 @@ export function minutesForAmount(ratePlans, ratePlanId, amount) {
   return Math.max(0, Math.floor(Number(amount || 0) * minutesPerPeso))
 }
 
-// Minutes -> peso amount, used for postpaid running totals (package plans aren't valid postpaid).
+// Minutes -> peso amount helper retained for historical data compatibility.
 export function amountForMinutes(ratePlans, ratePlanId, minutes) {
   const plan = rateForId(ratePlans, ratePlanId)
   if (!plan) return 0
@@ -85,19 +85,19 @@ const now = Date.now()
 
 export const INITIAL_PCS = [
   { id: 'pc-1', label: 'PC-1', ipAddress: '192.168.100.11', spec: 'i3 · GTX 1650', status: 'available' },
-  { id: 'pc-2', label: 'PC-2', ipAddress: '192.168.100.12', spec: 'i3 · GTX 1650', status: 'occupied', session: { customerName: 'Jhon Rey', billing: 'postpaid', ratePlanId: 'standard', startedAt: now - 42 * 60000 } },
+  { id: 'pc-2', label: 'PC-2', ipAddress: '192.168.100.12', spec: 'i3 · GTX 1650', status: 'occupied', session: { customerName: 'Jhon Rey', billing: 'prepaid', ratePlanId: 'standard', amount: 12, prepaidSeconds: 60 * 60, expiresAt: now + 18 * 60000, startedAt: now - 42 * 60000 } },
   { id: 'pc-3', label: 'PC-3', ipAddress: '192.168.100.13', spec: 'i3 · GTX 1650', status: 'occupied', session: { customerName: 'Maricel', billing: 'prepaid', ratePlanId: 'standard', amount: 15, startedAt: now - 18 * 60000, prepaidSeconds: 60 * 60 } },
   { id: 'pc-4', label: 'PC-4', ipAddress: '192.168.100.14', spec: 'i3 · GTX 1650', status: 'maintenance' },
   { id: 'pc-5', label: 'PC-5', ipAddress: '192.168.100.15', spec: 'i3 · GTX 1650', status: 'available' },
   { id: 'pc-6', label: 'PC-6', ipAddress: '192.168.100.16', spec: 'i3 · GTX 1650', status: 'reserved', session: { customerName: 'Kevin D.' } },
   { id: 'pc-7', label: 'PC-7', ipAddress: '192.168.100.21', spec: 'i5 · RTX 3060', status: 'occupied', session: { customerName: 'Ace', customerId: 'm3', billing: 'prepaid', ratePlanId: 'standard', amount: 30, startedAt: now - 105 * 60000, prepaidSeconds: 120 * 60 } },
   { id: 'pc-8', label: 'PC-8', ipAddress: '192.168.100.22', spec: 'i5 · RTX 3060', status: 'available' },
-  { id: 'pc-9', label: 'PC-9', ipAddress: '192.168.100.23', spec: 'i5 · RTX 3060', status: 'occupied', session: { customerName: 'Renz', customerId: 'm4', billing: 'postpaid', ratePlanId: 'standard', startedAt: now - 6 * 60000 } },
+  { id: 'pc-9', label: 'PC-9', ipAddress: '192.168.100.23', spec: 'i5 · RTX 3060', status: 'occupied', session: { customerName: 'Renz', customerId: 'm4', billing: 'prepaid', ratePlanId: 'standard', amount: 12, prepaidSeconds: 60 * 60, expiresAt: now + 54 * 60000, startedAt: now - 6 * 60000 } },
   { id: 'pc-10', label: 'PC-10', ipAddress: '192.168.100.24', spec: 'i5 · RTX 3060', status: 'available' },
   { id: 'pc-11', label: 'PC-11', ipAddress: '192.168.100.25', spec: 'i5 · RTX 3060', status: 'occupied', session: { customerName: 'Jhun', billing: 'prepaid', ratePlanId: 'midnight', amount: 12, startedAt: now - 58 * 60000, prepaidSeconds: 60 * 60 } },
   { id: 'pc-12', label: 'PC-12', ipAddress: '192.168.100.26', spec: 'i5 · RTX 3060', status: 'available' },
   { id: 'pc-13', label: 'PC-13', ipAddress: '192.168.100.31', spec: 'i7 · RTX 4070', status: 'available' },
-  { id: 'pc-14', label: 'PC-14', ipAddress: '192.168.100.32', spec: 'i7 · RTX 4070', status: 'occupied', session: { customerName: 'Nico Alvarado', customerId: 'm5', billing: 'postpaid', ratePlanId: 'standard', startedAt: now - 130 * 60000 } },
+  { id: 'pc-14', label: 'PC-14', ipAddress: '192.168.100.32', spec: 'i7 · RTX 4070', status: 'occupied', session: { customerName: 'Nico Alvarado', customerId: 'm5', billing: 'prepaid', ratePlanId: 'standard', amount: 36, prepaidSeconds: 180 * 60, expiresAt: now + 50 * 60000, startedAt: now - 130 * 60000 } },
   { id: 'pc-15', label: 'PC-15', ipAddress: '192.168.100.33', spec: 'i7 · RTX 4070', status: 'maintenance' },
   { id: 'pc-16', label: 'PC-16', ipAddress: '192.168.100.34', spec: 'i7 · RTX 4070', status: 'available' },
 ]

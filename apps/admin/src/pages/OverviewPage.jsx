@@ -74,7 +74,7 @@ function formatRelativeTime(value) {
 }
 
 function formatEndingSoon(value) {
-  if (!value) return 'Postpaid'
+  if (!value) return 'Session'
   const diff = new Date(value).getTime() - Date.now()
   if (!Number.isFinite(diff)) return 'Time unavailable'
   const minutes = Math.max(0, Math.ceil(diff / 60000))

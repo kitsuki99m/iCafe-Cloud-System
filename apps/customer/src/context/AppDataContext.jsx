@@ -28,7 +28,7 @@ const EMPTY_SETTINGS = {
   branchLocation:cachedBranding.branchLocation || '',
   currency:'PHP',
   defaultBilling:'prepaid',
-  postpaidMinutesPerPeso:1,
+  postpaidMinutesPerPeso:0,
   lowTimeWarningMinutes:5,
   gcashName:'',
   gcashNumber:'',
@@ -140,7 +140,7 @@ export function AppDataProvider({ children }) {
           apiGet('/public/rate-plans'),
         ])
         const snapshot=createPublicState({
-          settings:{...EMPTY_SETTINGS,...(publicSettings.settings ?? {})},
+          settings:{...EMPTY_SETTINGS,...(publicSettings.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
           currentClientPc:normalizePc(clientContext.pc),
           announcements:announcementData.announcements ?? [],
           ratePlans:(ratePlansData.ratePlans ?? []).map(normalizeRatePlan),
@@ -181,7 +181,7 @@ export function AppDataProvider({ children }) {
           pcs:currentPc ? [currentPc] : [],
           ratePlans:(ratePlansData.ratePlans ?? []).map(normalizeRatePlan),
           announcements:announcementData.announcements ?? [],
-          settings:{...EMPTY_SETTINGS,...(publicSettings.settings ?? {})},
+          settings:{...EMPTY_SETTINGS,...(publicSettings.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
           currentClientPc:currentPc,
         })
         if (generation !== refreshGenerationRef.current) return
@@ -211,7 +211,7 @@ export function AppDataProvider({ children }) {
         members:member ? [member] : [],
         ratePlans:(plansData.ratePlans ?? []).map(normalizeRatePlan),
         announcements:announcementData.announcements ?? [],
-        settings:{...EMPTY_SETTINGS,...(settingsData.settings ?? {})},
+        settings:{...EMPTY_SETTINGS,...(settingsData.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
       })
       if (generation !== refreshGenerationRef.current) return
       setState(snapshot)

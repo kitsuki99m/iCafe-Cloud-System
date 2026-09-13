@@ -81,7 +81,7 @@ export default function DeveloperConsolePage({standalone=false}){
 
   const orgStatus=selected?.organization_status
   const purgeReady=Boolean(selected?.purge_eligible_at&&Date.now()>=new Date(selected.purge_eligible_at).getTime())
-  const content=<div className={standalone?'mx-auto w-full max-w-[1440px] p-3 sm:p-6':'space-y-4'}>
+  const content=<div className={standalone?'developer-console-page developer-console-standalone':'developer-console-page'}>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><p className="eyebrow">Platform access</p><h1 className="font-display text-xl font-semibold text-ink-900 sm:text-2xl">Developer approvals</h1><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-soft">Approve owners, control billing lifecycle, and preserve local café operation even when Cloud access is suspended.</p></div>
       <div className="flex w-full gap-2 sm:w-auto"><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={RefreshCw} onClick={load} disabled={loading}>{loading?'Refreshing…':'Refresh'}</Button>{standalone&&<Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={LogOut} onClick={logout}>Sign out</Button>}</div>

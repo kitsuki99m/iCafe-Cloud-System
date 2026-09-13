@@ -194,6 +194,7 @@ export default function CustomerSessionView() {
   // Session presence is authoritative. A stale/mirrored PC status must never
   // hide an already-running session or block the wallet-start UI.
   const hasActiveSession = !!session;
+  const legacyBillingSession = hasActiveSession && session?.billing !== "prepaid";
   const lowTimeThresholdSeconds = (settings.lowTimeWarningMinutes ?? 5) * 60;
 
   const canExtend = hasActiveSession && session.billing === "prepaid";
@@ -263,20 +264,7 @@ export default function CustomerSessionView() {
     (canResumeSavedTime || wallet > 0);
   const canStartImmediately =
     canResumeSavedTime || (wallet > 0 && hasPurchasableWalletRate);
-  const cost = hasActiveSession
-    ? session.billing === "prepaid"
-      ? (session.amount ?? 0)
-      : Number(
-          session.accruedAmount ??
-            (Math.max(0, elapsedSeconds) / 60) *
-              Number(
-                session.postpaidRatePerMinute ||
-                  (Number(settings.postpaidMinutesPerPeso) > 0
-                    ? 1 / Number(settings.postpaidMinutesPerPeso)
-                    : 0),
-              ),
-        )
-    : 0;
+  const cost = hasActiveSession && session.billing === "prepaid" ? (session.amount ?? 0) : 0;
 
   const handleHelp = useCallback(async () => {
     if (assistanceBusy || assistanceSent) return;
@@ -308,16 +296,15 @@ export default function CustomerSessionView() {
 
   const handleThisPc = useCallback(() => {
     if (logoutBusy) return;
-    // Walk-in postpaid sessions must be checked out by staff so the frozen
-    // amount due is visible and deliberately settled. A power/offline event is
-    // still handled by the interruption lifecycle, but a normal guest action
-    // must not masquerade as an unpaid logout.
-    if (isGuest && session?.billing === "postpaid") {
+    // A legacy non-prepaid session can exist only from an older deployment.
+    // Keep it staff-controlled so this prepaid-only build cannot accidentally
+    // mutate or discard an unsettled historical session.
+    if (legacyBillingSession) {
       void handleHelp();
       return;
     }
     confirmLogout();
-  }, [logoutBusy, isGuest, session?.billing, handleHelp, confirmLogout]);
+  }, [logoutBusy, legacyBillingSession, handleHelp, confirmLogout]);
 
   useEffect(() => {
     const c = window.aezakmiClient;
@@ -550,7 +537,7 @@ export default function CustomerSessionView() {
           >
             <Minimize2 size={14} /> Hide
           </button>
-          {!(isGuest && session?.billing === "postpaid") && (
+          {!legacyBillingSession && (
             <button
               type="button"
               onClick={handleThisPc}
@@ -581,7 +568,7 @@ export default function CustomerSessionView() {
                     {user.username || user.name}
                   </h1>
                   <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${isGuest ? "bg-midnight/8 text-ink-900" : (TIER_STYLE[user.tier] ?? TIER_STYLE.Regular)}`}>
-                    {isGuest ? (session?.billing === "postpaid" ? "Guest · Postpaid" : "Guest · Prepaid") : (user.tier ?? "Regular")}
+                    {isGuest ? (legacyBillingSession ? "Guest · Staff checkout" : "Guest · Prepaid") : (user.tier ?? "Regular")}
                   </span>
                 </div>
               </div>
@@ -600,9 +587,9 @@ export default function CustomerSessionView() {
                 <div>
                   <p className="eyebrow">{isGuest ? "Guest session" : "Your session"}</p>
                   <p className="mt-0.5 text-[13px] font-semibold text-ink-900">
-                    {isGuest
-                      ? (session.billing === "prepaid" ? "Guest prepaid session" : "Guest postpaid session")
-                      : (session.billing === "prepaid" ? "Prepaid session" : "Postpaid session")}
+                    {legacyBillingSession
+                      ? "Legacy session requires staff"
+                      : (isGuest ? "Guest prepaid session" : "Prepaid session")}
                   </p>
                 </div>
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${session.isLocked ? "bg-ember/10 text-ember-dim" : "bg-teal/10 text-teal-dim"}`}>
@@ -613,19 +600,19 @@ export default function CustomerSessionView() {
 
               <div className="px-4 py-4 text-center">
                 <p className="eyebrow mb-2">
-                  {session.billing === "prepaid" ? "Time Left" : "Time Used"}
+                  {legacyBillingSession ? "Staff action required" : "Time Left"}
                 </p>
                 <p className={`customer-timer-value ${lowTime ? "!text-ember-dim" : ""}`}>
-                  {formatClock(session.billing === "prepaid" ? remainingSeconds : elapsedSeconds)}
+                  {legacyBillingSession ? "--:--" : formatClock(remainingSeconds)}
                 </p>
                 <p className={`mx-auto mt-2 max-w-lg text-[12px] leading-5 ${lowTime ? "font-semibold text-ember-dim" : "text-slate-soft"}`}>
-                  {session.billing === "prepaid"
-                    ? lowTime
+                  {legacyBillingSession
+                    ? "This session came from an older billing mode. Please call staff to close it safely."
+                    : lowTime
                       ? `${Math.max(1, Math.ceil((remainingSeconds || 0) / 60))} min left. Add more time now if you want to keep using this PC.`
-                      : "Your timer continues while this session is active."
-                    : "Postpaid time keeps counting until your session ends."}
+                      : "Your timer continues while this session is active."}
                 </p>
-                {session.billing === "prepaid" && (
+                {!legacyBillingSession && (
                   <div className="mx-auto mt-3 h-2.5 w-full max-w-2xl overflow-hidden rounded-full bg-dance/65">
                     <div
                       className={`h-full rounded-full transition-[width] duration-150 ${lowTime ? "bg-ember" : "bg-teal"}`}
@@ -651,20 +638,18 @@ export default function CustomerSessionView() {
                 <div className="customer-info-card">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Current Rate</p>
                   <p className="mt-1 truncate text-[13px] font-semibold text-ink-900">
-                    {session.billing === "postpaid"
-                      ? `${Math.floor(Number(session.postpaidMinutesPerPeso || (Number(session.postpaidRatePerMinute) > 0 ? 1 / Number(session.postpaidRatePerMinute) : settings.postpaidMinutesPerPeso || 0)))} min / ₱1`
-                      : (ratePlan?.name ?? "Standard rate")}
+                    {legacyBillingSession ? "Staff checkout" : (ratePlan?.name ?? "Standard rate")}
                   </p>
                 </div>
                 <div className="customer-info-card">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Session Type</p>
-                  <p className="mt-1 text-[13px] font-semibold text-ink-900">{session.billing === "prepaid" ? "Prepaid" : "Postpaid"}</p>
+                  <p className="mt-1 text-[13px] font-semibold text-ink-900">{legacyBillingSession ? "Legacy" : "Prepaid"}</p>
                 </div>
                 <div className="customer-info-card">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">
-                    {session.billing === "prepaid" ? "Amount Paid" : "Running Total"}
+                    {legacyBillingSession ? "Status" : "Amount Paid"}
                   </p>
-                  <p className="mt-1 stat-figure text-[16px] font-semibold text-ink-900">{peso(cost)}</p>
+                  <p className="mt-1 stat-figure text-[16px] font-semibold text-ink-900">{legacyBillingSession ? "Ask staff" : peso(cost)}</p>
                 </div>
               </div>
 
@@ -692,7 +677,7 @@ export default function CustomerSessionView() {
                     onClick={handleHelp}
                     disabled={assistanceSent || assistanceBusy}
                   >
-                    {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : session.billing === "postpaid" ? "Call Staff / Checkout" : "Ask for Help"}
+                    {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
                   </Button>
                 </div>
               ) : (

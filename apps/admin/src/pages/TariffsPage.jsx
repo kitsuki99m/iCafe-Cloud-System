@@ -440,7 +440,6 @@ export default function TariffsPage() {
     ratePlans = [],
     settings,
     updateSessionPolicy,
-    updatePostpaidRate,
     addRatePlan,
     updateRatePlan,
     deleteRatePlan,
@@ -454,12 +453,10 @@ export default function TariffsPage() {
   const [error, setError] = useState("");
   const [policy, setPolicy] = useState({
     defaultBilling: "prepaid",
-    postpaidMinutesPerPeso: "",
     lowTimeWarningMinutes: "",
     defaultAddTimeRatePlanId: "",
   });
   const [policySaving, setPolicySaving] = useState(false);
-  const [rateSaving, setRateSaving] = useState(false);
   const [policyModal, setPolicyModal] = useState(null);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -480,8 +477,7 @@ export default function TariffsPage() {
   useEffect(
     () =>
       setPolicy({
-        defaultBilling: settings.defaultBilling ?? "prepaid",
-        postpaidMinutesPerPeso: String(settings.postpaidMinutesPerPeso ?? ""),
+        defaultBilling: "prepaid",
         lowTimeWarningMinutes: String(settings.lowTimeWarningMinutes ?? ""),
         defaultAddTimeRatePlanId: settings.defaultAddTimeRatePlanId ?? "",
       }),
@@ -489,18 +485,14 @@ export default function TariffsPage() {
   );
   const policyValid = Boolean(positiveNumber(policy.lowTimeWarningMinutes));
   const policyDirty =
-    policy.defaultBilling !== (settings.defaultBilling ?? "prepaid") ||
+    (settings.defaultBilling ?? "prepaid") !== "prepaid" ||
     policy.lowTimeWarningMinutes !==
       String(settings.lowTimeWarningMinutes ?? "") ||
     policy.defaultAddTimeRatePlanId !==
       (settings.defaultAddTimeRatePlanId ?? "");
-  const rateDirty =
-    policy.postpaidMinutesPerPeso !==
-    String(settings.postpaidMinutesPerPeso ?? "");
   const resetPolicy = () =>
     setPolicy({
-      defaultBilling: settings.defaultBilling ?? "prepaid",
-      postpaidMinutesPerPeso: String(settings.postpaidMinutesPerPeso ?? ""),
+      defaultBilling: "prepaid",
       lowTimeWarningMinutes: String(settings.lowTimeWarningMinutes ?? ""),
       defaultAddTimeRatePlanId: settings.defaultAddTimeRatePlanId ?? "",
     });
@@ -510,7 +502,7 @@ export default function TariffsPage() {
     setPolicySaving(true);
     try {
       await updateSessionPolicy({
-        defaultBilling: policy.defaultBilling,
+        defaultBilling: "prepaid",
         lowTimeWarningMinutes: positiveNumber(policy.lowTimeWarningMinutes),
         defaultAddTimeRatePlanId: policy.defaultAddTimeRatePlanId || null,
       });
@@ -519,19 +511,6 @@ export default function TariffsPage() {
       setError(err?.message || "Unable to save the session policy.");
     } finally {
       setPolicySaving(false);
-    }
-  }
-  async function savePostpaidRate() {
-    const rate = positiveNumber(policy.postpaidMinutesPerPeso);
-    if (!rate || rateSaving) return;
-    setRateSaving(true);
-    try {
-      await updatePostpaidRate(rate);
-      setPolicyModal(null);
-    } catch (err) {
-      setError(err?.message || "Unable to save the postpaid rate.");
-    } finally {
-      setRateSaving(false);
     }
   }
 
@@ -679,7 +658,6 @@ export default function TariffsPage() {
           <AdminRailCard title="Session controls" subtitle="Pricing rules used by staff and customer stations.">
             <div className="space-y-2">
               <button type="button" className="admin-rail-action" onClick={()=>{setError("");resetPolicy();setPolicyModal("session")}}><span>Session Policy<small>Defaults, Add Time, and session rules</small></span><SlidersHorizontal size={15}/></button>
-              <button type="button" className="admin-rail-action" onClick={()=>{setError("");resetPolicy();setPolicyModal("postpaid")}}><span>Postpaid Rate<small>Configure postpaid billing behavior</small></span><Clock3 size={15}/></button>
             </div>
           </AdminRailCard>
           <AdminRailCard title="Tier coverage" subtitle="Plan inventory by customer level.">
@@ -924,19 +902,8 @@ export default function TariffsPage() {
             sessions are unchanged.
           </p>
           <div>
-            <label className="eyebrow mb-1.5 block">Default billing</label>
-            <div className="grid grid-cols-2 gap-1 rounded-lg border border-surface-line bg-surface-raised p-1">
-              {["prepaid", "postpaid"].map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setPolicy({ ...policy, defaultBilling: mode })}
-                  className={`rounded-md px-3 py-2 text-xs font-semibold capitalize transition-colors ${policy.defaultBilling === mode ? "bg-midnight text-soft-white" : "text-slate-soft hover:text-ink-900"}`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
+            <label className="eyebrow mb-1.5 block">Billing mode</label>
+            <div className="rounded-lg border border-surface-line bg-surface-raised px-3 py-2.5 text-xs font-semibold text-ink-900">Prepaid only</div>
           </div>
           <label className="block">
             <span className="eyebrow mb-1.5 block">Default Add Time rate</span>
@@ -980,59 +947,7 @@ export default function TariffsPage() {
         </div>
       </Modal>
 
-      <Modal
-        open={policyModal === "postpaid"}
-        onClose={() => !rateSaving && setPolicyModal(null)}
-        busy={rateSaving}
-        canSubmit={
-          rateDirty && Boolean(positiveNumber(policy.postpaidMinutesPerPeso))
-        }
-        onSubmit={savePostpaidRate}
-        eyebrow="Postpaid billing"
-        title="Set postpaid rate"
-        maxWidth="max-w-sm"
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              disabled={rateSaving}
-              onClick={() => setPolicyModal(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              disabled={
-                !rateDirty ||
-                !positiveNumber(policy.postpaidMinutesPerPeso) ||
-                rateSaving
-              }
-              onClick={savePostpaidRate}
-            >
-              {rateSaving ? "Saving…" : "Set rate"}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <label className="block">
-            <span className="eyebrow mb-1.5 block">Minutes per peso</span>
-            <NumericInput
-              autoFocus
-              value={policy.postpaidMinutesPerPeso}
-              onChange={(e) =>
-                setPolicy({ ...policy, postpaidMinutesPerPeso: e.target.value })
-              }
-              placeholder="0"
-              className="w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 outline-none focus:border-gold/50"
-            />
-          </label>
-          <p className="text-[11px] leading-5 text-slate-soft">
-            For example, 4 means ₱1 buys 4 minutes. Existing sessions keep their
-            captured rate.
-          </p>
-        </div>
-      </Modal>
+
 
       <Modal
         open={!!editor}

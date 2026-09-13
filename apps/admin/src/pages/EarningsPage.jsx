@@ -87,7 +87,7 @@ export default function EarningsPage(){
     <AdminRailCard title="Wallet-funded usage" subtitle="Only wallet value actually spent on services becomes earned revenue." action={<WalletCards size={15} className="text-midnight"/>}>
       <div className="space-y-2">
         <div className="admin-rail-stat"><span className="text-slate-soft">Prepaid</span><b className="stat-figure text-ink-900">{money(data?.walletUsage?.prepaid)}</b></div>
-        <div className="admin-rail-stat"><span className="text-slate-soft">Postpaid</span><b className="stat-figure text-ink-900">{money(data?.walletUsage?.postpaid)}</b></div>
+        <div className="admin-rail-stat"><span className="text-slate-soft">Legacy settlements</span><b className="stat-figure text-ink-900">{money(data?.walletUsage?.postpaid)}</b></div>
         <div className="admin-rail-stat"><span className="text-slate-soft">Wallet funds added</span><b className="stat-figure text-ink-900">{money(data?.summary?.walletFunding)}</b></div>
         <div className="admin-rail-stat"><span className="text-slate-soft">Wallet credit remaining</span><b className="stat-figure text-ink-900">{money(data?.summary?.walletBalances)}</b></div>
       </div>
@@ -102,7 +102,7 @@ export default function EarningsPage(){
   return <AdminPageWorkspace aside={earningsRail}><h1 className="sr-only">Earnings</h1>
     {error&&<div className="mb-4 rounded-xl border border-ember/30 bg-ember/10 px-3 py-2.5 text-xs text-ember-dim">{error}</div>}
     <div className="admin-metric-grid mb-3">
-      <AdminMetricCard label="Gross income" value={money(data?.summary?.gross)} hint="Earned member + guest sessions, extensions, postpaid settlements and POS; unused wallet credit excluded" icon={CircleDollarSign} tone="success"/>
+      <AdminMetricCard label="Gross income" value={money(data?.summary?.gross)} hint="Earned member + guest sessions, extensions, legacy settlements and POS; unused wallet credit excluded" icon={CircleDollarSign} tone="success"/>
       <AdminMetricCard label="Operating expenses" value={money(data?.summary?.expenses)} hint="Recorded operating costs" icon={ReceiptText} tone="danger"/>
       <AdminMetricCard label="Tax provision" value={money(data?.summary?.taxProvision)} hint="Estimated operational provision" icon={CalendarDays} tone="warning"/>
       <AdminMetricCard label="Net income" value={money(data?.summary?.net)} hint="Gross less refunds, expenses and provisions" icon={TrendingUp} tone="success"/>
@@ -127,7 +127,7 @@ export default function EarningsPage(){
 
     <section className="overview-card p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div><p className="eyebrow">Revenue sources</p><h2 className="mt-1 text-base font-semibold tracking-[-0.015em] text-ink-900">Gross income breakdown</h2><p className="mt-1 text-[11px] text-slate-soft">Revenue is recognized when sessions, extensions, postpaid usage or POS sales are earned. Wallet deposits are not income until spent.</p></div>
+        <div><p className="eyebrow">Revenue sources</p><h2 className="mt-1 text-base font-semibold tracking-[-0.015em] text-ink-900">Gross income breakdown</h2><p className="mt-1 text-[11px] text-slate-soft">Revenue is recognized when sessions, extensions, legacy settlements or POS sales are earned. Wallet deposits are not income until spent.</p></div>
         <span className="rounded-full bg-surface-raised px-3 py-1.5 text-[10px] font-semibold text-slate-soft">{categories.length} source{categories.length===1?'':'s'}</span>
       </div>
       {categories.length?<div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{categories.map(([key,value])=><div key={key} className="overview-soft-card flex items-center justify-between gap-3 px-3 py-3 text-xs"><span className="capitalize text-slate-soft">{key.replaceAll('_',' ')}</span><b className="stat-figure text-ink-900">{money(value)}</b></div>)}</div>:<Empty>No revenue for this period.</Empty>}

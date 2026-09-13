@@ -92,9 +92,10 @@ test('Cloud wallet-funded session usage is recorded as earned revenue without du
   assert.match(sql,/r\.source_type='wallet_transaction'[\s\S]*w\.reference_id=new\.local_id/)
 })
 
-test('Walk-in postpaid Guest normal logout is staff-checkout only while interruption lifecycle still handles power loss',()=>{
+test('Legacy non-prepaid Guest sessions remain staff-controlled while the production build is prepaid-only',()=>{
   const page=read('apps/customer/src/pages/CustomerSessionView.jsx')
-  assert.match(page,/if \(isGuest && session\?\.billing === "postpaid"\)[\s\S]*handleHelp\(\)/)
-  assert.match(page,/!\(isGuest && session\?\.billing === "postpaid"\)/)
-  assert.match(page,/Call Staff \/ Checkout/)
+  assert.match(page,/const legacyBillingSession = hasActiveSession && session\?\.billing !== "prepaid"/)
+  assert.match(page,/if \(legacyBillingSession\)[\s\S]*handleHelp\(\)/)
+  assert.match(page,/\{!legacyBillingSession && \(/)
+  assert.match(page,/This session came from an older billing mode/)
 })

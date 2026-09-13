@@ -5,6 +5,7 @@ import { connectSocket, disconnectSocket } from '../lib/socket.js'
 import { showToast } from '../lib/toast.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { isCloudAdmin, cloudBranchId } from '../lib/cloudClient.js'
+import { elapsedSessionSeconds, remainingSessionSeconds } from '../lib/sessionTime.js'
 
 const AppDataContext = createContext(null)
 const suppressedCommandToastIds = new Set()
@@ -14,7 +15,7 @@ const EMPTY_SETTINGS = {
   branch:'Davao City',
   currency:'PHP',
   defaultBilling:'prepaid',
-  postpaidMinutesPerPeso:1,
+  postpaidMinutesPerPeso:0,
   lowTimeWarningMinutes:5,
   gcashName:'',
   gcashNumber:'',
@@ -84,7 +85,8 @@ function normalizeSettings(settings = {}) {
   return {
     ...EMPTY_SETTINGS,
     ...settings,
-    postpaidMinutesPerPeso: finiteOr(settings.postpaidMinutesPerPeso ?? settings.postpaid_minutes_per_peso, EMPTY_SETTINGS.postpaidMinutesPerPeso),
+    defaultBilling:'prepaid',
+    postpaidMinutesPerPeso: 0,
     lowTimeWarningMinutes: finiteOr(settings.lowTimeWarningMinutes ?? settings.low_time_warning_minutes, EMPTY_SETTINGS.lowTimeWarningMinutes),
     decimalPlaces: finiteOr(settings.decimalPlaces ?? settings.decimal_places, EMPTY_SETTINGS.decimalPlaces),
   }
@@ -419,7 +421,7 @@ export function AppDataProvider({ children }) {
     if (!pc?.session?.id) return Promise.resolve()
     const sessionId=pc.session.id
     optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
-    return apiPost(`/sessions/${sessionId}/end`, { disposition, ...options }).then((result) => { showToast({ title:disposition==='settle'?'Postpaid settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
+    return apiPost(`/sessions/${sessionId}/end`, { disposition, ...options }).then((result) => { showToast({ title:disposition==='settle'?'Legacy session settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
   }
 
   function refundSession(pc) {
@@ -459,8 +461,19 @@ export function AppDataProvider({ children }) {
           }
         }
         const nextSession = normalizedCommand === 'lock'
-          ? { ...target.session, isLocked:true, pausedAt:dispatchedAt, pauseReason:'admin_lock', pendingCommand:'lock' }
-          : { ...target.session, isLocked:false, pausedAt:null, pauseReason:null, pendingCommand:'unlock', observedAt:dispatchedAt }
+          ? {
+              ...target.session,
+              isLocked:true,
+              isPaused:true,
+              pausedAt:dispatchedAt,
+              pauseReason:'admin_lock',
+              pendingCommand:'lock',
+              observedAt:dispatchedAt,
+              ...(target.session.billing === 'prepaid'
+                ? { remainingSeconds:remainingSessionSeconds(target.session,dispatchedAt), pausedRemainingSeconds:remainingSessionSeconds(target.session,dispatchedAt) }
+                : { billableSeconds:elapsedSessionSeconds(target.session,dispatchedAt), elapsedBillableSeconds:elapsedSessionSeconds(target.session,dispatchedAt) }),
+            }
+          : { ...target.session, isLocked:false, isPaused:false, pausedAt:null, pauseReason:null, pendingCommand:'unlock', observedAt:dispatchedAt }
         return {
           ...current,
           pcs: current.pcs.map((item) => String(item.id) === String(pc.id) ? { ...item, session:nextSession } : item),
@@ -720,7 +733,6 @@ export function AppDataProvider({ children }) {
     return refreshAfter(apiPatch('/settings', patch)).then((result) => { showToast({ title:'Settings saved', message:'Cafe configuration is up to date.' }); return result })
   }
   function updateSessionPolicy(patch){return refreshAfter(apiPatch('/billing-policy/session',patch)).then(result=>{showToast({title:'Session policy saved'});return result})}
-  function updatePostpaidRate(postpaidMinutesPerPeso){return refreshAfter(apiPatch('/billing-policy/postpaid-rate',{postpaidMinutesPerPeso})).then(result=>{showToast({title:'Postpaid rate saved',message:`${Number(postpaidMinutesPerPeso).toFixed(2)} minutes per peso`});return result})}
 
   function createAnnouncement(payload) { return refreshAfter(apiPost('/announcements', payload)) }
   function updateAnnouncement(id, payload) { return refreshAfter(apiPatch(`/announcements/${id}`, payload)) }
@@ -782,7 +794,6 @@ export function AppDataProvider({ children }) {
       planUsageCount,
       updateSettings,
       updateSessionPolicy,
-      updatePostpaidRate,
     }}>
       {children}
     </AppDataContext.Provider>

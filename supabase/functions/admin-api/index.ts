@@ -44,17 +44,19 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   const url=asUrl(path),route=url.pathname,branchId=branch.id,encoded=branchId;
 
   if(method==='PATCH'&&route==='/settings'){
-    const current=await readConfig(admin,branchId),settings={...(current.config.settings||{}),...(body||{})},config={...current.config,settings};await writeConfig(admin,branchId,config,user.id);await audit(admin,branch,user.id,'cloud.settings.update','settings',null,{keys:Object.keys(body||{})});return result({success:true,settings});
+    if(body?.defaultBilling!=null&&String(body.defaultBilling).toLowerCase()!=='prepaid')return json({success:false,status:410,code:'POSTPAID_DISABLED',error:'Postpaid billing is disabled in this build. Use prepaid sessions.'},200);
+    if(body?.postpaidMinutesPerPeso!=null||body?.postpaidPesoPerMinute!=null)return json({success:false,status:410,code:'POSTPAID_DISABLED',error:'Postpaid billing is disabled in this build.'},200);
+    const patch={...(body||{})};if(patch.defaultBilling!=null)patch.defaultBilling='prepaid';
+    const current=await readConfig(admin,branchId),settings={...(current.config.settings||{}),...patch},config={...current.config,settings};await writeConfig(admin,branchId,config,user.id);await audit(admin,branch,user.id,'cloud.settings.update','settings',null,{keys:Object.keys(patch)});return result({success:true,settings});
   }
   if(method==='POST'&&route==='/branding/logo'){
     const dataUrl=String(body?.dataUrl||'');if(!/^data:image\/(png|jpeg|jpg|webp|svg\+xml);/i.test(dataUrl))return json({success:false,status:400,code:'INVALID_LOGO',error:'Upload a PNG, JPEG, WebP, or SVG image.'},200);if(dataUrl.length>2_500_000)return json({success:false,status:413,code:'LOGO_TOO_LARGE',error:'Logo must be smaller than about 2 MB.'},200);const current=await readConfig(admin,branchId),logoVersion=Date.now(),settings={...(current.config.settings||{}),logoUrl:dataUrl,logoVersion},config={...current.config,settings};await writeConfig(admin,branchId,config,user.id);await audit(admin,branch,user.id,'cloud.branding.logo','settings',null,{logoVersion});return result({success:true,logoUrl:dataUrl,logoVersion});
   }
   if(method==='PATCH'&&route==='/billing-policy/session'){
-    const current=await readConfig(admin,branchId),settings={...(current.config.settings||{}),...(body||{})},config={...current.config,settings};await writeConfig(admin,branchId,config,user.id);return result({success:true,settings});
+    if(body?.defaultBilling!=null&&String(body.defaultBilling).toLowerCase()!=='prepaid')return json({success:false,status:410,code:'POSTPAID_DISABLED',error:'Postpaid billing is disabled in this build. Use prepaid sessions.'},200);
+    const patch={...(body||{}),defaultBilling:'prepaid'};const current=await readConfig(admin,branchId),settings={...(current.config.settings||{}),...patch},config={...current.config,settings};await writeConfig(admin,branchId,config,user.id);return result({success:true,settings});
   }
-  if(method==='PATCH'&&route==='/billing-policy/postpaid-rate'){
-    const value=n(body?.postpaidMinutesPerPeso,NaN);if(!Number.isFinite(value)||value<=0)return json({success:false,status:400,code:'INVALID_POSTPAID_RATE',error:'Postpaid minutes per peso must be greater than zero.'},200);const current=await readConfig(admin,branchId),settings={...(current.config.settings||{}),postpaidMinutesPerPeso:value},config={...current.config,settings};await writeConfig(admin,branchId,config,user.id);return result({success:true,postpaidMinutesPerPeso:value});
-  }
+  if(method==='PATCH'&&route==='/billing-policy/postpaid-rate')return json({success:false,status:410,code:'POSTPAID_DISABLED',error:'Postpaid billing is disabled in this build. Use prepaid sessions.'},200);
 
   if(method==='POST'&&route==='/rate-plans'){
     const data=rateData(body||{}),localId=String(data.id);const{error}=await admin.from('branch_rate_plans').insert({branch_id:branchId,edge_id:null,local_id:localId,data,updated_at:data.updatedAt});if(error)throw error;await audit(admin,branch,user.id,'cloud.rate_plan.create','rate_plan',localId,{name:data.name});await refreshManagedConfig(admin,branchId,user.id);return result({success:true,ratePlan:data},201);
@@ -149,7 +151,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   // Cloud-authoritative live session / wallet transaction engine.
   const settlementMatch=route.match(/^\/sessions\/([^/]+)\/settlement-preview$/);
   if(settlementMatch&&method==='GET')return cloudExecute(admin,branchId,'session.preview',{sessionId:decodeURIComponent(settlementMatch[1])},user.id,operationKey);
-  if(route==='/sessions/start'&&method==='POST'){await requireAvailableStation(admin,branchId,String(body?.pcId||''),body?.customerId?String(body.customerId):null);return cloudExecute(admin,branchId,'session.start',body,user.id,operationKey)}
+  if(route==='/sessions/start'&&method==='POST'){if(String(body?.billing||'prepaid').toLowerCase()!=='prepaid')return json({success:false,status:410,code:'POSTPAID_DISABLED',error:'Postpaid billing is disabled in this build. Use prepaid sessions.'},200);await requireAvailableStation(admin,branchId,String(body?.pcId||''),body?.customerId?String(body.customerId):null);return cloudExecute(admin,branchId,'session.start',{...(body||{}),billing:'prepaid'},user.id,operationKey)}
   const sessionEndMatch=route.match(/^\/sessions\/([^/]+)\/end$/);
   if(sessionEndMatch&&method==='POST')return cloudExecute(admin,branchId,'session.end',{...body,sessionId:decodeURIComponent(sessionEndMatch[1])},user.id,operationKey);
   const sessionRefundMatch=route.match(/^\/sessions\/([^/]+)\/refund$/);

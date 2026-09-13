@@ -13,7 +13,7 @@ for (const section of ['Overview','Clients','Rates','Members','Earnings','Analyt
 }
 
 test('manual explains the high-risk owner workflows', () => {
-  for (const phrase of ['wallet balance', 'saved session time', 'postpaid', 'GCash', 'Management PIN', 'audit trail']) {
+  for (const phrase of ['wallet balance', 'saved session time', 'prepaid', 'GCash', 'Management PIN', 'audit trail']) {
     assert.ok(manual.toLowerCase().includes(phrase.toLowerCase()), `missing manual phrase: ${phrase}`)
   }
 })

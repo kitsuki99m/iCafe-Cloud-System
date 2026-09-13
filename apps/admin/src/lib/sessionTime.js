@@ -43,7 +43,8 @@ export function elapsedSessionSeconds(session, now = Date.now()) {
   if (startedAt == null) return 0
   const pausedAt = toTimestamp(session.pausedAt)
   const effectiveNow = frozen(session) && pausedAt != null ? pausedAt : now
-  return Math.max(0, Math.floor((effectiveNow - startedAt) / 1000))
+  const historicalPausedSeconds = Math.max(0, Math.floor(Number(session.pausedSeconds || 0)))
+  return Math.max(0, Math.floor((effectiveNow - startedAt) / 1000) - historicalPausedSeconds)
 }
 
 export function formatRemainingSession(session, now = Date.now()) {

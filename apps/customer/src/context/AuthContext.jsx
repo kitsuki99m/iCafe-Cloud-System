@@ -11,7 +11,7 @@ function guestUserFromResponse(data) {
   const pc = data?.pc || null;
   // Session presence is the guest identity. Cloud/Edge can briefly return the
   // active session before the mirrored PC row/context is available; requiring
-  // both objects made setUser(null) and left prepaid/postpaid walk-ins on the
+  // both objects made setUser(null) and left guest walk-ins on the
   // Member Login kiosk even though their paid session was already running.
   if (!session) return null;
   return {
