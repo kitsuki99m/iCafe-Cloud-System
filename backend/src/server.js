@@ -28,7 +28,11 @@ for (const command of inheritedLockCommands) {
     resumeActiveSession(command.pc_id,{commandId:command.id,at:remoteCommandCleanupAt})
   }
 }
-db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE status IN ('queued','running')")
+// Update deployment intent is durable: an offline Customer Station may reconnect
+// hours later and must still receive the Admin-queued update. Ordinary station
+// controls remain process-scoped and are cancelled on backend restart.
+db.prepare(`UPDATE remote_commands SET status='failed',executed_at=?,result=?
+  WHERE status='running' OR (status='queued' AND command NOT IN ('customer_update_check','customer_update_download','customer_update_install_when_idle','customer_update_install_now','customer_update_cancel'))`)
   .run(remoteCommandCleanupAt,JSON.stringify({error:'Remote command cancelled because the backend restarted.',code:'REMOTE_COMMAND_SERVER_RESTARTED'}))
 
 // Presence belongs to this backend process, not to the last value stored in
@@ -104,6 +108,22 @@ function restorePcPresence(pcId) {
     .run(now, pcId)
 }
 
+function updateStationSoftwareTelemetry(pcId, payload = {}) {
+  if (!pcId) return
+  const version=String(payload.softwareVersion||payload.currentVersion||'').trim().slice(0,64)
+  const state=String(payload.updateState||payload.status||'').trim().toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,40)
+  const updateVersion=String(payload.updateVersion||payload.downloadedVersion||payload.availableVersion||'').trim().slice(0,64)
+  const rawProgress=Number(payload.updateProgress??payload.progress)
+  const progress=Number.isFinite(rawProgress)?Math.max(0,Math.min(100,rawProgress)):null
+  const installWhenIdle=Boolean(payload.updateInstallWhenIdle??payload.installWhenIdle)
+  const now=new Date().toISOString()
+  db.prepare(`UPDATE pcs SET
+    customer_version=CASE WHEN ?<>'' THEN ? ELSE customer_version END,
+    customer_update_state=CASE WHEN ?<>'' THEN ? ELSE customer_update_state END,
+    customer_update_version=?,customer_update_progress=?,customer_update_install_when_idle=?,customer_update_checked_at=?,updated_at=updated_at
+    WHERE id=?`).run(version,version,state,state,updateVersion||null,progress,installWhenIdle?1:0,now,pcId)
+}
+
 io.on('connection', (socket) => {
   const token = socket.handshake.auth?.token
   const advertisedIp = normalizeIp(socket.handshake.auth?.clientIp)
@@ -176,6 +196,15 @@ io.on('connection', (socket) => {
   }
 
   if (presencePcId) {
+    updateStationSoftwareTelemetry(presencePcId, socket.handshake.auth || {})
+    socket.on('station:software', (payload = {}) => {
+      try {
+        updateStationSoftwareTelemetry(presencePcId, payload)
+        emitDataChanged({ method:'SOFTWARE', path:'/pcs/software', pcId:presencePcId })
+      } catch (error) {
+        console.warn('Unable to update Customer software telemetry:', error?.message || error)
+      }
+    })
     const pendingDisconnect = stationDisconnectTimers.get(presencePcId)
     if (pendingDisconnect) {
       clearTimeout(pendingDisconnect)

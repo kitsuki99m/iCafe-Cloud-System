@@ -191,12 +191,12 @@ function RateAndAmount({ ratePlans, ratePlanId, setRatePlanId, amount, setAmount
   )
 }
 
-function RefundControl({ pc, refundableAmount, onRefund }) {
+function RefundControl({ pc, refundableAmount, onRefund, busy = false }) {
   const [armed, setArmed] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const hasMember = !!pc.session?.customerId
-  const disabled = refundableAmount <= 0
+  const disabled = refundableAmount <= 0 || busy
 
   return (
     <div className="rounded-lg border border-surface-line bg-surface-raised px-3 py-2.5">
@@ -223,7 +223,7 @@ function RefundControl({ pc, refundableAmount, onRefund }) {
             : 'border-surface-line text-slate-soft hover:text-ink-900'
         }`}
       >
-        {submitting ? 'Processing refund…' : armed
+        {busy ? 'Waiting for current session action…' : submitting ? 'Waiting for Customer Station…' : armed
           ? hasMember
             ? `Confirm — credit ${peso(refundableAmount)} to wallet & end session`
             : `Confirm — hand back ${peso(refundableAmount)} cash & end session`
@@ -599,11 +599,14 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
           </div>
 
           {s.billing === 'prepaid' && (
-            <RefundControl pc={pc} refundableAmount={Number(preview?.refundAmount ?? refundableAmount)} onRefund={runRefund} />
+            <RefundControl pc={pc} refundableAmount={Number(preview?.refundAmount ?? refundableAmount)} onRefund={runRefund} busy={!!sessionAction} />
           )}
 
           {s.billing === 'postpaid' && <SettlementControl pc={pc} amountDue={amountDue} walletBalance={members?.find((member) => String(member.id)===String(s.customerId))?.wallet ?? 0} onSettle={(paymentMethod) => runSessionAction('settle', { paymentMethod })} />}
 
+          {sessionAction && !s.customerId && (sessionAction === 'forfeit' || sessionAction === 'refund') && (
+            <p className="rounded-lg border border-gold/25 bg-gold/5 px-3 py-2 text-xs text-gold-dim">Waiting for Customer Station to return to the login kiosk before {sessionAction === 'refund' ? 'committing the refund' : 'discarding the remaining time'}…</p>
+          )}
           {localError && <p className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-xs text-ember-dim">{localError}</p>}
           <PowerControl pc={pc} onPowerCommand={onPowerCommand} />
         </div>

@@ -1,6 +1,5 @@
 {
-  "manifestUrl": "https://updates.example.com/customer/stable/latest.json",
-  "checkIntervalMinutes": 5,
-  "autoDownload": true,
-  "allowInsecure": false
+  "manifestUrl": "https://updates.your-domain.com/customer/stable/latest.json",
+  "allowInsecure": false,
+  "note": "Optional fallback/manual source only. Production Customer Stations are Admin-managed and do not auto-check this file on a timer."
 }

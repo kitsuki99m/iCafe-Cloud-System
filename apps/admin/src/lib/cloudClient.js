@@ -493,6 +493,8 @@ async function cloudPcs(branchId) {
       customerVersion: row.customer_version || null,
       customerUpdateState: row.customer_update_state || null,
       customerUpdateVersion: row.customer_update_version || null,
+      customerUpdateProgress: row.customer_update_progress == null ? null : Number(row.customer_update_progress),
+      customerUpdateInstallWhenIdle: Boolean(row.customer_update_install_when_idle),
       edgeId: row.edge_id || null,
       createdAt: row.created_at || null,
       updatedAt: row.updated_at || null,
@@ -582,6 +584,8 @@ async function cloudDirectRead(path, branchId) {
   const url = new URL(path, "https://aezakmi.local");
   const route = url.pathname;
   const encoded = encodeURIComponent(branchId);
+  const commandStatusMatch = route.match(/^\/remote-commands\/([^/]+)$/);
+  if (commandStatusMatch) return cloudStationAdmin("command_status", { branchId, commandId:decodeURIComponent(commandStatusMatch[1]) });
   if (route === "/pcs") return { success: true, pcs: await cloudPcs(branchId) };
   if (route === "/members") {
     const rows = await rest(`branch_members?select=*&branch_id=eq.${encoded}&order=name.asc`);

@@ -208,6 +208,12 @@ function pcView(p, suppliedActive) {
     macAddress: p.mac_address,
     spec: p.spec,
     status: p.status,
+    customerVersion: p.customer_version || null,
+    customerUpdateState: p.customer_update_state || null,
+    customerUpdateVersion: p.customer_update_version || null,
+    customerUpdateProgress: p.customer_update_progress == null ? null : Number(p.customer_update_progress),
+    customerUpdateInstallWhenIdle: Boolean(p.customer_update_install_when_idle),
+    customerUpdateCheckedAt: p.customer_update_checked_at || null,
     session,
   };
 }
@@ -5248,6 +5254,7 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
             code: "SESSION_ALREADY_ENDED",
             expose: true,
           });
+        db.prepare("UPDATE session_pauses SET resumed_at=? WHERE computer_session_id=? AND resumed_at IS NULL").run(endedAt, s.id);
         if (s.member_id)
           db.prepare(
             "UPDATE members SET session_seconds_remaining=0,updated_at=? WHERE id=?",
@@ -5379,6 +5386,7 @@ router.post(
             new Error("This session was already refunded or ended."),
             { status: 409, code: "SESSION_ALREADY_ENDED", expose: true },
           );
+        db.prepare("UPDATE session_pauses SET resumed_at=? WHERE computer_session_id=? AND resumed_at IS NULL").run(endedAt, s.id);
         let balance = null;
         if (s.member_id) {
           const m = db

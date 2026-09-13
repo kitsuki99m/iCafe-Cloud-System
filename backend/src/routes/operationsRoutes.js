@@ -1,4 +1,9 @@
 import { Router } from 'express'
+import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'node:crypto'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { db, nowIso, transaction } from '../db/connection.js'
 import { authenticate, requireRole } from '../middleware/auth.js'
 import { requirePairedStation } from '../middleware/clientIdentity.js'
@@ -6,10 +11,25 @@ import { id } from '../utils/helpers.js'
 import { emitToRoom, emitToStaff, emitWalletUpdated, emitDataChanged } from '../realtime.js'
 import { activeSessionPause, pauseActiveSession, releaseStationSession, resumeActiveSession } from '../utils/sessionTime.js'
 import { enqueueCloudEvent } from '../cloud/outbox.js'
+import { env } from '../config/env.js'
 
 const router=Router()
 const auth=authenticate
 const REMOTE_COMMAND_TIMEOUT_MS=15000
+const CUSTOMER_UPDATE_COMMANDS=new Set(['customer_update_check','customer_update_download','customer_update_install_when_idle','customer_update_install_now','customer_update_cancel'])
+const CUSTOMER_UPDATE_COMMAND_TTL_MS=7*24*60*60*1000
+const CUSTOMER_UPDATE_SOURCE_SETTING='customerUpdateManifestUrl'
+function customerUpdateCacheDir(){return path.join(path.dirname(path.resolve(env.databasePath)),'customer-updates')}
+function customerUpdateManifestPath(){return path.join(customerUpdateCacheDir(),'latest.json')}
+function readCustomerUpdateSource(){const row=db.prepare('SELECT value FROM settings WHERE key=?').get(CUSTOMER_UPDATE_SOURCE_SETTING);if(!row?.value)return'';try{return String(JSON.parse(row.value)||'').trim()}catch{return String(row.value||'').trim()}}
+function writeCustomerUpdateSource(value){const url=String(value||'').trim();db.prepare("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(CUSTOMER_UPDATE_SOURCE_SETTING,JSON.stringify(url));return url}
+function isPrivateOrLoopbackHost(host){const h=String(host||'').toLowerCase();if(h==='localhost'||h==='127.0.0.1'||h==='::1')return true;if(/^10\./.test(h)||/^192\.168\./.test(h))return true;const m=h.match(/^172\.(\d+)\./);return Boolean(m&&Number(m[1])>=16&&Number(m[1])<=31)}
+function validateUpdateUrl(value){let parsed;try{parsed=new URL(String(value||''))}catch{throw Object.assign(new Error('Enter a valid Customer update manifest URL.'),{status:400,code:'UPDATE_URL_INVALID',expose:true})}if(parsed.protocol!=='https:'&&!(parsed.protocol==='http:'&&isPrivateOrLoopbackHost(parsed.hostname)))throw Object.assign(new Error('Customer update source must use HTTPS. Plain HTTP is allowed only on a private café LAN.'),{status:400,code:'UPDATE_URL_INSECURE',expose:true});return parsed.toString()}
+function safeUpdateFileName(value){const base=path.basename(String(value||''));if(!base||base!==String(value||'')||!base.toLowerCase().endsWith('.exe'))throw Object.assign(new Error('Update manifest contains an invalid installer filename.'),{status:400,code:'UPDATE_FILE_INVALID',expose:true});return base}
+function normalizeUpdateManifest(raw){const version=String(raw?.version||'').trim(),file=safeUpdateFileName(raw?.file),sha256=String(raw?.sha256||'').trim().toLowerCase(),size=Number(raw?.size||0);if(!version)throw Object.assign(new Error('Update manifest is missing a version.'),{status:400,code:'UPDATE_MANIFEST_INVALID',expose:true});if(!/^[a-f0-9]{64}$/.test(sha256))throw Object.assign(new Error('Update manifest is missing a valid SHA-256 checksum.'),{status:400,code:'UPDATE_MANIFEST_INVALID',expose:true});return{version,file,sha256,size:Number.isFinite(size)&&size>0?size:null,releaseNotes:String(raw?.releaseNotes||''),releasedAt:raw?.releasedAt||raw?.releaseDate||null,channel:String(raw?.channel||'stable')}}
+function readCachedUpdateManifest(){try{return JSON.parse(fs.readFileSync(customerUpdateManifestPath(),'utf8'))}catch{return null}}
+async function sha256UpdateFile(file){return await new Promise((resolve,reject)=>{const hash=crypto.createHash('sha256'),stream=fs.createReadStream(file);stream.on('data',chunk=>hash.update(chunk));stream.on('error',reject);stream.on('end',()=>resolve(hash.digest('hex')))})}
+async function cacheCustomerUpdateRelease(sourceUrl){const manifestUrl=validateUpdateUrl(sourceUrl),controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),5*60_000);try{const response=await fetch(manifestUrl,{cache:'no-store',headers:{Accept:'application/json'},signal:controller.signal});if(!response.ok)throw Object.assign(new Error(`Update manifest request failed (${response.status}).`),{status:502,code:'UPDATE_SOURCE_FAILED',expose:true});const manifest=normalizeUpdateManifest(await response.json());const installerUrl=new URL(manifest.file,manifestUrl).toString();validateUpdateUrl(installerUrl);const installerResponse=await fetch(installerUrl,{cache:'no-store',signal:controller.signal});if(!installerResponse.ok||!installerResponse.body)throw Object.assign(new Error(`Update installer download failed (${installerResponse.status}).`),{status:502,code:'UPDATE_DOWNLOAD_FAILED',expose:true});const dir=customerUpdateCacheDir();fs.mkdirSync(dir,{recursive:true});const target=path.join(dir,manifest.file),temp=`${target}.part`;await pipeline(Readable.fromWeb(installerResponse.body),fs.createWriteStream(temp,{flags:'w'}));const actual=String(await sha256UpdateFile(temp)).toLowerCase();if(actual!==manifest.sha256){fs.rmSync(temp,{force:true});throw Object.assign(new Error('Downloaded Customer installer failed SHA-256 verification.'),{status:502,code:'UPDATE_CHECKSUM_FAILED',expose:true})}fs.rmSync(target,{force:true});fs.renameSync(temp,target);const cached={...manifest,size:fs.statSync(target).size,cachedAt:new Date().toISOString(),upstreamManifestUrl:manifestUrl};fs.writeFileSync(customerUpdateManifestPath(),JSON.stringify(cached,null,2));writeCustomerUpdateSource(manifestUrl);return cached}finally{clearTimeout(timeout)}}
 const POS_ORDER_RESERVATION_MS=15*60*1000
 
 function recordPosRevenue(order,userId){const cents=Math.round(Number(order.total||0)*100);if(cents<=0)return;db.prepare("INSERT OR IGNORE INTO revenue_events(id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by,category,payment_method,member_id,pc_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)").run(id(),'pos_sale','pos_order',order.id,cents,nowIso(),userId,'pos',order.payment_method,order.member_id,order.pc_id)}
@@ -82,10 +102,11 @@ function publishRemoteCommandTransition(transition, result) {
 router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
   try {
     const {pcId,command,payload=null}=req.body??{}
-    if(!pcId||!['lock','unlock','reboot','shutdown','wake','game_update'].includes(command)) return res.status(400).json({success:false,code:'INVALID_COMMAND',error:'PC and valid command are required.'})
+    if(!pcId||(!['lock','unlock','reboot','shutdown','wake','game_update'].includes(command)&&!CUSTOMER_UPDATE_COMMANDS.has(command))) return res.status(400).json({success:false,code:'INVALID_COMMAND',error:'PC and valid command are required.'})
     const pc=db.prepare('SELECT id,status FROM pcs WHERE id=?').get(pcId)
     if(!pc) return res.status(404).json({success:false,code:'PC_NOT_FOUND',error:'PC not found.'})
-    if(pc.status==='offline') return res.status(409).json({success:false,code:'PC_OFFLINE',error:'The station is offline and cannot receive commands.'})
+    const isCustomerUpdate=CUSTOMER_UPDATE_COMMANDS.has(command)
+    if(pc.status==='offline'&&!isCustomerUpdate) return res.status(409).json({success:false,code:'PC_OFFLINE',error:'The station is offline and cannot receive commands.'})
     const active=db.prepare("SELECT id,member_id FROM computer_sessions WHERE pc_id=? AND status='active' LIMIT 1").get(pcId)
     const pause=active ? activeSessionPause(active.id) : null
     if(command==='lock' && !active) return res.status(409).json({success:false,code:'SESSION_REQUIRED',error:'Lock Session requires an active session.'})
@@ -102,14 +123,28 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
         publishRemoteCommandTransition(transition,expiredResult)
       } catch {}
     }
-    const pending=db.prepare("SELECT id FROM remote_commands WHERE pc_id=? AND status IN ('queued','running') LIMIT 1").get(pcId)
-    if(pending) return res.status(409).json({success:false,code:'COMMAND_PENDING',error:'Wait for the current station command to finish.'})
+    if(command==='customer_update_cancel') {
+      const queuedUpdates=db.prepare("SELECT id FROM remote_commands WHERE pc_id=? AND status='queued' AND command IN ('customer_update_check','customer_update_download','customer_update_install_when_idle','customer_update_install_now')").all(pcId)
+      for(const queued of queuedUpdates){
+        try{const result={error:'Customer update cancelled by Admin before delivery.',code:'UPDATE_CANCELLED_BY_ADMIN'};const transition=transitionRemoteCommand(queued.id,'failed',result);publishRemoteCommandTransition(transition,result)}catch{}
+      }
+    }
+    const pending=db.prepare("SELECT id,command FROM remote_commands WHERE pc_id=? AND status IN ('queued','running') ORDER BY requested_at ASC LIMIT 1").get(pcId)
+    const cancelMayInterruptUpdate=command==='customer_update_cancel'&&pending&&CUSTOMER_UPDATE_COMMANDS.has(String(pending.command||''))&&pending.command!=='customer_update_cancel'
+    if(pending&&!cancelMayInterruptUpdate) return res.status(409).json({success:false,code:'COMMAND_PENDING',error:'Wait for the current station command to finish.'})
     const commandId=id(), requestedAt=nowIso(), warningSeconds=['shutdown','reboot'].includes(command) ? 5 : 0
     const warningExpiresAt = warningSeconds ? new Date(Date.now() + warningSeconds * 1000).toISOString() : null
-    const expiresAt = new Date(Date.now() + Math.max(REMOTE_COMMAND_TIMEOUT_MS, warningSeconds * 1000 + 10000)).toISOString()
+    const expiresAt = new Date(Date.now() + (isCustomerUpdate ? CUSTOMER_UPDATE_COMMAND_TTL_MS : Math.max(REMOTE_COMMAND_TIMEOUT_MS, warningSeconds * 1000 + 10000))).toISOString()
     const queuedCommand={id:commandId,pc_id:pcId,command,payload,requested_by:req.auth.userId}
     const interruption=transaction(() => {
       db.prepare('INSERT INTO remote_commands(id,pc_id,command,payload,status,requested_by,requested_at,warning_started_at,warning_expires_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(commandId,pcId,command,JSON.stringify(payload),'queued',req.auth.userId,requestedAt,warningSeconds ? requestedAt : null,warningExpiresAt,expiresAt)
+      if(isCustomerUpdate){
+        const targetVersion=String(payload?.targetVersion||'').trim().slice(0,64)||null
+        const queuedState=command==='customer_update_cancel'?'cancel_queued':'queued'
+        const installFlag=command==='customer_update_install_when_idle'||command==='customer_update_install_now'?1:command==='customer_update_cancel'?0:null
+        db.prepare(`UPDATE pcs SET customer_update_state=?,customer_update_version=COALESCE(?,customer_update_version),customer_update_progress=CASE WHEN ?='customer_update_download' THEN 0 ELSE customer_update_progress END,customer_update_install_when_idle=CASE WHEN ? IS NULL THEN customer_update_install_when_idle ELSE ? END,customer_update_checked_at=?,updated_at=updated_at WHERE id=?`)
+          .run(queuedState,targetVersion,command,installFlag,installFlag,requestedAt,pcId)
+      }
       return interruptForQueuedCommand(queuedCommand,requestedAt)
     })
     if (interruption?.session) {
@@ -122,7 +157,7 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
     // before the immediate auth-revocation event causes React to clear identity.
     emitToRoom(`pc:${pcId}`,'remote:command',{id:commandId,command,payload,warningSeconds,warningExpiresAt,expiresAt})
     if (['shutdown','reboot'].includes(command)) emitToRoom(`pc:${pcId}`,'auth:revoked',{reason:command,pcId,immediate:true})
-    setTimeout(() => {
+    const timeout=setTimeout(() => {
       const current=db.prepare("SELECT status FROM remote_commands WHERE id=?").get(commandId)
       if (current && ['queued','running'].includes(current.status)) {
         const result={error:'Station command acknowledgement timed out.',code:'REMOTE_COMMAND_TIMEOUT'}
@@ -133,11 +168,20 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
         emitDataChanged({method:'TIMEOUT',path:`/remote-commands/${commandId}`})
       }
     }, Math.max(0, new Date(expiresAt).getTime() - Date.now()))
+    timeout.unref?.()
     res.status(201).json({success:true,commandId,status:'queued',expiresAt})
   }catch(e){next(e)}
 })
 
 router.get('/remote-commands',auth,requireRole('admin'),(req,res)=>res.json({success:true,commands:db.prepare("SELECT rc.*,p.label pc_label,p.ip_address pc_ip FROM remote_commands rc JOIN pcs p ON p.id=rc.pc_id WHERE rc.status IN ('queued','running') ORDER BY rc.requested_at ASC").all()}))
+
+router.get('/remote-commands/:id',auth,requireRole('admin'),(req,res)=>{
+  const command=db.prepare('SELECT id,pc_id,command,status,requested_at,expires_at,executed_at,result FROM remote_commands WHERE id=?').get(req.params.id)
+  if(!command) return res.status(404).json({success:false,code:'COMMAND_NOT_FOUND',error:'Station command not found.'})
+  let result=null
+  try { result=command.result ? JSON.parse(command.result) : null } catch { result=null }
+  res.json({success:true,command:{id:command.id,pcId:command.pc_id,command:command.command,status:command.status,requestedAt:command.requested_at,expiresAt:command.expires_at,executedAt:command.executed_at,result}})
+})
 
 router.patch('/public/remote-commands/:id',requirePairedStation,(req,res,next)=>{
   try {
@@ -167,6 +211,15 @@ router.patch('/remote-commands/:id',auth,requireRole('admin'),(req,res,next)=>{
     res.json({success:true})
   }catch(e){next(e)}
 })
+
+router.get('/customer-updates/status',auth,requireRole('admin'),(req,res)=>{
+  const cached=readCachedUpdateManifest(),file=cached?.file?path.join(customerUpdateCacheDir(),path.basename(String(cached.file))):null
+  res.json({success:true,sourceUrl:readCustomerUpdateSource(),cachedManifest:cached,cacheReady:Boolean(cached&&file&&fs.existsSync(file)),localManifestPath:'/public/customer-updates/latest.json'})
+})
+router.post('/customer-updates/source',auth,requireRole('admin'),(req,res,next)=>{try{const sourceUrl=validateUpdateUrl(req.body?.manifestUrl);writeCustomerUpdateSource(sourceUrl);res.json({success:true,sourceUrl})}catch(error){next(error)}})
+router.post('/customer-updates/cache',auth,requireRole('admin'),async(req,res,next)=>{try{const sourceUrl=validateUpdateUrl(req.body?.manifestUrl||readCustomerUpdateSource());const manifest=await cacheCustomerUpdateRelease(sourceUrl);res.json({success:true,manifest,localManifestPath:'/public/customer-updates/latest.json'})}catch(error){next(error)}})
+router.get('/public/customer-updates/latest.json',(req,res)=>{const manifest=readCachedUpdateManifest();if(!manifest)return res.status(404).json({success:false,code:'UPDATE_CACHE_EMPTY',error:'No Customer release is cached on Café Edge yet.'});res.set('Cache-Control','no-store');res.json(manifest)})
+router.get('/public/customer-updates/:file',(req,res)=>{const manifest=readCachedUpdateManifest();if(!manifest)return res.status(404).end();let requested;try{requested=safeUpdateFileName(req.params.file)}catch{return res.status(404).end()}if(requested!==path.basename(String(manifest.file||'')))return res.status(404).end();const file=path.join(customerUpdateCacheDir(),requested);if(!fs.existsSync(file))return res.status(404).end();res.set('Cache-Control','no-store');res.set('Content-Type','application/vnd.microsoft.portable-executable');res.sendFile(file)})
 
 router.get('/pos/products',auth,(req,res)=>res.json({success:true,products:db.prepare('SELECT * FROM pos_products WHERE is_active=1 ORDER BY category,name').all()}))
 

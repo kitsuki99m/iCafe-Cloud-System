@@ -353,8 +353,24 @@ export function AppDataProvider({ children }) {
           return
         }
         await ack('running',{ received:true, warningSeconds, warningExpiresAt, expiresAt })
-        if (['shutdown','reboot'].includes(String(payload.command).toLowerCase())) {
-          const interruptionReason=String(payload.command).toLowerCase()
+        const commandName=String(payload.command).toLowerCase()
+        const sessionClose=Boolean(payload?.payload?.sessionClose)
+        if (sessionClose) {
+          // Admin close/refund is a two-phase operation. Customer Station exits
+          // the active Guest UI first, then ACKs. The Admin only commits the
+          // destructive forfeit/refund after this acknowledgement, so the
+          // station lifecycle endpoint cannot race the accounting mutation.
+          await clearStationLifecycleMarker()
+          if (user?.role === 'guest') {
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-session-interruption',{detail:{reason:'admin_session_close',commandId:payload.id,disposition:payload?.payload?.disposition || null}}))
+          } else {
+            queueRefresh()
+          }
+          await ack('completed',{ executed:true, sessionExitReady:true, sessionId:payload?.payload?.sessionId || null, disposition:payload?.payload?.disposition || null })
+          return
+        }
+        if (['shutdown','reboot'].includes(commandName)) {
+          const interruptionReason=commandName
           await releaseStationLifecycle(interruptionReason, { allowDeferred:true })
           // The backend/Cloud already checkpointed this session when Admin
           // issued the command. Drop the local member/guest identity before the

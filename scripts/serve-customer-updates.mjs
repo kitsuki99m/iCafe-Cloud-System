@@ -20,11 +20,23 @@ function send(res, status, body, type = 'text/plain; charset=utf-8', cache = 'no
     'Content-Length': Buffer.byteLength(body),
     'Cache-Control': cache,
     'X-Content-Type-Options': 'nosniff',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type,Accept',
   })
   res.end(body)
 }
 
 const server = http.createServer((req, res) => {
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin':'*',
+      'Access-Control-Allow-Methods':'GET,HEAD,OPTIONS',
+      'Access-Control-Allow-Headers':'Content-Type,Accept',
+      'Access-Control-Max-Age':'86400',
+    })
+    return res.end()
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'Method not allowed')
   let pathname = '/'
   try { pathname = decodeURIComponent(new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`).pathname) } catch {}
@@ -34,7 +46,7 @@ const server = http.createServer((req, res) => {
     const file = path.join(updateDir, 'latest.json')
     if (!fs.existsSync(file)) return send(res, 404, 'Build the Customer installer first; latest.json is missing.')
     const body = fs.readFileSync(file)
-    res.writeHead(200, { 'Content-Type':'application/json; charset=utf-8', 'Content-Length':body.length, 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff' })
+    res.writeHead(200, { 'Content-Type':'application/json; charset=utf-8', 'Content-Length':body.length, 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Access-Control-Allow-Origin':'*' })
     return req.method === 'HEAD' ? res.end() : res.end(body)
   }
   const requested = path.basename(pathname)
@@ -43,7 +55,7 @@ const server = http.createServer((req, res) => {
   const file = path.join(updateDir, requested)
   if (!fs.existsSync(file)) return send(res, 404, 'Installer not found')
   const stat = fs.statSync(file)
-  res.writeHead(200, { 'Content-Type':'application/vnd.microsoft.portable-executable', 'Content-Length':stat.size, 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff' })
+  res.writeHead(200, { 'Content-Type':'application/vnd.microsoft.portable-executable', 'Content-Length':stat.size, 'Cache-Control':'no-store', 'X-Content-Type-Options':'nosniff', 'Access-Control-Allow-Origin':'*' })
   if (req.method === 'HEAD') return res.end()
   fs.createReadStream(file).pipe(res)
 })

@@ -10,11 +10,12 @@ const runtime = read('supabase/functions/station-runtime/index.ts')
 const builder = read('scripts/build-installer.mjs')
 const pcCard = read('apps/admin/src/components/floor/PcCard.jsx')
 
-test('Customer production updater uses a versioned manifest and verifies SHA-256 before marking ready', () => {
+test('Customer production updater uses an Admin-approved versioned manifest and verifies SHA-256 before marking ready', () => {
+  assert.match(main, /managedByAdmin:true/)
   assert.match(main, /update-config\.json/)
   assert.match(main, /manifest\.sha256/)
   assert.match(main, /UPDATE_CHECKSUM_FAILED/)
-  assert.match(main, /status:'ready'/)
+  assert.match(main, /'waiting_idle':'ready'/)
   assert.match(builder, /latest\.json/)
   assert.match(builder, /createHash\('sha256'\)/)
 })

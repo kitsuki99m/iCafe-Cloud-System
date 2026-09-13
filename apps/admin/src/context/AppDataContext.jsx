@@ -431,16 +431,75 @@ export function AppDataProvider({ children }) {
     return apiGet(`/sessions/${pc.session.id}/settlement-preview`)
   }
 
-  function endSession(pc, disposition = 'save', options = {}) {
-    if (!pc?.session?.id) return Promise.resolve()
-    const sessionId=pc.session.id
-    optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
-    return apiPost(`/sessions/${sessionId}/end`, { disposition, ...options }).then((result) => { playAdminSound('success', { dedupeKey:`session-end:${pc.id}` }); showToast({ title:disposition==='settle'?'Legacy session settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
+  async function waitForStationCommand(commandId, timeoutMs = 22000) {
+    const deadline=Date.now()+timeoutMs
+    let lastStatus='queued'
+    while (Date.now() < deadline) {
+      try {
+        const response=await apiGet(`/remote-commands/${encodeURIComponent(commandId)}`)
+        const command=response?.command || response
+        lastStatus=String(command?.status || lastStatus).toLowerCase()
+        if (lastStatus === 'completed') return command
+        if (lastStatus === 'failed' || lastStatus === 'expired') {
+          const message=command?.result?.error || 'Customer Station could not confirm the session exit.'
+          const error=new Error(message)
+          error.code=command?.result?.code || 'STATION_EXIT_FAILED'
+          throw error
+        }
+      } catch (error) {
+        if (error?.code !== 'COMMAND_NOT_FOUND' && error?.status !== 404) throw error
+      }
+      await new Promise((resolve)=>setTimeout(resolve,250))
+    }
+    const error=new Error(`Customer Station did not confirm the session exit (last status: ${lastStatus}). No forfeit or refund was committed.`)
+    error.code='STATION_EXIT_TIMEOUT'
+    throw error
   }
 
-  function refundSession(pc) {
-    if (!pc?.session?.id) return Promise.resolve()
-    return refreshAfter(apiPost(`/sessions/${pc.session.id}/refund`)).then((result) => { showToast({ title:'Session refunded', message:`₱${Number(result.refundAmount||0).toFixed(2)} returned by ${result.destination}.` }); return result })
+  async function prepareGuestSessionClose(pc, disposition) {
+    if (!pc?.session?.id || pc.session?.customerId) return null
+    // If presence is definitively offline there is no renderer that can race
+    // this action. The interrupted-session path already owns persistence.
+    if (String(pc.status || '').toLowerCase() === 'offline' || pc.stationOnline === false || pc.isOnline === false || pc.cloudConnectionStatus === 'offline') return null
+    const transportCommand = (pc.session?.isPaused || pc.session?.isLocked) ? 'game_update' : 'lock'
+    const queued=await apiPost('/remote-commands', {
+      pcId:pc.id,
+      command:transportCommand,
+      payload:{ sessionClose:true, sessionId:pc.session.id, disposition, requestedAt:new Date().toISOString() },
+    })
+    if (!queued?.commandId) throw Object.assign(new Error('Customer Station close command was not created.'),{code:'STATION_EXIT_COMMAND_MISSING'})
+    return waitForStationCommand(queued.commandId)
+  }
+
+  async function endSession(pc, disposition = 'save', options = {}) {
+    if (!pc?.session?.id) return
+    const sessionId=pc.session.id
+    try {
+      if (disposition === 'forfeit' && !pc.session?.customerId) await prepareGuestSessionClose(pc, 'forfeit')
+      const result=await apiPost(`/sessions/${sessionId}/end`, { disposition, ...options })
+      optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
+      playAdminSound('success', { dedupeKey:`session-end:${pc.id}` })
+      showToast({ title:disposition==='settle'?'Legacy session settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` })
+      refresh()
+      return result
+    } catch (error) {
+      refresh()
+      throw error
+    }
+  }
+
+  async function refundSession(pc) {
+    if (!pc?.session?.id) return
+    try {
+      if (!pc.session?.customerId) await prepareGuestSessionClose(pc, 'refund')
+      const result=await apiPost(`/sessions/${pc.session.id}/refund`)
+      await refresh()
+      showToast({ title:'Session refunded', message:`₱${Number(result.refundAmount||0).toFixed(2)} returned by ${result.destination}.` })
+      return result
+    } catch (error) {
+      await refresh()
+      throw error
+    }
   }
 
   function setMaintenance(pc, toMaintenance = true) {
@@ -495,7 +554,7 @@ export function AppDataProvider({ children }) {
       })
     }
 
-    return apiPost('/remote-commands', { pcId:pc.id, command:normalizedCommand })
+    return apiPost('/remote-commands', { pcId:pc.id, command:normalizedCommand, payload:options.payload || null })
       .then((result) => {
         if (options.suppressToast && result?.commandId) suppressedCommandToastIds.add(result.commandId)
         if (isSessionLockCommand && result?.commandId) {
