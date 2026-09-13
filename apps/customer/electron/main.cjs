@@ -118,6 +118,12 @@ let dashboardVisible = false
 let appIsQuitting = false
 let hookRestartTimer = null
 let sessionStartTransitionPending = false
+// A healthy active-session marker belongs to this Electron process. Only a
+// marker from an older process (crash/restart) or one with an explicit exit
+// request is recovery work. Without this ownership id, the renderer's recovery
+// timer mistakes every newly-started session for a crashed session and logs the
+// member out immediately after Start Session.
+const lifecycleRuntimeId = crypto.randomUUID()
 let remoteLockSnapshot = null
 let localBackendProcess = null
 let localBackendLogStream = null
@@ -346,11 +352,21 @@ function readInstallationId(){try{const value=fs.readFileSync(installationIdPath
 
 function sessionLifecyclePath(){return path.join(app.getPath('userData'),'session-lifecycle.json')}
 function readSessionLifecycleMarker(){try{const value=JSON.parse(fs.readFileSync(sessionLifecyclePath(),'utf8'));return value&&typeof value==='object'?value:null}catch{return null}}
+function lifecycleMarkerForRenderer(){
+  const marker=readSessionLifecycleMarker()
+  if(!marker)return null
+  const owner=String(marker.runtimeInstanceId||'')
+  // Legacy markers without an owner are conservatively treated as leftovers
+  // from an older process. A current-process active marker is healthy unless
+  // an exit has explicitly been requested.
+  const recoveryRequired=Boolean(marker.active && (marker.exitRequestedAt || !owner || owner!==lifecycleRuntimeId))
+  return {...marker,recoveryRequired}
+}
 function writeSessionLifecycleMarker(value){const file=sessionLifecyclePath();const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2),{encoding:'utf8',mode:0o600});fs.renameSync(temp,file);return value}
-function markActiveSession(data={}){const stamp=new Date().toISOString();return writeSessionLifecycleMarker({active:true,sessionId:data?.sessionId||data?.id||null,memberId:data?.memberId||null,role:data?.role||null,billing:data?.billing||null,startedAt:data?.startedAt||null,markedAt:stamp,lastSeenAt:stamp,exitReason:null,exitRequestedAt:null})}
+function markActiveSession(data={}){const stamp=new Date().toISOString();return writeSessionLifecycleMarker({active:true,runtimeInstanceId:lifecycleRuntimeId,sessionId:data?.sessionId||data?.id||null,memberId:data?.memberId||null,role:data?.role||null,billing:data?.billing||null,startedAt:data?.startedAt||null,markedAt:stamp,lastSeenAt:stamp,exitReason:null,exitRequestedAt:null})}
 let lifecycleTouchAt=0
 function touchSessionLifecycle(){const nowMs=Date.now();if(nowMs-lifecycleTouchAt<4000)return true;const current=readSessionLifecycleMarker();if(!current?.active)return true;lifecycleTouchAt=nowMs;writeSessionLifecycleMarker({...current,lastSeenAt:new Date(nowMs).toISOString()});return true}
-function markSessionExit(data={}){const current=readSessionLifecycleMarker()||{};const existingAt=current.exitRequestedAt||null;return writeSessionLifecycleMarker({...current,active:true,exitReason:String(data?.reason||current.exitReason||'station_exit'),exitRequestedAt:existingAt||String(data?.interruptedAt||new Date().toISOString())})}
+function markSessionExit(data={}){const current=readSessionLifecycleMarker()||{};const existingAt=current.exitRequestedAt||null;return writeSessionLifecycleMarker({...current,active:true,runtimeInstanceId:current.runtimeInstanceId||lifecycleRuntimeId,exitReason:String(data?.reason||current.exitReason||'station_exit'),exitRequestedAt:existingAt||String(data?.interruptedAt||new Date().toISOString())})}
 function clearSessionLifecycleMarker(){try{fs.unlinkSync(sessionLifecyclePath())}catch{}return true}
 
 function isLocked() { return windowState === WINDOW_STATES.LOCKED }
@@ -816,7 +832,7 @@ app.whenReady().then(async () => {
   handleTrusted('client:update-widget', () => touchSessionLifecycle())
   handleTrusted('client:lock', () => lockClientWindow())
   handleTrusted('client:deactivate-session', () => lockClientWindow())
-  ipcMain.on('client:get-session-lifecycle-marker', event => { if (!isTrustedRenderer(event)) { event.returnValue=null; return } event.returnValue=readSessionLifecycleMarker() })
+  ipcMain.on('client:get-session-lifecycle-marker', event => { if (!isTrustedRenderer(event)) { event.returnValue=null; return } event.returnValue=lifecycleMarkerForRenderer() })
   handleTrusted('client:mark-session-exit', (_event, data) => markSessionExit(data || {}))
   handleTrusted('client:clear-session-lifecycle-marker', () => clearSessionLifecycleMarker())
   handleTrusted('client:remote-command', (_event, command) => executeRemoteCommand(command))

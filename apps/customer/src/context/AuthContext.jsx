@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { apiGet, apiPost, setToken, getToken } from "../lib/api.js";
 import { cloudStationFeatureEnabled, cloudStationPaired, pairCloudStation, startCloudStationRuntime, unpairCloudStation } from "../lib/cloudStation.js";
-import { clearStationLifecycleMarker, hasPendingStationLifecycle, recoverPendingStationLifecycle, releaseStationLifecycle } from "../lib/sessionLifecycle.js";
+import { clearStationLifecycleMarker, hasActiveStationLifecycle, hasPendingStationLifecycle, recoverPendingStationLifecycle, releaseStationLifecycle } from "../lib/sessionLifecycle.js";
 
 const C = createContext(null);
 const CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN = "aezakmi.customer.password-setup.deferred-token";
@@ -9,12 +9,16 @@ const CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN = "aezakmi.customer.password-setup.
 function guestUserFromResponse(data) {
   const session = data?.session || null;
   const pc = data?.pc || null;
-  if (!session || !pc) return null;
+  // Session presence is the guest identity. Cloud/Edge can briefly return the
+  // active session before the mirrored PC row/context is available; requiring
+  // both objects made setUser(null) and left prepaid/postpaid walk-ins on the
+  // Member Login kiosk even though their paid session was already running.
+  if (!session) return null;
   return {
     role:"guest",
     name: session.customerName || "Guest",
-    pcId: pc.id,
-    pcIp: pc.ipAddress,
+    pcId: pc?.id ?? session.pcId ?? null,
+    pcIp: pc?.ipAddress ?? null,
     guestSession: session,
   };
 }
@@ -90,7 +94,8 @@ export function AuthProvider({ children }) {
           const d = await apiGet("/guest/session");
           if (!cancelled && d.session) {
             window.aezakmiClient?.unlockClient?.();
-            setUser(guestUserFromResponse(d));
+            const guestUser=guestUserFromResponse(d);
+            if (guestUser) setUser(guestUser);
           }
         } catch {}
         finally { if (!cancelled) setLoading(false); }
@@ -155,7 +160,7 @@ export function AuthProvider({ children }) {
       window.aezakmiClient?.lockClient?.();
     };
     const onAuthInvalid = () => {
-      if (hasPendingStationLifecycle()) releaseStationLifecycle("auth_invalid", { allowDeferred:true }).catch(() => {});
+      if (hasActiveStationLifecycle()) releaseStationLifecycle("auth_invalid", { allowDeferred:true }).catch(() => {});
       lock();
     };
     const onAdminSessionInterruption = () => {
@@ -165,16 +170,16 @@ export function AuthProvider({ children }) {
       lock();
     };
     const onStationSessionInterruption = onAdminSessionInterruption;
-    const onSessionExpired = () => { clearStationLifecycleMarker(); lock(); };
+    const onGuestSessionEnded = () => { clearStationLifecycleMarker(); lock(); };
     window.addEventListener("aezakmi:auth-invalid", onAuthInvalid);
     window.addEventListener("aezakmi:admin-session-interruption", onStationSessionInterruption);
     window.addEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
-    window.addEventListener("aezakmi:session-expired", onSessionExpired);
+    window.addEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     return () => {
       window.removeEventListener("aezakmi:auth-invalid", onAuthInvalid);
       window.removeEventListener("aezakmi:admin-session-interruption", onStationSessionInterruption);
       window.removeEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
-      window.removeEventListener("aezakmi:session-expired", onSessionExpired);
+      window.removeEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     };
   }, []);
 
@@ -229,7 +234,8 @@ export function AuthProvider({ children }) {
           setToken(null);
           clearDeferredPasswordSetup();
           window.aezakmiClient?.unlockClient?.();
-          setUser(guestUserFromResponse(d));
+          const guestUser=guestUserFromResponse(d);
+          if (guestUser) setUser(guestUser);
         }
       } catch {} finally { running=false; }
     };
@@ -292,7 +298,9 @@ export function AuthProvider({ children }) {
       setToken(null);
       clearDeferredPasswordSetup();
       window.aezakmiClient?.unlockClient?.();
-      setUser(guestUserFromResponse(d));
+      const guestUser=guestUserFromResponse(d);
+      if (!guestUser) return { ok:false, error:"Guest session is still synchronizing. Please try again." };
+      setUser(guestUser);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };

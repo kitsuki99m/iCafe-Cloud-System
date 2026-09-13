@@ -59,7 +59,6 @@ function cleanupExpiredComputerSessions() {
       if(changed.changes!==1) continue
       if(s.member_id) {
         db.prepare('UPDATE members SET session_seconds_remaining=0,updated_at=? WHERE id=?').run(now,s.member_id)
-        db.prepare(`UPDATE auth_sessions SET revoked_at=? WHERE revoked_at IS NULL AND user_id=(SELECT user_id FROM members WHERE id=?)`).run(now,s.member_id)
       }
       db.prepare("UPDATE pcs SET status='available',updated_at=? WHERE id=? AND status='occupied'").run(now,s.pc_id)
       results.push({...s,remainingSeconds:0})

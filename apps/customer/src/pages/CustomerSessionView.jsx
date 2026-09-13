@@ -388,12 +388,13 @@ export default function CustomerSessionView() {
     if (endedSessionKey.current === key) return;
     endedSessionKey.current = key;
     endSession(activePc).finally(async () => {
-      window.aezakmiClient?.lockClient?.();
-      // Guest prepaid expiry must be a local logout boundary even if both
-      // Cloud and Café Edge disappear at the exact second the timer reaches
-      // zero. Keep the lifecycle marker for startup recovery instead of
-      // trapping the renderer in a signed-in Guest state behind the lock UI.
-      if (isGuest) await logout({ reason:"session_expired", allowDeferred:true });
+      // Natural prepaid expiry is an authentication boundary for walk-in
+      // Guests only. A signed-in member must stay authenticated so they can
+      // immediately buy/resume another session or top up their wallet.
+      if (isGuest) {
+        window.aezakmiClient?.lockClient?.();
+        await logout({ reason:"session_expired", allowDeferred:true });
+      }
     });
   }, [
     hasActiveSession,
@@ -436,30 +437,46 @@ export default function CustomerSessionView() {
     return () => ls.forEach(([e, fn]) => window.removeEventListener(e, fn));
   }, [canExtend, handleHelp, handleThisPc]);
 
+  const idleUiPaused = Boolean(
+    topUpOpen || extendOpen || startOpen || logoutOpen || feedbackOpen || announcementsOpen || viewFeedback || powerConfirm ||
+    logoutBusy || feedbackBusy || assistanceBusy
+  );
+  const idleUiPausedRef = useRef(idleUiPaused);
+  idleUiPausedRef.current = idleUiPaused;
+
   useEffect(() => {
     if (!user || hasActiveSession) return undefined;
+    let remaining = 300;
     idleTriggered.current = false;
-    setIdleCountdown(300);
-    const countdownTimer = window.setInterval(
-      () =>
-        setIdleCountdown((value) => {
-          if (value === null) return null;
-          if (value <= 1) {
-            window.clearInterval(countdownTimer);
-            if (!idleTriggered.current) {
-              idleTriggered.current = true;
-              const shutdown = window.aezakmiClient?.shutdownClient;
-              void logout({ reason:"idle_shutdown", allowDeferred:true }).catch(() => {});
-              if (shutdown) void shutdown();
-            }
-            return 0;
-          }
-          return value - 1;
-        }),
-      1000,
-    );
+    setIdleCountdown(remaining);
+
+    const resetIdle = () => {
+      if (idleTriggered.current) return;
+      remaining = 300;
+      setIdleCountdown(remaining);
+    };
+    const activityEvents = ["pointermove", "pointerdown", "keydown", "touchstart", "wheel"];
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, resetIdle, { passive: true }));
+
+    const countdownTimer = window.setInterval(() => {
+      if (idleTriggered.current || idleUiPausedRef.current) return;
+      remaining = Math.max(0, remaining - 1);
+      setIdleCountdown(remaining);
+      if (remaining > 0) return;
+
+      idleTriggered.current = true;
+      const shutdown = window.aezakmiClient?.shutdownClient;
+      void (async () => {
+        try {
+          await logout({ reason:"idle_shutdown", allowDeferred:true });
+        } catch {}
+        if (shutdown) await shutdown();
+      })();
+    }, 1000);
+
     return () => {
       window.clearInterval(countdownTimer);
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, resetIdle));
       setIdleCountdown(null);
       idleTriggered.current = false;
     };

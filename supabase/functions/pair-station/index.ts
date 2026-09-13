@@ -48,7 +48,7 @@ Deno.serve(async req=>{
 
     const{data:branch,error:branchError}=await admin.from('branches').select('name').eq('id',pairing.branch_id).maybeSingle()
     if(branchError)throw branchError
-    const{data:station,error:stationError}=await admin.from('branch_stations').select('local_id,label,pc_number,station_device_id').eq('branch_id',pairing.branch_id).eq('local_id',pairing.local_station_id).maybeSingle()
+    const{data:station,error:stationError}=await admin.from('branch_stations').select('local_id,label,pc_number,station_device_id,status').eq('branch_id',pairing.branch_id).eq('local_id',pairing.local_station_id).maybeSingle()
     if(stationError)throw stationError
     if(!station)return json({success:false,code:'STATION_NOT_FOUND',error:'The PC assigned to this pairing code no longer exists.'},404)
     if(station.station_device_id){
@@ -87,7 +87,7 @@ Deno.serve(async req=>{
         device_token_hash:tokenHash,
         realtime_topic_key:topicKey,
         status:'paired',
-        cloud_last_seen_at:now,
+        cloud_last_seen_at:null,
         revoked_at:null,
         updated_at:now,
       }).eq('id',existing.data.id).select('id').single()
@@ -103,7 +103,7 @@ Deno.serve(async req=>{
         device_token_hash:tokenHash,
         realtime_topic_key:topicKey,
         status:'paired',
-        cloud_last_seen_at:now,
+        cloud_last_seen_at:null,
       }).select('id').single()
       if(inserted.error)throw inserted.error
       device=inserted.data
@@ -116,7 +116,8 @@ Deno.serve(async req=>{
       return json({success:false,code:'PAIRING_USED',error:'Station pairing code was already used.'},409)
     }
 
-    const stationPatch=await admin.from('branch_stations').update({station_device_id:device.id,cloud_connection_status:'online',cloud_last_seen_at:now,updated_at:now}).eq('branch_id',pairing.branch_id).eq('local_id',pairing.local_station_id)
+    const persistedStatus=String(station.status||'offline').toLowerCase()
+    const stationPatch=await admin.from('branch_stations').update({station_device_id:device.id,cloud_connection_status:'paired',cloud_last_seen_at:null,status:['maintenance','reserved'].includes(persistedStatus)?persistedStatus:'offline',updated_at:now}).eq('branch_id',pairing.branch_id).eq('local_id',pairing.local_station_id)
     if(stationPatch.error)throw stationPatch.error
 
     return json({

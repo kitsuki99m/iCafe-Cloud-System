@@ -4,8 +4,17 @@ export function stationLifecycleMarker() {
   try { return window.aezakmiClient?.getSessionLifecycleMarker?.() || null } catch { return null }
 }
 
-export function hasPendingStationLifecycle() {
+export function hasActiveStationLifecycle() {
   return Boolean(stationLifecycleMarker()?.active)
+}
+
+export function hasPendingStationLifecycle() {
+  // `active` means Electron is tracking a currently-running paid session. It
+  // is NOT, by itself, a crash/interruption marker. Recovery is required only
+  // when Electron says the marker belongs to an older runtime or an exit was
+  // explicitly requested.
+  const marker=stationLifecycleMarker()
+  return Boolean(marker?.active && marker?.recoveryRequired)
 }
 
 async function markExit(reason, interruptedAt, preserveExisting = false) {
@@ -40,7 +49,11 @@ export async function releaseStationLifecycle(reason='station_exit', options={})
 
 export async function recoverPendingStationLifecycle() {
   const marker = stationLifecycleMarker()
-  if (!marker?.active) return { ok:true, skipped:true }
+  // A renderer remount can happen while the same Electron process owns a
+  // perfectly healthy paid session. Never run recovery merely because the
+  // lifecycle marker is active; Electron's runtime ownership check must say
+  // this is genuinely stale/interrupted first.
+  if (!marker?.active || !marker?.recoveryRequired) return { ok:true, skipped:true }
   return releaseStationLifecycle(marker.exitReason || 'startup_recovery', {
     interruptedAt:marker.exitRequestedAt || marker.lastSeenAt || marker.markedAt || new Date().toISOString(),
     preserveExistingExit:true,

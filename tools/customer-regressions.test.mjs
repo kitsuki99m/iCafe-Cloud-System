@@ -248,12 +248,13 @@ test('customer realtime invalidation bridges backend branding/settings changes i
   assert.match(source, /aezakmi:branding-updated/)
 })
 
-test('login idle shutdown is not reset by clicks, typing, mouse movement, or form changes', () => {
+test('login kiosk keeps the intentional fixed 180-second shutdown countdown regardless of activity or dialogs', () => {
   const source = read('apps/customer/src/components/auth/CustomerLoginForm.jsx')
-  assert.doesNotMatch(source, /const events = \["pointerdown", "keydown", "mousemove", "touchstart"\]/)
-  assert.doesNotMatch(source, /addEventListener\(event, reset/)
   assert.match(source, /let remaining = 180;/)
+  assert.match(source, /remaining -= 1;/)
   assert.match(source, /if \(remaining > 0 \|\| shutdownTriggered\.current\) return;/)
+  assert.doesNotMatch(source, /addEventListener\(eventName, resetIdle/)
+  assert.doesNotMatch(source, /idlePausedRef/)
 })
 
 test('customer duration labels are human-readable and Extend Time is peso-first only', async () => {

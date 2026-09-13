@@ -164,6 +164,17 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         })
       }
 
+      const stationActiveSession = req.pc
+        ? db.prepare("SELECT id,member_id,billing_type FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(req.pc.id)
+        : null
+      if (stationActiveSession && String(stationActiveSession.member_id || '') !== String(candidate.member_id || '')) {
+        return res.status(409).json({
+          success:false,
+          code:'PC_IN_USE',
+          error:'This station already has an active Guest or member session.',
+        })
+      }
+
       const savedSeconds = Number(member.session_seconds_remaining ?? 0)
       if (db.prepare("SELECT id FROM computer_sessions WHERE member_id=? AND status='active' LIMIT 1").get(candidate.member_id)) {
         checkpointMemberSession(candidate.member_id)

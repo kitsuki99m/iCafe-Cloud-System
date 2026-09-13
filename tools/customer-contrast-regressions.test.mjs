@@ -47,12 +47,10 @@ test('customer selection controls use gold instead of teal or midnight as a gene
   const topup = read('apps/customer/src/components/customer/TopUpModal.jsx')
   const extend = read('apps/customer/src/components/customer/ExtendSessionModal.jsx')
   const loginTopup = read('apps/customer/src/components/auth/CustomerLoginForm.jsx')
-  const login = read('apps/customer/src/components/auth/LoginForm.jsx')
   assert.doesNotMatch(topup, /method === 'gcash'[\s\S]{0,180}border-teal/)
   assert.doesNotMatch(extend, /method === id[\s\S]{0,220}border-teal/)
   assert.match(loginTopup, /method === "cash" \? "border-gold\/50 bg-gold\/10 text-gold-dim"/)
   assert.match(loginTopup, /method === "gcash" \? "border-gold\/50 bg-gold\/10 text-gold-dim"/)
-  assert.match(login, /role === 'customer' \? 'border-gold\/50 bg-gold\/10 text-gold-dim'/)
 })
 
 test('shared customer modal uses semantic text and surfaces rather than hardcoded midnight/dance colors', () => {

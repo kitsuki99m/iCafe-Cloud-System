@@ -61,7 +61,12 @@ async function localApiFetch(path, options = {}) {
   const response = await fetch(`${getApiBase()}${path}`, { ...fetchOptions, headers })
   let data = null
   try { data = await response.json() } catch {}
-  if (response.status === 401) window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid', { detail: data }))
+  // A 401 can mean either member-auth expiry or station-device auth failure.
+  // Guests intentionally have no member auth token, so a station credential
+  // problem on /guest/session must never kick an active walk-in session back
+  // to Member Login. Only invalidate customer auth when a customer token was
+  // actually presented.
+  if (response.status === 401 && getToken()) window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid', { detail: data }))
   if (!response.ok) {
     const error = new Error(data?.error || `Request failed (${response.status})`)
     error.status = response.status; error.code = data?.code; error.data = data
@@ -94,13 +99,24 @@ export async function apiFetch(path, options = {}) {
       if (method==='GET' && basePath==='/guest/session' && !data?.session) {
         try {
           const localGuest=await localApiFetch(path, options)
-          if (localGuest?.session) return localGuest
-        } catch {}
+          if (localGuest?.session) return { ...localGuest, guestSessionAuthority:'edge', guestSessionAbsentConfirmed:false }
+          // Both Cloud and the paired LAN Edge agree that no guest session is
+          // active. Consumers may use this as a confirmed absence rather than
+          // treating a single Cloud-sync miss as a logout boundary.
+          return { ...data, guestSessionAuthority:'cloud+edge', guestSessionAbsentConfirmed:true }
+        } catch {
+          // Cloud currently has no guest row but Edge could not be consulted.
+          // Preserve an already-rendered guest until transport reconciliation
+          // succeeds; otherwise a brief Edge credential/network problem causes
+          // Guest UI -> Member Login flapping.
+          return { ...data, guestSessionAuthority:'cloud', guestSessionAbsentConfirmed:false, guestSessionReconcilePending:true }
+        }
       }
+      if (method==='GET' && basePath==='/guest/session' && data?.session) return { ...data, guestSessionAuthority:'cloud', guestSessionAbsentConfirmed:false }
       return data
     } catch (error) {
       if (!shouldFallback(error)) {
-        if (error?.status === 401) window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:error.data}))
+        if (error?.status === 401 && getToken()) window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:error.data}))
         throw error
       }
       // Cloud transport is unavailable (or intentionally suspended). The station
@@ -109,7 +125,10 @@ export async function apiFetch(path, options = {}) {
     }
   }
 
-  return localApiFetch(path, options)
+  const localData=await localApiFetch(path, options)
+  const localBase=String(path||'').split('?')[0]
+  if (method==='GET' && localBase==='/guest/session') return { ...localData, guestSessionAuthority:'edge', guestSessionAbsentConfirmed:!localData?.session }
+  return localData
 }
 
 export function apiGet(path) { return apiFetch(path, { cache:'no-store' }) }

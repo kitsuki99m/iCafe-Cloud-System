@@ -6,7 +6,7 @@ import { showToast } from '../lib/toast.js'
 import { playBroadcastChime } from '../lib/sound.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { acknowledgeCloudStationCommand, cloudStationFeatureEnabled, cloudStationPaired, cloudStationTransport } from '../lib/cloudStation.js'
-import { clearStationLifecycleMarker, hasPendingStationLifecycle, releaseStationLifecycle } from '../lib/sessionLifecycle.js'
+import { clearStationLifecycleMarker, hasActiveStationLifecycle, releaseStationLifecycle } from '../lib/sessionLifecycle.js'
 
 const AppDataContext = createContext(null)
 const handledRemoteCommands = new Set()
@@ -127,6 +127,7 @@ export function AppDataProvider({ children }) {
   // can otherwise flash back in and race the newly-started guest session.
   const cacheKey=user?.role === 'guest' ? null : (user ? `customer:${user.id}:${user.role}` : 'customer:public')
   const refreshGenerationRef=useRef(0)
+  const guestAbsentConfirmationsRef=useRef(0)
 
   const refresh = useCallback(async () => {
     const generation=refreshGenerationRef.current
@@ -158,10 +159,24 @@ export function AppDataProvider({ children }) {
           apiGet('/public/rate-plans'),
         ])
         if (!guestData.session) {
-          window.dispatchEvent(new CustomEvent('aezakmi:session-expired', { detail:{ reason:'guest_session_expired' } }))
-          throw new Error('No active guest session on this PC.')
+          // Never tear down Guest UI on one Cloud-sync miss. A Guest has no
+          // member token, and Cloud can briefly report null while the LAN Edge
+          // already owns the active walk-in session. api.js marks absence as
+          // confirmed only when both reachable authorities agree. Require two
+          // consecutive confirmed reads before treating it as a real end.
+          if (guestData.guestSessionAbsentConfirmed) guestAbsentConfirmationsRef.current += 1
+          else guestAbsentConfirmationsRef.current = 0
+          if (guestAbsentConfirmationsRef.current >= 2) {
+            guestAbsentConfirmationsRef.current = 0
+            window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason:'guest_session_ended' } }))
+          }
+          throw new Error(guestData.guestSessionReconcilePending
+            ? 'Guest session is reconnecting…'
+            : 'Checking the active guest session…')
         }
-        const currentPc=normalizePc(guestData.pc ? {...guestData.pc,session:guestData.session} : null)
+        guestAbsentConfirmationsRef.current = 0
+        const guestPc=guestData.pc || { id:user.pcId ?? guestData.session?.pcId ?? null, ipAddress:user.pcIp ?? '', label:'Customer Station', status:'occupied' }
+        const currentPc=normalizePc({...guestPc,session:guestData.session})
         const snapshot=createPublicState({
           pcs:currentPc ? [currentPc] : [],
           ratePlans:(ratePlansData.ratePlans ?? []).map(normalizeRatePlan),
@@ -211,6 +226,7 @@ export function AppDataProvider({ children }) {
     const effectGeneration=++refreshGenerationRef.current
     let active=true
     // Identity changes must not inherit the previous account's private state.
+    guestAbsentConfirmationsRef.current = 0
     setState(createPublicState({ loading:true }))
     if (cacheKey) {
       readSnapshot(cacheKey)
@@ -253,7 +269,10 @@ export function AppDataProvider({ children }) {
         stationDisconnectReason=null
         if (cloudPrimary && cloudStationTransport() === 'cloud') return
         if (socket?.connected) return
-        if (hasPendingStationLifecycle()) {
+        if (hasActiveStationLifecycle()) {
+          // A real transport interruption converts the healthy active marker
+          // into pending recovery before local auth/UI is cleared. If the
+          // network is already gone, the marker survives for startup recovery.
           await releaseStationLifecycle('station_disconnect',{allowDeferred:true}).catch(() => {})
         }
         window.dispatchEvent(new CustomEvent('aezakmi:station-session-interruption',{detail:{reason:'station_disconnect',transportReason:disconnectReason}}))
@@ -282,11 +301,11 @@ export function AppDataProvider({ children }) {
       if(!payload?.memberId) return
       setState((current) => ({ ...current, members:current.members.map((member) => sameId(member.id,payload.memberId) ? { ...member, wallet:Number(payload.balance ?? member.wallet ?? 0), walletBalance:Number(payload.balance ?? member.walletBalance ?? 0) } : member) }))
     }
-    const onSessionChanged = (payload) => {
+    const onSessionChanged = () => {
+      // Session state and authentication are separate lifecycles. In
+      // particular, natural prepaid expiry must refresh the member dashboard
+      // without clearing a valid member login.
       queueRefresh()
-      if (user?.role === 'customer' && String(payload?.memberId) === String(user.memberId) && payload?.reason === 'session_expired') {
-        window.dispatchEvent(new CustomEvent('aezakmi:session-expired', { detail: payload }))
-      }
     }
     const onTopUpUpdated = (payload) => {
       queueRefresh()
@@ -457,8 +476,12 @@ export function AppDataProvider({ children }) {
   }
 
   function startSelfServiceSession(pcId, memberId, ratePlanId=null, amount=null, options = {}) {
-    const pendingSession={id:`pending:${Date.now()}`,pcId,customerId:memberId,ratePlanId,billing:'prepaid',startedAt:Date.now(),observedAt:Date.now(),pending:true}
-    optimisticState((current)=>({...current,pcs:current.pcs.map((pc)=>sameId(pc.id,pcId)?{...pc,status:'occupied',session:pendingSession}:pc),currentClientPc:sameId(current.currentClientPc?.id,pcId)?{...current.currentClientPc,status:'occupied',session:pendingSession}:current.currentClientPc}))
+    // Do not fabricate an active `pending:` session before the backend commits
+    // the wallet deduction/session row. CustomerSessionView treats session
+    // presence as authoritative and would otherwise call Electron
+    // activateSession(), writing an active lifecycle marker for a purchase that
+    // might still fail. Keep the existing modal busy state as the optimistic UX
+    // and switch to active only after the authoritative refresh sees the session.
     showToast({ title:'Starting session', message:'Confirming with the local café server…', tone:'session' })
     return apiPost('/sessions/start', {
       pcId,

@@ -93,8 +93,10 @@ export async function pairCloudStation({ pairingCode }) {
   const data=await parse(response)
   const credential={stationId:data.stationId,stationToken:data.stationToken,realtimeTopicKey:data.realtimeTopicKey,organizationId:data.organizationId,organizationName:data.organizationName,branchId:data.branchId,branchName:data.branchName,localStationId:data.localStationId,stationName:data.stationName,pairedAt:data.pairedAt}
   await saveCredential(credential)
-  markCloudStationOnline()
-  startCloudStationRuntime()
+  // Pairing intentionally requires a clean Electron restart. Do not start the
+  // runtime heartbeat in the old process, otherwise Cloud Admin can treat this
+  // PC as available and start paid time while the restart-required modal still
+  // blocks Customer Station. bootstrapStation() starts runtime after relaunch.
   window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-paired',{detail:credential}))
   return credential
 }

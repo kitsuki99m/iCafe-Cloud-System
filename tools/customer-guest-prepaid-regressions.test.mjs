@@ -36,9 +36,9 @@ test('Guest sessions automatically leave Member Login even when Cloud sync trail
   const auth=read('apps/customer/src/context/AuthContext.jsx')
   assert.match(api,/basePath==='\/guest\/session' && !data\?\.session/)
   assert.match(api,/const localGuest=await localApiFetch\(path, options\)/)
-  assert.match(api,/if \(localGuest\?\.session\) return localGuest/)
+  assert.match(api,/if \(localGuest\?\.session\) return \{ \.\.\.localGuest, guestSessionAuthority:'edge', guestSessionAbsentConfirmed:false \}/)
   assert.match(auth,/setInterval\(detect,1000\)/)
-  assert.match(auth,/setUser\(guestUserFromResponse\(d\)\)/)
+  assert.match(auth,/const guestUser=guestUserFromResponse\(d\);[\s\S]*if \(guestUser\) setUser\(guestUser\)/)
 })
 
 test('Local Café Edge requests use the Edge enrollment token before any Cloud station token',()=>{
@@ -68,4 +68,21 @@ test('Guest session fallback remains actionable before AppData refresh completes
   assert.match(page,/endSession\(activePc\)/)
   assert.match(page,/pc=\{isGuest \? activePc : pc\}/)
   assert.match(page,/session\.billing === "postpaid" \? "Call Staff \/ Checkout" : "Ask for Help"/)
+})
+
+
+test('Guest/public station 401 responses never masquerade as member-auth expiry',()=>{
+  const api=read('apps/customer/src/lib/api.js')
+  assert.match(api,/response\.status === 401 && getToken\(\)/)
+  assert.match(api,/error\?\.status === 401 && getToken\(\)/)
+})
+
+test('Active Guest UI survives transient null reconciliation and only ends after confirmed absence',()=>{
+  const data=read('apps/customer/src/context/AppDataContext.jsx')
+  const auth=read('apps/customer/src/context/AuthContext.jsx')
+  assert.match(data,/guestSessionAbsentConfirmed/)
+  assert.match(data,/guestAbsentConfirmationsRef\.current >= 2/)
+  assert.match(data,/guestSessionReconcilePending/)
+  assert.match(auth,/if \(!session\) return null;/)
+  assert.match(auth,/pcId: pc\?\.id \?\? session\.pcId \?\? null/)
 })

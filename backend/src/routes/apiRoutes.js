@@ -4749,6 +4749,15 @@ router.post("/sessions/start", auth, (req, res, next) => {
           code: "PC_NOT_AVAILABLE",
           expose: true,
         });
+      const signedIn = db.prepare(`SELECT u.member_id FROM auth_sessions a JOIN users u ON u.id=a.user_id
+        WHERE a.pc_id=? AND a.revoked_at IS NULL AND a.expires_at>? AND u.role='customer' AND u.is_active=1
+        ORDER BY a.created_at DESC LIMIT 1`).get(pcId, nowIso());
+      if (signedIn?.member_id && String(signedIn.member_id) !== String(customerId || ''))
+        throw Object.assign(new Error("A member is already signed in on this PC."), {
+          status: 409,
+          code: "PC_MEMBER_SIGNED_IN",
+          expose: true,
+        });
       const memberId =
         customerId ?? (req.auth.role === "customer" ? req.auth.memberId : null);
       let member = memberId
