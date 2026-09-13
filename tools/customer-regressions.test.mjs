@@ -474,3 +474,22 @@ test('station enrollment reconnect binds realtime listeners to the replacement s
   assert.match(source, /const connectFallbackSocket[\s\S]*socket\s*=\s*connectSocket\(\)[\s\S]*bindSocket\(socket\)/)
   assert.match(source, /onStationEnrolled[\s\S]*disconnectFallbackSocket\(\)[\s\S]*connectFallbackSocket\(\)/)
 })
+
+test('Customer Electron keeps fallback profile and IndexedDB beside the installed client', () => {
+  const main = read('apps/customer/electron/main.cjs')
+  const preload = read('apps/customer/electron/preload.cjs')
+  const cache = read('apps/customer/src/lib/localCache.js')
+
+  assert.match(main, /const CUSTOMER_LOCAL_DATA_DIR = ['"]\.aezakmi-customer['"]/)
+  assert.match(main, /return path\.dirname\(process\.execPath\)/)
+  assert.match(main, /app\.setPath\(['"]userData['"], target\)/)
+  assert.match(main, /app\.setPath\(['"]sessionData['"], target\)/)
+  assert.match(main, /execFileSync\(['"]attrib\.exe['"], \[['"]\+H['"], target\]/)
+  assert.match(main, /'IndexedDB'/)
+  assert.match(main, /'Local Storage'/)
+  assert.match(main, /fs\.rmSync\(source, \{ recursive:true, force:true \}\)/)
+  assert.ok(main.indexOf('configureCustomerInstallStorage()') < main.indexOf('app.requestSingleInstanceLock()'))
+  assert.match(preload, /getLocalDataPath:\(\) => ipcRenderer\.sendSync\(['"]client:get-local-data-path['"]\)/)
+  assert.match(cache, /indexedDB\.open\(DB_NAME,1\)/)
+  assert.doesNotMatch(main, /C:\\\\ProgramData/)
+})

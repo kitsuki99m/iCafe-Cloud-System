@@ -7,6 +7,101 @@ const crypto = require('node:crypto')
 
 const isDev = !app.isPackaged
 const DEV_URL = process.env.AEZAKMI_CUSTOMER_DEV_URL || 'http://localhost:5173'
+const CUSTOMER_LOCAL_DATA_DIR = '.aezakmi-customer'
+
+// Customer-local fallback state must stay with the Customer Station install.
+// This is intentionally configured before the single-instance lock, BrowserWindow,
+// or defaultSession are created so Chromium IndexedDB/localStorage follows the
+// installation drive instead of silently landing under C:\Users\...\AppData.
+const legacyUserDataPath = app.getPath('userData')
+const legacySessionDataPath = app.getPath('sessionData')
+
+function customerInstallRoot() {
+  if (isDev) return path.resolve(__dirname, '..')
+  return path.dirname(process.execPath)
+}
+
+function customerLocalDataPath() {
+  return path.join(customerInstallRoot(), CUSTOMER_LOCAL_DATA_DIR)
+}
+
+function copyLegacyEntry(sourceRoot, targetRoot, name) {
+  const source = path.join(sourceRoot, name)
+  const target = path.join(targetRoot, name)
+  if (!fs.existsSync(source)) return false
+  if (fs.existsSync(target)) return true
+  try {
+    fs.cpSync(source, target, { recursive:true, errorOnExist:false, force:false })
+    return true
+  } catch (error) {
+    console.warn(`Unable to migrate legacy Customer data ${name}:`, error?.message || error)
+    return false
+  }
+}
+
+function migrateLegacyCustomerStorage(target) {
+  const marker = path.join(target, '.install-storage-v1')
+  if (fs.existsSync(marker)) return
+
+  // Preserve identity and the cached public/fallback snapshot used by the
+  // renderer. We deliberately skip Chromium caches; they can be rebuilt.
+  const entries = [
+    'server-config.json',
+    'station-credential.bin',
+    'cloud-station-credential.bin',
+    'station-installation-id.txt',
+    'IndexedDB',
+    'Local Storage',
+  ]
+  const roots = [...new Set([legacyUserDataPath, legacySessionDataPath].filter(Boolean))]
+  const migrated = []
+  for (const root of roots) {
+    if (!root || path.resolve(root) === path.resolve(target)) continue
+    for (const name of entries) {
+      if (copyLegacyEntry(root, target, name)) migrated.push({ root, name })
+    }
+  }
+
+  // Remove the old copies after the install-relative copy exists. This includes
+  // IndexedDB/Local Storage so the fallback database is not left authoritative
+  // on C: after a station is migrated to an install on another drive.
+  for (const { root, name } of migrated) {
+    const source = path.join(root, name)
+    const targetFile = path.join(target, name)
+    try {
+      if (fs.existsSync(targetFile)) fs.rmSync(source, { recursive:true, force:true })
+    } catch (error) {
+      console.warn(`Unable to remove migrated legacy Customer data ${name}:`, error?.message || error)
+    }
+  }
+
+  try { fs.writeFileSync(marker, new Date().toISOString(), { encoding:'utf8', mode:0o600 }) } catch {}
+}
+
+function configureCustomerInstallStorage() {
+  const target = customerLocalDataPath()
+  try {
+    fs.mkdirSync(target, { recursive:true })
+    migrateLegacyCustomerStorage(target)
+    app.setPath('userData', target)
+    app.setPath('sessionData', target)
+    if (process.platform === 'win32') {
+      try { execFileSync('attrib.exe', ['+H', target], { windowsHide:true, stdio:'ignore' }) } catch (error) {
+        console.warn('Unable to mark Customer local-data folder hidden:', error?.message || error)
+      }
+    }
+    return target
+  } catch (error) {
+    // Never silently fall back to C:\Users\...\AppData. If the chosen install
+    // directory is not writable, fail clearly so the station is not split over
+    // two drives and does not lose its fallback identity after disk imaging.
+    const wrapped = new Error(`Customer Station cannot initialize local data beside the installed app: ${target}. Choose a writable installation folder. ${error?.message || error}`)
+    wrapped.code = 'CUSTOMER_INSTALL_STORAGE_UNAVAILABLE'
+    throw wrapped
+  }
+}
+
+const customerDataRoot = configureCustomerInstallStorage()
 const ACTIVE_WIDTH = 960
 const ACTIVE_HEIGHT = 680
 const WINDOW_STATES = Object.freeze({ LOCKED:'locked', IDLE:'idle', ACTIVE:'active' })
@@ -603,6 +698,10 @@ app.whenReady().then(() => {
   ipcMain.on('client:get-installation-id', event => {
     if (!isTrustedRenderer(event)) { event.returnValue=''; return }
     event.returnValue=readInstallationId()
+  })
+  ipcMain.on('client:get-local-data-path', event => {
+    if (!isTrustedRenderer(event)) { event.returnValue=''; return }
+    event.returnValue=customerDataRoot
   })
   handleTrusted('client:set-cloud-station-credential', (_event, value) => writeCloudStationCredential(String(value || '').slice(0, 16384)))
   handleTrusted('client:clear-cloud-station-credential', () => writeCloudStationCredential(''))

@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   getStationCredential:() => ipcRenderer.sendSync('client:get-station-credential'),
   getCloudStationCredential:() => ipcRenderer.sendSync('client:get-cloud-station-credential'),
   getInstallationId:() => ipcRenderer.sendSync('client:get-installation-id'),
+  getLocalDataPath:() => ipcRenderer.sendSync('client:get-local-data-path'),
   getServerConfig:() => ipcRenderer.sendSync('client:server-config:get'),
   setServerConfig:value => ipcRenderer.invoke('client:server-config:set',value),
   setStationCredential:value => ipcRenderer.invoke('client:set-station-credential',value),

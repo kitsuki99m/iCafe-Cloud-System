@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowUpRight,
   CalendarDays,
+  BookOpenText,
   ChartNoAxesCombined,
   ChevronRight,
   CircleDollarSign,
@@ -29,6 +30,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { formatAdminPeso } from '../lib/numeric.js'
 import { buildRevenueScale, formatRevenueDay, normalizeSevenDayRevenue } from '../lib/revenueChart.js'
+import AdminSectionManual from '../components/admin/AdminSectionManual.jsx'
 
 const STATUS_META = {
   available: { label:'Available', icon:MonitorCheck, tone:'text-teal-dim bg-teal/10', dot:'bg-teal' },
@@ -119,6 +121,7 @@ export default function OverviewPage(){
   const [data,setData]=useState(null)
   const [error,setError]=useState('')
   const [feedbackOpen,setFeedbackOpen]=useState(false)
+  const [manualOpen,setManualOpen]=useState(false)
   const loadSequenceRef=useRef(0)
   const navigate=useNavigate()
 
@@ -208,6 +211,7 @@ export default function OverviewPage(){
           </div>
           <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
             <AdminQuickFind />
+            <button type="button" onClick={()=>setManualOpen(true)} className="overview-header-control hidden lg:flex" title="Open Overview owner manual"><BookOpenText size={15}/><span className="hidden sm:inline">Manual</span></button>
             <button type="button" onClick={()=>setFeedbackOpen(true)} className="overview-header-control relative" title="Open customer feedback">
               <MessageSquareText size={15}/><span className="hidden sm:inline">Feedback</span>
               {feedbackCount>0&&<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-midnight px-1 text-[9px] font-bold text-soft-white">{feedbackCount>=3?'3+':feedbackCount}</span>}
@@ -303,6 +307,7 @@ export default function OverviewPage(){
       </aside>
     </div>
     <FeedbackInboxModal open={feedbackOpen} onClose={()=>setFeedbackOpen(false)} onChanged={load}/>
+    <AdminSectionManual open={manualOpen} onClose={()=>setManualOpen(false)} section="Overview"/>
   </div>
 }
 

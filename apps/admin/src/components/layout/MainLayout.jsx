@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck, Menu, X } from 'lucide-react'
+import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck, Menu, X, BookOpenText } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import AdminNotificationCenter from '../admin/AdminNotificationCenter.jsx'
@@ -14,6 +14,7 @@ import { useBranding } from '../../hooks/useBranding.js'
 import Button from '../common/Button.jsx'
 import CloudBranchPicker from '../cloud/CloudBranchPicker.jsx'
 import { isCloudAdmin, cloudVerifyPassword } from '../../lib/cloudClient.js'
+import AdminSectionManual, { hasSectionManual } from '../admin/AdminSectionManual.jsx'
 
 const BASE_NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -50,6 +51,7 @@ export default function MainLayout({ children }) {
   const [clock, setClock] = useState(() => new Date())
   const [locked, setLocked] = useState(false)
   const [feedbackOpen,setFeedbackOpen]=useState(false)
+  const [manualOpen,setManualOpen]=useState(false)
   const [mobileNavOpen,setMobileNavOpen]=useState(false)
   const [pin, setPin] = useState('')
   const [password, setPassword] = useState('')
@@ -60,7 +62,7 @@ export default function MainLayout({ children }) {
   const lockDialogRef=useRef(null)
   const previousLockFocusRef=useRef(null)
   useEffect(() => { const timer = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(timer) }, [])
-  useEffect(()=>{setMobileNavOpen(false)},[location.pathname])
+  useEffect(()=>{setMobileNavOpen(false);setManualOpen(false)},[location.pathname])
   useEffect(()=>{
     if(!mobileNavOpen)return undefined
     const previous=document.body.style.overflow
@@ -210,6 +212,7 @@ export default function MainLayout({ children }) {
               <p className="truncate font-display text-[15px] font-semibold leading-tight text-ink-900">{currentLabel}</p>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-icon-button" title={`${currentLabel} owner manual`} aria-label={`Open ${currentLabel} owner manual`}><BookOpenText size={16}/></button>}
               <AdminNotificationCenter />
               <AnnouncementCenter />
               <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>{isDark ? <Sun size={16}/> : <Moon size={16}/>}</button>
@@ -224,6 +227,7 @@ export default function MainLayout({ children }) {
             <AdminQuickFind />
             <div className="ml-auto flex items-center gap-1.5 text-slate-soft">
               <button type="button" onClick={()=>setFeedbackOpen(true)} className="admin-header-pill hidden lg:flex" title="Open customer feedback"><MessageSquareText size={15}/> Feedback</button>
+              {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-header-pill" title={`Open ${currentLabel} owner manual`}><BookOpenText size={15}/><span className="hidden xl:inline">Manual</span></button>}
               <AdminNotificationCenter />
               <AnnouncementCenter />
               <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>{isDark ? <Sun size={16}/> : <Moon size={16}/>}</button>
@@ -269,6 +273,7 @@ export default function MainLayout({ children }) {
           </div>
         </aside>
       </div>}
+      <AdminSectionManual open={manualOpen} onClose={()=>setManualOpen(false)} section={currentLabel}/>
       {locked && <div className="fixed inset-0 z-[900] flex items-center justify-center bg-midnight/95 p-3 backdrop-blur-[2px] sm:p-6">
         <div ref={lockDialogRef} tabIndex={-1} onKeyDown={containLockFocus} className="admin-modal-shell w-full max-w-sm overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="admin-lock-title">
           <div className="admin-modal-header text-center">
