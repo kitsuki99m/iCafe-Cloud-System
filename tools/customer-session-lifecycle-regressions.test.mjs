@@ -113,16 +113,22 @@ test('Hard power-loss recovery uses a recent persisted lifecycle heartbeat inste
 })
 
 
-test('Station presence uses a three-second offline window in both Café Edge and Cloud Admin',()=>{
+test('Station presence tolerates transient jitter before confirmed offline in Café Edge and Cloud Admin',()=>{
   const server=read('backend/src/server.js')
   const cloudStation=read('apps/customer/src/lib/cloudStation.js')
   const cloudAdmin=read('apps/admin/src/lib/cloudClient.js')
-  assert.match(server,/STATION_DISCONNECT_GRACE_MS = 3000/)
+  const cloudAdminApi=read('supabase/functions/admin-api/index.ts')
+  const cloudStationAdmin=read('supabase/functions/station-admin/index.ts')
+  const presenceSql=read('supabase/migrations/20260914000015_presence_jitter_grace.sql')
+  assert.match(server,/STATION_DISCONNECT_GRACE_MS = 10000/)
   assert.match(server,/releaseStationSession\(pcId,\{reason:'station_disconnect',at:disconnectedAt,markAvailable:false\}\)/)
   assert.match(cloudStation,/heartbeatTimer=setInterval\(\(\)=>void heartbeat\(\),1000\)/)
-  assert.match(cloudAdmin,/cloud_last_seen_at\)\.getTime\(\) < 3_000/)
-  assert.match(cloudAdmin,/!cloudSeen && row\.station_device_id \? "offline" : session \? "occupied"/)
-  assert.match(cloudAdmin,/cloudConnectionStatus: cloudSeen \? "online" : \(row\.station_device_id \? "offline" : "unpaired"\)/)
+  assert.match(cloudAdmin,/cloudHeartbeatAgeMs[\s\S]*< 10_000/)
+  assert.match(cloudAdmin,/!cloudOnline && row\.station_device_id \? "offline" : session \? "occupied"/)
+  assert.match(cloudAdmin,/cloudConnectionStatus: !row\.station_device_id \? "unpaired" : cloudDegraded \? "reconnecting" : cloudOnline \? "online" : "offline"/)
+  assert.match(cloudAdminApi,/Date\.now\(\)-seen>=10_000/)
+  assert.match(cloudStationAdmin,/STATION_OFFLINE_AFTER_MS=10_000/)
+  assert.match(presenceSql,/cloud_last_seen_at < ts-interval '10 seconds'/)
 })
 
 test('Explicit logout may return a powered-on station to Available, while shutdown/restart waits for presence loss',()=>{

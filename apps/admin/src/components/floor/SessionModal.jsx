@@ -561,7 +561,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
         footer={
           <>
             <Button variant="ghost" disabled={!!sessionAction} onClick={onClose}>Close</Button>
-            {s.billing === 'prepaid' && <Button variant="danger" disabled={!!sessionAction} onClick={() => runSessionAction('forfeit')}>{sessionAction==='forfeit'?'Forfeiting…':'Forfeit Time'}</Button>}
+            {s.billing === 'prepaid' && <Button variant="danger" disabled={!!sessionAction} onClick={() => { const subject=s.customerId?'member':'guest'; const effect=s.customerId?'The member will stay signed in, but this active session and all of its remaining time will be permanently discarded.':'The guest session will end immediately, the Customer Station will return to the login kiosk, and all remaining time will be permanently discarded.'; if (window.confirm(`Forfeit this ${subject} session? ${effect} This cannot be undone.`)) runSessionAction('forfeit') }}>{sessionAction==='forfeit'?'Forfeiting…':'Forfeit Time'}</Button>}
             {s.billing === 'prepaid' && <Button variant="primary" disabled={!!sessionAction || sessionFrozen} onClick={() => runSessionAction('save')}>{sessionFrozen ? 'Session Paused' : sessionAction==='save' ? 'Saving…' : 'Pause & Save'}</Button>}
           </>
         }

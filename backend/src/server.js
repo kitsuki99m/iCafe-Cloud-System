@@ -79,7 +79,10 @@ if (env.cloudEnabled) console.log(`Aezakmi Cloud sync enabled: ${env.supabaseUrl
 const io=new SocketIOServer(server,{cors:{origin:env.corsOrigin==='*'?true:env.corsOrigin.split(',').map(x=>x.trim()).filter(Boolean)}})
 setRealtime(io)
 const stationDisconnectTimers = new Map()
-const STATION_DISCONNECT_GRACE_MS = 3000
+// Network loss is ambiguous; give Socket.IO enough time to complete normal
+// reconnect attempts before we checkpoint/release a paid session. Explicit
+// shutdown/reboot/logout/lock paths still interrupt immediately elsewhere.
+const STATION_DISCONNECT_GRACE_MS = 10000
 
 // Presence is independent from a session's billing state.  A station that
 // reconnects while its guest session is active must immediately become busy

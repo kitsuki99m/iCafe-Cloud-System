@@ -43,7 +43,7 @@ This pass verifies the Customer Electron UI, Café Edge backend, Cloud Station A
    - Pairing no longer starts Cloud runtime heartbeat in the pre-restart Electron process.
    - `pair-station` persists the logical PC as Offline/paired until the clean relaunched Customer Station sends its first `station-runtime` heartbeat.
    - Both Admin reset-pairing and Customer unpair persist Offline (except intentional Maintenance/Reserved state).
-   - Cloud Admin paid-session start/Guest restore now requires a paired station plus a heartbeat fresher than three seconds; a stale persisted `available` value is not enough.
+   - Cloud Admin paid-session start/Guest restore now requires a paired station plus a heartbeat fresher than ten seconds; (the original three-second rule was widened for production jitter tolerance); a stale persisted `available` value is not enough.
 
 ## Verified without a new fix
 

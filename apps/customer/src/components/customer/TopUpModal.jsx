@@ -6,13 +6,13 @@ import NumericInput from '../common/NumericInput.jsx'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import { createOperationKey } from '../../lib/api.js'
 
-const PRESETS = [50, 100, 200]
+const PRESETS = [5, 10, 15, 20]
 
 
 export default function TopUpModal({ open, onClose, pc, customerId, customerName, tier = 'Regular', ratePlans = [] }) {
   const { requestTopUp, settings } = useAppData()
   const [method, setMethod] = useState('counter')
-  const [amount, setAmount] = useState(100)
+  const [amount, setAmount] = useState(PRESETS[0])
   const [customAmount, setCustomAmount] = useState('')
   const [gcashNumber, setGcashNumber] = useState('')
   const [sent, setSent] = useState(false)
@@ -40,7 +40,7 @@ export default function TopUpModal({ open, onClose, pc, customerId, customerName
     setError('')
     setGcashNumber('')
     setCustomAmount('')
-    setAmount(100)
+    setAmount(PRESETS[0])
     setMethod('counter')
   }
 
@@ -137,7 +137,7 @@ export default function TopUpModal({ open, onClose, pc, customerId, customerName
 
           <div>
             <label className="eyebrow mb-1.5 block">Top-Up Amount</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {PRESETS.map((p) => (
                 <button
                   key={p}

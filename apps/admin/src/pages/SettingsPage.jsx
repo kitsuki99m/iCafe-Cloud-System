@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Building2, Check, Cloud, CreditCard, ImageUp, Link2, LockKeyhole, PhilippinePeso, MonitorSmartphone, RefreshCw, ShieldCheck, Unplug } from 'lucide-react'
+import { Building2, BellRing, Check, Cloud, CreditCard, ImageUp, Link2, LockKeyhole, PhilippinePeso, MonitorSmartphone, RefreshCw, ShieldCheck, Unplug, Volume2 } from 'lucide-react'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
 import { useAppData } from '../context/AppDataContext.jsx'
@@ -8,6 +8,7 @@ import { apiGet, apiPost, apiUrl } from '../lib/api.js'
 import fallbackLogo from '../assets/aktura-logo.svg'
 import { isCloudAdmin, cloudBranchId, cloudCreateBranch, cloudGetBranchStatus, cloudGetSubscriptionOverview, cloudInvoke, cloudOrganizationId, cloudSelectBranch } from '../lib/cloudClient.js'
 import { SUBSCRIPTION_PACKAGES, packageDefinition } from '../lib/subscriptionPackages.js'
+import { getAdminSoundPreferences, saveAdminSoundPreferences, testAdminSound } from '../lib/sound.js'
 
 const inputClass = 'w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 outline-none transition-colors focus:border-gold/50'
 
@@ -31,6 +32,8 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState({ cafeName:'', branch:'',branchLocation:'' })
   const [payment, setPayment] = useState({ gcashName:'', gcashNumber:'' })
   const [station,setStation]=useState({defaultBilling:'prepaid',lowTimeWarningMinutes:'5'})
+  const [soundPrefs,setSoundPrefs]=useState(()=>getAdminSoundPreferences())
+  const [savedSoundPrefs,setSavedSoundPrefs]=useState(()=>getAdminSoundPreferences())
   const [numberFormat, setNumberFormat] = useState('decimal')
   const [decimalPlaces, setDecimalPlaces] = useState(3)
   const [saving, setSaving] = useState('')
@@ -80,6 +83,7 @@ export default function SettingsPage() {
   const profileDirty = useMemo(() => profile.cafeName !== (settings.cafeName ?? '') || profile.branch !== (settings.branch ?? '')||profile.branchLocation!==(settings.branchLocation??'') || numberFormat !== (settings.numberFormat === 'whole' ? 'whole' : 'decimal') || decimalPlaces !== Math.max(1,Math.min(3,Number(settings.decimalPlaces)||3)), [profile, numberFormat, decimalPlaces, settings])
   const paymentDirty = useMemo(() => payment.gcashName !== (settings.gcashName ?? '') || payment.gcashNumber !== (settings.gcashNumber ?? ''), [payment, settings])
   const stationDirty=(settings.defaultBilling ?? 'prepaid')!=='prepaid'||station.lowTimeWarningMinutes!==String(settings.lowTimeWarningMinutes ?? 5)
+  const soundDirty=JSON.stringify(soundPrefs)!==JSON.stringify(savedSoundPrefs)
   const stationValid=Number(station.lowTimeWarningMinutes)>0
   const gcashValid = !payment.gcashNumber || /^09\d{9}$/.test(payment.gcashNumber)
   const currentAuthMethod=cloudMode ? 'password' : (user?.authMethod || 'pin')
@@ -94,6 +98,7 @@ export default function SettingsPage() {
   const securityDirty=cloudMode ? Boolean(security.newPassword) : Boolean(security.newPin || security.newPassword || security.authMethod !== currentAuthMethod)
   const securityValid=cloudMode ? (securityDirty && passwordsMatch) : (securityDirty && currentCredentialsReady && newPinValid && passwordsMatch && passwordReady && managementPinReady)
   async function saveSection(name, patch) { setSaving(name); setSaveError(''); try { await updateSettings(patch) } catch(error) { setSaveError(error?.message || 'Unable to save settings.') } finally { setSaving('') } }
+  function saveSoundSettings(){setSaving('sounds');const saved=saveAdminSoundPreferences(soundPrefs);setSavedSoundPrefs(saved);setSoundPrefs(saved);setSaving('')}
   async function selectLogo(file){
     if(!file)return;
     if(!['image/png','image/svg+xml'].includes(file.type)){setLogoWarning('Please choose a PNG or safe SVG logo.');return}
@@ -165,7 +170,7 @@ export default function SettingsPage() {
     <div className="grid items-start gap-5 xl:grid-cols-[190px_minmax(0,1fr)]">
       <nav className="settings-section-nav overview-card sticky top-[112px] hidden p-2 xl:block" aria-label="Settings sections">
         <p className="eyebrow px-3 pb-2 pt-2">Settings</p>
-        {[['settings-branding','Branding',Building2],['settings-payments','Payments',CreditCard],['settings-customer','Customer Station',MonitorSmartphone],['settings-cloud','Cloud',Cloud],['settings-security','Security',ShieldCheck]].map(([id,label,Icon])=><button type="button" key={id} onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-slate-soft transition-colors hover:bg-surface-raised hover:text-ink-900"><Icon size={14}/>{label}</button>)}
+        {[['settings-branding','Branding',Building2],['settings-payments','Payments',CreditCard],['settings-customer','Customer Station',MonitorSmartphone],['settings-sounds','Notification Sounds',BellRing],['settings-cloud','Cloud',Cloud],['settings-security','Security',ShieldCheck]].map(([id,label,Icon])=><button type="button" key={id} onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-slate-soft transition-colors hover:bg-surface-raised hover:text-ink-900"><Icon size={14}/>{label}</button>)}
       </nav>
       <div className="space-y-5">
         <Section id="settings-branding" icon={Building2} title="Branding" description="Cafe identity shown across Admin, Customer Station, and generated reports." dirty={(profileDirty || Boolean(pendingLogoDataUrl)) && profile.cafeName.trim() && profile.branch.trim()} saving={saving==='profile'} onSave={saveProfile}>
@@ -182,6 +187,17 @@ export default function SettingsPage() {
 
         <Section id="settings-customer" icon={MonitorSmartphone} title="Customer Station" description="Default session behavior and time-warning presentation for customer PCs." dirty={stationDirty && stationValid} saving={saving==='station'} onSave={()=>saveSection('station',{defaultBilling:'prepaid',lowTimeWarningMinutes:Number(station.lowTimeWarningMinutes)})}>
           <Field label="Billing mode"><div className="flex h-[38px] items-center rounded-lg border border-surface-line bg-surface-raised/45 px-3 text-sm font-semibold text-ink-900">Prepaid only</div></Field><Field label="Low-time warning (minutes)" hint={!stationValid?'Enter a value greater than zero.':''}><input inputMode="numeric" value={station.lowTimeWarningMinutes} onChange={e=>setStation({...station,lowTimeWarningMinutes:e.target.value.replace(/\D/g,'')})} className={inputClass}/></Field><div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-3 text-[11px] leading-5 text-slate-soft">This production build accepts prepaid sessions only. Rate pricing remains managed under <strong className="text-ink-900">Rates</strong>.</div>
+        </Section>
+
+        <Section id="settings-sounds" icon={BellRing} title="Notification Sounds" description="Browser-local audio alerts for requests, sessions, low time, and station problems." dirty={soundDirty} saving={saving==='sounds'} onSave={saveSoundSettings}>
+          <Field label="Sound notifications">
+            <button type="button" onClick={()=>setSoundPrefs({...soundPrefs,enabled:!soundPrefs.enabled})} className={`flex h-[38px] w-full items-center justify-between rounded-lg border px-3 text-sm font-semibold transition-colors ${soundPrefs.enabled?'border-teal/35 bg-teal/10 text-teal-dim':'border-surface-line bg-surface-raised/45 text-slate-soft'}`}><span>{soundPrefs.enabled?'Enabled':'Muted'}</span><span className={`h-2.5 w-2.5 rounded-full ${soundPrefs.enabled?'bg-teal':'bg-slate-soft/40'}`}/></button>
+          </Field>
+          <Field label={`Volume · ${Math.round(Number(soundPrefs.volume||0)*100)}%`}>
+            <div className="flex h-[38px] items-center gap-3 rounded-lg border border-surface-line bg-surface-raised/45 px-3"><Volume2 size={15} className="shrink-0 text-slate-soft"/><input type="range" min="0" max="100" step="5" value={Math.round(Number(soundPrefs.volume||0)*100)} onChange={e=>setSoundPrefs({...soundPrefs,volume:Number(e.target.value)/100})} className="w-full accent-current"/></div>
+          </Field>
+          <div className="sm:col-span-2 grid gap-2 sm:grid-cols-4">{[['payments','Payments'],['help','Help requests'],['sessions','Sessions'],['stations','PC / network']].map(([key,label])=><button type="button" key={key} onClick={()=>setSoundPrefs({...soundPrefs,[key]:!soundPrefs[key]})} className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${soundPrefs[key]?'border-gold/35 bg-gold/8':'border-surface-line bg-surface'}`}><p className={`text-xs font-semibold ${soundPrefs[key]?'text-gold-dim':'text-slate-soft'}`}>{label}</p><p className="mt-0.5 text-[10px] text-slate-soft">{soundPrefs[key]?'Sound on':'Muted'}</p></button>)}</div>
+          <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="max-w-2xl text-[11px] leading-5 text-slate-soft">Browser audio unlocks after the first click or key press in the Admin tab. Settings are saved only on this browser/device so each counter can choose its own volume.</p><Button type="button" variant="secondary" size="sm" onClick={()=>testAdminSound('help',soundPrefs)}>Test sound</Button></div>
         </Section>
 
         <section id="settings-cloud" className="overview-card scroll-mt-28 overflow-hidden">

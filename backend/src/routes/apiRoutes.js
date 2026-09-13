@@ -4529,6 +4529,24 @@ router.post("/sessions/:id/settle-interrupted", auth, requireRole("admin"), (req
   } catch (e) { next(e); }
 });
 
+router.post("/sessions/:id/forfeit-interrupted-guest", auth, requireRole("admin"), (req, res, next) => {
+  try {
+    const result = transaction(() => {
+      const session = db.prepare("SELECT * FROM computer_sessions WHERE id=? AND status='ended' AND billing_type='prepaid' AND member_id IS NULL AND COALESCE(saved_remaining_seconds,0)>0").get(req.params.id);
+      if (!session) throw Object.assign(new Error("This guest session has no saved time left to forfeit."), { status:409, code:"GUEST_TIME_NOT_RECOVERABLE", expose:true });
+      const forfeitedAt = nowIso();
+      const remainingSeconds = Math.max(0, Number(session.saved_remaining_seconds || 0));
+      const changed = db.prepare("UPDATE computer_sessions SET saved_remaining_seconds=0,end_reason=COALESCE(end_reason,'station_exit')||':forfeited' WHERE id=? AND status='ended' AND COALESCE(saved_remaining_seconds,0)>0").run(session.id);
+      if (changed.changes !== 1) throw Object.assign(new Error("This guest session no longer has recoverable saved time."), { status:409, code:"GUEST_TIME_NOT_RECOVERABLE", expose:true });
+      log(req.auth.userId,"session.forfeit_interrupted_guest","computer_session",session.id,session.pc_id,{ remainingSeconds,forfeitedAt,endReason:session.end_reason || "station_exit" });
+      return { session, remainingSeconds, forfeitedAt };
+    });
+    emitSessionUpdated(result.session.id,{ pcId:result.session.pc_id,memberId:null,reason:"session_forfeited",remainingSeconds:0,interrupted:true });
+    emitDataChanged({ method:"POST",path:`/sessions/${result.session.id}/forfeit-interrupted-guest`,pcId:result.session.pc_id });
+    res.json({ success:true,sessionId:result.session.id,pcId:result.session.pc_id,remainingSeconds:0,forfeitedSeconds:result.remainingSeconds,forfeitedAt:result.forfeitedAt });
+  } catch (e) { next(e); }
+});
+
 router.post("/sessions/:id/restore-interrupted-guest", auth, requireRole("admin"), (req, res, next) => {
   try {
     const result = transaction(() => {

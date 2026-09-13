@@ -99,7 +99,7 @@ export default function FloorMatrix() {
   useEffect(() => {
     if (requestedStatusFilter !== filter) setFilter(requestedStatusFilter)
   }, [requestedStatusFilter, filter])
-  useEffect(() => { pcs.forEach(pc=>{const session=pc.session;if(pc.status!=='occupied'||session?.billing!=='prepaid')return;const remaining=remainingSessionSeconds(session,now);const key=`${pc.id}:${session.id}`;if(remaining>0&&remaining<=Number(settings.lowTimeWarningMinutes||5)*60&&!alerted.current.has(key)){alerted.current.add(key);playLowTimeAlert()}}) }, [now,pcs,settings.lowTimeWarningMinutes])
+  useEffect(() => { pcs.forEach(pc=>{const session=pc.session;if(pc.status!=='occupied'||session?.billing!=='prepaid')return;const remaining=remainingSessionSeconds(session,now);const key=`${pc.id}:${session.id}`;if(remaining>0&&remaining<=Number(settings.lowTimeWarningMinutes||5)*60&&!alerted.current.has(key)){alerted.current.add(key);playLowTimeAlert(key)}}) }, [now,pcs,settings.lowTimeWarningMinutes])
 
   const stats = useMemo(() => ({
     available:pcs.filter(p=>p.status==='available').length,

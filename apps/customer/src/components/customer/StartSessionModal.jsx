@@ -16,15 +16,10 @@ function startPresets(plan, wallet) {
   if (!plan || plan.mode === 'package') return []
   const balance = Math.max(0, Math.floor(Number(wallet || 0)))
   const minimum = Math.max(1, Math.ceil(Number(minAmountFor(plan) || 1)))
-  const unit = Math.max(0, Math.floor(Number(plan.pesoUnit || 0)))
-  const candidates = [
-    unit >= 5 ? unit : null,
-    minimum >= 5 ? minimum : null,
-    20,
-    50,
-    100,
-    balance,
-  ]
+  // Keep Customer quick-spend choices intentionally small and predictable.
+  // Rate minimums and wallet balance still decide which of these presets are valid;
+  // custom amount remains available for plans that require another amount.
+  const candidates = [5, 10, 15, 20]
   return [...new Set(candidates.filter((value) => Number.isFinite(value) && value >= minimum && value <= balance && value > 0))]
     .sort((a, b) => a - b)
 }

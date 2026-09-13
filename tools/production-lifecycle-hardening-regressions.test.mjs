@@ -11,13 +11,13 @@ test('Customer lifecycle logout does not issue a second authenticated logout aft
   assert.match(auth,/if \(getToken\(\) && !hadPendingLifecycle && lifecycle\?\.ok\)/)
 })
 
-test('Customer total transport outage gets a three-second interruption watchdog even if no socket disconnect event fires',()=>{
+test('Customer total transport outage gets a ten-second confirmed interruption watchdog even if no socket disconnect event fires',()=>{
   const data=read('apps/customer/src/context/AppDataContext.jsx')
   assert.match(data,/scheduleStationDisconnect/)
   assert.match(data,/onSocketError/)
   assert.match(data,/socket\?\.connected/)
   assert.match(data,/releaseStationLifecycle\('station_disconnect',\{allowDeferred:true\}\)/)
-  assert.match(data,/3000/)
+  assert.match(data,/10000/)
 })
 
 test('Guest prepaid expiry can defer lifecycle persistence while immediately leaving the expired session UI',()=>{
@@ -46,10 +46,10 @@ test('Local reset pairing is a paid-session interruption before the station cred
 
 test('Interrupted Guest prepaid restore requires a genuinely Available online station in Edge and Cloud',()=>{
   const edge=read('backend/src/routes/apiRoutes.js')
-  const sql=read('supabase/migrations/20260913000012_production_session_lifecycle_hardening.sql')
+  const sql=read('supabase/migrations/20260914000015_presence_jitter_grace.sql')
   const admin=read('supabase/functions/admin-api/index.ts')
   assert.match(edge,/restore-interrupted-guest[\s\S]*String\(pc\.status \|\| ""\)\.toLowerCase\(\) !== "available"/)
-  assert.match(sql,/cloud_last_seen_at < ts-interval '3 seconds'/)
+  assert.match(sql,/cloud_last_seen_at < ts-interval '10 seconds'/)
   assert.match(sql,/lower\(coalesce\(station\.status,''\)\)<>'available'/)
   assert.match(admin,/restore-interrupted-guest[\s\S]*requireAvailableStation/)
 })
@@ -77,7 +77,7 @@ test('Cloud Admin station lifecycle prevents fabricated availability, unsafe del
 test('Cloud paid-session starts and restores are rejected unless station availability and heartbeat are current',()=>{
   const admin=read('supabase/functions/admin-api/index.ts')
   assert.match(admin,/async function requireAvailableStation/)
-  assert.match(admin,/Date\.now\(\)-seen>=3000/)
+  assert.match(admin,/Date\.now\(\)-seen>=10_000/)
   assert.match(admin,/route==='\/sessions\/start'[\s\S]*requireAvailableStation/)
   assert.match(admin,/restore-interrupted-guest[\s\S]*requireAvailableStation/)
 })

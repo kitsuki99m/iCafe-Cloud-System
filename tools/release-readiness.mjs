@@ -20,6 +20,7 @@ const required=[
   'supabase/migrations/20260913000005_business_lifecycle_controls.sql',
   'supabase/migrations/20260913000006_cloud_primary_customer_stations.sql',
   'supabase/migrations/20260913000009_station_repairing.sql',
+  'supabase/migrations/20260914000015_presence_jitter_grace.sql',
   'supabase/functions/admin-api/index.ts',
   'supabase/functions/edge-sync/index.ts',
   'supabase/functions/request-business-access/index.ts',

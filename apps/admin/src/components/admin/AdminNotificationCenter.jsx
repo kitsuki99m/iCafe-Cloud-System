@@ -5,81 +5,7 @@ import { useAppData } from '../../context/AppDataContext.jsx'
 import { connectSocket } from '../../lib/socket.js'
 import { isCloudAdmin } from '../../lib/cloudClient.js'
 import { useLocation } from 'react-router-dom'
-
-function playTopUpPing() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
-    const playPing = (offset, startFreq) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.type = 'sine'
-      const start = ctx.currentTime + offset
-      osc.frequency.setValueAtTime(startFreq, start)
-      osc.frequency.exponentialRampToValueAtTime(startFreq * 1.12, start + 0.18)
-      gain.gain.setValueAtTime(1.0, start)
-      gain.gain.setValueAtTime(1.0, start + 0.55)
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.95)
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.start(start)
-      osc.stop(start + 1.0)
-    }
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {})
-    playPing(0, 880)
-    playPing(1.18, 1046.5)
-    setTimeout(() => ctx.close().catch(() => {}), 2900)
-  } catch {
-    // Audio unavailable or blocked by browser/OS policy.
-  }
-}
-
-function playSupportPing() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
-    const play = (offset, freq) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      const start = ctx.currentTime + offset
-      osc.type = 'triangle'
-      osc.frequency.setValueAtTime(freq, start)
-      gain.gain.setValueAtTime(1.0, start)
-      gain.gain.setValueAtTime(1.0, start + 0.5)
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.9)
-      osc.connect(gain); gain.connect(ctx.destination)
-      osc.start(start); osc.stop(start + 0.95)
-    }
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {})
-    play(0, 660); play(1.05, 784)
-    setTimeout(() => ctx.close().catch(() => {}), 2600)
-  } catch {}
-}
-
-function playBroadcastPing() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
-    const notes = [740, 988, 1175, 988, 740]
-    notes.forEach((frequency, index) => {
-      const start = ctx.currentTime + index * 0.9
-      const oscillator = ctx.createOscillator()
-      const gain = ctx.createGain()
-      oscillator.type = 'sine'
-      oscillator.frequency.setValueAtTime(frequency, start)
-      gain.gain.setValueAtTime(0.0001, start)
-      gain.gain.exponentialRampToValueAtTime(0.12, start + 0.03)
-      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.55)
-      oscillator.connect(gain); gain.connect(ctx.destination)
-      oscillator.start(start); oscillator.stop(start + 0.7)
-    })
-    if (ctx.state === 'suspended') ctx.resume().catch(() => {})
-    setTimeout(() => ctx.close().catch(() => {}), 4900)
-  } catch {}
-}
+import { initAdminSound, playAdminSound } from '../../lib/sound.js'
 
 function methodLabel(method) {
   return method === 'gcash' ? 'GCash' : 'Cash at Counter'
@@ -95,9 +21,13 @@ export default function AdminNotificationCenter() {
   const [actionBusyIds, setActionBusyIds] = useState(() => new Set())
   const triggerRef = useRef(null)
   const seenIds = useRef(new Set())
+  const seenSupportIds = useRef(new Set())
+  const seenExtensionIds = useRef(new Set())
   const primed = useRef(false)
   const actionBusyRef = useRef(new Set())
   const toastTimersRef = useRef(new Set())
+
+  useEffect(() => { initAdminSound() }, [])
 
   function scheduleToastRemoval(id, delay) {
     const timer=setTimeout(() => {
@@ -133,36 +63,65 @@ export default function AdminNotificationCenter() {
     // already pending before this tab opened — only genuinely new ones.
     if (!primed.current) {
       pending.forEach((r) => seenIds.current.add(r.id))
+      openSupport.forEach((r) => seenSupportIds.current.add(r.id))
+      pendingExtensions.forEach((r) => seenExtensionIds.current.add(r.id))
       primed.current = true
       return
     }
     const fresh = pending.filter((r) => !seenIds.current.has(r.id))
     if (fresh.length === 0) return
-    fresh.forEach((r) => seenIds.current.add(r.id))
+    fresh.forEach((r) => {
+      seenIds.current.add(r.id)
+      playAdminSound('payment', { dedupeKey:`topup:${r.id}` })
+    })
     setToasts((t) => [...fresh, ...t])
     fresh.forEach((r) => scheduleToastRemoval(r.id, 7000))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingKey])
 
   useEffect(() => {
+    if (!primed.current) return
+    const fresh = openSupport.filter((r) => !seenSupportIds.current.has(r.id))
+    fresh.forEach((r) => {
+      seenSupportIds.current.add(r.id)
+      playAdminSound('help', { dedupeKey:`support:${r.id}` })
+      const support = { ...r, support:true, customerName:r.customerName || 'Customer', pcLabel:r.pcLabel || 'Unknown PC' }
+      setToasts((t) => [support, ...t])
+      scheduleToastRemoval(r.id, 9000)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supportKey])
+
+  const extensionKey = pendingExtensions.map((r) => r.id).join(',')
+  useEffect(() => {
+    if (!primed.current) return
+    pendingExtensions.forEach((r) => {
+      if (seenExtensionIds.current.has(r.id)) return
+      seenExtensionIds.current.add(r.id)
+      playAdminSound('payment', { dedupeKey:`extension:${r.id}` })
+    })
+  }, [extensionKey, pendingExtensions])
+
+  useEffect(() => {
     if (isCloudAdmin()) return undefined
     const socket = connectSocket()
     const onTopUpRequest = (request) => {
       seenIds.current.add(request.id)
-      playTopUpPing()
+      playAdminSound('payment', { dedupeKey:`topup:${request.id}` })
       setToasts((t) => [{ ...request, customerName: request.customerName || 'Customer', pcLabel: request.pcLabel || 'Unknown PC' }, ...t])
       scheduleToastRemoval(request.id, 7000)
     }
     const onSupportRequest = (request) => {
-      playSupportPing()
+      seenSupportIds.current.add(request.id)
+      playAdminSound('help', { dedupeKey:`support:${request.id}` })
       const support = { ...request, support:true, customerName:request.customerName || 'Customer', pcLabel:request.pcLabel || 'Unknown PC' }
       setToasts((t) => [support, ...t])
       scheduleToastRemoval(request.id, 9000)
     }
     socket.on('topup:new_request', onTopUpRequest)
     socket.on('support:new_request', onSupportRequest)
-    const onRatePlansUpdated = () => playBroadcastPing()
-    const onAnnouncementsUpdated = () => playBroadcastPing()
+    const onRatePlansUpdated = () => playAdminSound('broadcast', { dedupeKey:'rate-plans' })
+    const onAnnouncementsUpdated = () => playAdminSound('broadcast', { dedupeKey:'announcements' })
     socket.on('rate-plans:updated', onRatePlansUpdated)
     socket.on('announcements:updated', onAnnouncementsUpdated)
     return () => { socket.off('topup:new_request', onTopUpRequest); socket.off('support:new_request', onSupportRequest); socket.off('rate-plans:updated', onRatePlansUpdated); socket.off('announcements:updated', onAnnouncementsUpdated) }

@@ -6,6 +6,7 @@ import { showToast } from '../lib/toast.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { isCloudAdmin, cloudBranchId } from '../lib/cloudClient.js'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../lib/sessionTime.js'
+import { playAdminSound } from '../lib/sound.js'
 
 const AppDataContext = createContext(null)
 const suppressedCommandToastIds = new Set()
@@ -268,12 +269,25 @@ export function AppDataProvider({ children }) {
         if (payload.status === 'completed' || payload.status === 'failed') suppressedCommandToastIds.delete(payload.id)
         return
       }
-      if(payload?.status==='completed') showToast({title:'Station command completed',message:'The customer station acknowledged the command.'})
-      if(payload?.status==='failed') showToast({title:'Station command failed',message:payload?.result?.error || 'The station did not complete the command.',tone:'warning'})
+      if(payload?.status==='completed') {
+        playAdminSound('success', { dedupeKey:`command:${payload.id || 'completed'}` })
+        showToast({title:'Station command completed',message:'The customer station acknowledged the command.'})
+      }
+      if(payload?.status==='failed') {
+        playAdminSound('station-warning', { dedupeKey:`command:${payload.id || 'failed'}` })
+        showToast({title:'Station command failed',message:payload?.result?.error || 'The station did not complete the command.',tone:'warning'})
+      }
     }
     const onPcPresence = (payload) => {
       if (!payload?.pcId) return
-      setState((current) => ({ ...current, pcs: current.pcs.map((pc) => String(pc.id) === String(payload.pcId) ? { ...pc, status:payload.online ? (pc.session ? 'occupied' : 'available') : 'offline' } : pc) }))
+      setState((current) => {
+        const previous=current.pcs.find((pc)=>String(pc.id)===String(payload.pcId))
+        const nextStatus=payload.online ? (previous?.session ? 'occupied' : 'available') : 'offline'
+        if (!payload.online && previous && previous.status !== 'offline') {
+          playAdminSound('station-warning', { dedupeKey:`offline:${payload.pcId}`, dedupeMs:10000 })
+        }
+        return { ...current, pcs: current.pcs.map((pc) => String(pc.id) === String(payload.pcId) ? { ...pc, status:nextStatus } : pc) }
+      })
     }
 
     // Top-ups are inserted immediately so the pending queue updates without
@@ -409,7 +423,7 @@ export function AppDataProvider({ children }) {
   function startSession(pc, sessionInput) {
     const pendingId=`pending:${Date.now()}`
     optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'occupied',session:{id:pendingId,pcId:pc.id,customerId:sessionInput.customerId??null,customerName:sessionInput.customerName??'Starting…',billing:sessionInput.billing??'prepaid',ratePlanId:sessionInput.ratePlanId??null,startedAt:Date.now(),observedAt:Date.now(),pending:true}}:item)}))
-    return apiPost('/sessions/start', { pcId:pc.id, pcIp:pc.ipAddress, ...sessionInput }).then((result) => { showToast({ title:'Session started', message:`${pc.label} is now in use.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
+    return apiPost('/sessions/start', { pcId:pc.id, pcIp:pc.ipAddress, ...sessionInput }).then((result) => { playAdminSound('success', { dedupeKey:`session-start:${pc.id}` }); showToast({ title:'Session started', message:`${pc.label} is now in use.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
   }
 
   function getSessionPreview(pc) {
@@ -421,7 +435,7 @@ export function AppDataProvider({ children }) {
     if (!pc?.session?.id) return Promise.resolve()
     const sessionId=pc.session.id
     optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
-    return apiPost(`/sessions/${sessionId}/end`, { disposition, ...options }).then((result) => { showToast({ title:disposition==='settle'?'Legacy session settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
+    return apiPost(`/sessions/${sessionId}/end`, { disposition, ...options }).then((result) => { playAdminSound('success', { dedupeKey:`session-end:${pc.id}` }); showToast({ title:disposition==='settle'?'Legacy session settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
   }
 
   function refundSession(pc) {
@@ -541,7 +555,7 @@ export function AppDataProvider({ children }) {
 
   function approveTopUp(id) {
     optimisticState((current)=>({...current,topUpRequests:current.topUpRequests.map((r)=>String(r.id)===String(id)?{...r,status:'approved',pending:true}:r)}))
-    return apiPatch(`/top-ups/${id}/approve`).then((result) => { showToast({ title:'Top up approved', message:'Wallet balance was updated.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
+    return apiPatch(`/top-ups/${id}/approve`).then((result) => { playAdminSound('success', { dedupeKey:`topup-approved:${id}` }); showToast({ title:'Top up approved', message:'Wallet balance was updated.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
   }
 
   function rejectTopUp(id) {

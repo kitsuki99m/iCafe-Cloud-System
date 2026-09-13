@@ -262,7 +262,9 @@ export function AppDataProvider({ children }) {
       stationDisconnectReason=reason
       // A Cloud-primary station is healthy when either Supabase is live or
       // Café Edge fallback has established its socket. Only a sustained loss
-      // of both transports is a logout boundary.
+      // of both transports is a logout boundary. A ten-second grace window
+      // prevents normal Wi-Fi/Supabase jitter from logging out a healthy paid
+      // session while Socket.IO/Cloud are still attempting to reconnect.
       stationDisconnectTimer=setTimeout(async () => {
         stationDisconnectTimer=null
         const disconnectReason=stationDisconnectReason || reason
@@ -276,7 +278,7 @@ export function AppDataProvider({ children }) {
           await releaseStationLifecycle('station_disconnect',{allowDeferred:true}).catch(() => {})
         }
         window.dispatchEvent(new CustomEvent('aezakmi:station-session-interruption',{detail:{reason:'station_disconnect',transportReason:disconnectReason}}))
-      },3000)
+      },10000)
     }
     const onSocketConnect = () => {
       clearStationDisconnectWatch()
@@ -301,10 +303,22 @@ export function AppDataProvider({ children }) {
       if(!payload?.memberId) return
       setState((current) => ({ ...current, members:current.members.map((member) => sameId(member.id,payload.memberId) ? { ...member, wallet:Number(payload.balance ?? member.wallet ?? 0), walletBalance:Number(payload.balance ?? member.walletBalance ?? 0) } : member) }))
     }
-    const onSessionChanged = () => {
-      // Session state and authentication are separate lifecycles. In
-      // particular, natural prepaid expiry must refresh the member dashboard
-      // without clearing a valid member login.
+    const onSessionChanged = (payload = {}) => {
+      // Session state and authentication are separate lifecycles. A member
+      // whose prepaid time is forfeited remains signed in and returns to the
+      // no-session dashboard. A Guest has no independent account lifecycle, so
+      // an authoritative Guest forfeiture is an immediate kiosk/logout boundary.
+      const reason=String(payload?.reason || '').toLowerCase()
+      const belongsToPc=!payload?.pcId || sameId(payload.pcId,user?.pcId)
+      const belongsToMember=!payload?.memberId || sameId(payload.memberId,user?.memberId)
+      if (reason === 'session_forfeited' && belongsToPc) {
+        clearStationLifecycleMarker().catch?.(() => {})
+        if (user?.role === 'guest') {
+          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason:'session_forfeited' } }))
+          return
+        }
+      }
+      if (user?.role === 'customer' && payload?.memberId && !belongsToMember) return
       queueRefresh()
     }
     const onTopUpUpdated = (payload) => {
@@ -410,6 +424,15 @@ export function AppDataProvider({ children }) {
       }
     }
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
+    const onCloudWakeup = (event) => {
+      const reason=String(event?.detail?.reason || '').toLowerCase()
+      if (reason === 'session_forfeited' && user?.role === 'guest') {
+        clearStationLifecycleMarker().catch?.(() => {})
+        window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason:'session_forfeited', source:'cloud' } }))
+        return
+      }
+      queueRefresh()
+    }
     if (cloudPrimary) {
       if (cloudStationTransport()==='fallback') {
         connectFallbackSocket()
@@ -418,6 +441,7 @@ export function AppDataProvider({ children }) {
       cloudRefreshInterval=setInterval(queueRefresh,user?.role === 'customer' ? 1000 : 5000)
       window.addEventListener('aezakmi:station-transport',onTransport)
       window.addEventListener('aezakmi:cloud-station-command',onCloudCommand)
+      window.addEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup)
     } else connectFallbackSocket()
 
     const onStationEnrolled=()=>{ if(!cloudPrimary || cloudStationTransport()==='fallback'){disconnectFallbackSocket();connectFallbackSocket()} }
@@ -428,6 +452,7 @@ export function AppDataProvider({ children }) {
       window.removeEventListener('aezakmi:station-enrolled',onStationEnrolled)
       window.removeEventListener('aezakmi:station-transport',onTransport)
       window.removeEventListener('aezakmi:cloud-station-command',onCloudCommand)
+      window.removeEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup)
       if(cloudRefreshInterval)clearInterval(cloudRefreshInterval)
       clearTimeout(refreshTimer)
       clearStationDisconnectWatch()
@@ -445,12 +470,13 @@ export function AppDataProvider({ children }) {
     setState((current) => updater(current))
   }
 
-  function endSession(pc) {
+  function endSession(pc, options = {}) {
     if (!pc?.session?.id) return Promise.resolve()
     const sessionId=pc.session.id
     const path = user?.role === 'guest' ? `/public/sessions/${sessionId}/end` : `/sessions/${sessionId}/end`
+    const disposition=String(options?.disposition || 'save').toLowerCase()
     optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>sameId(item.id,pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item),currentClientPc:sameId(current.currentClientPc?.id,pc.id)?{...current.currentClientPc,status:'available',session:null,pendingSessionEnd:sessionId}:current.currentClientPc}))
-    return apiPost(path).then(async(data)=>{await clearStationLifecycleMarker();refresh();return data}).catch((error)=>{refresh();throw error})
+    return apiPost(path, { disposition }).then(async(data)=>{await clearStationLifecycleMarker();refresh();return data}).catch((error)=>{refresh();throw error})
   }
 
   function getMemberWallet(memberId) {

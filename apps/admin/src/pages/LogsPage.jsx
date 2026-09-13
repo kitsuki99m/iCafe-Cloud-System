@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CircleDollarSign, Clock3, RefreshCw, RotateCcw, ScrollText, Search, SlidersHorizontal } from 'lucide-react'
+import { AlertTriangle, CircleDollarSign, Clock3, RefreshCw, RotateCcw, ScrollText, Search, SlidersHorizontal } from 'lucide-react'
 import { apiGet, apiPost } from '../lib/api.js'
 import SidePanel from '../components/common/SidePanel.jsx'
 import { AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
@@ -116,6 +116,22 @@ export default function LogsPage() {
     }
   }
 
+  async function forfeitInterruptedGuest(item) {
+    if (!item?.id || processingId) return
+    const minutes = Math.max(0, Math.ceil(Number(item.remainingSeconds || 0) / 60))
+    if (!window.confirm(`Permanently forfeit ${minutes} saved guest minute${minutes === 1 ? '' : 's'} from ${item.pcLabel || 'this station'}? This cannot be undone.`)) return
+    setProcessingId(item.id)
+    setError('')
+    try {
+      await apiPost(`/sessions/${encodeURIComponent(item.id)}/forfeit-interrupted-guest`, {})
+      await loadLogs()
+    } catch (err) {
+      setError(err?.message || 'Unable to forfeit the interrupted guest time.')
+    } finally {
+      setProcessingId('')
+    }
+  }
+
   const logRail = <>
     <AdminRailCard title="Audit snapshot" subtitle="Operational activity currently loaded.">
       <div className="space-y-2">
@@ -161,7 +177,7 @@ export default function LogsPage() {
         </div>)}
         {recoverableGuestSessions.map((item)=><div key={`restore-${item.id}`} className="overview-soft-card flex flex-wrap items-center justify-between gap-3 p-3">
           <div className="min-w-0"><p className="text-xs font-semibold text-ink-900">Saved guest time · {item.pcLabel || item.pcId || 'Station'}</p><p className="mt-1 text-[10px] text-slate-soft">Interrupted {formatTime(item.endedAt)} · {String(item.endReason || 'interrupted').replaceAll('_',' ')}</p><p className="stat-figure mt-1 text-sm font-semibold text-teal-dim">{Math.floor(Number(item.remainingSeconds || 0)/3600)}h {String(Math.floor((Number(item.remainingSeconds || 0)%3600)/60)).padStart(2,'0')}m saved</p></div>
-          <button type="button" disabled={processingId===item.id} onClick={()=>restoreGuest(item)} className="inline-flex items-center gap-2 rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-50"><RotateCcw size={13}/>Restore guest</button>
+          <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>restoreGuest(item)} className="inline-flex items-center gap-2 rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-50"><RotateCcw size={13}/>Restore guest</button><button type="button" disabled={processingId===item.id} onClick={()=>forfeitInterruptedGuest(item)} className="inline-flex items-center gap-2 rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-[10px] font-semibold text-ember-dim disabled:opacity-50"><AlertTriangle size={13}/>Forfeit</button></div>
         </div>)}
       </div>
     </section>}

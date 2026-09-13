@@ -95,7 +95,7 @@ test('GCash extension payments are linked to the exact extension id instead of m
 
 test('station disconnect releases active sessions after a grace period and never auto-resumes a logged-out station',()=>{
   const server=read('backend/src/server.js')
-  assert.match(server,/STATION_DISCONNECT_GRACE_MS = 3000/)
+  assert.match(server,/STATION_DISCONNECT_GRACE_MS = 10000/)
   assert.match(server,/releaseStationSession\(pcId,\{reason:'station_disconnect',at:disconnectedAt,markAvailable:false\}\)/)
   assert.match(server,/UPDATE auth_sessions SET revoked_at=/)
   assert.doesNotMatch(server,/resumeActiveSession\(presencePcId/)

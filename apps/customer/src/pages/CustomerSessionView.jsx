@@ -294,6 +294,24 @@ export default function CustomerSessionView() {
     }
   }, [logoutBusy, logout]);
 
+  const confirmGuestForfeitLogout = useCallback(async () => {
+    if (logoutBusy || !isGuest || !hasActiveSession || session?.billing !== "prepaid") return;
+    setLogoutBusy(true);
+    setLogoutError("");
+    try {
+      // Guest logout with paid time remaining is deliberately destructive:
+      // end the authoritative session first with `forfeit`, which zeroes any
+      // recoverable remaining time, then clear the local Guest identity.
+      await endSession(activePc, { disposition: "forfeit" });
+      await logout({ reason: "guest_forfeit_logout" });
+      setLogoutOpen(false);
+    } catch (error) {
+      setLogoutError(error?.message || "Unable to end the guest session. Your remaining time was not forfeited. Please try again or ask staff for help.");
+    } finally {
+      setLogoutBusy(false);
+    }
+  }, [logoutBusy, isGuest, hasActiveSession, session?.billing, endSession, activePc, logout]);
+
   const handleThisPc = useCallback(() => {
     if (logoutBusy) return;
     // A legacy non-prepaid session can exist only from an older deployment.
@@ -303,8 +321,13 @@ export default function CustomerSessionView() {
       void handleHelp();
       return;
     }
+    if (isGuest && hasActiveSession && session?.billing === "prepaid" && Number(remainingSeconds || 0) > 0) {
+      setLogoutError("");
+      setLogoutOpen(true);
+      return;
+    }
     confirmLogout();
-  }, [logoutBusy, legacyBillingSession, handleHelp, confirmLogout]);
+  }, [logoutBusy, legacyBillingSession, handleHelp, isGuest, hasActiveSession, session?.billing, remainingSeconds, confirmLogout]);
 
   useEffect(() => {
     const c = window.aezakmiClient;
@@ -1006,6 +1029,38 @@ export default function CustomerSessionView() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={logoutOpen}
+        onClose={() => { if (!logoutBusy) { setLogoutOpen(false); setLogoutError(""); } }}
+        eyebrow="Guest session"
+        title="Forfeit remaining session time?"
+        description="Logging out now will stop this Guest session immediately and permanently discard any unused prepaid time."
+        maxWidth="max-w-md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => { setLogoutOpen(false); setLogoutError(""); }} disabled={logoutBusy}>
+              Keep Session
+            </Button>
+            <Button variant="danger" onClick={confirmGuestForfeitLogout} disabled={logoutBusy}>
+              {logoutBusy ? "Ending session…" : "Forfeit & Log Out"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div className="rounded-xl border border-ember/25 bg-ember/8 px-3 py-3 text-[13px] leading-5 text-ink-900">
+            <p className="font-semibold text-ember-dim">This cannot be undone.</p>
+            <p className="mt-1 text-slate-soft">
+              You currently have <span className="font-semibold text-ink-900">{formatClock(Math.max(0, remainingSeconds || 0))}</span> remaining.
+              Confirming will set that remaining time to zero, end the session, and return this PC to the login kiosk.
+            </p>
+          </div>
+          {logoutError && (
+            <p className="rounded-xl border border-ember/30 bg-ember/10 px-3 py-2 text-[12px] leading-5 text-ember-dim">{logoutError}</p>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         open={!!powerConfirm}

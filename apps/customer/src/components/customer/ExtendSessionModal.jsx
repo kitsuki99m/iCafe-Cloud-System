@@ -15,7 +15,7 @@ import { minAmountFor, minutesForAmount, eligibleCustomerPlans } from "../../lib
 import { formatDuration } from "../../lib/duration.js";
 import { createOperationKey } from "../../lib/api.js";
 
-const PRESETS = [50, 100, 200];
+const PRESETS = [5, 10, 15, 20];
 function peso(n) {
   return `₱${Math.floor(Number(n || 0))}`;
 }

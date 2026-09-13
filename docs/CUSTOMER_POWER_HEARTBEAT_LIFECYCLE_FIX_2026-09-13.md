@@ -10,10 +10,10 @@
 - If Cloud/Edge persistence is unavailable, the lifecycle marker remains for startup recovery rather than silently losing paid time.
 
 ## Unexpected station disconnect / heartbeat loss
-- Customer realtime disconnect now uses the same 3-second grace window as Café Edge.
+- Customer realtime disconnect now uses the same 10-second confirmed-outage grace window as Café Edge.
 - Reconnect inside the grace window cancels the interruption.
 - A sustained disconnect checkpoints/releases any pending paid session and clears local member/guest identity.
-- Café Edge already performs the authoritative backend-side release, time checkpoint, auth-session revoke, and PC offline transition after the same 3-second boundary.
+- Café Edge already performs the authoritative backend-side release, time checkpoint, auth-session revoke, and PC offline transition after the same 10-second confirmed-outage boundary.
 
 ## Coverage
 - Added `tools/customer-power-heartbeat-regressions.test.mjs`.

@@ -23,13 +23,13 @@ test('Electron power commands persist the interruption marker before the Windows
   assert.ok(start>=0&&marker>start&&notify>marker&&execute>notify)
 })
 
-test('Sustained Customer realtime loss uses the same three-second offline boundary and clears signed-in UI',()=>{
+test('Sustained Customer realtime loss requires a ten-second confirmed outage before clearing signed-in UI',()=>{
   const data=read('apps/customer/src/context/AppDataContext.jsx')
   const auth=read('apps/customer/src/context/AuthContext.jsx')
   assert.match(data,/const onSocketDisconnect = \(socketReason\)/)
   assert.match(data,/releaseStationLifecycle\('station_disconnect',\{allowDeferred:true\}\)/)
   assert.match(data,/aezakmi:station-session-interruption/)
-  assert.match(data,/\},3000\)/)
+  assert.match(data,/\},10000\)/)
   assert.match(data,/target\.on\('disconnect', onSocketDisconnect\)/)
   assert.match(auth,/aezakmi:station-session-interruption/)
   assert.match(auth,/onStationSessionInterruption[\s\S]*lock\(\)/)

@@ -459,14 +459,17 @@ async function cloudPcs(branchId) {
   }
   return (stations || []).map((row) => {
     const session = sessionsByPc.get(String(row.local_id));
-    const cloudSeen = row.cloud_last_seen_at ? Date.now() - new Date(row.cloud_last_seen_at).getTime() < 3_000 : false;
+    const cloudHeartbeatAgeMs = row.cloud_last_seen_at ? Date.now() - new Date(row.cloud_last_seen_at).getTime() : Number.POSITIVE_INFINITY;
+    const cloudOnline = Number.isFinite(cloudHeartbeatAgeMs) && cloudHeartbeatAgeMs < 10_000;
+    const cloudDegraded = cloudOnline && cloudHeartbeatAgeMs >= 3_000;
     const persistedStatus = String(row.status || "offline").toLowerCase();
     const maintenance = persistedStatus === "maintenance";
     // Power/lifecycle commands intentionally persist Offline before the OS
     // exits. Do not reinterpret that as Available merely because the last
-    // heartbeat is still inside the three-second freshness window. A genuine
-    // reconnect heartbeat will persist Available again.
-    const status = maintenance ? "maintenance" : !cloudSeen && row.station_device_id ? "offline" : session ? "occupied" : persistedStatus === "offline" ? "offline" : persistedStatus === "reserved" ? "reserved" : cloudSeen ? "available" : (row.status || "offline");
+    // heartbeat is still inside the ten-second confirmed-offline window.
+    // Between 3s and 10s we keep the last usable station state and expose a
+    // reconnecting/degraded transport marker instead of flickering Offline.
+    const status = maintenance ? "maintenance" : !cloudOnline && row.station_device_id ? "offline" : session ? "occupied" : persistedStatus === "offline" ? "offline" : persistedStatus === "reserved" ? "reserved" : cloudOnline ? "available" : (row.status || "offline");
     return {
       id: String(row.local_id),
       pcNumber: row.pc_number ?? row.local_id,
@@ -478,8 +481,9 @@ async function cloudPcs(branchId) {
       session: cloudSessionView(session),
       stationDeviceId: row.station_device_id || null,
       cloudLastSeenAt: row.cloud_last_seen_at || null,
-      cloudConnectionStatus: cloudSeen ? "online" : (row.station_device_id ? "offline" : "unpaired"),
-      cloudOnline: cloudSeen,
+      cloudConnectionStatus: !row.station_device_id ? "unpaired" : cloudDegraded ? "reconnecting" : cloudOnline ? "online" : "offline",
+      cloudOnline,
+      cloudDegraded,
       edgeId: row.edge_id || null,
       createdAt: row.created_at || null,
       updatedAt: row.updated_at || null,

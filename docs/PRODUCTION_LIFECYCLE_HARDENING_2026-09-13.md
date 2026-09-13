@@ -14,7 +14,7 @@ This pass hardens Customer Station, Café Edge, Cloud/Supabase, and Admin statio
 
 ## Transport and Customer UI
 
-- Customer has a 3-second total-transport outage watchdog covering Cloud and local Café Edge.
+- Customer now uses a 10-second confirmed total-transport outage watchdog covering Cloud and local Café Edge (superseding the original 3-second production setting).
 - A Cloud failure alone does not log out a working local Edge session; both paths must be unavailable for the outage boundary.
 - Duplicate `/auth/logout` is skipped when the station lifecycle endpoint already revoked the active auth token.
 - Active guest prepaid/postpaid sessions enter Guest Session UI automatically.
