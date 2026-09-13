@@ -21,6 +21,7 @@ export default function App() {
   if (authLoading) return <div className="flex min-h-screen items-center justify-center"><div className="panel px-6 py-5">Checking admin session…</div></div>
   if (!user) return <><AdminLoginForm /><ToastContainer /></>
   if (user.cloud && user.cloudInviteSetup) return <><CloudInviteSetup /><ToastContainer /></>
+  if (user.cloud && user.cloudBusinessSuspended) return <><CloudAccessPending suspended /><ToastContainer /></>
   if (user.cloud && user.cloudDeveloper && user.cloudNeedsSetup) return <><DeveloperConsolePage standalone /><ToastContainer /></>
   if (user.cloud && user.cloudNeedsSetup) return <><CloudAccessPending /><ToastContainer /></>
   return <>

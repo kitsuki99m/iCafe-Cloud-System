@@ -3,7 +3,7 @@ import { apiGet, apiPost, setToken, getToken } from '../lib/api.js'
 import { isCloudAdmin, cloudConfigReady, cloudGetUser, cloudResolveAccess, cloudSignIn, cloudSignOut, cloudUpdatePassword, cloudConsumeAuthCallback, cloudInvitationSetupPending, cloudClearInvitationSetup, cloudActivateRegistration } from '../lib/cloudClient.js'
 
 const C=createContext(null)
-function cloudUserShape(cloudUser,access){return{id:cloudUser.id,email:cloudUser.email,name:cloudUser.user_metadata?.name||cloudUser.email||'Administrator',role:'admin',cloudRole:access.role,authMethod:'password',cloud:true,cloudNeedsSetup:!access.branchId,cloudDeveloper:Boolean(access.platformDeveloper),cloudInviteSetup:cloudInvitationSetupPending()}}
+function cloudUserShape(cloudUser,access){const status=access.organizationStatus||null,suspended=status==='suspended'||status==='terminated';return{id:cloudUser.id,email:cloudUser.email,name:cloudUser.user_metadata?.name||cloudUser.email||'Administrator',role:'admin',cloudRole:access.role,authMethod:'password',cloud:true,cloudNeedsSetup:!access.branchId&&!suspended,cloudDeveloper:Boolean(access.platformDeveloper),cloudInviteSetup:cloudInvitationSetupPending(),cloudBusinessStatus:status,cloudBusinessReason:access.organizationReason||null,cloudBusinessSuspended:suspended}}
 
 export function AuthProvider({children}){
   const [user,setUser]=useState(null),[authLoading,setLoading]=useState(true),[mustChange,setMustChange]=useState(false)
@@ -47,7 +47,7 @@ export function AuthProvider({children}){
   }
   async function setupCredentials(payload){if(cloud)return{ok:true};try{const d=await apiPost('/auth/setup-credentials',payload);setUser(d.user);window.aezakmiAdmin?.setAuthenticated?.(true);setMustChange(false);return{ok:true}}catch(e){return{ok:false,error:e.message}}}
   async function updateCredentials(payload){try{if(cloud){if(!payload?.password&&!payload?.newPassword)return{ok:false,error:'Enter a new password.'};await cloudUpdatePassword(payload.newPassword||payload.password);return{ok:true,user}}const d=await apiPost('/auth/update-credentials',payload);setUser(d.user);return{ok:true,user:d.user,adminPinReady:Boolean(d.adminPinReady)}}catch(e){return{ok:false,error:e.message,code:e.code}}}
-  async function refreshCloudAccess(){if(!cloud||!user)return null;const access=await cloudResolveAccess(user.id);setUser(current=>current?{...current,cloudRole:access.role,cloudNeedsSetup:!access.branchId,cloudDeveloper:Boolean(access.platformDeveloper)}:current);return access}
+  async function refreshCloudAccess(){if(!cloud||!user)return null;const access=await cloudResolveAccess(user.id);setUser(current=>current?{...current,cloudRole:access.role,cloudNeedsSetup:!access.branchId&&!['suspended','terminated'].includes(access.organizationStatus||''),cloudDeveloper:Boolean(access.platformDeveloper),cloudBusinessStatus:access.organizationStatus||null,cloudBusinessReason:access.organizationReason||null,cloudBusinessSuspended:['suspended','terminated'].includes(access.organizationStatus||'')}:current);return access}
   async function logout(){try{if(cloud)await cloudSignOut();else if(getToken())await apiPost('/auth/logout')}catch{}if(!cloud)setToken(null);setUser(null);setMustChange(false);window.aezakmiAdmin?.setAuthenticated?.(false)}
   return <C.Provider value={{user,authLoading,mustChange,loginAdminPin,loginAdminPassword,completeCloudInvitation,setupCredentials,updateCredentials,refreshCloudAccess,logout}}>{children}</C.Provider>
 }

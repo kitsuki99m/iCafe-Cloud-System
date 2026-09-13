@@ -181,3 +181,24 @@ where lower(email)=lower('developer@example.com');
 ```
 
 RLS and the developer Edge Function both enforce `is_active=true`.
+
+## Business lifecycle and non-payment controls
+
+Migration `20260913000005_business_lifecycle_controls.sql` adds developer-only lifecycle enforcement without changing the local-cafe availability rule.
+
+The Developer console supports:
+
+- **Copy activation link** — generates a secure Supabase recovery/activation link for an outstanding invited owner. Use this as a manual fallback if SMTP delivery is unavailable.
+- **Cancel invite** — only before activation. Deletes the provisional Auth user and provisional organization while retaining the registration/audit record.
+- **Grace period** — keeps Cloud access available for a default 7-day billing grace period.
+- **Suspend Cloud** — blocks tenant Cloud data/actions and new pairings, but does **not** revoke the existing Edge credential or stop local café sessions. Edge sync remains available so reactivation can reconcile normally.
+- **Reactivate** — restores Cloud access after payment/review.
+- **Terminate business** — blocks Cloud access, revokes active Cloud Edge credentials, expires unused pairing codes, and cancels queued Cloud commands. Local LAN operation is not remotely shut down.
+- **Delete owner login** — available after termination. Removes the Supabase Auth owner account while preserving organization data and the registration audit trail.
+- **Permanently delete data** — available only 30 days after termination and requires typing the exact business name. The organization and tenant data are deleted; the registration/audit record remains.
+
+Every destructive lifecycle action requires a developer-entered reason and is recorded in `registration_audit_logs`.
+
+### SMTP fallback
+
+`Approve & invite` still uses Supabase Auth email invitations. Configure custom SMTP for production delivery. If email is unavailable, use **Copy activation link** and send that link to the verified owner through a trusted channel. The activation link redirects to `AEZAKMI_ADMIN_URL` with the activation marker and the owner still chooses their own password.

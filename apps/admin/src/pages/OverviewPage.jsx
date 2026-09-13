@@ -206,7 +206,7 @@ export default function OverviewPage(){
             <p className="text-[24px] font-semibold tracking-[-0.03em] text-ink-900">Hi, {firstName}</p>
             <p className="mt-1 text-[11px] leading-4 text-slate-soft">Here’s what’s happening across {settings?.cafeName||'the cafe'} today.</p>
           </div>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
             <AdminQuickFind />
             <button type="button" onClick={()=>setFeedbackOpen(true)} className="overview-header-control relative" title="Open customer feedback">
               <MessageSquareText size={15}/><span className="hidden sm:inline">Feedback</span>
