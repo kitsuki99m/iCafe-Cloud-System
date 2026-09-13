@@ -37,7 +37,7 @@ See `CUSTOMER_AUTO_UPDATE_PRICING_AND_QUOTATIONS_2026-09-14.md` for Resend secre
 
 ## Deployment
 
-1. Apply migrations through `20260914000017_platform_pricing_quotes_and_customer_updates.sql`.
+1. Apply migrations through `20260914000018_platform_pricing_quotes_and_customer_updates.sql`.
 2. Redeploy `developer-registrations`, `station-runtime`, and any already-required station/admin Edge Functions.
 3. Rebuild/redeploy the Admin frontend.
 4. Configure quotation email secrets if quotation sending will be used.

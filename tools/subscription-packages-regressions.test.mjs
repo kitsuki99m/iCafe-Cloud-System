@@ -5,7 +5,7 @@ import fs from 'node:fs'
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
 const capMigration = read('supabase/migrations/20260913000014_subscription_packages_station_caps.sql')
-const pricingMigration = read('supabase/migrations/20260914000017_platform_pricing_quotes_and_customer_updates.sql')
+const pricingMigration = read('supabase/migrations/20260914000018_platform_pricing_quotes_and_customer_updates.sql')
 const developer = read('supabase/functions/developer-registrations/index.ts')
 const stationAdmin = read('supabase/functions/station-admin/index.ts')
 const developerUi = read('apps/admin/src/pages/DeveloperConsolePage.jsx')
@@ -14,6 +14,15 @@ const invite = read('supabase/templates/invite.html')
 const recovery = read('supabase/templates/recovery.html')
 
 const expected = { bronze:[10,499], silver:[25,799], gold:[50,1299] }
+
+test('four-tier subscription migration drops the legacy fixed-cap invariant before remapping rows', () => {
+  const drop = pricingMigration.indexOf('alter table public.subscriptions drop constraint if exists subscriptions_package_station_limit_check')
+  const remap = pricingMigration.indexOf('update public.subscriptions')
+  assert.ok(drop >= 0, 'legacy package cap constraint must be dropped')
+  assert.ok(remap >= 0, 'subscription rows must be remapped')
+  assert.ok(drop < remap, 'drop the old fixed-cap constraint before changing plan/max_stations')
+  assert.match(pricingMigration, /greatest\(1, least\(10000, coalesce\(max_stations, 10\)\)\)/)
+})
 
 test('commercial catalog defaults to Bronze, Silver, Gold, and Ultra and remains developer editable', () => {
   for (const [plan, [cap, price]] of Object.entries(expected)) {

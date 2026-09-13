@@ -95,7 +95,7 @@ The feed must be reachable by Customer Stations. If Cloud Admin itself fetches t
 This patch adds update progress/intent telemetry and expands the station command constraint.
 
 ```text
-supabase/migrations/20260914000018_admin_managed_customer_updates.sql
+supabase/migrations/20260914000019_admin_managed_customer_updates.sql
 ```
 
 Apply migrations:

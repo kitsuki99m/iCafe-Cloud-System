@@ -69,18 +69,25 @@ create table if not exists public.platform_quotations (
 create index if not exists platform_quotations_registration_idx on public.platform_quotations(registration_request_id,created_at desc);
 
 -- Migrate the old six-tier fixed catalog into the new four-tier commercial model.
--- Existing >50-PC organizations retain their exact cap and move to Ultra.
-update public.subscriptions
-set plan = case
-  when max_stations <= 10 then 'bronze'
-  when max_stations <= 25 then 'silver'
-  when max_stations <= 50 then 'gold'
-  else 'ultra'
-end,
-updated_at = now()
-where lower(coalesce(plan,'')) in ('bronze','silver','gold','platinum','diamond','ultra','starter','trial','basic','');
-
+-- IMPORTANT: drop the legacy fixed-cap constraint before changing a row's plan.
+-- The old invariant required Bronze=50, Silver=100, Gold=200, etc.; changing
+-- Bronze(50) to Gold(50), for example, would otherwise fail mid-migration.
 alter table public.subscriptions drop constraint if exists subscriptions_package_station_limit_check;
+
+-- Preserve every organization's existing station entitlement while mapping it to
+-- the closest new tier. Existing >50-PC organizations retain their exact cap and
+-- move to Ultra. Defensive clamping keeps legacy/custom rows inside the supported
+-- 1..10000 range before the new invariant is installed.
+update public.subscriptions
+set max_stations = greatest(1, least(10000, coalesce(max_stations, 10))),
+    plan = case
+      when greatest(1, least(10000, coalesce(max_stations, 10))) <= 10 then 'bronze'
+      when greatest(1, least(10000, coalesce(max_stations, 10))) <= 25 then 'silver'
+      when greatest(1, least(10000, coalesce(max_stations, 10))) <= 50 then 'gold'
+      else 'ultra'
+    end,
+    updated_at = now();
+
 alter table public.subscriptions add constraint subscriptions_package_station_limit_check check (
   lower(plan) in ('bronze','silver','gold','ultra') and max_stations between 1 and 10000
 );

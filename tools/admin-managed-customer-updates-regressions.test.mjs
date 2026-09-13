@@ -81,7 +81,7 @@ test('Admin Clients exposes Software Updates and bulk deployment controls',()=>{
 })
 
 test('Supabase migration permits Admin-managed update command names and telemetry',()=>{
-  const sql=read('supabase/migrations/20260914000018_admin_managed_customer_updates.sql')
+  const sql=read('supabase/migrations/20260914000019_admin_managed_customer_updates.sql')
   assert.match(sql,/update_progress/)
   assert.match(sql,/update_install_when_idle/)
   assert.match(sql,/customer_update_check/)

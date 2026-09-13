@@ -20,7 +20,7 @@ This build merges the latest Guest forfeit/refund synchronization lifecycle chan
 - Customer Electron does not autonomously deploy production updates; Admin/Edge is the deployment authority.
 - Customer installation remains blocked until the session lifecycle is safe.
 - Café Edge can cache and serve one verified Customer installer across the branch LAN.
-- Migration `20260914000018_admin_managed_customer_updates.sql` is included after the Guest close migration.
+- Migration `20260914000019_admin_managed_customer_updates.sql` is included after the Guest close migration.
 
 ## Validation
 

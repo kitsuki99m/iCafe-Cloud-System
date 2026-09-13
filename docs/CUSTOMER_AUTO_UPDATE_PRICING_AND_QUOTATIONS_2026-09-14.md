@@ -34,7 +34,7 @@ Bronze, Silver, and Gold PC limits must remain strictly increasing. Ultra remain
 Apply the new migration:
 
 ```text
-supabase/migrations/20260914000017_platform_pricing_quotes_and_customer_updates.sql
+supabase/migrations/20260914000018_platform_pricing_quotes_and_customer_updates.sql
 ```
 
 Using the Supabase CLI from the repository:
