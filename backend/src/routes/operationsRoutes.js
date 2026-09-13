@@ -49,12 +49,23 @@ function transitionRemoteCommand(commandId, status, result) {
     const updated = db.prepare('UPDATE remote_commands SET status=?,executed_at=?,result=? WHERE id=? AND status=?')
       .run(status,executedAt,result?JSON.stringify(result):null,command.id,command.status)
     if (updated.changes !== 1) throw Object.assign(new Error('Command status changed before this acknowledgement was applied.'),{status:409,code:'COMMAND_STATE_CONFLICT',expose:true})
-    const affected = status === 'completed' ? applyCompletedCommand(command) : null
+    let affected = status === 'completed' ? applyCompletedCommand(command) : null
+    let rolledBackLock = false
+    if (status === 'failed' && command.command === 'lock') {
+      const active = db.prepare("SELECT id FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(command.pc_id)
+      const pause = active ? activeSessionPause(active.id) : null
+      // Only undo the pause created by this failed lock command. Never resume
+      // a different/manual pause just because an old command later times out.
+      if (pause && String(pause.command_id || '') === String(command.id)) {
+        affected = resumeActiveSession(command.pc_id,{commandId:command.id,at:executedAt || nowIso()})
+        rolledBackLock = Boolean(affected?.resumed)
+      }
+    }
     if (status === 'failed' && (command.command === 'reboot' || command.command === 'shutdown')) {
       db.prepare("UPDATE pcs SET status='available',updated_at=? WHERE id=? AND status='offline' AND NOT EXISTS (SELECT 1 FROM computer_sessions WHERE pc_id=? AND status='active')")
         .run(executedAt || nowIso(),command.pc_id,command.pc_id)
     }
-    return { command:{...command,status,executed_at:executedAt,result:result?JSON.stringify(result):null}, affected }
+    return { command:{...command,status,executed_at:executedAt,result:result?JSON.stringify(result):null}, affected, rolledBackLock }
   })
 }
 
@@ -63,7 +74,8 @@ function publishRemoteCommandTransition(transition, result) {
   emitToStaff('remote:command-status',{id:command.id,pcId:command.pc_id,status:command.status,result})
   if (command.cloud_command_id) enqueueCloudEvent('cloud_command.ack',{id:command.cloud_command_id,status:command.status,result:result&&typeof result==='object'?result:{}},{entityType:'cloud_command',entityId:command.cloud_command_id})
   if(transition.affected?.session) {
-    emitToRoom(`pc:${command.pc_id}`,'session:updated',{sessionId:transition.affected.session.id,pcId:command.pc_id,memberId:transition.affected.session.member_id,reason:command.command==='unlock'?'session_resumed':'session_paused',locked:command.command!=='unlock'})
+    const resumed = command.command === 'unlock' || transition.rolledBackLock
+    emitToRoom(`pc:${command.pc_id}`,'session:updated',{sessionId:transition.affected.session.id,pcId:command.pc_id,memberId:transition.affected.session.member_id,reason:resumed?'session_resumed':'session_paused',locked:!resumed})
   }
 }
 
@@ -82,8 +94,14 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
     // A station can disappear after accepting a command. Do not let an old
     // queued/running command block every later control action forever.
     const expiryNow=nowIso()
-    db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE pc_id=? AND status IN ('queued','running') AND ((expires_at IS NOT NULL AND expires_at<=?) OR (expires_at IS NULL AND julianday(requested_at)<=julianday('now','-30 seconds')))")
-      .run(expiryNow,JSON.stringify({error:'Station command expired without acknowledgement.',code:'REMOTE_COMMAND_EXPIRED'}),pcId,expiryNow)
+    const expiredCommands=db.prepare("SELECT id FROM remote_commands WHERE pc_id=? AND status IN ('queued','running') AND ((expires_at IS NOT NULL AND expires_at<=?) OR (expires_at IS NULL AND julianday(requested_at)<=julianday('now','-30 seconds')))").all(pcId,expiryNow)
+    for (const expired of expiredCommands) {
+      try {
+        const expiredResult={error:'Station command expired without acknowledgement.',code:'REMOTE_COMMAND_EXPIRED'}
+        const transition=transitionRemoteCommand(expired.id,'failed',expiredResult)
+        publishRemoteCommandTransition(transition,expiredResult)
+      } catch {}
+    }
     const pending=db.prepare("SELECT id FROM remote_commands WHERE pc_id=? AND status IN ('queued','running') LIMIT 1").get(pcId)
     if(pending) return res.status(409).json({success:false,code:'COMMAND_PENDING',error:'Wait for the current station command to finish.'})
     const commandId=id(), requestedAt=nowIso(), warningSeconds=['shutdown','reboot'].includes(command) ? 5 : 0
@@ -105,10 +123,13 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
     emitToRoom(`pc:${pcId}`,'remote:command',{id:commandId,command,payload,warningSeconds,warningExpiresAt,expiresAt})
     if (['shutdown','reboot'].includes(command)) emitToRoom(`pc:${pcId}`,'auth:revoked',{reason:command,pcId,immediate:true})
     setTimeout(() => {
-      const timedOut = db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE id=? AND status IN ('queued','running')").run(nowIso(),JSON.stringify({ error:'Station command acknowledgement timed out.' }),commandId)
-      if (timedOut.changes) {
-        const result={error:'Station command acknowledgement timed out.'}
-        emitToStaff('remote:command-status',{id:commandId,pcId,status:'failed',result})
+      const current=db.prepare("SELECT status FROM remote_commands WHERE id=?").get(commandId)
+      if (current && ['queued','running'].includes(current.status)) {
+        const result={error:'Station command acknowledgement timed out.',code:'REMOTE_COMMAND_TIMEOUT'}
+        try {
+          const transition=transitionRemoteCommand(commandId,'failed',result)
+          publishRemoteCommandTransition(transition,result)
+        } catch { return }
         emitDataChanged({method:'TIMEOUT',path:`/remote-commands/${commandId}`})
       }
     }, Math.max(0, new Date(expiresAt).getTime() - Date.now()))

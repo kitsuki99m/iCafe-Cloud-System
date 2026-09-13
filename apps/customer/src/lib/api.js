@@ -45,8 +45,13 @@ async function localApiFetch(path, options = {}) {
   try {
     const stationIp = window.aezakmiClient?.getLocalIPv4?.() || import.meta.env.VITE_CLIENT_IP || ''
     if (stationIp) headers.set('X-Aezakmi-Client-IP', stationIp)
+    // Café Edge and Aezakmi Cloud use different station credentials. Local
+    // requests must prefer the Edge enrollment token; a Cloud device token is
+    // only a last-resort compatibility fallback and normally belongs only on
+    // Supabase Function requests.
+    const edgeToken = window.aezakmiClient?.getStationCredential?.() || localStorage.getItem('aezakmi.dev.station-token') || ''
     const cloudToken = getCloudStationCredential()?.stationToken || ''
-    const stationToken = cloudToken || window.aezakmiClient?.getStationCredential?.() || localStorage.getItem('aezakmi.dev.station-token') || ''
+    const stationToken = edgeToken || cloudToken
     if (stationToken) headers.set('X-Aezakmi-Station-Token', stationToken)
     const installationId = window.aezakmiClient?.getInstallationId?.() || ''
     if (installationId) headers.set('X-Aezakmi-Installation-Id', installationId)
@@ -77,6 +82,21 @@ export async function apiFetch(path, options = {}) {
     try {
       const data=await cloudStationApiFetch(path,{method,body,operationKey:operationKey || (method!=='GET'?createOperationKey():null),localAuthToken:getToken()||''})
       setFallbackTransportActive(false)
+
+      // Guest sessions are started by Admin and may exist on the LAN Edge a
+      // moment before Cloud sync reflects them. A Cloud `session:null` is not
+      // authoritative proof that this physical PC has no guest session. Probe
+      // the paired Café Edge immediately and prefer its active guest session.
+      // This makes prepaid/postpaid walk-ins leave the member-login kiosk as
+      // soon as staff starts the session, while Cloud remains primary whenever
+      // it already has the active session or Edge is unavailable.
+      const basePath=String(path||'').split('?')[0]
+      if (method==='GET' && basePath==='/guest/session' && !data?.session) {
+        try {
+          const localGuest=await localApiFetch(path, options)
+          if (localGuest?.session) return localGuest
+        } catch {}
+      }
       return data
     } catch (error) {
       if (!shouldFallback(error)) {

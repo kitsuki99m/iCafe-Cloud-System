@@ -6,6 +6,19 @@ import { clearStationLifecycleMarker, hasPendingStationLifecycle, recoverPending
 const C = createContext(null);
 const CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN = "aezakmi.customer.password-setup.deferred-token";
 
+function guestUserFromResponse(data) {
+  const session = data?.session || null;
+  const pc = data?.pc || null;
+  if (!session || !pc) return null;
+  return {
+    role:"guest",
+    name: session.customerName || "Guest",
+    pcId: pc.id,
+    pcIp: pc.ipAddress,
+    guestSession: session,
+  };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setLoading] = useState(true);
@@ -77,12 +90,7 @@ export function AuthProvider({ children }) {
           const d = await apiGet("/guest/session");
           if (!cancelled && d.session) {
             window.aezakmiClient?.unlockClient?.();
-            setUser({
-              role: "guest",
-              name: d.session.customerName || "Guest",
-              pcId: d.pc.id,
-              pcIp: d.pc.ipAddress,
-            });
+            setUser(guestUserFromResponse(d));
           }
         } catch {}
         finally { if (!cancelled) setLoading(false); }
@@ -221,7 +229,7 @@ export function AuthProvider({ children }) {
           setToken(null);
           clearDeferredPasswordSetup();
           window.aezakmiClient?.unlockClient?.();
-          setUser({ role:"guest", name:d.session.customerName || "Guest", pcId:d.pc.id, pcIp:d.pc.ipAddress });
+          setUser(guestUserFromResponse(d));
         }
       } catch {} finally { running=false; }
     };
@@ -284,12 +292,7 @@ export function AuthProvider({ children }) {
       setToken(null);
       clearDeferredPasswordSetup();
       window.aezakmiClient?.unlockClient?.();
-      setUser({
-        role: "guest",
-        name: d.session.customerName || "Guest",
-        pcId: d.pc.id,
-        pcIp: d.pc.ipAddress,
-      });
+      setUser(guestUserFromResponse(d));
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };
@@ -330,12 +333,19 @@ export function AuthProvider({ children }) {
     const reason=String(options?.reason || "logout");
     const allowDeferred=Boolean(options?.allowDeferred);
     let lifecycle={ ok:true, skipped:true };
-    if (hasPendingStationLifecycle()) {
+    const hadPendingLifecycle=hasPendingStationLifecycle();
+    if (hadPendingLifecycle) {
       lifecycle=await releaseStationLifecycle(reason,{ allowDeferred });
       if (!lifecycle?.ok && !allowDeferred) throw lifecycle?.error || new Error("Unable to save the current session before logout.");
     }
     try {
-      if (getToken() && lifecycle?.ok) await apiPost("/auth/logout", { event:reason, interruptedAt:new Date().toISOString() });
+      // /public/station/lifecycle revokes every Customer auth session for this
+      // station after it checkpoints the paid session. Calling /auth/logout
+      // again with that now-revoked token turns a successful logout into a
+      // misleading 401 and can leave the renderer showing an error. Only use
+      // the token-authenticated logout endpoint when there was no active
+      // station lifecycle marker to release.
+      if (getToken() && !hadPendingLifecycle && lifecycle?.ok) await apiPost("/auth/logout", { event:reason, interruptedAt:new Date().toISOString() });
     } catch (error) {
       if (!allowDeferred) throw error;
     }

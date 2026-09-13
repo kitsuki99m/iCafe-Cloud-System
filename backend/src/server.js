@@ -7,7 +7,7 @@ import { ensureBootstrapAdmin } from './db/bootstrapAdmin.js'
 import { Server as SocketIOServer } from 'socket.io'
 import { setRealtime, emitSessionUpdated, emitDataChanged, emitPcPresence } from './realtime.js'
 import jwt from 'jsonwebtoken'
-import { activeSessionPause, closeSessionAndSaveRemaining, isSessionHeartbeatStale, remainingSecondsForSession, releaseStationSession } from './utils/sessionTime.js'
+import { activeSessionPause, closeSessionAndSaveRemaining, isSessionHeartbeatStale, remainingSecondsForSession, releaseStationSession, resumeActiveSession } from './utils/sessionTime.js'
 import { normalizeIp, isValidIpv4 } from './middleware/clientIdentity.js'
 import { stationCredentialMatches } from './utils/stationAuth.js'
 import { startCloudSyncWorker, stopCloudSyncWorker } from './cloud/syncWorker.js'
@@ -20,6 +20,14 @@ await ensureBootstrapAdmin()
 // Process-local acknowledgement timers disappear on restart, so never replay a
 // command inherited from a previous process — especially shutdown/reboot.
 const remoteCommandCleanupAt = new Date().toISOString()
+const inheritedLockCommands=db.prepare("SELECT id,pc_id FROM remote_commands WHERE status IN ('queued','running') AND command='lock'").all()
+for (const command of inheritedLockCommands) {
+  const active=db.prepare("SELECT id FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(command.pc_id)
+  const pause=active ? activeSessionPause(active.id) : null
+  if (pause && String(pause.command_id || '') === String(command.id)) {
+    resumeActiveSession(command.pc_id,{commandId:command.id,at:remoteCommandCleanupAt})
+  }
+}
 db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE status IN ('queued','running')")
   .run(remoteCommandCleanupAt,JSON.stringify({error:'Remote command cancelled because the backend restarted.',code:'REMOTE_COMMAND_SERVER_RESTARTED'}))
 
@@ -78,8 +86,20 @@ const STATION_DISCONNECT_GRACE_MS = 3000
 // reconnects while its guest session is active must immediately become busy
 // again instead of remaining visually offline until another mutation occurs.
 function restorePcPresence(pcId) {
+  const now = new Date().toISOString()
+  const powerPending = db.prepare(`SELECT id FROM remote_commands
+    WHERE pc_id=? AND command IN ('shutdown','reboot') AND status IN ('queued','running')
+      AND (expires_at IS NULL OR expires_at>?) LIMIT 1`).get(pcId, now)
+  // A shutdown/reboot command checkpoints and releases the paid session before
+  // Windows executes it. The station can reconnect its socket during the
+  // warning, but that must never make the seat Available again while power-off
+  // is still pending.
+  if (powerPending) {
+    db.prepare("UPDATE pcs SET status='offline',updated_at=? WHERE id=? AND status<>'maintenance'").run(now, pcId)
+    return
+  }
   db.prepare("UPDATE pcs SET status=CASE WHEN EXISTS (SELECT 1 FROM computer_sessions WHERE pc_id=pcs.id AND status='active') THEN 'occupied' ELSE 'available' END,updated_at=? WHERE id=? AND status='offline'")
-    .run(new Date().toISOString(), pcId)
+    .run(now, pcId)
 }
 
 io.on('connection', (socket) => {
@@ -173,6 +193,13 @@ io.on('connection', (socket) => {
       if (released?.released) emitSessionUpdated(activeSession.id,{pcId:presencePcId,memberId:activeSession.member_id,reason:'station_session_released',endReason:pause.reason,remainingSeconds:released.remainingSeconds,amountDue:released.amountDue,settlementPending:released.settlementPending,locked:true})
     }
     const replayNow=new Date().toISOString()
+    const expiredReplayLocks=db.prepare("SELECT id FROM remote_commands WHERE pc_id=? AND command='lock' AND status IN ('queued','running') AND ((expires_at IS NOT NULL AND expires_at<=?) OR (expires_at IS NULL AND julianday(requested_at)<=julianday('now','-30 seconds')))").all(presencePcId,replayNow)
+    for (const command of expiredReplayLocks) {
+      const expiredCommandPcId=presencePcId
+      const currentSession=db.prepare("SELECT id FROM computer_sessions WHERE pc_id=? AND status='active' ORDER BY started_at DESC LIMIT 1").get(expiredCommandPcId)
+      const currentPause=currentSession ? activeSessionPause(currentSession.id) : null
+      if (currentPause && String(currentPause.command_id || '') === String(command.id)) resumeActiveSession(expiredCommandPcId,{commandId:command.id,at:replayNow})
+    }
     const expiredReplay=db.prepare("UPDATE remote_commands SET status='failed',executed_at=?,result=? WHERE pc_id=? AND status IN ('queued','running') AND ((expires_at IS NOT NULL AND expires_at<=?) OR (expires_at IS NULL AND julianday(requested_at)<=julianday('now','-30 seconds')) OR (status='queued' AND command IN ('shutdown','reboot') AND warning_expires_at IS NOT NULL AND warning_expires_at<=?))")
       .run(replayNow,JSON.stringify({error:'Remote command expired before reconnect replay.',code:'REMOTE_COMMAND_EXPIRED'}),presencePcId,replayNow,replayNow)
     if(expiredReplay.changes) emitDataChanged({method:'EXPIRE',path:'/remote-commands',pcId:presencePcId})

@@ -1745,20 +1745,27 @@ router.post(
       const result = transaction(() => {
         const pc = db.prepare("SELECT id FROM pcs WHERE id=?").get(req.params.id);
         if (!pc) throw Object.assign(new Error("PC not found."), { status:404, code:"PC_NOT_FOUND", expose:true });
-        db.prepare("UPDATE pcs SET station_token_hash=NULL,paired_at=NULL,updated_at=? WHERE id=?").run(now, pc.id);
+        // Reset Pairing is also a station interruption. Persist prepaid time or
+        // freeze postpaid debt before invalidating the station credential.
+        const released = releaseStationSession(pc.id, { reason:'pairing_reset', at:now, markAvailable:false });
+        db.prepare("UPDATE pcs SET station_token_hash=NULL,paired_at=NULL,status=CASE WHEN status='maintenance' THEN status ELSE 'offline' END,updated_at=? WHERE id=?").run(now, pc.id);
         const revoked = db.prepare(`
           UPDATE auth_sessions
           SET revoked_at=?, ended_at=?, end_reason='pairing_reset'
           WHERE pc_id=? AND revoked_at IS NULL
             AND user_id IN (SELECT id FROM users WHERE role='customer')
         `).run(now, now, pc.id).changes;
-        log(req.auth.userId, "pc.pairing_reset", "pc", pc.id, pc.id, { revokedSessions:revoked });
-        return { pcId:pc.id, revoked };
+        log(req.auth.userId, "pc.pairing_reset", "pc", pc.id, pc.id, { revokedSessions:revoked, releasedSessionId:released?.id || null });
+        return { pcId:pc.id, revoked, released };
       });
       const io = getIO();
+      if (result.released?.released) {
+        emitSessionUpdated(result.released.id, { pcId:result.pcId, memberId:result.released.member_id || null, reason:'station_session_released', endReason:'pairing_reset', remainingSeconds:Number(result.released.remainingSeconds || 0), amountDue:Number(result.released.amountDue || 0), settlementPending:Boolean(result.released.settlementPending), locked:true });
+      }
+      emitDataChanged({ method:'PAIRING_RESET', path:`/pcs/${result.pcId}/reset-pairing`, pcId:result.pcId });
       io?.to(`pc:${result.pcId}`).emit('auth:revoked', { reason:'pairing_reset', pcId:result.pcId, at:Date.now() });
       io?.in(`pc:${result.pcId}`).disconnectSockets(true);
-      res.json({ success:true, revokedSessions:result.revoked });
+      res.json({ success:true, revokedSessions:result.revoked, released:Boolean(result.released?.released), sessionId:result.released?.id || null });
     } catch (error) { next(error); }
   },
 );
@@ -4591,6 +4598,7 @@ router.post("/sessions/:id/restore-interrupted-guest", auth, requireRole("admin"
       const pc = db.prepare("SELECT * FROM pcs WHERE id=?").get(oldSession.pc_id);
       if (!pc) throw Object.assign(new Error("The original station no longer exists."), { status:404, code:"PC_NOT_FOUND", expose:true });
       if (String(pc.status || "").toLowerCase() === "maintenance") throw Object.assign(new Error("Take the station out of Maintenance before restoring the guest session."), { status:409, code:"PC_MAINTENANCE", expose:true });
+      if (String(pc.status || "").toLowerCase() !== "available") throw Object.assign(new Error("The original station must be online and Available before restoring saved guest time."), { status:409, code:"PC_NOT_AVAILABLE", expose:true });
       if (db.prepare("SELECT 1 FROM computer_sessions WHERE pc_id=? AND status='active' LIMIT 1").get(oldSession.pc_id)) throw Object.assign(new Error("The original station already has an active session."), { status:409, code:"PC_NOT_AVAILABLE", expose:true });
       const remainingSeconds = Math.max(0, Number(oldSession.saved_remaining_seconds || 0));
       const originalSeconds = Math.max(0, Number(oldSession.prepaid_seconds || 0));

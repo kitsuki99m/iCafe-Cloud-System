@@ -225,6 +225,7 @@ export function AppDataProvider({ children }) {
     let socket = null
     let refreshTimer = null
     let stationDisconnectTimer = null
+    let stationDisconnectReason = null
     let refreshRunning = false
     let refreshTrailing = false
     const runRefresh = async () => {
@@ -234,26 +235,42 @@ export function AppDataProvider({ children }) {
       finally { refreshRunning = false }
     }
     const queueRefresh = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(runRefresh, 75) }
-    const onSocketConnect = () => {
+    const clearStationDisconnectWatch = () => {
       clearTimeout(stationDisconnectTimer)
       stationDisconnectTimer = null
-      queueRefresh()
+      stationDisconnectReason = null
     }
-    const onSocketDisconnect = (socketReason) => {
+    const scheduleStationDisconnect = (reason = 'station_disconnect') => {
       if (user?.role !== 'customer' && user?.role !== 'guest') return
-      clearTimeout(stationDisconnectTimer)
-      // Match Café Edge's authoritative three-second offline boundary. A brief
-      // reconnect does nothing; a sustained loss logs the local UI out and
-      // checkpoints/recoverably marks any active paid session.
+      if (stationDisconnectTimer) return
+      stationDisconnectReason=reason
+      // A Cloud-primary station is healthy when either Supabase is live or
+      // Café Edge fallback has established its socket. Only a sustained loss
+      // of both transports is a logout boundary.
       stationDisconnectTimer=setTimeout(async () => {
         stationDisconnectTimer=null
+        const disconnectReason=stationDisconnectReason || reason
+        stationDisconnectReason=null
+        if (cloudPrimary && cloudStationTransport() === 'cloud') return
+        if (socket?.connected) return
         if (hasPendingStationLifecycle()) {
           await releaseStationLifecycle('station_disconnect',{allowDeferred:true}).catch(() => {})
         }
-        window.dispatchEvent(new CustomEvent('aezakmi:station-session-interruption',{detail:{reason:'station_disconnect',socketReason}}))
+        window.dispatchEvent(new CustomEvent('aezakmi:station-session-interruption',{detail:{reason:'station_disconnect',transportReason:disconnectReason}}))
       },3000)
     }
-    const onSocketError = () => { /* REST remains authoritative while realtime reconnects. */ }
+    const onSocketConnect = () => {
+      clearStationDisconnectWatch()
+      queueRefresh()
+    }
+    const onSocketDisconnect = (socketReason) => {
+      if (cloudPrimary && cloudStationTransport() === 'cloud') return
+      scheduleStationDisconnect(socketReason || 'socket_disconnect')
+    }
+    const onSocketError = (error) => {
+      if (cloudPrimary && cloudStationTransport() === 'cloud') return
+      scheduleStationDisconnect(error?.message || 'socket_connect_error')
+    }
     const onAuthRevoked = (payload) => window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:payload}))
     const onChanged = (payload) => {
       if (payload?.path === '/branding/logo' || payload?.path === '/settings') window.dispatchEvent(new CustomEvent('aezakmi:branding-updated', { detail:payload }))
@@ -364,12 +381,21 @@ export function AppDataProvider({ children }) {
       unbindSocket(socket);socket=null;disconnectSocket()
     }
     const onTransport = (event) => {
-      if (event?.detail?.mode === 'fallback') connectFallbackSocket()
-      else { disconnectFallbackSocket();queueRefresh() }
+      if (event?.detail?.mode === 'fallback') {
+        connectFallbackSocket()
+        if (!socket?.connected) scheduleStationDisconnect(event?.detail?.reason || 'cloud_fallback_unavailable')
+      }
+      else {
+        clearStationDisconnectWatch()
+        disconnectFallbackSocket();queueRefresh()
+      }
     }
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
     if (cloudPrimary) {
-      if (cloudStationTransport()==='fallback') connectFallbackSocket()
+      if (cloudStationTransport()==='fallback') {
+        connectFallbackSocket()
+        if (!socket?.connected) scheduleStationDisconnect('initial_cloud_fallback')
+      }
       cloudRefreshInterval=setInterval(queueRefresh,user?.role === 'customer' ? 1000 : 5000)
       window.addEventListener('aezakmi:station-transport',onTransport)
       window.addEventListener('aezakmi:cloud-station-command',onCloudCommand)
@@ -385,7 +411,7 @@ export function AppDataProvider({ children }) {
       window.removeEventListener('aezakmi:cloud-station-command',onCloudCommand)
       if(cloudRefreshInterval)clearInterval(cloudRefreshInterval)
       clearTimeout(refreshTimer)
-      clearTimeout(stationDisconnectTimer)
+      clearStationDisconnectWatch()
       active=false
       if (refreshGenerationRef.current === effectGeneration) refreshGenerationRef.current += 1
     }

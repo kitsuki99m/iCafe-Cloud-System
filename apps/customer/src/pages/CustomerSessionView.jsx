@@ -123,6 +123,7 @@ export default function CustomerSessionView() {
     submitFeedback,
     getFeedbackHistory,
     currentClientPc,
+    loading,
   } = useAppData();
   const branding = useBranding();
   const [now, setNow] = useState(Date.now());
@@ -176,7 +177,19 @@ export default function CustomerSessionView() {
   const savedSessionSeconds = Number(
     memberRecord?.sessionSecondsRemaining ?? user.sessionSecondsRemaining ?? 0,
   );
-  const session = pc?.session;
+  // Auth carries the just-detected guest session so the UI can switch away
+  // from Member Login immediately. AppData replaces this fallback with the
+  // authoritative live station session as soon as its refresh completes.
+  const session = pc?.session ?? (isGuest ? user?.guestSession ?? null : null);
+  const activePc = session
+    ? {
+        ...(pc || {}),
+        id: pc?.id ?? user?.pcId ?? null,
+        ipAddress: pc?.ipAddress ?? user?.pcIp ?? null,
+        label: pc?.label || "Customer Station",
+        session,
+      }
+    : pc;
   const ratePlan = rateForId(ratePlans, session?.ratePlanId);
   // Session presence is authoritative. A stale/mirrored PC status must never
   // hide an already-running session or block the wallet-start UI.
@@ -295,8 +308,16 @@ export default function CustomerSessionView() {
 
   const handleThisPc = useCallback(() => {
     if (logoutBusy) return;
+    // Walk-in postpaid sessions must be checked out by staff so the frozen
+    // amount due is visible and deliberately settled. A power/offline event is
+    // still handled by the interruption lifecycle, but a normal guest action
+    // must not masquerade as an unpaid logout.
+    if (isGuest && session?.billing === "postpaid") {
+      void handleHelp();
+      return;
+    }
     confirmLogout();
-  }, [logoutBusy, confirmLogout]);
+  }, [logoutBusy, isGuest, session?.billing, handleHelp, confirmLogout]);
 
   useEffect(() => {
     const c = window.aezakmiClient;
@@ -366,9 +387,13 @@ export default function CustomerSessionView() {
     const key = `${pc?.id || "pc"}:${session?.id || session?.startedAt || "session"}`;
     if (endedSessionKey.current === key) return;
     endedSessionKey.current = key;
-    endSession(pc).finally(async () => {
+    endSession(activePc).finally(async () => {
       window.aezakmiClient?.lockClient?.();
-      if (isGuest) await logout();
+      // Guest prepaid expiry must be a local logout boundary even if both
+      // Cloud and Café Edge disappear at the exact second the timer reaches
+      // zero. Keep the lifecycle marker for startup recovery instead of
+      // trapping the renderer in a signed-in Guest state behind the lock UI.
+      if (isGuest) await logout({ reason:"session_expired", allowDeferred:true });
     });
   }, [
     hasActiveSession,
@@ -508,15 +533,17 @@ export default function CustomerSessionView() {
           >
             <Minimize2 size={14} /> Hide
           </button>
-          <button
-            type="button"
-            onClick={handleThisPc}
-            disabled={logoutBusy}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-ember/25 bg-ember/8 px-2.5 text-[11px] font-semibold text-ember-dim transition-colors hover:bg-ember/15 disabled:opacity-50"
-            title="Log out of this PC"
-          >
-            <LogOut size={14} /> {logoutBusy ? "Logging out…" : "Log Out"}
-          </button>
+          {!(isGuest && session?.billing === "postpaid") && (
+            <button
+              type="button"
+              onClick={handleThisPc}
+              disabled={logoutBusy}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-ember/25 bg-ember/8 px-2.5 text-[11px] font-semibold text-ember-dim transition-colors hover:bg-ember/15 disabled:opacity-50"
+              title="Log out of this PC"
+            >
+              <LogOut size={14} /> {logoutBusy ? "Logging out…" : "Log Out"}
+            </button>
+          )}
         </div>
       </header>
 
@@ -531,13 +558,13 @@ export default function CustomerSessionView() {
           <div className="customer-primary-card px-4 py-3.5">
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
-                <p className="eyebrow">Signed in</p>
+                <p className="eyebrow">{isGuest ? "Guest access" : "Signed in"}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   <h1 className="truncate font-display text-[20px] font-semibold tracking-tight text-ink-900">
                     {user.username || user.name}
                   </h1>
                   <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${isGuest ? "bg-midnight/8 text-ink-900" : (TIER_STYLE[user.tier] ?? TIER_STYLE.Regular)}`}>
-                    {isGuest ? "Guest" : (user.tier ?? "Regular")}
+                    {isGuest ? (session?.billing === "postpaid" ? "Guest · Postpaid" : "Guest · Prepaid") : (user.tier ?? "Regular")}
                   </span>
                 </div>
               </div>
@@ -554,9 +581,11 @@ export default function CustomerSessionView() {
             <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
               <div className="flex items-center justify-between gap-3 border-b border-surface-line px-4 py-3">
                 <div>
-                  <p className="eyebrow">Your session</p>
+                  <p className="eyebrow">{isGuest ? "Guest session" : "Your session"}</p>
                   <p className="mt-0.5 text-[13px] font-semibold text-ink-900">
-                    {session.billing === "prepaid" ? "Prepaid session" : "Postpaid session"}
+                    {isGuest
+                      ? (session.billing === "prepaid" ? "Guest prepaid session" : "Guest postpaid session")
+                      : (session.billing === "prepaid" ? "Prepaid session" : "Postpaid session")}
                   </p>
                 </div>
                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${session.isLocked ? "bg-ember/10 text-ember-dim" : "bg-teal/10 text-teal-dim"}`}>
@@ -596,6 +625,12 @@ export default function CustomerSessionView() {
                     <p className="mt-1 stat-figure text-[16px] font-semibold text-ink-900">{peso(wallet)}</p>
                   </div>
                 )}
+                {isGuest && (
+                  <div className="customer-info-card">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Guest Station</p>
+                    <p className="mt-1 truncate text-[13px] font-semibold text-ink-900">{pc?.label || "This PC"}</p>
+                  </div>
+                )}
                 <div className="customer-info-card">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Current Rate</p>
                   <p className="mt-1 truncate text-[13px] font-semibold text-ink-900">
@@ -623,23 +658,24 @@ export default function CustomerSessionView() {
               )}
 
               {isGuest ? (
-                <div className="grid grid-cols-2 gap-2 border-t border-surface-line p-3">
-                  <Button
-                    variant={canExtend ? "teal" : "ghost"}
-                    icon={PlusCircle}
-                    onClick={() => canExtend && setExtendOpen(true)}
-                    disabled={!canExtend}
-                    title={canExtend ? "Add more prepaid time" : "Add Time is available during prepaid sessions"}
-                  >
-                    Add Time
-                  </Button>
+                <div className={`grid ${canExtend ? "grid-cols-2" : "grid-cols-1"} gap-2 border-t border-surface-line p-3`}>
+                  {canExtend && (
+                    <Button
+                      variant="teal"
+                      icon={PlusCircle}
+                      onClick={() => setExtendOpen(true)}
+                      title="Add more prepaid time"
+                    >
+                      Add Time
+                    </Button>
+                  )}
                   <Button
                     variant="primary"
                     icon={Bell}
                     onClick={handleHelp}
                     disabled={assistanceSent || assistanceBusy}
                   >
-                    {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
+                    {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : session.billing === "postpaid" ? "Call Staff / Checkout" : "Ask for Help"}
                   </Button>
                 </div>
               ) : (
@@ -677,7 +713,7 @@ export default function CustomerSessionView() {
                   </h2>
                   <p className="mt-1 max-w-xl text-[12px] leading-5 text-slate-soft">
                     {isGuest
-                      ? "A guest session must be started by staff. Ask for help when you are ready."
+                      ? (loading ? "Loading the guest session started for this PC…" : "The guest session is reconnecting. Ask staff for help if it does not return.")
                       : canStartImmediately
                         ? "Choose Start Session to use your wallet or resume saved time."
                         : canSelfStart
@@ -946,7 +982,7 @@ export default function CustomerSessionView() {
         <ExtendSessionModal
           open={extendOpen}
           onClose={() => setExtendOpen(false)}
-          pc={pc}
+          pc={isGuest ? activePc : pc}
           memberId={user.memberId}
           wallet={wallet}
           ratePlan={ratePlan}
