@@ -29,7 +29,7 @@ import { formatDuration } from "../../lib/duration.js";
 export default function CustomerLoginForm() {
   const branding = useBranding();
   const { loginCustomerCredentials, enterGuestMode, clientIp } = useAuth();
-  const { settings, announcements = [], ratePlans = [], currentClientPc } = useAppData();
+  const { settings, announcements = [], ratePlans = [], currentClientPc, serverError } = useAppData();
   const { isDark, toggleTheme } = useTheme();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -222,15 +222,17 @@ export default function CustomerLoginForm() {
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-900">
-                  This PC is ready
+                  {serverError ? "Connection required" : "This PC is ready"}
                 </p>
                 <p className="mt-1 text-xs text-slate-soft">
-                  {clientIp ||
-                    currentClientPc?.ipAddress ||
-                    "Detecting local IP…"}
+                  {serverError
+                    ? "Cloud and Café Edge are currently unavailable. Cached café information is being shown."
+                    : (clientIp || currentClientPc?.ipAddress || "Detecting local IP…")}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-soft">
-                  You can use one cafe PC at a time with this account.
+                  {serverError
+                    ? "Member sign-in and wallet/session changes require Cloud or the cashier/Admin Café Edge."
+                    : "You can use one cafe PC at a time with this account."}
                 </p>
               </div>
             </div>

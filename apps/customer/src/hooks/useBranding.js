@@ -1,22 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
 import { apiGet, apiUrl } from '../lib/api.js'
 
-const fallback = { cafeName:'iCafe', branch:'Customer Station', branchLocation:'', logoUrl:null }
+const fallback = { cafeName:'Aezakmi Cafe', branch:'Customer Station', branchLocation:'', logoUrl:null }
 let cached = null
+
+function resolvedLogoUrl(value) {
+  const raw=String(value || '').trim()
+  if (!raw) return null
+  if (/^(?:data:|blob:|https?:)/i.test(raw)) return raw
+  try { return apiUrl(raw.replace(/^\/api/, '')) } catch { return null }
+}
 
 function normalizeBranding(value) {
   const raw = { ...fallback, ...(value && typeof value === 'object' ? value : {}) }
-  return {
-    ...raw,
-    logoUrl: raw.logoUrl ? apiUrl(String(raw.logoUrl).replace(/^\/api/, '')) : null,
-  }
+  return { ...raw, logoUrl:resolvedLogoUrl(raw.logoUrl) }
 }
 
 function cachedBranding() {
   try {
-    return normalizeBranding(JSON.parse(localStorage.getItem('aezakmi.customer.branding') || '{}'))
+    const raw=JSON.parse(localStorage.getItem('aezakmi.customer.branding') || '{}')
+    // Network resolution may be unavailable during startup. Keep the cached café
+    // identity even if its server-hosted logo cannot be resolved right now.
+    return normalizeBranding(raw)
   } catch {
-    return fallback
+    return { ...fallback }
   }
 }
 

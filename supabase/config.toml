@@ -37,3 +37,13 @@ verify_jwt = false
 verify_jwt = false
 [functions.station-api]
 verify_jwt = false
+
+# Local/self-hosted Auth email branding. Hosted Supabase projects must also apply
+# these templates in Authentication > Email Templates or via the Management API.
+[auth.email.template.invite]
+subject = "Your Aezakmi Café business workspace is ready"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Continue setting up your Aezakmi Café owner account"
+content_path = "./supabase/templates/recovery.html"

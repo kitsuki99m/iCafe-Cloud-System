@@ -10,11 +10,6 @@ function bridge() {
   return typeof window !== 'undefined' ? window.aezakmiClient : null
 }
 
-export function isLocalServerHost(host) {
-  const value = String(host || '').trim().toLowerCase()
-  return value === '127.0.0.1' || value === 'localhost' || value === '::1'
-}
-
 function parseApiBase(apiBase) {
   try {
     const url = new URL(apiBase)
@@ -142,8 +137,8 @@ export function getApiBase() {
   if (envBase) return envBase
 
   if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
-    const error = new Error('SERVER_CONFIG_REQUIRED: Open Server Connection and enter the cafe server IP address.')
-    error.code = 'SERVER_CONFIG_REQUIRED'
+    const error = new Error('Café Edge is not configured on this Customer Station. Open Server Connection and enter the cashier/Admin PC LAN address.')
+    error.code = 'CAFE_EDGE_NOT_CONFIGURED'
     throw error
   }
   return '/api'
@@ -172,15 +167,16 @@ export function normalizeServerDraft(hostValue, portValue) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('Port must be a whole number from 1 to 65535.')
   }
+  if (typeof window !== 'undefined' && window.location.protocol === 'file:' && ['127.0.0.1','localhost','::1'].includes(host.toLowerCase())) {
+    const error = new Error('Enter the cashier/Admin PC LAN address. A production Customer Station cannot use itself as Café Edge.')
+    error.code = 'LOCAL_CUSTOMER_EDGE_DISABLED'
+    throw error
+  }
   return { host, port, apiBase: `http://${host}:${port}/api` }
 }
 
 export async function testServerConfig(host, port, options = {}) {
   const candidate = normalizeServerDraft(host, port)
-  if (isLocalServerHost(candidate.host) && Number(candidate.port) === DEFAULT_PORT) {
-    const ensure = bridge()?.ensureLocalBackend
-    if (ensure) await ensure()
-  }
   await probeApiBase(candidate.apiBase, options)
   return { ok: true, ...candidate }
 }

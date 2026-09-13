@@ -58,7 +58,18 @@ async function localApiFetch(path, options = {}) {
     if (cloudStationTransport() === 'fallback') headers.set('X-Aezakmi-Cloud-Fallback', '1')
   } catch {}
 
-  const response = await fetch(`${getApiBase()}${path}`, { ...fetchOptions, headers })
+  let response
+  try {
+    const apiBase=getApiBase()
+    response = await fetch(`${apiBase}${path}`, { ...fetchOptions, headers })
+  } catch (error) {
+    if (error?.code === 'CAFE_EDGE_NOT_CONFIGURED') throw error
+    const unavailable = new Error('Café Edge is unavailable on the LAN. Connect this PC to the café network or restore the Cloud connection, then try again.')
+    unavailable.status = 503
+    unavailable.code = 'CAFE_EDGE_UNAVAILABLE'
+    unavailable.cause = error
+    throw unavailable
+  }
   let data = null
   try { data = await response.json() } catch {}
   // A 401 can mean either member-auth expiry or station-device auth failure.

@@ -14,21 +14,24 @@ test('Settings no longer exposes or persists a global network prefix', () => {
   assert.doesNotMatch(backend, /configuredIpPrefix|incoming\.ipPrefix|ipPrefix:\s*configuredIpPrefix/)
 })
 
-test('Add PC owns an independent prefix and last-octet input while Edit PC keeps full IP', () => {
+test('Admin Add PC no longer exposes IP Prefix and Cloud stations map IP after pairing', () => {
   const source = read('apps/admin/src/components/floor/PcFormModal.jsx')
-  assert.match(source, /const \[createPrefix, setCreatePrefix\]/)
-  assert.match(source, /const \[createLastOctet, setCreateLastOctet\]/)
-  assert.match(source, /IP Prefix/)
-  assert.match(source, /Last Octet/)
-  assert.match(source, /isEdit[\s\S]*IP Address/)
-  assert.match(source, /composeCreateIp/)
+  const floor = read('apps/admin/src/pages/FloorMatrix.jsx')
+  assert.doesNotMatch(source, /IP Prefix|Last Octet|createPrefix|composeCreateIp/)
+  assert.match(source, /cloudManaged/)
+  assert.match(source, /IP address is automatic/)
+  assert.match(source, /paired Customer Station/)
+  assert.match(source, /Local-only Café Edge[\s\S]*IP Address/)
+  assert.match(floor, /cloudManaged=\{isCloudAdmin\(\)\}/)
 })
 
-test('Bulk Add owns its prefix state and no longer accepts a shared ipPrefix prop', () => {
+test('Bulk Add no longer exposes IP Prefix; Cloud maps addresses and local mode uses one full starting IP', () => {
   const source = read('apps/admin/src/components/bulk/BulkAddPcModal.jsx')
-  assert.doesNotMatch(source, /ipPrefix\s*=|\{[^}]*ipPrefix[^}]*\}/)
-  assert.match(source, /const \[prefix, setPrefix\] = useState\(['"]192\.168\.100\.['"]\)/)
-  assert.doesNotMatch(source, /\[open, ipPrefix\]/)
+  assert.doesNotMatch(source, /IP Prefix|const \[prefix, setPrefix\]/)
+  assert.match(source, /cloudManaged/)
+  assert.match(source, /IP after pairing/)
+  assert.match(source, /Starting IP Address/)
+  assert.match(source, /There is no shared IP-prefix setting/)
 })
 
 test('PC create and update validate complete IPv4 addresses without a global subnet restriction', () => {

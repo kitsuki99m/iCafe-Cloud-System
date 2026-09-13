@@ -72,7 +72,7 @@ test('customer production builds use runtime server configuration instead of req
   const config = read('apps/customer/src/lib/serverConfig.js')
   assert.doesNotMatch(vite, /loadEnv|command === ['"]build['"]|production build requires VITE_API_BASE_URL/i)
   assert.match(config, /getRuntimeServerConfig/)
-  assert.match(config, /SERVER_CONFIG_REQUIRED/)
+  assert.match(config, /CAFE_EDGE_NOT_CONFIGURED/)
 })
 
 test('Electron AppUserModelId matches each package appId', () => {

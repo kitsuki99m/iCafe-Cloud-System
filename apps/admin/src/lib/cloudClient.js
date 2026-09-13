@@ -227,6 +227,17 @@ async function rest(path, { method = "GET", body } = {}) {
   });
   return parse(response);
 }
+async function restCount(path) {
+  const h = await cloudAuthHeaders();
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    method: "GET",
+    headers: { ...h, Prefer: "count=exact", Range: "0-0" },
+  });
+  if (!response.ok) return parse(response);
+  const contentRange = response.headers.get("content-range") || "";
+  const match = contentRange.match(/\/(\d+|\*)$/);
+  return match && match[1] !== "*" ? Number(match[1]) : 0;
+}
 export async function cloudListMemberships(userId) {
   return rest(
     `organization_members?select=organization_id,role&user_id=eq.${encodeURIComponent(userId)}`,
@@ -290,6 +301,27 @@ export function cloudBranchId() {
 }
 export function cloudOrganizationId() {
   return localStorage.getItem(ORG_KEY) || "";
+}
+export async function cloudGetSubscriptionOverview(organizationId = cloudOrganizationId()) {
+  if (!organizationId) return null;
+  const rows = await rest(`subscriptions?select=organization_id,plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end&organization_id=eq.${encodeURIComponent(organizationId)}&limit=1`);
+  const subscription = rows?.[0] || null;
+  if (!subscription) return null;
+  const branches = await rest(`branches?select=id&organization_id=eq.${encodeURIComponent(organizationId)}&is_active=eq.true`);
+  const ids = (branches || []).map((branch) => branch.id).filter(Boolean);
+  const stationCount = ids.length ? await restCount(`branch_stations?select=local_id&branch_id=in.(${ids.map(encodeURIComponent).join(",")})`) : 0;
+  return {
+    organizationId,
+    plan: subscription.plan || "bronze",
+    status: subscription.status || "trial",
+    maxBranches: Number(subscription.max_branches || 0),
+    maxStations: Number(subscription.max_stations || 0),
+    stationCount: Number(stationCount || 0),
+    branchCount: Array.isArray(branches) ? branches.length : 0,
+    trialEndsAt: subscription.trial_ends_at || null,
+    graceUntil: subscription.grace_until || null,
+    currentPeriodEnd: subscription.current_period_end || null,
+  };
 }
 export function cloudSelectBranch(branch) {
   if (!branch?.id) return;

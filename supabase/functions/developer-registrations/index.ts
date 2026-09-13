@@ -14,6 +14,19 @@ async function requireDeveloper(admin:SupabaseClient,userId:string){const{data,e
 function note(value:unknown){return String(value||'').trim().slice(0,2000)||null}
 function requiredReason(value:unknown){const valueText=note(value);if(!valueText)throw Object.assign(new Error('Enter a reason for this developer action.'),{status:400,code:'REASON_REQUIRED'});return valueText}
 function addDays(iso:string|Date,days:number){const d=new Date(iso);d.setUTCDate(d.getUTCDate()+days);return d.toISOString()}
+
+const SUBSCRIPTION_PACKAGES:Record<string,number|null>={bronze:50,silver:100,gold:200,platinum:350,diamond:500,ultra:null}
+function subscriptionPackage(planValue:unknown,customValue:unknown,expectedStations=1){
+  let plan=String(planValue||'').trim().toLowerCase()
+  if(!plan){const expected=Math.max(1,Number(expectedStations)||1);plan=expected<=50?'bronze':expected<=100?'silver':expected<=200?'gold':expected<=350?'platinum':expected<=500?'diamond':'ultra'}
+  if(!Object.prototype.hasOwnProperty.call(SUBSCRIPTION_PACKAGES,plan))throw Object.assign(new Error('Choose Bronze, Silver, Gold, Platinum, Diamond, or Ultra.'),{status:400,code:'INVALID_SUBSCRIPTION_PLAN'})
+  const fixed=SUBSCRIPTION_PACKAGES[plan]
+  const maxStations=fixed===null?Math.floor(Number(customValue)):fixed
+  if(plan==='ultra'&&(!Number.isInteger(maxStations)||maxStations<1||maxStations>10000))throw Object.assign(new Error('Ultra requires a custom station limit from 1 to 10,000.'),{status:400,code:'INVALID_ULTRA_STATION_LIMIT'})
+  return{plan,maxStations:Number(maxStations)}
+}
+async function organizationStationCount(admin:SupabaseClient,organizationId:string){const{data:branches,error:branchError}=await admin.from('branches').select('id').eq('organization_id',organizationId);if(branchError)throw branchError;const ids=(branches||[]).map((x:any)=>x.id);if(!ids.length)return 0;const{count,error}=await admin.from('branch_stations').select('local_id',{count:'exact',head:true}).in('branch_id',ids);if(error)throw error;return Number(count||0)}
+async function applySubscription(admin:SupabaseClient,organizationId:string,planValue:unknown,customValue:unknown,expectedStations=1){const pkg=subscriptionPackage(planValue,customValue,expectedStations),used=await organizationStationCount(admin,organizationId);if(used>pkg.maxStations)throw Object.assign(new Error(`This business already has ${used} stations. Choose a package that supports at least ${used}.`),{status:409,code:'SUBSCRIPTION_BELOW_USAGE'});const{data,error}=await admin.from('subscriptions').update({plan:pkg.plan,max_stations:pkg.maxStations,updated_at:new Date().toISOString()}).eq('organization_id',organizationId).select('plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').single();if(error)throw error;return{...data,station_count:used}}
 async function audit(admin:SupabaseClient,requestId:string,actor:string,action:string,details:Record<string,unknown>={}){const{error}=await admin.from('registration_audit_logs').insert({registration_request_id:requestId,actor_user_id:actor,action,details});if(error)throw error}
 function activationRedirect(){
   const base=String(Deno.env.get('AEZAKMI_ADMIN_URL')||'').trim().replace(/\/+$/,'')
@@ -29,8 +42,9 @@ async function activationLink(admin:SupabaseClient,email:string){
   return String(props.action_link||props.actionLink||'')||null
 }
 async function maybeActivationLink(admin:SupabaseClient,email:string){try{return await activationLink(admin,email)}catch{return null}}
-async function sendInviteEmail(admin:SupabaseClient,registration:any){
-  const options:any={data:{name:registration.owner_name,business_name:registration.business_name,aezakmi_registration_id:registration.id}}
+function inviteMetadata(registration:any,pkg:{plan:string,maxStations:number}){return{name:registration.owner_name,business_name:registration.business_name,aezakmi_registration_id:registration.id,subscription_plan:pkg.plan,max_stations:pkg.maxStations}}
+async function sendInviteEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
+  const options:any={data:inviteMetadata(registration,pkg)}
   const redirectTo=activationRedirect();if(redirectTo)options.redirectTo=redirectTo
   const{data,error}=await admin.auth.admin.inviteUserByEmail(registration.email,options)
   if(error)throw Object.assign(new Error(error.message||'Unable to send invitation email.'),{status:409,code:'INVITE_EMAIL_FAILED'})
@@ -62,13 +76,13 @@ Deno.serve(async req=>{
       if(orgIds.length){
         const[orgResult,subResult]=await Promise.all([
           admin.from('organizations').select('id,name,lifecycle_status,lifecycle_reason,lifecycle_updated_at,suspended_at,terminated_at').in('id',orgIds),
-          admin.from('subscriptions').select('organization_id,plan,status,trial_ends_at,grace_until,current_period_end').in('organization_id',orgIds),
+          admin.from('subscriptions').select('organization_id,plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').in('organization_id',orgIds),
         ])
         if(orgResult.error)throw orgResult.error;if(subResult.error)throw subResult.error
         orgs=orgResult.data||[];subs=subResult.data||[]
       }
       const orgMap=new Map(orgs.map((x:any)=>[x.id,x])),subMap=new Map(subs.map((x:any)=>[x.organization_id,x]))
-      const merged=(requests||[]).map((r:any)=>{const org:any=r.organization_id?orgMap.get(r.organization_id):null,sub:any=r.organization_id?subMap.get(r.organization_id):null;return{...r,organization_status:org?.lifecycle_status||null,organization_reason:org?.lifecycle_reason||null,lifecycle_updated_at:org?.lifecycle_updated_at||null,suspended_at:org?.suspended_at||null,terminated_at:org?.terminated_at||null,subscription_plan:sub?.plan||null,subscription_status:sub?.status||null,grace_until:sub?.grace_until||null,current_period_end:sub?.current_period_end||null,purge_eligible_at:org?.terminated_at?addDays(org.terminated_at,30):null}})
+      const merged=(requests||[]).map((r:any)=>{const org:any=r.organization_id?orgMap.get(r.organization_id):null,sub:any=r.organization_id?subMap.get(r.organization_id):null;return{...r,organization_status:org?.lifecycle_status||null,organization_reason:org?.lifecycle_reason||null,lifecycle_updated_at:org?.lifecycle_updated_at||null,suspended_at:org?.suspended_at||null,terminated_at:org?.terminated_at||null,subscription_plan:sub?.plan||null,subscription_status:sub?.status||null,subscription_max_stations:sub?.max_stations??null,subscription_max_branches:sub?.max_branches??null,grace_until:sub?.grace_until||null,current_period_end:sub?.current_period_end||null,purge_eligible_at:org?.terminated_at?addDays(org.terminated_at,30):null}})
       return json({success:true,requests:merged})
     }
 
@@ -90,22 +104,26 @@ Deno.serve(async req=>{
       if(r.status==='activated')return json({success:true,request:r,alreadyApproved:true})
       if(r.status==='invited')return json({success:true,request:r,alreadyApproved:true,emailSent:true,email:r.email})
       if(r.status==='rejected')throw Object.assign(new Error('Reopen the application before approving it.'),{status:409,code:'REGISTRATION_REJECTED'})
+      const pkg=subscriptionPackage(b.subscriptionPlan,b.ultraStationLimit,r.expected_station_count)
       let authUserId=r.auth_user_id as string|null
       const inviteSentAt=new Date().toISOString()
-      if(!authUserId)authUserId=await sendInviteEmail(admin,r)
-      else await resendActivationEmail(r.email)
+      if(!authUserId)authUserId=await sendInviteEmail(admin,r,pkg)
+      else{await admin.auth.admin.updateUserById(authUserId,{user_metadata:inviteMetadata(r,pkg)});await resendActivationEmail(r.email)}
       const{error:markError}=await admin.from('registration_requests').update({status:'approved',auth_user_id:authUserId,reviewed_by:user.id,reviewed_at:inviteSentAt,review_notes:reviewNotes,invite_sent_at:inviteSentAt,invite_cancelled_at:null,owner_deleted_at:null,updated_at:inviteSentAt}).eq('id',requestId)
       if(markError)throw markError
       const{data:finalized,error:finalizeError}=await admin.rpc('aezakmi_finalize_registration_approval',{p_request_id:requestId,p_auth_user_id:authUserId,p_reviewer_id:user.id,p_review_notes:reviewNotes})
       if(finalizeError)throw finalizeError
       const tenant=Array.isArray(finalized)?finalized[0]:finalized
+      const subscription=await applySubscription(admin,String(tenant?.organization_id||r.organization_id||''),pkg.plan,pkg.maxStations,r.expected_station_count)
       const{data:updated}=await admin.from('registration_requests').select('*').eq('id',requestId).single()
-      await audit(admin,requestId,user.id,'invite_email_sent',{email:r.email,automatic:true})
-      return json({success:true,request:updated,tenant,emailSent:true,email:r.email})
+      await audit(admin,requestId,user.id,'invite_email_sent',{email:r.email,automatic:true,subscriptionPlan:pkg.plan,maxStations:pkg.maxStations})
+      return json({success:true,request:updated,tenant,subscription,emailSent:true,email:r.email})
     }
 
     if(action==='resend_invite'){
       if(!['approved','invited'].includes(r.status)||!r.auth_user_id||r.activated_at)throw Object.assign(new Error('Only an outstanding invitation can be resent.'),{status:409,code:'INVITE_NOT_ACTIVE'})
+      const{data:sub,error:subError}=await admin.from('subscriptions').select('plan,max_stations').eq('organization_id',r.organization_id).maybeSingle();if(subError)throw subError
+      if(r.auth_user_id&&sub)await admin.auth.admin.updateUserById(r.auth_user_id,{user_metadata:inviteMetadata(r,{plan:String(sub.plan||'bronze'),maxStations:Number(sub.max_stations||50)})})
       await resendActivationEmail(r.email)
       const now=new Date().toISOString()
       const{data,error}=await admin.from('registration_requests').update({invite_sent_at:now,updated_at:now}).eq('id',requestId).select('*').single()
@@ -130,6 +148,14 @@ Deno.serve(async req=>{
       if(error)throw error
       await audit(admin,requestId,user.id,'invite_cancelled',{reason,organizationId:oldOrgId,authUserId:oldUserId})
       return json({success:true,request:data})
+    }
+
+    if(action==='set_subscription'){
+      if(!r.organization_id)throw Object.assign(new Error('Approve the business before assigning a subscription package.'),{status:409,code:'ORGANIZATION_REQUIRED'})
+      const subscription=await applySubscription(admin,r.organization_id,b.subscriptionPlan,b.ultraStationLimit,r.expected_station_count)
+      if(r.auth_user_id)await admin.auth.admin.updateUserById(r.auth_user_id,{user_metadata:inviteMetadata(r,{plan:String(subscription.plan),maxStations:Number(subscription.max_stations)})})
+      await audit(admin,requestId,user.id,'subscription_package_changed',{plan:subscription.plan,maxStations:subscription.max_stations,stationCount:subscription.station_count})
+      return json({success:true,subscription})
     }
 
     if(['grace_period','suspend','reactivate','terminate','delete_owner','purge_business'].includes(action)){

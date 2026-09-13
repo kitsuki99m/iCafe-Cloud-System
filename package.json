@@ -25,6 +25,7 @@
     "start:backend": "npm --workspace backend run start",
     "test": "node --test tools/*.test.mjs",
     "test:cloud": "node --test tools/cloud-deployment-regressions.test.mjs",
-    "check:release": "node tools/release-readiness.mjs"
+    "check:release": "node tools/release-readiness.mjs",
+    "deploy:auth-templates": "node scripts/deploy-auth-email-templates.mjs"
   }
 }

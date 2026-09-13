@@ -462,7 +462,7 @@ test('packaged customer networking requires runtime server configuration instead
   const config = read('apps/customer/src/lib/serverConfig.js')
   const socket = read('apps/customer/src/lib/socket.js')
   assert.match(config, /window\.location\.protocol === ['"]file:['"]/)
-  assert.match(config, /SERVER_CONFIG_REQUIRED/)
+  assert.match(config, /CAFE_EDGE_NOT_CONFIGURED/)
   assert.match(socket, /apiUrl\(['"]\/['"]\)/)
   assert.doesNotMatch(socket, /window\.location\.origin/)
 })

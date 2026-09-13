@@ -15,11 +15,13 @@ test('Customer login kiosk preserves the fixed 180-second shutdown policy while 
   assert.doesNotMatch(src,/addEventListener\(eventName, resetIdle/)
 })
 
-test('Signed-in idle shutdown pauses for all customer modals and resets on activity',()=>{
+test('Signed-in member with no paid session has a fixed 300-second shutdown boundary',()=>{
   const src=read('apps/customer/src/pages/CustomerSessionView.jsx')
-  assert.match(src,/topUpOpen \|\| extendOpen \|\| startOpen \|\| logoutOpen \|\| feedbackOpen \|\| announcementsOpen \|\| viewFeedback \|\| powerConfirm/)
-  assert.match(src,/\["pointermove", "pointerdown", "keydown", "touchstart", "wheel"\]/)
-  assert.match(src,/idleUiPausedRef\.current\) return/)
+  assert.match(src,/let remaining = 300;/)
+  assert.match(src,/User activity and open dialogs do[\s\S]*not extend or pause this countdown/)
+  assert.doesNotMatch(src,/idleUiPausedRef/)
+  assert.doesNotMatch(src,/addEventListener\(eventName, resetIdle/)
+  assert.doesNotMatch(src,/pointermove[\s\S]*resetIdle/)
   assert.match(src,/await logout\(\{ reason:"idle_shutdown", allowDeferred:true \}\)/)
 })
 

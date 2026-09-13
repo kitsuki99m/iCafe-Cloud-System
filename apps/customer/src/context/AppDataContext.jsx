@@ -439,11 +439,10 @@ export function AppDataProvider({ children }) {
   function refreshAfter(promise) { return promise.finally(() => refresh()) }
 
   function optimisticState(updater) {
-    setState((current) => {
-      const next=updater(current)
-      if (cacheKey) writeSnapshot(cacheKey,{...next,loading:false}).catch?.(()=>{})
-      return next
-    })
+    // Optimistic UI is memory-only. Persistent snapshots are last-known-good
+    // authority data and are written only after successful Cloud/Café Edge
+    // reads. A failed mutation must never replace the emergency offline cache.
+    setState((current) => updater(current))
   }
 
   function endSession(pc) {

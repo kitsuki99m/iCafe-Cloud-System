@@ -57,7 +57,7 @@ try {
   }
   fs.rmSync(path.join(appDir, 'installer'), { recursive: true, force: true })
 
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' && appName === 'admin') {
     runNpm(['run', 'rebuild:backend'])
     backendRebuilt = true
   }

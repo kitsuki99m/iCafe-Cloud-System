@@ -6,7 +6,8 @@ import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiUrl } from '../lib/api.js'
 import fallbackLogo from '../assets/aktura-logo.svg'
-import { isCloudAdmin, cloudBranchId, cloudCreateBranch, cloudGetBranchStatus, cloudInvoke, cloudOrganizationId, cloudSelectBranch } from '../lib/cloudClient.js'
+import { isCloudAdmin, cloudBranchId, cloudCreateBranch, cloudGetBranchStatus, cloudGetSubscriptionOverview, cloudInvoke, cloudOrganizationId, cloudSelectBranch } from '../lib/cloudClient.js'
+import { SUBSCRIPTION_PACKAGES, packageDefinition } from '../lib/subscriptionPackages.js'
 
 const inputClass = 'w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 outline-none transition-colors focus:border-gold/50'
 
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const [securityError,setSecurityError]=useState('')
   const [securityMessage,setSecurityMessage]=useState('')
   const [cloud,setCloud]=useState(null)
+  const [subscription,setSubscription]=useState(null)
   const [cloudPairingCode,setCloudPairingCode]=useState('')
   const [cloudBusy,setCloudBusy]=useState('')
   const [cloudError,setCloudError]=useState('')
@@ -120,7 +122,12 @@ export default function SettingsPage() {
   async function loadCloudStatus(){
     setCloudError('')
     try{
-      if(cloudMode){const edge=await cloudGetBranchStatus();setCloud({enabled:true,paired:Boolean(edge),edgeId:edge?.id||null,lastSeenAt:edge?.last_seen_at||null,lastSyncAt:edge?.last_sync_at||null,softwareVersion:edge?.software_version||null,statusSnapshot:edge?.status_snapshot||{}});return}
+      if(cloudMode){
+        const [edge,sub]=await Promise.all([cloudGetBranchStatus(),cloudGetSubscriptionOverview()])
+        setCloud({enabled:true,paired:Boolean(edge),edgeId:edge?.id||null,lastSeenAt:edge?.last_seen_at||null,lastSyncAt:edge?.last_sync_at||null,softwareVersion:edge?.software_version||null,statusSnapshot:edge?.status_snapshot||{}})
+        setSubscription(sub||null)
+        return
+      }
       const result=await apiGet('/cloud/status');setCloud(result.cloud||null)
     }catch(error){setCloudError(error?.message||'Unable to read cloud status.')}
   }
@@ -185,6 +192,12 @@ export default function SettingsPage() {
           <div className="grid gap-4 p-5 sm:grid-cols-2">
             {!cloud&&<div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-4 text-xs text-slate-soft">Loading cloud status…</div>}
             {cloudMode&&!cloudPrivileged&&<div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-4 text-[11px] leading-5 text-slate-soft">Your <strong className="text-ink-900">{user?.cloudRole||'viewer'}</strong> role can view this branch, but only organization owners/admins can create branches, generate Edge pairing codes, or revoke an Edge.</div>}
+            {cloudMode&&subscription&&<div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">Subscription</p><p className="mt-1 text-base font-semibold text-ink-900">{packageDefinition(subscription.plan).label}</p><p className="mt-1 text-[11px] leading-5 text-slate-soft">{subscription.stationCount} of {subscription.maxStations} stations used across {subscription.branchCount} active branch{subscription.branchCount===1?'':'es'}.</p></div><span className="rounded-full bg-gold/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-gold-dim">{subscription.status}</span></div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-midnight/8"><div className="h-full rounded-full bg-gold" style={{width:`${Math.min(100,subscription.maxStations>0?(subscription.stationCount/subscription.maxStations)*100:0)}%`}}/></div>
+              <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">{SUBSCRIPTION_PACKAGES.map(pkg=><div key={pkg.id} className={`rounded-lg border px-2 py-2 ${subscription.plan===pkg.id?'border-gold/45 bg-gold/8':'border-surface-line bg-soft-white'}`}><p className={`text-[10px] font-semibold ${subscription.plan===pkg.id?'text-gold-dim':'text-ink-900'}`}>{pkg.label}</p><p className="mt-0.5 text-[9px] text-slate-soft">{pkg.maxStations===null?'Custom':pkg.maxStations}</p></div>)}</div>
+              <p className="mt-3 text-[10px] leading-4 text-slate-soft">Package changes are assigned by the Aezakmi platform developer. Ultra supports a custom station allowance.</p>
+            </div>}
             {cloudMode&&cloudPrivileged&&<div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold text-ink-900">Add another branch</p><p className="mt-1 text-[11px] leading-5 text-slate-soft">Creates a branch inside the current organization. Your subscription branch limit is enforced in Supabase.</p></div><span className="rounded-full bg-midnight/10 px-2.5 py-1 font-mono text-[10px] text-midnight">{cloudOrganizationId()||'No organization'}</span></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={newBranchName} onChange={e=>setNewBranchName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();createCloudBranch()}}} placeholder="New branch name" className={`${inputClass} flex-1`}/><Button type="button" variant="secondary" disabled={cloudBusy==='branch'||!newBranchName.trim()} onClick={createCloudBranch}>{cloudBusy==='branch'?'Creating…':'Create branch'}</Button></div></div>}
             {cloud&&!cloud.enabled&&<div className="sm:col-span-2 rounded-xl border border-gold/25 bg-gold/5 p-4"><p className="text-xs font-semibold text-ink-900">Cloud integration is disabled on this server.</p><p className="mt-1 text-[11px] leading-5 text-slate-soft">Set <code className="rounded bg-surface px-1 py-0.5">AEZAKMI_CLOUD_ENABLED=true</code>, <code className="rounded bg-surface px-1 py-0.5">AEZAKMI_SUPABASE_URL</code>, and <code className="rounded bg-surface px-1 py-0.5">AEZAKMI_SUPABASE_PUBLISHABLE_KEY</code> in the Edge backend environment, then restart it.</p></div>}
             {cloud?.enabled&&!cloud.paired&&<>

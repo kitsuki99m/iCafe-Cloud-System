@@ -424,29 +424,17 @@ export default function CustomerSessionView() {
     return () => ls.forEach(([e, fn]) => window.removeEventListener(e, fn));
   }, [canExtend, handleHelp, handleThisPc]);
 
-  const idleUiPaused = Boolean(
-    topUpOpen || extendOpen || startOpen || logoutOpen || feedbackOpen || announcementsOpen || viewFeedback || powerConfirm ||
-    logoutBusy || feedbackBusy || assistanceBusy
-  );
-  const idleUiPausedRef = useRef(idleUiPaused);
-  idleUiPausedRef.current = idleUiPaused;
-
   useEffect(() => {
     if (!user || hasActiveSession) return undefined;
+    // Intentional hard boundary: a signed-in member who has not started a paid
+    // session gets five minutes to begin one. User activity and open dialogs do
+    // not extend or pause this countdown.
     let remaining = 300;
     idleTriggered.current = false;
     setIdleCountdown(remaining);
 
-    const resetIdle = () => {
-      if (idleTriggered.current) return;
-      remaining = 300;
-      setIdleCountdown(remaining);
-    };
-    const activityEvents = ["pointermove", "pointerdown", "keydown", "touchstart", "wheel"];
-    activityEvents.forEach((eventName) => window.addEventListener(eventName, resetIdle, { passive: true }));
-
     const countdownTimer = window.setInterval(() => {
-      if (idleTriggered.current || idleUiPausedRef.current) return;
+      if (idleTriggered.current) return;
       remaining = Math.max(0, remaining - 1);
       setIdleCountdown(remaining);
       if (remaining > 0) return;
@@ -463,7 +451,6 @@ export default function CustomerSessionView() {
 
     return () => {
       window.clearInterval(countdownTimer);
-      activityEvents.forEach((eventName) => window.removeEventListener(eventName, resetIdle));
       setIdleCountdown(null);
       idleTriggered.current = false;
     };
