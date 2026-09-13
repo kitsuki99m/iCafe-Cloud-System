@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { apiGet, apiPost, setToken, getToken } from "../lib/api.js";
-import { cloudStationFeatureEnabled, cloudStationPaired, pairCloudStation, startCloudStationRuntime, clearCloudStationCredential } from "../lib/cloudStation.js";
+import { cloudStationFeatureEnabled, cloudStationPaired, pairCloudStation, startCloudStationRuntime, unpairCloudStation } from "../lib/cloudStation.js";
 import { clearStationLifecycleMarker, hasPendingStationLifecycle, recoverPendingStationLifecycle, releaseStationLifecycle } from "../lib/sessionLifecycle.js";
 
 const C = createContext(null);
@@ -275,10 +275,10 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function pairStationToCloud(ownerEmail, pairingCode) {
+  async function pairStationToCloud(pairingCode) {
     setStationPairingError("");
     try {
-      const station = await pairCloudStation({ ownerEmail, pairingCode });
+      const station = await pairCloudStation({ pairingCode });
       setStationPairingRequired(false);
       return { ok:true, station };
     } catch (error) {
@@ -288,10 +288,18 @@ export function AuthProvider({ children }) {
   }
 
   async function resetCloudStationPairing() {
-    await clearCloudStationCredential();
-    setStationPairingRequired(true);
-    setUser(null);
-    setToken(null);
+    setStationPairingError("");
+    try {
+      await unpairCloudStation();
+      setStationPairingRequired(true);
+      setUser(null);
+      setToken(null);
+      return { ok:true };
+    } catch (error) {
+      const message=error?.message || "Unable to reset this Customer Station pairing. Check the internet connection and try again.";
+      setStationPairingError(message);
+      return { ok:false, error:message, code:error?.code };
+    }
   }
 
   async function logout(options = {}) {

@@ -42,6 +42,27 @@ export async function clearCloudStationCredential() {
   else localStorage.removeItem(DEV_CREDENTIAL_KEY)
   window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-unpaired'))
 }
+export async function unpairCloudStation() {
+  if (!cloudStationPaired()) {
+    await clearCloudStationCredential()
+    return { success:true, alreadyUnpaired:true }
+  }
+  try {
+    const response=await fetch(`${SUPABASE_URL}/functions/v1/station-runtime`,{method:'POST',headers:stationHeaders(),body:JSON.stringify({action:'unpair'})})
+    const data=await parse(response)
+    await clearCloudStationCredential()
+    return data
+  } catch (error) {
+    // If Cloud already revoked/deleted this device, the local credential is stale
+    // and can be safely discarded. Network/server failures keep the credential so
+    // we do not create a ghost pairing that cannot revoke itself later.
+    if (['STATION_AUTH_INVALID','STATION_AUTH_REQUIRED'].includes(String(error?.code||''))) {
+      await clearCloudStationCredential()
+      return { success:true, alreadyRevoked:true }
+    }
+    throw error
+  }
+}
 export function cloudStationPaired() { const c=getCloudStationCredential();return Boolean(c?.stationId&&c?.stationToken&&c?.branchId&&c?.organizationId) }
 export function installationId() {
   try { const id=window.aezakmiClient?.getInstallationId?.();if(id)return id } catch {}
@@ -66,9 +87,9 @@ function stationHeaders(extra={}) {
   return publicHeaders({ 'x-aezakmi-station-id':credential.stationId, 'x-aezakmi-station-token':credential.stationToken, ...extra })
 }
 
-export async function pairCloudStation({ ownerEmail, pairingCode }) {
+export async function pairCloudStation({ pairingCode }) {
   if (!cloudStationFeatureEnabled()) throw Object.assign(new Error('Cloud Station is not configured in this Customer build.'),{code:'CLOUD_CONFIG_MISSING'})
-  const response=await fetch(`${SUPABASE_URL}/functions/v1/pair-station`,{method:'POST',headers:publicHeaders(),body:JSON.stringify({ownerEmail:String(ownerEmail||'').trim(),pairingCode:String(pairingCode||'').trim(),installationId:installationId()})})
+  const response=await fetch(`${SUPABASE_URL}/functions/v1/pair-station`,{method:'POST',headers:publicHeaders(),body:JSON.stringify({pairingCode:String(pairingCode||'').trim(),installationId:installationId()})})
   const data=await parse(response)
   const credential={stationId:data.stationId,stationToken:data.stationToken,realtimeTopicKey:data.realtimeTopicKey,organizationId:data.organizationId,organizationName:data.organizationName,branchId:data.branchId,branchName:data.branchName,localStationId:data.localStationId,stationName:data.stationName,pairedAt:data.pairedAt}
   await saveCredential(credential)

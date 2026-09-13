@@ -41,6 +41,19 @@ test('Customer Server settings use an offline-safe master setup PIN instead of c
   assert.match(main, /client:verify-setup-master-pin/)
 })
 
+
+
+test('Quit Customer Station supersedes unregistered/unpaired station state with the offline setup master PIN', () => {
+  const guard = read('apps/customer/src/components/common/EmergencyControlGuard.jsx')
+  assert.match(guard, /stationPairingRequired/)
+  assert.match(guard, /command === 'quit' && stationPairingRequired/)
+  assert.match(guard, /verifyStationSetupMasterPin/)
+  assert.match(guard, /PC_NOT_REGISTERED/)
+  assert.match(guard, /STATION_NOT_PAIRED/)
+  assert.match(guard, /executeEmergencyCommand\?\.\('quit'\)/)
+  assert.match(guard, /Lock\/unlock never get this/)
+})
+
 test('Customer master setup PIN is not persisted in renderer storage or sent to the backend', () => {
   const gate = read('apps/customer/src/components/common/AdminPinGateModal.jsx')
   const config = read('apps/customer/src/lib/serverConfig.js')

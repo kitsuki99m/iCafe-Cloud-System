@@ -14,6 +14,18 @@ async function cloudSessionAction(admin:SupabaseClient,station:any,action:string
 async function mirrorStationStateToEdge(admin:SupabaseClient,station:any,command:any,result:any){if(!['lock','unlock','reboot','shutdown'].includes(String(command.command)))return;const{data:edge,error}=await admin.from('edge_servers').select('id').eq('branch_id',station.branch_id).is('revoked_at',null).order('last_seen_at',{ascending:false}).limit(1).maybeSingle();if(error||!edge)return;await admin.from('cloud_commands').insert({organization_id:station.organization_id,branch_id:station.branch_id,edge_id:edge.id,station_id:station.local_station_id,command:'station_state',payload:{stationCommandId:command.id,command:command.command,result:result&&typeof result==='object'?result:{}},expires_at:new Date(Date.now()+120000).toISOString()})}
 
 Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admin=adminClient(),station=await stationAuth(req,admin),body=await req.json().catch(()=>({})),action=String(body.action||'heartbeat'),now=new Date().toISOString();
+  if(action==='unpair'){
+    // Customer-side Reset Pairing must revoke the Cloud identity before the
+    // Electron app deletes its local credential. This prevents ghost pairings
+    // where the kiosk looks unpaired but Supabase still owns the logical PC.
+    await admin.from('branch_customer_auth_sessions').update({revoked_at:now}).eq('branch_id',station.branch_id).eq('station_device_id',station.id).is('revoked_at',null);
+    await admin.from('station_commands').update({status:'failed',acknowledged_at:now,result:{error:'Customer Station pairing was reset on the client.',code:'STATION_UNPAIRED'}}).eq('station_device_id',station.id).in('status',['queued','running']);
+    const stationPatch=await admin.from('branch_stations').update({station_device_id:null,cloud_connection_status:'unpaired',cloud_last_seen_at:null,updated_at:now}).eq('branch_id',station.branch_id).eq('local_id',station.local_station_id).eq('station_device_id',station.id);
+    if(stationPatch.error)throw stationPatch.error;
+    const revoked=await admin.from('station_devices').update({status:'revoked',revoked_at:now,updated_at:now}).eq('id',station.id).is('revoked_at',null);
+    if(revoked.error)throw revoked.error;
+    return json({success:true,unpaired:true,stationId:station.id,localStationId:station.local_station_id})
+  }
   if(action==='heartbeat'){
     const recovered=Boolean(body.recoveredFromFallback);const patch:any={status:'online',cloud_last_seen_at:now,updated_at:now};if(recovered)patch.last_sync_restored_at=now;if(body.usedFallback)patch.last_fallback_at=now;await admin.from('station_devices').update(patch).eq('id',station.id);const localIp=String(body.localIp||'').trim();const stationPatch:any={station_device_id:station.id,cloud_last_seen_at:now,cloud_connection_status:'online',updated_at:now};if(/^(?:\d{1,3}\.){3}\d{1,3}$/.test(localIp)&&localIp.split('.').every((part:string)=>Number(part)>=0&&Number(part)<=255))stationPatch.ip_address=localIp;await admin.from('branch_stations').update(stationPatch).eq('branch_id',station.branch_id).eq('local_id',station.local_station_id);await cloudSessionAction(admin,station,'session.heartbeat',{pcId:station.local_station_id},null);return json({success:true,station:{id:station.id,organizationId:station.organization_id,branchId:station.branch_id,localStationId:station.local_station_id,name:station.station_name},serverTime:now})
   }

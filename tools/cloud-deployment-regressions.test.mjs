@@ -265,21 +265,49 @@ test('developer business lifecycle controls preserve local operation while enfor
 })
 
 
-test('cloud-primary Customer Stations bind enrollment email to a permanent organization/branch/station identity',()=>{
+test('cloud-primary Customer Stations use the owner-generated one-time code as the permanent organization/branch/station enrollment boundary',()=>{
   const sql=read('supabase/migrations/20260913000006_cloud_primary_customer_stations.sql')
   const pair=read('supabase/functions/pair-station/index.ts')
   const station=read('apps/customer/src/lib/cloudStation.js')
+  const setup=read('apps/customer/src/components/auth/StationCloudPairing.jsx')
   assert.match(sql,/create table if not exists public\.station_devices/)
   assert.match(sql,/organization_id uuid not null/)
   assert.match(sql,/branch_id uuid not null/)
   assert.match(sql,/local_station_id text not null/)
-  assert.match(pair,/ownerEmail/)
+  assert.doesNotMatch(pair,/body\.ownerEmail/)
+  assert.doesNotMatch(setup,/Business owner email/)
+  assert.match(pair,/pairingCode/)
   assert.match(pair,/organization_id/)
   assert.match(pair,/branch_id/)
   assert.match(pair,/local_station_id/)
   assert.match(station,/organizationId/)
   assert.match(station,/branchId/)
   assert.match(station,/localStationId/)
+})
+
+test('Customer-side pairing reset revokes the Cloud station before clearing Electron credentials',()=>{
+  const station=read('apps/customer/src/lib/cloudStation.js')
+  const auth=read('apps/customer/src/context/AuthContext.jsx')
+  const runtime=read('supabase/functions/station-runtime/index.ts')
+  const pair=read('supabase/functions/pair-station/index.ts')
+  assert.match(station,/export async function unpairCloudStation/)
+  assert.match(station,/action:'unpair'/)
+  assert.match(auth,/await unpairCloudStation\(\)/)
+  assert.match(runtime,/action==='unpair'/)
+  assert.match(runtime,/cloud_connection_status:'unpaired'/)
+  assert.match(runtime,/status:'revoked'/)
+  assert.match(pair,/Heal a stale branch pointer/)
+})
+
+test('revoked Customer Station history does not block a PC from pairing again after reset or reinstall',()=>{
+  const migration=read('supabase/migrations/20260913000009_station_repairing.sql')
+  const pair=read('supabase/functions/pair-station/index.ts')
+  assert.match(migration,/drop constraint if exists station_devices_branch_id_local_station_id_key/)
+  assert.match(migration,/create unique index station_devices_active_branch_station_uidx/)
+  assert.match(migration,/where revoked_at is null/)
+  assert.match(pair,/activeForStation/)
+  assert.match(pair,/is\('revoked_at',null\)/)
+  assert.match(pair,/existing\.data\.revoked_at/)
 })
 
 test('Customer Station uses Cloud first and opens local Socket.IO only as fallback',()=>{
@@ -312,7 +340,7 @@ test('Cloud Admin can generate a Customer Station pairing code for an unpaired l
   const fn=read('supabase/functions/station-admin/index.ts')
   assert.match(page,/Pair Customer PC/)
   assert.match(page,/cloudStationAdmin\('pairing_code'/)
-  assert.match(page,/Owner email/)
+  assert.doesNotMatch(page,/enter the owner email/i)
   assert.match(fn,/action==='pairing_code'/)
   assert.match(fn,/STATION_ALREADY_PAIRED/)
 })
