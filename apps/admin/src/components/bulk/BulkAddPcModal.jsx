@@ -26,17 +26,23 @@ export default function BulkAddPcModal({ open, onClose, onCreate, existingPcs = 
     setError('')
   }, [open])
 
-  const total = Math.max(1, Math.min(50, Number(count) || 1))
-  const firstStation = Math.max(1, Number(stationStart) || 1)
+  const total = Math.max(1, Math.min(50, Math.trunc(Number(count) || 1)))
+  const firstStation = Math.max(1, Math.trunc(Number(stationStart) || 1))
   const baseIp = parseIpv4(startingIp)
   const rows = useMemo(() => Array.from({ length: total }, (_, index) => {
-    const label = `PC ${firstStation + index}`
-    if (cloudManaged || !baseIp) return { label, ip: '' }
-    return { label, ip: `${baseIp[0]}.${baseIp[1]}.${baseIp[2]}.${baseIp[3] + index}` }
+    const number = firstStation + index
+    const label = `PC - ${number}`
+    if (cloudManaged || !baseIp) return { number, label, ip: '' }
+    return { number, label, ip: `${baseIp[0]}.${baseIp[1]}.${baseIp[2]}.${baseIp[3] + index}` }
   }), [total, firstStation, startingIp, cloudManaged])
 
   const ipRangeValid = cloudManaged || Boolean(baseIp && baseIp[3] >= 1 && baseIp[3] + total - 1 <= 254)
-  const duplicateLabel = rows.some((row) => existingPcs.some((pc) => String(pc.label || '').trim().toLowerCase() === row.label.toLowerCase()))
+  const duplicateLabel = rows.some((row) => existingPcs.some((pc) => {
+    const explicit = Number.parseInt(String(pc.pcNumber ?? pc.pc_number ?? ''), 10)
+    const fallback = String(pc.label ?? pc.id ?? '').match(/\d+/)
+    const existingNumber = Number.isInteger(explicit) && explicit > 0 ? explicit : fallback ? Number.parseInt(fallback[0], 10) : null
+    return existingNumber === row.number
+  }))
   const duplicateIp = !cloudManaged && rows.some((row) => row.ip && existingPcs.some((pc) => String(pc.ipAddress || '').trim() === row.ip))
   const valid = ipRangeValid && !duplicateLabel && !duplicateIp
 
@@ -52,7 +58,7 @@ export default function BulkAddPcModal({ open, onClose, onCreate, existingPcs = 
     setSaving(true)
     setError('')
     try {
-      for (const row of rows) await onCreate({ label: row.label, ipAddress: cloudManaged ? '' : row.ip, spec: '', status: 'offline' })
+      for (const row of rows) await onCreate({ id:`pc-${row.number}`, pcNumber:String(row.number), label:row.label, ipAddress:cloudManaged ? '' : row.ip, spec:'', status:'offline' })
       onClose()
     } catch (err) {
       setError(err?.message || 'Unable to add all PCs.')
@@ -79,7 +85,7 @@ export default function BulkAddPcModal({ open, onClose, onCreate, existingPcs = 
           <div>
             <label className="eyebrow mb-1.5 block">Station # starting</label>
             <input type="number" min="1" value={stationStart} onChange={(e) => setStationStart(e.target.value)} placeholder="1" className="w-full rounded-lg border border-surface-line bg-ink px-3 py-2.5 text-sm text-ink-900 focus:border-gold/50 focus:outline-none"/>
-            <p className="mt-1 text-[11px] text-slate-soft">Creates PC {firstStation}, PC {firstStation + 1}, and so on.</p>
+            <p className="mt-1 text-[11px] text-slate-soft">Creates PC - {firstStation}, PC - {firstStation + 1}, and so on.</p>
           </div>
           <div>
             <label className="eyebrow mb-1.5 block">Number of PCs</label>

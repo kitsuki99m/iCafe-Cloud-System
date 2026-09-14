@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import Modal from '../common/Modal.jsx'
 import Button from '../common/Button.jsx'
-import { makePcId } from '../../lib/rates.js'
 
 const inputClass =
   'w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
-const BLANK = { label: '', ipAddress: '', spec: '' }
+const BLANK = { pcNumber: '', label: '', ipAddress: '', spec: '' }
 
 function validIpv4(value) {
   const ip = String(value || '').trim()
@@ -16,6 +15,30 @@ function validIpv4(value) {
     return Number.isInteger(number) && number >= 0 && number <= 255
   })
 }
+
+function stationNumber(value) {
+  const text = String(value ?? '').trim()
+  if (!/^\d+$/.test(text)) return null
+  const number = Number(text)
+  return Number.isSafeInteger(number) && number > 0 ? number : null
+}
+
+function pcNumberFor(pc) {
+  const explicit = stationNumber(pc?.pcNumber ?? pc?.pc_number)
+  if (explicit) return explicit
+  const match = String(pc?.label ?? pc?.id ?? '').match(/\d+/)
+  return match ? stationNumber(match[0]) : null
+}
+
+function nextStationNumber(existingPcs = []) {
+  const used = new Set(existingPcs.map(pcNumberFor).filter(Boolean))
+  let number = 1
+  while (used.has(number)) number += 1
+  return number
+}
+
+const pcLabel = (number) => `PC - ${number}`
+const pcId = (number) => `pc-${number}`
 
 // Cloud stations learn their LAN address from the paired Customer Station.
 // Local-only Café Edge still needs a complete IP because its station identity
@@ -30,7 +53,9 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
 
   useEffect(() => {
     if (open) {
-      setDraft(pc ? { label: pc.label, ipAddress: pc.ipAddress || '', spec: pc.spec ?? '' } : { ...BLANK })
+      setDraft(pc
+        ? { pcNumber: String(pcNumberFor(pc) ?? ''), label: pc.label, ipAddress: pc.ipAddress || '', spec: pc.spec ?? '' }
+        : { ...BLANK, pcNumber: String(nextStationNumber(existingPcs)) })
       setRemoveArmed(false)
       setSaving(false)
       setError('')
@@ -40,9 +65,11 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
   const effectiveIp = draft.ipAddress.trim()
   const validIp = cloudManaged || validIpv4(effectiveIp)
   const duplicateIp = Boolean(effectiveIp) && existingPcs.some((item) => String(item.id) !== String(pc?.id ?? '') && String(item.ipAddress ?? '').trim() === effectiveIp)
-  const generatedId = makePcId(draft.label)
-  const duplicateId = !isEdit && existingPcs.some((item) => String(item.id) === String(generatedId))
-  const valid = draft.label.trim() && validIp && !duplicateIp && !duplicateId
+  const createNumber = stationNumber(draft.pcNumber)
+  const generatedId = createNumber ? pcId(createNumber) : null
+  const duplicateNumber = !isEdit && Boolean(createNumber) && existingPcs.some((item) => pcNumberFor(item) === createNumber)
+  const duplicateId = !isEdit && Boolean(generatedId) && existingPcs.some((item) => String(item.id) === String(generatedId))
+  const valid = (isEdit ? Boolean(draft.label.trim()) : Boolean(createNumber)) && validIp && !duplicateIp && !duplicateNumber && !duplicateId
 
   async function handleSave() {
     if (!valid || saving) return
@@ -55,9 +82,15 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
           : draft
         await onSave(pc.id, patch)
       } else {
-        const id = generatedId
-        if (!id) throw new Error('Enter a valid PC label.')
-        await onCreate({ ...draft, id, ipAddress: cloudManaged ? '' : effectiveIp })
+        if (!createNumber || !generatedId) throw new Error('Enter a valid PC number.')
+        await onCreate({
+          id: generatedId,
+          pcNumber: String(createNumber),
+          label: pcLabel(createNumber),
+          ipAddress: cloudManaged ? '' : effectiveIp,
+          spec: draft.spec,
+          status: 'offline',
+        })
       }
       onClose()
     } catch (err) {
@@ -116,18 +149,35 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
       }
     >
       <div className="space-y-4">
-        <div>
-          <label className="eyebrow mb-1.5 block">Label</label>
-          <input
-            autoFocus
-            value={draft.label}
-            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-            placeholder="PC 17"
-            className={inputClass}
-          />
-        </div>
-        {!isEdit && draft.label.trim() && (
-          <p className="text-xs text-slate-soft">PC ID will be generated automatically: <span className="font-mono text-ink-900">{makePcId(draft.label)}</span></p>
+        {isEdit ? (
+          <div>
+            <label className="eyebrow mb-1.5 block">Label</label>
+            <input
+              autoFocus
+              value={draft.label}
+              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+              placeholder="PC - 1"
+              className={inputClass}
+            />
+          </div>
+        ) : (
+          <div>
+            <label className="eyebrow mb-1.5 block">PC number</label>
+            <div className="flex overflow-hidden rounded-lg border border-surface-line bg-ink focus-within:border-gold/50">
+              <span className="flex items-center border-r border-surface-line bg-surface-raised px-3 text-sm font-semibold text-slate-soft">PC -</span>
+              <input
+                autoFocus
+                type="number"
+                min="1"
+                step="1"
+                value={draft.pcNumber}
+                onChange={(e) => setDraft({ ...draft, pcNumber: e.target.value.replace(/[^0-9]/g, '') })}
+                placeholder="1"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink-900 outline-none"
+              />
+            </div>
+            {createNumber ? <p className="mt-1 text-[11px] text-slate-soft">Station: <span className="font-semibold text-ink-900">{pcLabel(createNumber)}</span> · ID <span className="font-mono text-ink-900">{generatedId}</span></p> : null}
+          </div>
         )}
 
         {cloudManaged ? (
@@ -159,7 +209,8 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
         </div>
         {duplicateIp && <p className="text-xs font-medium text-ember-dim">That IP address is already assigned to another PC.</p>}
         {!cloudManaged && effectiveIp && !validIpv4(effectiveIp) && <p className="text-xs font-medium text-ember-dim">Enter a valid IPv4 address.</p>}
-        {duplicateId && <p className="text-xs font-medium text-ember-dim">That PC label would create an ID already used by another PC.</p>}
+        {duplicateNumber && <p className="text-xs font-medium text-ember-dim">PC - {createNumber} already exists.</p>}
+        {!duplicateNumber && duplicateId && <p className="text-xs font-medium text-ember-dim">That PC number is already in use.</p>}
         {error && <p className="rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-xs text-ember-dim">{error}</p>}
       </div>
     </Modal>

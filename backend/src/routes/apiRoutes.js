@@ -199,10 +199,11 @@ function pcView(p, suppliedActive) {
         pauseReason: pause?.reason ?? null,
       }
     : null;
+  const storedNumber = Number.parseInt(String(p.pc_number ?? ""), 10);
   const numberMatch = String(p.label || p.id || "").match(/\d+/);
   return {
     id: p.id,
-    pcNumber: numberMatch ? Number(numberMatch[0]) : null,
+    pcNumber: Number.isInteger(storedNumber) && storedNumber > 0 ? storedNumber : numberMatch ? Number(numberMatch[0]) : null,
     label: p.label,
     ipAddress: p.ip_address,
     macAddress: p.mac_address,
@@ -1581,13 +1582,18 @@ router.post("/pcs", auth, requireRole("admin"), (req, res, next) => {
     // IP look ready for customers.
     const {
       id: requestedPcId,
+      pcNumber: requestedPcNumber,
+      pc_number: requestedPcNumberSnake,
       label,
       ipAddress,
       spec,
       status = "offline",
       macAddress = null,
     } = req.body;
-    const cleanLabel = String(label || "").trim();
+    const rawPcNumber = String(requestedPcNumber ?? requestedPcNumberSnake ?? "").trim();
+    const parsedPcNumber = /^\d+$/.test(rawPcNumber) ? Number(rawPcNumber) : NaN;
+    const cleanPcNumber = Number.isSafeInteger(parsedPcNumber) && parsedPcNumber > 0 ? String(parsedPcNumber) : null;
+    const cleanLabel = String(label || (cleanPcNumber ? `PC - ${cleanPcNumber}` : "")).trim();
     const cleanIp = String(ipAddress || "").trim();
     if (!cleanLabel || !cleanIp)
       return res
@@ -1620,15 +1626,26 @@ router.post("/pcs", auth, requireRole("admin"), (req, res, next) => {
           error:
             "New PCs start offline until the paired Customer Station connects.",
         });
-    const generatedId = `pc-${cleanLabel
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "")}`;
+    const generatedId = cleanPcNumber
+      ? `pc-${cleanPcNumber}`
+      : `pc-${cleanLabel
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")}`;
     const pcId = requestedPcId || generatedId;
     if (!pcId)
       return res
         .status(400)
         .json({ success: false, error: "A valid PC label is required." });
+    if (cleanPcNumber) {
+      const duplicateNumber = db.prepare("SELECT id,label FROM pcs WHERE pc_number=?").get(cleanPcNumber);
+      if (duplicateNumber)
+        return res.status(409).json({
+          success:false,
+          code:"PC_NUMBER_EXISTS",
+          error:`PC - ${cleanPcNumber} already exists.`,
+        });
+    }
     const duplicateId = db.prepare("SELECT id FROM pcs WHERE id=?").get(pcId);
     if (duplicateId)
       return res
@@ -1654,7 +1671,7 @@ router.post("/pcs", auth, requireRole("admin"), (req, res, next) => {
       `INSERT INTO pcs (id,pc_number,label,ip_address,mac_address,spec,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)`,
     ).run(
       pcId,
-      String(pcId).replace(/^pc-/, "").toUpperCase(),
+      cleanPcNumber || String(pcId).replace(/^pc-/, "").toUpperCase(),
       cleanLabel,
       cleanIp,
       macAddress,
@@ -1663,7 +1680,7 @@ router.post("/pcs", auth, requireRole("admin"), (req, res, next) => {
       now,
       now,
     );
-    log(req.auth.userId, "pc.create", "pc", pcId, null, { label, ipAddress });
+    log(req.auth.userId, "pc.create", "pc", pcId, null, { pcNumber:cleanPcNumber, label:cleanLabel, ipAddress:cleanIp });
     res
       .status(201)
       .json({
