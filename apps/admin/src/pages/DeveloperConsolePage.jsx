@@ -26,6 +26,7 @@ import {
 import { cloudDeveloperRegistrations } from '../lib/cloudClient.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import Button from '../components/common/Button.jsx'
+import Modal from '../components/common/Modal.jsx'
 import { SUBSCRIPTION_PACKAGES, formatPackagePrice, normalizeSubscriptionPackages, packageDefinition, packageForStations } from '../lib/subscriptionPackages.js'
 
 const FILTERS=['all','pending','reviewing','needs_info','approved','invited','invite_cancelled','activated','rejected']

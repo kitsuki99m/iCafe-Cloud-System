@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CircleDollarSign, Clock3, RefreshCw, RotateCcw, ScrollText, Search, SlidersHorizontal } from 'lucide-react'
 import { apiGet, apiPost } from '../lib/api.js'
 import SidePanel from '../components/common/SidePanel.jsx'
+import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import { AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
 
 const BADGE = {
@@ -41,6 +42,7 @@ export default function LogsPage() {
   const [query, setQuery] = useState('')
   const [actionFilter, setActionFilter] = useState('all')
   const [selectedLog, setSelectedLog] = useState(null)
+  const [forfeitTarget, setForfeitTarget] = useState(null)
   const [page,setPage]=useState(1)
   const pageSize=50
 
@@ -118,12 +120,11 @@ export default function LogsPage() {
 
   async function forfeitInterruptedGuest(item) {
     if (!item?.id || processingId) return
-    const minutes = Math.max(0, Math.ceil(Number(item.remainingSeconds || 0) / 60))
-    if (!window.confirm(`Permanently forfeit ${minutes} saved guest minute${minutes === 1 ? '' : 's'} from ${item.pcLabel || 'this station'}? This cannot be undone.`)) return
     setProcessingId(item.id)
     setError('')
     try {
       await apiPost(`/sessions/${encodeURIComponent(item.id)}/forfeit-interrupted-guest`, {})
+      setForfeitTarget(null)
       await loadLogs()
     } catch (err) {
       setError(err?.message || 'Unable to forfeit the interrupted guest time.')
@@ -177,12 +178,25 @@ export default function LogsPage() {
         </div>)}
         {recoverableGuestSessions.map((item)=><div key={`restore-${item.id}`} className="overview-soft-card flex flex-wrap items-center justify-between gap-3 p-3">
           <div className="min-w-0"><p className="text-xs font-semibold text-ink-900">Saved guest time · {item.pcLabel || item.pcId || 'Station'}</p><p className="mt-1 text-[10px] text-slate-soft">Interrupted {formatTime(item.endedAt)} · {String(item.endReason || 'interrupted').replaceAll('_',' ')}</p><p className="stat-figure mt-1 text-sm font-semibold text-teal-dim">{Math.floor(Number(item.remainingSeconds || 0)/3600)}h {String(Math.floor((Number(item.remainingSeconds || 0)%3600)/60)).padStart(2,'0')}m saved</p></div>
-          <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>restoreGuest(item)} className="inline-flex items-center gap-2 rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-50"><RotateCcw size={13}/>Restore guest</button><button type="button" disabled={processingId===item.id} onClick={()=>forfeitInterruptedGuest(item)} className="inline-flex items-center gap-2 rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-[10px] font-semibold text-ember-dim disabled:opacity-50"><AlertTriangle size={13}/>Forfeit</button></div>
+          <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>restoreGuest(item)} className="inline-flex items-center gap-2 rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-50"><RotateCcw size={13}/>Restore guest</button><button type="button" disabled={processingId===item.id} onClick={()=>setForfeitTarget(item)} className="inline-flex items-center gap-2 rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-[10px] font-semibold text-ember-dim disabled:opacity-50"><AlertTriangle size={13}/>Forfeit</button></div>
         </div>)}
       </div>
     </section>}
 
     {!loading && !error && filteredLogs.length === 0 ? <div className="overview-card flex flex-col items-center gap-2 py-16 text-center"><ScrollText size={22} className="text-slate-soft"/><p className="text-sm font-medium text-ink-900">No logs match this view.</p><p className="text-xs text-slate-soft">Try a different search or action filter.</p></div> : <div className="admin-table-shell overflow-hidden"><div className="max-h-[calc(100vh-300px)] overflow-auto"><table className="w-full min-w-[780px] text-[11px]"><thead className="sticky top-0 z-10 bg-surface"><tr className="text-left text-[10px] uppercase tracking-[0.12em] text-slate-soft"><th className="px-4 py-3 font-medium">Action</th><th className="px-4 py-3 font-medium">Entity</th><th className="px-4 py-3 font-medium">PC</th><th className="px-4 py-3 font-medium">Duration</th><th className="px-4 py-3 font-medium">Amount</th><th className="px-4 py-3 font-medium">Time</th></tr></thead><tbody>{loading?<tr><td colSpan="6" className="px-4 py-12 text-center text-sm text-slate-soft">Loading logs…</td></tr>:visibleLogs.map((log)=>{const details=log.details||{};const amount=Number(details.amount??details.amountPaid??0);const badge=BADGE[log.action]||'text-slate-soft bg-surface-raised';return <tr key={log.id} onClick={()=>setSelectedLog(log)} className="cursor-pointer border-b border-surface-line/50 last:border-0 hover:bg-surface-raised/45"><td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badge}`}>{labelForAction(log.action)}</span></td><td className="px-4 py-2.5 text-slate-soft">{log.entityType||log.entity_type||'—'}</td><td className="px-4 py-2.5 font-medium text-ink-900">{log.pcId||'—'}</td><td className="stat-figure px-4 py-2.5 text-slate-soft">{durationFromDetails(details)}</td><td className="stat-figure px-4 py-2.5 text-ink-900">{amount>0?`₱${amount.toFixed(2)}`:'—'}</td><td className="px-4 py-2.5 text-slate-soft">{formatTime(log.createdAt)}</td></tr>})}</tbody></table></div><div className="flex items-center justify-between gap-2 border-t border-surface-line bg-surface px-4 py-2.5 text-[10px] text-slate-soft"><span>{filteredLogs.length} record{filteredLogs.length===1?'':'s'} · Page {page} of {pages}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(v=>v-1)} className="rounded-lg border border-surface-line px-2.5 py-1.5 disabled:opacity-40">Previous</button><button disabled={page>=pages} onClick={()=>setPage(v=>v+1)} className="rounded-lg border border-surface-line px-2.5 py-1.5 disabled:opacity-40">Next</button></div></div></div>}
+
+
+    <ConfirmModal
+      open={Boolean(forfeitTarget)}
+      eyebrow="Interrupted guest recovery"
+      title="Forfeit saved guest time?"
+      message={forfeitTarget ? `Permanently forfeit ${Math.max(0, Math.ceil(Number(forfeitTarget.remainingSeconds || 0) / 60))} saved guest minute${Math.max(0, Math.ceil(Number(forfeitTarget.remainingSeconds || 0) / 60)) === 1 ? '' : 's'} from ${forfeitTarget.pcLabel || 'this station'}? This cannot be undone.` : ''}
+      confirmLabel="Forfeit time"
+      variant="danger"
+      busy={Boolean(forfeitTarget?.id && processingId === forfeitTarget.id)}
+      onClose={()=>!processingId&&setForfeitTarget(null)}
+      onConfirm={()=>forfeitInterruptedGuest(forfeitTarget)}
+    />
 
     <SidePanel open={!!selectedLog} onClose={()=>setSelectedLog(null)} eyebrow="Log details" title={selectedLog?labelForAction(selectedLog.action):'Log'}>
       {selectedLog&&<div className="space-y-4"><section className="overview-soft-card p-4"><div className="grid grid-cols-2 gap-3 text-xs"><div><p className="text-[10px] text-slate-soft">Recorded</p><p className="mt-1 font-medium text-ink-900">{formatTime(selectedLog.createdAt)}</p></div><div><p className="text-[10px] text-slate-soft">PC</p><p className="mt-1 font-medium text-ink-900">{selectedLog.pcId||'—'}</p></div><div><p className="text-[10px] text-slate-soft">Entity</p><p className="mt-1 font-medium text-ink-900">{selectedLog.entityType||selectedLog.entity_type||'—'}</p></div><div><p className="text-[10px] text-slate-soft">Entity ID</p><p className="stat-figure mt-1 break-all font-medium text-ink-900">{selectedLog.entityId||selectedLog.entity_id||'—'}</p></div></div></section><section className="overview-card p-4"><p className="eyebrow mb-3">Recorded details</p>{Object.keys(selectedLog.details||{}).length?<dl className="space-y-2">{Object.entries(selectedLog.details||{}).map(([key,value])=><div key={key} className="grid grid-cols-[130px_1fr] gap-3 border-b border-surface-line/50 pb-2 text-xs last:border-0"><dt className="text-slate-soft">{key.replaceAll(/([A-Z])/g,' $1')}</dt><dd className="break-words text-right font-medium text-ink-900">{typeof value==='object'?JSON.stringify(value):String(value??'—')}</dd></div>)}</dl>:<p className="text-xs text-slate-soft">No additional details were recorded.</p>}</section></div>}

@@ -556,11 +556,12 @@ export function migrate() {
   if (!revenueCols.includes('metadata')) db.exec('ALTER TABLE revenue_events ADD COLUMN metadata TEXT')
   if (!revenueCols.includes('reversed_event_id')) db.exec('ALTER TABLE revenue_events ADD COLUMN reversed_event_id TEXT')
 
-  // Gross earnings follow consumed services/products, not stored wallet credit.
-  // Backfill wallet-funded usage from the immutable wallet ledger so existing
-  // installations immediately report historical member usage correctly after
-  // this migration. A legacy session_total already represents the whole session,
-  // so wallet rows for that session are skipped to avoid double counting.
+  // Backfill wallet-funded service usage from the immutable wallet ledger so
+  // existing installations immediately report historical member usage. Paid
+  // wallet loads are also receipt events in Earnings; earningsSnapshot separately
+  // reconciles any older positive wallet rows whose receipt event was missing. A
+  // legacy session_total already represents the whole session, so wallet service
+  // rows for that session are skipped here to avoid duplicate service revenue.
   db.exec(`
     INSERT OR IGNORE INTO revenue_events(
       id,event_type,source_type,source_id,amount_centavos,occurred_at,created_by,

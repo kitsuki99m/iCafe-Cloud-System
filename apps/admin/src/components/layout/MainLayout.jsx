@@ -97,7 +97,7 @@ export default function MainLayout({ children }) {
   }
   useEffect(()=>{
     const onKey=(event)=>{
-      const key=event.key.toLowerCase()
+      const key=String(event?.key || '').toLowerCase()
       const unlockShortcut=event.altKey&&event.shiftKey&&key==='u'
       if(locked){
         if(unlockShortcut){event.preventDefault();unlockInputRef.current?.focus();return}

@@ -4,12 +4,17 @@ import fs from 'node:fs'
 
 const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8')
 
-test('Admin active prepaid forfeiture is explicitly destructive for Member and Guest modes',()=>{
+test('Admin active prepaid forfeiture uses a destructive confirmation modal for Member and Guest modes',()=>{
   const modal=read('apps/admin/src/components/floor/SessionModal.jsx')
-  assert.match(modal,/Forfeit this \$\{subject\} session\?/) 
-  assert.match(modal,/member will stay signed in/) 
-  assert.match(modal,/guest session will end immediately/) 
+  assert.match(modal,/import ConfirmModal from '\.\.\/common\/ConfirmModal\.jsx'/)
+  assert.match(modal,/Forfeit this \$\{forfeitSubject\} session\?/)
+  assert.match(modal,/title="Forfeit remaining time\?"/)
+  assert.match(modal,/confirmLabel="Forfeit time"/)
+  assert.match(modal,/variant="danger"/)
+  assert.match(modal,/member will stay signed in/)
+  assert.match(modal,/guest session will end immediately/)
   assert.match(modal,/runSessionAction\('forfeit'\)/)
+  assert.doesNotMatch(modal,/window\.confirm\([^)]*Forfeit this/)
 })
 
 test('Interrupted Guest saved time has a dedicated local authoritative forfeit route',()=>{
@@ -31,11 +36,15 @@ test('Cloud has a transaction-safe interrupted Guest forfeit RPC and Admin API r
   assert.match(api,/aezakmi_forfeit_interrupted_guest_session/)
 })
 
-test('Interrupted Guest recovery UI offers both Restore and permanent Forfeit',()=>{
+test('Interrupted Guest recovery UI offers Restore plus a permanent Forfeit confirmation modal',()=>{
   const logs=read('apps/admin/src/pages/LogsPage.jsx')
+  assert.match(logs,/import ConfirmModal from '\.\.\/components\/common\/ConfirmModal\.jsx'/)
   assert.match(logs,/forfeitInterruptedGuest/)
   assert.match(logs,/restore-interrupted-guest/)
   assert.match(logs,/forfeit-interrupted-guest/)
+  assert.match(logs,/title="Forfeit saved guest time\?"/)
+  assert.match(logs,/confirmLabel="Forfeit time"/)
+  assert.match(logs,/setForfeitTarget\(item\)/)
   assert.match(logs,/>Forfeit<\/button>/)
 })
 

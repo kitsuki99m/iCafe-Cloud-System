@@ -25,3 +25,15 @@ test('public branding logo explicitly permits cross-origin embedding', () => {
 test('admin Vite source includes a favicon public asset', () => {
   assert.equal(fs.existsSync(path.join(root, 'apps/admin/public/favicon.ico')), true)
 })
+
+test('Developer navigation renders with the shared Modal imported', () => {
+  const source = read('apps/admin/src/pages/DeveloperConsolePage.jsx')
+  assert.match(source, /import Modal from '\.\.\/components\/common\/Modal\.jsx'/)
+  assert.match(source, /<Modal open=\{pricingOpen\}/)
+})
+
+test('Admin global shortcut handling tolerates keyboard events without a key value', () => {
+  const source = read('apps/admin/src/components/layout/MainLayout.jsx')
+  assert.match(source, /const key=String\(event\?\.key \|\| ''\)\.toLowerCase\(\)/)
+  assert.doesNotMatch(source, /const key=event\.key\.toLowerCase\(\)/)
+})

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Zap, User, Users, Wrench, CheckCircle2, Power, RotateCw, Loader2, Banknote } from 'lucide-react'
 import Modal from '../common/Modal.jsx'
+import ConfirmModal from '../common/ConfirmModal.jsx'
 import Button from '../common/Button.jsx'
 import NumericInput from '../common/NumericInput.jsx'
 import { minutesForAmount, amountForMinutes, minAmountFor, rateForId } from '../../lib/rates.js'
@@ -287,6 +288,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
   const [statusBusy, setStatusBusy] = useState(false)
   const [localError, setLocalError] = useState('')
   const [preview, setPreview] = useState(null)
+  const [forfeitConfirmOpen, setForfeitConfirmOpen] = useState(false)
 
   async function runSessionAction(disposition, options = {}) {
     if (sessionAction) return
@@ -342,6 +344,10 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pc?.id, pc?.status])
+
+  useEffect(() => {
+    setForfeitConfirmOpen(false)
+  }, [pc?.id, pc?.session?.id])
 
   useEffect(() => {
     let active = true
@@ -551,6 +557,29 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
       amountDue = Number(s.accruedAmount ?? preview?.amountDue ?? ((elapsedSec / 60) * Number(s.postpaidRatePerMinute || 0)))
     }
 
+    const forfeitSubject = s.customerId ? 'member' : 'guest'
+    const forfeitEffect = s.customerId
+      ? 'The member will stay signed in, but this active session and all of its remaining time will be permanently discarded.'
+      : 'The guest session will end immediately, the Customer Station will return to the login kiosk, and all remaining time will be permanently discarded.'
+    const forfeitMessage = `Forfeit this ${forfeitSubject} session? ${forfeitEffect} This cannot be undone.`
+
+    if (forfeitConfirmOpen) {
+      return <ConfirmModal
+        open
+        eyebrow="Destructive session action"
+        title="Forfeit remaining time?"
+        message={forfeitMessage}
+        confirmLabel="Forfeit time"
+        variant="danger"
+        busy={sessionAction === 'forfeit'}
+        onClose={() => !sessionAction && setForfeitConfirmOpen(false)}
+        onConfirm={async () => {
+          await runSessionAction('forfeit')
+          setForfeitConfirmOpen(false)
+        }}
+      />
+    }
+
     return (
       <Modal
         open
@@ -561,7 +590,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
         footer={
           <>
             <Button variant="ghost" disabled={!!sessionAction} onClick={onClose}>Close</Button>
-            {s.billing === 'prepaid' && <Button variant="danger" disabled={!!sessionAction} onClick={() => { const subject=s.customerId?'member':'guest'; const effect=s.customerId?'The member will stay signed in, but this active session and all of its remaining time will be permanently discarded.':'The guest session will end immediately, the Customer Station will return to the login kiosk, and all remaining time will be permanently discarded.'; if (window.confirm(`Forfeit this ${subject} session? ${effect} This cannot be undone.`)) runSessionAction('forfeit') }}>{sessionAction==='forfeit'?'Forfeiting…':'Forfeit Time'}</Button>}
+            {s.billing === 'prepaid' && <Button variant="danger" disabled={!!sessionAction} onClick={() => setForfeitConfirmOpen(true)}>{sessionAction==='forfeit'?'Forfeiting…':'Forfeit Time'}</Button>}
             {s.billing === 'prepaid' && <Button variant="primary" disabled={!!sessionAction || sessionFrozen} onClick={() => runSessionAction('save')}>{sessionFrozen ? 'Session Paused' : sessionAction==='save' ? 'Saving…' : 'Pause & Save'}</Button>}
           </>
         }

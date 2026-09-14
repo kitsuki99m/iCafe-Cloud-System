@@ -348,6 +348,36 @@ test('cloud Earnings derives gross from every paid revenue event and returns wal
   assert.match(api,/Promise\.all\(\[revenueRows\(admin,branchId,bounds\.start,bounds\.end\),walletLedgerRows\(admin,branchId,bounds\.start,bounds\.end\)\]\)/)
 })
 
+test('cloud Earnings uses Manila reporting boundaries and repairs missing paid wallet receipts once',()=>{
+  const api=read('supabase/functions/admin-api/index.ts')
+  assert.match(api,/timeZone:'Asia\/Manila'/)
+  assert.match(api,/function manilaStartIso\(year:number,month:number,day:number\)/)
+  assert.match(api,/\.gte\('occurred_at',start\)\.lt\('occurred_at',end\)/)
+  assert.match(api,/function isPaidWalletReceipt\(row:any\)/)
+  assert.match(api,/countedWalletReceiptLedgers/)
+  assert.match(api,/ids\.find\(ledgerId=>!countedWalletReceiptLedgers\.has\(ledgerId\)\)\|\|ids\[0\]\|\|null/)
+  assert.match(api,/receiptCategoryForWalletRow/)
+  assert.match(api,/categories\[category\]=\(categories\[category\]\|\|0\)\+n\(row\.amount\)/)
+})
+
+test('Cloud wallet receipt trigger skips Edge-origin ledger rows and removes prior generated duplicates',()=>{
+  const migration=read('supabase/migrations/20260914000023_earnings_receipt_edge_dedupe_guard.sql')
+  assert.match(migration,/new\.edge_id is not null/)
+  assert.match(migration,/metadata->>'authority'.*= 'edge'/)
+  assert.match(migration,/delete from public\.branch_revenue_events generated/)
+  assert.match(migration,/generated\.local_id = 'wallet-receipt-' \|\| w\.local_id/)
+  assert.match(migration,/generated\.event_type = 'member_initial_wallet'/)
+})
+
+test('cloud member creation writes a deterministic starting-wallet receipt guard',()=>{
+  const api=read('supabase/functions/admin-api/index.ts')
+  assert.match(api,/local_id:`wallet-receipt-\$\{initialWalletId\}`/)
+  assert.match(api,/event_type:'member_initial_wallet'/)
+  assert.match(api,/source_type:'wallet_receipt'/)
+  assert.match(api,/directGuard:true/)
+  assert.match(api,/onConflict:'branch_id,local_id',ignoreDuplicates:true/)
+})
+
 test('cloud Earnings includes paid member prepaid sessions regardless of payment method',()=>{
   const api=read('supabase/functions/admin-api/index.ts')
   assert.doesNotMatch(api,/r\.payment_method!=='wallet'/)

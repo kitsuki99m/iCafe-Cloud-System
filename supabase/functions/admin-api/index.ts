@@ -35,12 +35,86 @@ async function refreshManagedConfig(admin:SupabaseClient,branchId:string,userId:
 function rateData(input:any,current:any={}){const t=now();return{...current,...input,id:String(current?.id||input?.id||id()),isActive:input?.isActive??current?.isActive??true,customerSelfService:input?.customerSelfService??current?.customerSelfService??false,createdAt:current?.createdAt||input?.createdAt||t,updatedAt:t}}
 function memberShape(row:any){return{id:String(row.local_id),memberCode:row.member_code||null,name:row.name||'',username:row.username||'',birthdate:row.birthdate||null,phone:row.phone||null,email:row.email||null,tier:row.tier||'Regular',wallet:n(row.wallet_balance),walletBalance:n(row.wallet_balance),sessionSecondsRemaining:n(row.session_seconds_remaining),status:row.status||'active',pcId:row.pc_id||null,pcIp:row.pc_ip||null,createdAt:row.created_at||null,updatedAt:row.updated_at||null}}
 function rangeBounds(range:string){const end=new Date(),start=new Date(end);if(range==='today')start.setHours(0,0,0,0);else if(range==='7d')start.setDate(start.getDate()-6);else if(range==='30d')start.setDate(start.getDate()-29);else if(range==='year')start.setMonth(0,1),start.setHours(0,0,0,0);else start.setFullYear(2000,0,1);return{start:start.toISOString(),end:end.toISOString()}}
-function earningsBounds(period:string,dateText:string){const ref=/^\d{4}-\d{2}-\d{2}$/.test(dateText)?new Date(`${dateText}T12:00:00+08:00`):new Date();const y=ref.getFullYear(),m=ref.getMonth();let start:Date,end:Date,label='';if(period==='daily'){start=new Date(y,m,ref.getDate());end=new Date(y,m,ref.getDate()+1);label=ref.toLocaleDateString('en-PH')}else if(period==='yearly'){start=new Date(y,0,1);end=new Date(y+1,0,1);label=String(y)}else if(period==='ytd'){start=new Date(y,0,1);end=new Date(ref);end.setDate(end.getDate()+1);label=`${y} YTD`}else{start=new Date(y,m,1);end=new Date(y,m+1,1);label=ref.toLocaleDateString('en-PH',{month:'long',year:'numeric'})}return{start:start.toISOString(),end:end.toISOString(),label,period}}
+function manilaDateParts(value=new Date()){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(value);const out:any={};for(const part of parts)if(part.type!=='literal')out[part.type]=Number(part.value);return{year:Number(out.year),month:Number(out.month),day:Number(out.day)}}
+function manilaStartIso(year:number,month:number,day:number){return new Date(Date.UTC(year,month-1,day,-8,0,0,0)).toISOString()}
+function earningsBounds(period:string,dateText:string){let year:number,month:number,day:number;if(/^\d{4}-\d{2}-\d{2}$/.test(dateText)){[year,month,day]=dateText.split('-').map(Number)}else({year,month,day}=manilaDateParts());let start:string,end:string,label='';if(period==='daily'){start=manilaStartIso(year,month,day);end=manilaStartIso(year,month,day+1);label=`${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`}else if(period==='yearly'){start=manilaStartIso(year,1,1);end=manilaStartIso(year+1,1,1);label=String(year)}else if(period==='ytd'){start=manilaStartIso(year,1,1);end=manilaStartIso(year,month,day+1);label=`${year} YTD`}else{start=manilaStartIso(year,month,1);end=manilaStartIso(year,month+1,1);label=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long',year:'numeric'}).format(new Date(`${year}-${String(month).padStart(2,'0')}-15T12:00:00+08:00`))}return{start,end,label,period,year}}
 async function revenueRows(admin:SupabaseClient,branchId:string,start:string,end:string){const{data,error}=await admin.from('branch_revenue_events').select('*').eq('branch_id',branchId).gte('occurred_at',start).lt('occurred_at',end).order('occurred_at',{ascending:true});if(error)throw error;return data||[]}
 async function walletLedgerRows(admin:SupabaseClient,branchId:string,start:string,end:string){const{data,error}=await admin.from('branch_wallet_ledger').select('*').eq('branch_id',branchId).gte('created_at',start).lt('created_at',end).order('created_at',{ascending:true});if(error)throw error;return data||[]}
 function expenseFromRevenue(row:any){const meta=row.metadata&&typeof row.metadata==='object'?row.metadata:{};return{id:String(row.local_id),kind:meta.kind||'custom',category:row.category||meta.category||'Expense',description:meta.description||'',amount:Math.abs(n(row.amount_centavos)/100),recorded_at:row.occurred_at,recordedAt:row.occurred_at,sourceKey:meta.sourceKey||null,periodKey:meta.periodKey||null,taxRatePercent:meta.taxRatePercent??null,taxableBase:meta.taxableBase??null,formulaSnapshot:meta.formulaSnapshot??null}}
-function earningsFromRows(rows:any[],walletRows:any[],bounds:any){const revenue=rows.filter(r=>n(r.amount_centavos)>0&&r.event_type!=='session_refund'),expenseRows=rows.filter(r=>r.event_type==='expense'&&n(r.amount_centavos)<0),categories:Record<string,number>={};for(const row of revenue){const key=String(row.category||row.source_type||row.event_type||'other');categories[key]=(categories[key]||0)+n(row.amount_centavos)/100}const walletFunding=n(categories.wallet_top_up)+n(categories.initial_wallet),gross=Object.values(categories).reduce((a,b)=>a+b,0),expenses=expenseRows.reduce((s,r)=>s+Math.abs(n(r.amount_centavos))/100,0),taxProvision=expenseRows.filter(r=>String(r.category||'').toLowerCase().includes('tax')).reduce((s,r)=>s+Math.abs(n(r.amount_centavos))/100,0),net=gross-expenses;return{bounds,summary:{gross,expenses,net,taxProvision,walletFunding,walletRevenue:0},categories,expenses:expenseRows.map(expenseFromRevenue),walletActivity:walletRows.map(row=>({id:String(row.local_id),type:String(row.type),amount:n(row.amount),recorded_at:row.created_at})),walletUsage:{prepaid:0,postpaid:0}}}
-async function taxEstimate(admin:SupabaseClient,branchId:string,dateText:string,rateInput:any){const ref=/^\d{4}-\d{2}-\d{2}$/.test(dateText)?new Date(`${dateText}T23:59:59+08:00`):new Date(),year=ref.getFullYear(),start=new Date(year,0,1).toISOString(),end=new Date(ref.getTime()+1000).toISOString(),[rows,walletRows]=await Promise.all([revenueRows(admin,branchId,start,end),walletLedgerRows(admin,branchId,start,end)]),grossYtd=earningsFromRows(rows,walletRows,{start,end}).summary.gross,rate=Math.min(100,Math.max(0,n(rateInput,8))),annualReduction=250000,taxableGross=Math.max(0,grossYtd-annualReduction),estimatedLiability=taxableGross*(rate/100),priorProvision=rows.filter(r=>r.event_type==='expense'&&n(r.amount_centavos)<0&&String(r.category||'').toLowerCase().includes('tax')).reduce((s,r)=>s+Math.abs(n(r.amount_centavos))/100,0),proposedProvision=Math.max(0,estimatedLiability-priorProvision),exceedsThreshold=grossYtd>3000000;return{grossYtd,annualReduction,taxableGross,ratePercent:rate,estimatedLiability,priorProvision,proposedProvision,exceedsThreshold,regimeState:exceedsThreshold?'manual_required':'eligible',taxYear:year}}
+function isPaidWalletReceipt(row:any){const amount=n(row?.amount);if(amount<=0)return false;const type=String(row?.type||'').toLowerCase();return type==='admin_top_up'||type==='paid_deposit'||type==='top_up'}
+function receiptCategoryForWalletRow(row:any){return String(row?.reference_type||'')==='member_create'?'initial_wallet':'wallet_top_up'}
+function earningsFromRows(rows:any[],walletRows:any[],bounds:any){
+  const revenue=rows.filter(r=>n(r.amount_centavos)>0&&r.event_type!=='session_refund')
+  const expenseRows=rows.filter(r=>r.event_type==='expense'&&n(r.amount_centavos)<0)
+  const categories:Record<string,number>={}
+  const receiptSignature=(eventType:string,memberId:any,cents:any,occurredAt:any)=>`${eventType}|${String(memberId||'')}|${Math.round(n(cents))}|${String(occurredAt||'')}`
+  const receiptLedgers=walletRows.filter(isPaidWalletReceipt)
+  const ledgerById=new Map<string,any>()
+  const ledgersByReference=new Map<string,string[]>()
+  const ledgersBySignature=new Map<string,string[]>()
+  for(const row of receiptLedgers){
+    const ledgerId=String(row.local_id||'')
+    if(!ledgerId)continue
+    ledgerById.set(ledgerId,row)
+    const referenceId=String(row.reference_id||'')
+    if(referenceId)ledgersByReference.set(referenceId,[...(ledgersByReference.get(referenceId)||[]),ledgerId])
+    const eventType=String(row.reference_type||'')==='member_create'?'member_initial_wallet':'wallet_top_up'
+    const signature=receiptSignature(eventType,row.member_id,n(row.amount)*100,row.created_at)
+    ledgersBySignature.set(signature,[...(ledgersBySignature.get(signature)||[]),ledgerId])
+  }
+  const countedWalletReceiptLedgers=new Set<string>()
+  const receiptLedgerForRevenue=(row:any)=>{
+    const meta=row.metadata&&typeof row.metadata==='object'?row.metadata:{}
+    for(const raw of [meta.walletLedgerId,row.source_id]){
+      const key=String(raw||'')
+      if(key&&ledgerById.has(key))return key
+    }
+    const chooseLedger=(ids:string[])=>ids.find(ledgerId=>!countedWalletReceiptLedgers.has(ledgerId))||ids[0]||null
+    const sourceId=String(row.source_id||'')
+    const referenceLedger=chooseLedger(ledgersByReference.get(sourceId)||[])
+    if(referenceLedger)return referenceLedger
+    const memberId=row.member_id||(row.event_type==='member_initial_wallet'||row.source_type==='wallet_adjustment'?row.source_id:null)
+    const signature=receiptSignature(row.event_type,memberId,row.amount_centavos,row.occurred_at)
+    return chooseLedger(ledgersBySignature.get(signature)||[])
+  }
+  for(const row of revenue){
+    if(row.event_type==='wallet_top_up'||row.event_type==='member_initial_wallet'){
+      const ledgerId=receiptLedgerForRevenue(row)
+      // Edge wallet inserts used to fire the Cloud receipt trigger and then sync
+      // their own receipt event. Both describe one payment, so count the ledger
+      // receipt only once even if historical data still contains both rows.
+      if(ledgerId&&countedWalletReceiptLedgers.has(ledgerId))continue
+      if(ledgerId)countedWalletReceiptLedgers.add(ledgerId)
+    }
+    const key=String(row.category||row.source_type||row.event_type||'other')
+    categories[key]=(categories[key]||0)+n(row.amount_centavos)/100
+  }
+  // Read-time guard for deployments where the receipt trigger/backfill has not
+  // reached a paid wallet ledger row yet. The ledger is immutable, so synthesize
+  // only a receipt that was not already represented by a revenue event above.
+  for(const row of receiptLedgers){
+    const ledgerId=String(row.local_id||'')
+    if(ledgerId&&countedWalletReceiptLedgers.has(ledgerId))continue
+    const category=receiptCategoryForWalletRow(row)
+    categories[category]=(categories[category]||0)+n(row.amount)
+    if(ledgerId)countedWalletReceiptLedgers.add(ledgerId)
+  }
+  const walletFunding=n(categories.wallet_top_up)+n(categories.initial_wallet)
+  const gross=Object.values(categories).reduce((a,b)=>a+b,0)
+  const expenses=expenseRows.reduce((sum,row)=>sum+Math.abs(n(row.amount_centavos))/100,0)
+  const taxProvision=expenseRows.filter(row=>String(row.category||'').toLowerCase().includes('tax')).reduce((sum,row)=>sum+Math.abs(n(row.amount_centavos))/100,0)
+  const net=gross-expenses
+  const walletUsage={prepaid:0,postpaid:0}
+  for(const row of walletRows){
+    if(n(row.amount)>=0)continue
+    const type=String(row.type||'')
+    if(type==='session_start'||type==='session_extension')walletUsage.prepaid+=Math.abs(n(row.amount))
+    else if(type==='postpaid_settlement')walletUsage.postpaid+=Math.abs(n(row.amount))
+  }
+  return{bounds,summary:{gross,expenses,net,taxProvision,walletFunding,walletRevenue:walletUsage.prepaid+walletUsage.postpaid},categories,expenses:expenseRows.map(expenseFromRevenue),walletActivity:walletRows.map(row=>({id:String(row.local_id),type:String(row.type),amount:n(row.amount),recorded_at:row.created_at})),walletUsage}
+}
+
+async function taxEstimate(admin:SupabaseClient,branchId:string,dateText:string,rateInput:any){const bounds=earningsBounds('ytd',dateText),year=Number(bounds.year),[rows,walletRows]=await Promise.all([revenueRows(admin,branchId,bounds.start,bounds.end),walletLedgerRows(admin,branchId,bounds.start,bounds.end)]),grossYtd=earningsFromRows(rows,walletRows,bounds).summary.gross,rate=Math.min(100,Math.max(0,n(rateInput,8))),annualReduction=250000,taxableGross=Math.max(0,grossYtd-annualReduction),estimatedLiability=taxableGross*(rate/100),priorProvision=rows.filter(r=>r.event_type==='expense'&&n(r.amount_centavos)<0&&String(r.category||'').toLowerCase().includes('tax')).reduce((sum,row)=>sum+Math.abs(n(row.amount_centavos))/100,0),proposedProvision=Math.max(0,estimatedLiability-priorProvision),exceedsThreshold=grossYtd>3000000;return{grossYtd,annualReduction,taxableGross,ratePercent:rate,estimatedLiability,priorProvision,proposedProvision,exceedsThreshold,regimeState:exceedsThreshold?'manual_required':'eligible',taxYear:year}}
 
 async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:string,path:string,body:any,operationKey:string|null){
   const url=asUrl(path),route=url.pathname,branchId=branch.id,encoded=branchId;
@@ -104,7 +178,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   }
 
   if(method==='POST'&&route==='/members'){
-    const username=String(body?.username||'').trim();if(!username)return json({success:false,status:400,code:'USERNAME_REQUIRED',error:'Username is required.'},200);const{data:dupe}=await admin.from('branch_members').select('local_id').eq('branch_id',branchId).ilike('username',username).limit(1);if(dupe?.length)return json({success:false,status:409,code:'USERNAME_EXISTS',error:'That username is already in use.'},200);const localId=String(body?.id||id()),timestamp=now(),startingWallet=n(body?.wallet??body?.walletBalance),row={branch_id:branchId,edge_id:null,local_id:localId,member_code:String(body?.memberCode||body?.member_code||`M-${localId.slice(0,8).toUpperCase()}`),name:String(body?.name||username),username,birthdate:body?.birthdate||null,phone:body?.phone||null,email:body?.email||null,tier:String(body?.tier||'Regular'),wallet_balance:startingWallet,session_seconds_remaining:n(body?.sessionSecondsRemaining),status:String(body?.status||'active'),pc_id:body?.pcId||null,pc_ip:body?.pcIp||null,created_at:timestamp,updated_at:timestamp};const{data,error}=await admin.from('branch_members').insert(row).select('*').single();if(error)throw error;if(startingWallet>0){const initialWalletId=`member-initial-wallet-${localId}`;const{error:walletError}=await admin.from('branch_wallet_ledger').insert({branch_id:branchId,edge_id:null,local_id:initialWalletId,member_id:localId,type:'admin_top_up',amount:startingWallet,balance_before:0,balance_after:startingWallet,reference_type:'member_create',reference_id:localId,created_at:timestamp,metadata:{authority:'cloud'}});if(walletError)throw walletError}await setMemberCredential(admin,branchId,localId,username,'1234',true);await audit(admin,branch,user.id,'cloud.member.create','member',localId,{username});await refreshManagedConfig(admin,branchId,user.id);return result({success:true,member:memberShape(data),temporaryPassword:'1234',cloudCredential:true,edgeProvisioning:'mirrored'},201);
+    const username=String(body?.username||'').trim();if(!username)return json({success:false,status:400,code:'USERNAME_REQUIRED',error:'Username is required.'},200);const{data:dupe}=await admin.from('branch_members').select('local_id').eq('branch_id',branchId).ilike('username',username).limit(1);if(dupe?.length)return json({success:false,status:409,code:'USERNAME_EXISTS',error:'That username is already in use.'},200);const localId=String(body?.id||id()),timestamp=now(),startingWallet=n(body?.wallet??body?.walletBalance),row={branch_id:branchId,edge_id:null,local_id:localId,member_code:String(body?.memberCode||body?.member_code||`M-${localId.slice(0,8).toUpperCase()}`),name:String(body?.name||username),username,birthdate:body?.birthdate||null,phone:body?.phone||null,email:body?.email||null,tier:String(body?.tier||'Regular'),wallet_balance:startingWallet,session_seconds_remaining:n(body?.sessionSecondsRemaining),status:String(body?.status||'active'),pc_id:body?.pcId||null,pc_ip:body?.pcIp||null,created_at:timestamp,updated_at:timestamp};const{data,error}=await admin.from('branch_members').insert(row).select('*').single();if(error)throw error;if(startingWallet>0){const initialWalletId=`member-initial-wallet-${localId}`;const{error:walletError}=await admin.from('branch_wallet_ledger').insert({branch_id:branchId,edge_id:null,local_id:initialWalletId,member_id:localId,type:'admin_top_up',amount:startingWallet,balance_before:0,balance_after:startingWallet,reference_type:'member_create',reference_id:localId,created_at:timestamp,metadata:{authority:'cloud'}});if(walletError)throw walletError;const{error:receiptError}=await admin.from('branch_revenue_events').upsert({branch_id:branchId,edge_id:null,local_id:`wallet-receipt-${initialWalletId}`,event_type:'member_initial_wallet',source_type:'wallet_receipt',source_id:initialWalletId,amount_centavos:Math.round(startingWallet*100),occurred_at:timestamp,category:'initial_wallet',payment_method:'cash',member_id:localId,metadata:{walletLedgerId:initialWalletId,receiptRecorded:true,directGuard:true}},{onConflict:'branch_id,local_id',ignoreDuplicates:true});if(receiptError)throw receiptError}await setMemberCredential(admin,branchId,localId,username,'1234',true);await audit(admin,branch,user.id,'cloud.member.create','member',localId,{username});await refreshManagedConfig(admin,branchId,user.id);return result({success:true,member:memberShape(data),temporaryPassword:'1234',cloudCredential:true,edgeProvisioning:'mirrored'},201);
   }
   const memberMatch=route.match(/^\/members\/([^/]+)$/);
   if(memberMatch&&method==='PATCH'){

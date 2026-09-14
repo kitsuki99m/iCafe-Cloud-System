@@ -323,7 +323,7 @@ test('Earnings wallet-funded usage is derived from wallet ledger debits by usage
   assert.doesNotMatch(section, /settlement_method='wallet'/)
 })
 
-test('Earnings derives gross from every paid revenue event while keeping wallet activity display-only', () => {
+test('Earnings derives gross from paid revenue events and repairs missing wallet receipts without summing wallet activity twice', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   const helperStart = source.indexOf('function earningsRevenueRows')
   const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
@@ -334,12 +334,26 @@ test('Earnings derives gross from every paid revenue event while keeping wallet 
 
   assert.doesNotMatch(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
   assert.doesNotMatch(helper, /source_type != 'wallet_transaction'/)
-  assert.match(snapshot, /const grossCents = revenue\.reduce/)
+  assert.match(snapshot, /const ledgerGrossCents = revenue\.reduce/)
   assert.match(snapshot, /Math\.max\(0, Number\(row\.amount_centavos \|\| 0\)\)/)
-  assert.doesNotMatch(snapshot, /\['top_up','admin_top_up','paid_deposit'\]\.includes\(row\.type\)/)
+  assert.match(snapshot, /receiptFallbackCents/)
+  assert.match(snapshot, /\["admin_top_up", "paid_deposit", "top_up"\]\.includes\(type\)/)
+  assert.match(snapshot, /const grossCents = ledgerGrossCents \+ receiptFallbackCents/)
   assert.match(snapshot, /gross: grossCents \/ 100/)
   assert.match(snapshot, /walletActivity/)
   assert.doesNotMatch(snapshot, /const walletRevenue\s*=\s*[^;\n]*walletBalances/)
+})
+
+
+test('manual wallet top-ups use the immutable wallet transaction id as their unique revenue source', () => {
+  const source = read('backend/src/routes/apiRoutes.js')
+  const routeStart = source.indexOf('router.post(\n  "/wallet/adjustments"')
+  const routeEnd = source.indexOf('router.get("/top-ups"', routeStart)
+  const section = source.slice(routeStart, routeEnd)
+  assert.match(section, /const walletTransactionId = id\(\)/)
+  assert.match(section, /\.run\(\s*walletTransactionId,\s*memberId,/s)
+  assert.match(section, /"wallet_top_up",\s*"wallet_adjustment",\s*walletTransactionId/s)
+  assert.doesNotMatch(section, /"wallet_top_up",\s*"wallet_adjustment",\s*memberId/s)
 })
 
 test('Earnings includes paid member prepaid revenue regardless of payment method', () => {

@@ -402,7 +402,7 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
       "SELECT * FROM expense_records WHERE voided_at IS NULL AND recorded_at BETWEEN ? AND ? ORDER BY recorded_at,id",
     )
     .all(bounds.start, bounds.end);
-  const grossCents = revenue.reduce(
+  const ledgerGrossCents = revenue.reduce(
     (sum, row) => sum + Math.max(0, Number(row.amount_centavos || 0)),
     0,
   );
@@ -413,12 +413,61 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
     0,
   );
   const categories = {};
+  const receiptSignatures = new Map();
+  const receiptSignature = (eventType, memberId, cents, occurredAt) =>
+    `${eventType}|${memberId || ""}|${Number(cents || 0)}|${occurredAt || ""}`;
   for (const row of revenue) {
     const key =
       row.category || REVENUE_CATEGORY[row.event_type] || row.event_type;
     categories[key] =
       (categories[key] || 0) + Number(row.amount_centavos || 0) / 100;
+    if (["wallet_top_up", "member_initial_wallet"].includes(row.event_type)) {
+      const memberId =
+        row.member_id ||
+        (row.event_type === "member_initial_wallet" || row.source_type === "wallet_adjustment"
+          ? row.source_id
+          : null);
+      const signature = receiptSignature(
+        row.event_type,
+        memberId,
+        row.amount_centavos,
+        row.occurred_at,
+      );
+      receiptSignatures.set(signature, (receiptSignatures.get(signature) || 0) + 1);
+    }
   }
+
+  // Historical guard: older local databases can contain paid wallet ledger rows
+  // without a matching receipt event (and older manual top-ups reused the member
+  // id as the revenue source, so only the first top-up survived the UNIQUE key).
+  // Reconcile those immutable ledger rows at read time without writing duplicates.
+  let receiptFallbackCents = 0;
+  for (const row of walletTransactions) {
+    const amount = Number(row.amount || 0);
+    const type = String(row.type || "").toLowerCase();
+    if (amount <= 0 || !["admin_top_up", "paid_deposit", "top_up"].includes(type))
+      continue;
+    const eventType =
+      row.reference_type === "member_create"
+        ? "member_initial_wallet"
+        : "wallet_top_up";
+    const cents = Math.round(amount * 100);
+    const signature = receiptSignature(
+      eventType,
+      row.member_id,
+      cents,
+      row.created_at,
+    );
+    const represented = receiptSignatures.get(signature) || 0;
+    if (represented > 0) {
+      receiptSignatures.set(signature, represented - 1);
+      continue;
+    }
+    const category = REVENUE_CATEGORY[eventType];
+    categories[category] = (categories[category] || 0) + amount;
+    receiptFallbackCents += cents;
+  }
+  const grossCents = ledgerGrossCents + receiptFallbackCents;
   const expenseCategories = {};
   for (const row of expenses) {
     expenseCategories[row.category] =
@@ -4146,10 +4195,11 @@ router.post(
         db.prepare(
           "UPDATE members SET wallet_balance=?,updated_at=? WHERE id=?",
         ).run(nextBalance, recordedAt, memberId);
+        const walletTransactionId = id();
         db.prepare(
           `INSERT INTO wallet_transactions (id,member_id,type,amount,balance_before,balance_after,reference_type,created_at) VALUES (?,?,?,?,?,?,?,?)`,
         ).run(
-          id(),
+          walletTransactionId,
           memberId,
           type,
           delta,
@@ -4162,7 +4212,7 @@ router.post(
           recordRevenue(
             "wallet_top_up",
             "wallet_adjustment",
-            memberId,
+            walletTransactionId,
             delta,
             req.auth.userId,
             recordedAt,

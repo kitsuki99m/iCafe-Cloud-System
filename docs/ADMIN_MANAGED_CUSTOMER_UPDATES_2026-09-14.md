@@ -1,5 +1,8 @@
 # Aezakmi Admin-Managed Customer Station Updates
 
+> **ARCHIVED / SUPERSEDED:** The in-app Customer software update workflow described here was removed on 2026-09-14. Keep this document only as implementation history; do not use it as a production deployment runbook.
+
+
 This build changes Customer Station updates from an autonomous client updater into an **Admin-controlled deployment system**.
 
 The Customer Electron app still performs the sensitive local work (download, SHA-256 verification, safe install and relaunch), but it no longer periodically decides by itself to fetch or install a release. Admin is the authority.

@@ -1,5 +1,8 @@
 # Aezakmi Customer Auto-Update, Pricing, and Quotation Guide
 
+> **ARCHIVED / SUPERSEDED:** The in-app Customer software update workflow described here was removed on 2026-09-14. Keep this document only as implementation history; do not use it as a production deployment runbook.
+
+
 This patch adds three related platform capabilities:
 
 1. **Customer Electron update listener** for packaged Customer Stations.
