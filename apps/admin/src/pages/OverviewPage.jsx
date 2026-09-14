@@ -260,7 +260,7 @@ export default function OverviewPage(){
       <div className="overview-main-column min-w-0 border-b border-[var(--admin-ui-border)] xl:border-b-0 xl:border-r">
         <header className="overview-header flex min-h-[96px] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
           <div className="min-w-0">
-            <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}</p>
+            <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}!</p>
           </div>
           <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
             <AdminQuickFind />
