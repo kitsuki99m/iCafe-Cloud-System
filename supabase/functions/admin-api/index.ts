@@ -122,7 +122,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   if(method==='PATCH'&&route==='/settings'){
     if(body?.defaultBilling!=null&&String(body.defaultBilling).toLowerCase()!=='prepaid')return json({success:false,status:410,code:'POSTPAID_DISABLED',error:'Postpaid billing is disabled in this build. Use prepaid sessions.'},200);
     if(body?.postpaidMinutesPerPeso!=null||body?.postpaidPesoPerMinute!=null)return json({success:false,status:410,code:'POSTPAID_DISABLED',error:'Postpaid billing is disabled in this build.'},200);
-    const patch={...(body||{})};if(patch.defaultBilling!=null)patch.defaultBilling='prepaid';
+    const patch={...(body||{})};if(patch.defaultBilling!=null)patch.defaultBilling='prepaid';if(patch.displayName!=null){patch.displayName=String(patch.displayName).trim();if(patch.displayName.length>40)return json({success:false,status:400,code:'INVALID_DISPLAY_NAME',error:'Display name must be 40 characters or fewer.'},200)}
     const current=await readConfig(admin,branchId),settings={...(current.config.settings||{}),...patch},config={...current.config,settings};await writeConfig(admin,branchId,config,user.id);await audit(admin,branch,user.id,'cloud.settings.update','settings',null,{keys:Object.keys(patch)});return result({success:true,settings});
   }
   if(method==='POST'&&route==='/branding/logo'){

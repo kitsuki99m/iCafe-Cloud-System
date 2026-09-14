@@ -57,6 +57,8 @@ export default function MainLayout({ children }) {
   const [pin, setPin] = useState('')
   const [password, setPassword] = useState('')
   const cloud=isCloudAdmin()
+  const fallbackAdminName=String(user?.name||user?.email||'Admin').includes('@') ? String(user?.email||user?.name||'Admin').split('@')[0] : String(user?.name||user?.email||'Admin')
+  const adminDisplayName=String(settings?.displayName||fallbackAdminName||'Admin').trim()||'Admin'
   const lockAuthMethod=cloud ? 'password' : (user?.authMethod || 'pin')
   const [unlockError, setUnlockError] = useState('')
   const unlockInputRef=useRef(null)
@@ -147,10 +149,10 @@ export default function MainLayout({ children }) {
   }
 
   return (
-    <div className="admin-app-canvas h-dvh min-h-0 overflow-hidden p-0 lg:p-5">
+    <div className="admin-app-canvas h-dvh min-h-0 w-full overflow-hidden">
       <div className="admin-shell-frame flex h-full min-h-0 overflow-hidden">
-        <aside className="admin-sidebar sticky top-0 z-[120] hidden h-full w-[220px] shrink-0 flex-col overflow-visible px-4 py-5 lg:flex lg:w-[232px] lg:px-5 lg:py-6">
-          <div className="mb-7 flex items-center gap-2.5 px-1 pt-0.5">
+        <aside className="admin-sidebar sticky top-0 z-[120] hidden h-full w-[220px] shrink-0 flex-col overflow-hidden px-4 py-5 lg:flex lg:w-[232px] lg:px-5 lg:py-6">
+          <div className="admin-sidebar-brand mb-7 flex items-center gap-2.5 px-1 pt-0.5">
             <img key={branding.logoUrl || 'default-logo'} src={branding.logoUrl || logo} onError={event=>{event.currentTarget.src=logo}} alt="" className="h-9 w-9 rounded-[11px] shadow-sm" />
             <div className="min-w-0">
               <p className="truncate font-display text-[15px] font-bold uppercase leading-tight tracking-[0.045em] text-ink-900">
@@ -159,9 +161,9 @@ export default function MainLayout({ children }) {
               <p className="mt-0.5 max-w-[148px] truncate text-[10px] font-medium uppercase tracking-[0.13em] text-slate-soft" title={branding.branchLocation || settings?.branchLocation || ''}>{branding.branch || settings?.branch || 'Davao Branch'}</p>
             </div>
           </div>
-          <div className="mb-3"><CloudBranchPicker /></div>
+          <div className="admin-sidebar-branch mb-3"><CloudBranchPicker /></div>
 
-          <nav className="min-h-0 flex flex-1 flex-col gap-1 overflow-y-auto py-1">
+          <nav className="admin-sidebar-nav min-h-0 flex flex-1 flex-col gap-1 overflow-y-auto py-1">
             {navItems.map(({ to, label, icon: Icon, end }) => (
               <NavLink
                 key={to}
@@ -175,20 +177,20 @@ export default function MainLayout({ children }) {
             ))}
           </nav>
 
-          <div className="mt-5 space-y-2.5">
+          <div className="admin-sidebar-footer mt-5 space-y-2.5">
             <div className="admin-sidebar-status flex items-center gap-2.5 rounded-xl px-3 py-2.5">
               <span className="relative flex h-2 w-2 shrink-0">
                 <span className={`absolute inline-flex h-full w-full animate-led rounded-full ${serverError ? 'bg-ember' : 'bg-teal'}`} />
               </span>
               <div className="min-w-0 leading-tight">
                 <p className="text-[11px] font-semibold text-ink-900">{serverError ? (cloud ? 'Edge Offline' : 'Server Offline') : (cloud ? 'Edge Online' : 'Server Online')}</p>
-                <p className="mt-0.5 truncate text-[9px] text-slate-soft">{serverError ? (cloud ? 'Cloud cache available' : 'Check local network') : (cloud ? 'Supabase ↔ Edge synced' : 'Local network synced')}</p>
+                <p className="admin-sidebar-status-subtitle mt-0.5 truncate text-[9px] text-slate-soft">{serverError ? (cloud ? 'Cloud cache available' : 'Check local network') : (cloud ? 'Supabase ↔ Edge synced' : 'Local network synced')}</p>
               </div>
             </div>
 
             <div className="flex items-center justify-between gap-2 rounded-xl px-2 py-2">
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-[11px] font-semibold text-ink-900">{user?.name}</p>
+                <p className="truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</p>
                 <p className="mt-0.5 text-[9px] text-slate-soft">{'Administrator'}</p>
               </div>
               <div className="flex items-center gap-0.5">
@@ -235,7 +237,7 @@ export default function MainLayout({ children }) {
               <button type="button" onClick={openLock} className="admin-icon-button" aria-label="Lock admin console" title="Lock admin console"><LockKeyhole size={16}/></button>
               <div className="ml-1 hidden items-center gap-2 rounded-full border border-surface-line bg-surface py-1 pl-1 pr-3 sm:flex">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-midnight text-soft-white"><UserRound size={15}/></span>
-                <span className="max-w-[110px] truncate text-[11px] font-semibold text-ink-900">{user?.name || 'Admin'}</span>
+                <span className="max-w-[110px] truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</span>
               </div>
             </div>
           </header>}
@@ -268,7 +270,7 @@ export default function MainLayout({ children }) {
             </div>
             <div className="flex items-center gap-2 rounded-xl bg-[var(--admin-card-subtle)] p-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-midnight text-soft-white"><UserRound size={16}/></span>
-              <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-ink-900">{user?.name || 'Admin'}</p><p className="text-[9px] text-slate-soft">Administrator</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</p><p className="text-[9px] text-slate-soft">Administrator</p></div>
               <button type="button" onClick={openLock} className="admin-icon-button" aria-label="Lock admin console"><LockKeyhole size={15}/></button>
               <button type="button" onClick={logout} className="admin-icon-button" aria-label="Log out"><LogOut size={15}/></button>
             </div>

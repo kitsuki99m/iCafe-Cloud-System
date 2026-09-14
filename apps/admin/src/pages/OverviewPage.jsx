@@ -250,7 +250,8 @@ export default function OverviewPage(){
   const weekLabel=formatWeekRange(week)
   const totalPcs=pcs.length
   const feedbackCount=data?.feedback?.length||0
-  const firstName=String(user?.name||'Admin').trim().split(/\s+/)[0]||'Admin'
+  const fallbackAdminName=String(user?.name||user?.email||'Admin').includes('@') ? String(user?.email||user?.name||'Admin').split('@')[0] : String(user?.name||user?.email||'Admin')
+  const displayName=String(settings?.displayName||fallbackAdminName||'Admin').trim()||'Admin'
 
   if(!data&&!error)return <div className="overview-workspace flex min-h-full items-center justify-center p-8 text-sm text-slate-soft">Loading business overview…</div>
 
@@ -259,7 +260,7 @@ export default function OverviewPage(){
       <div className="overview-main-column min-w-0 border-b border-[var(--admin-ui-border)] xl:border-b-0 xl:border-r">
         <header className="overview-header flex min-h-[96px] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
           <div className="min-w-0">
-            <p className="text-[24px] font-semibold tracking-[-0.03em] text-ink-900">Hi, {firstName}</p>
+            <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}</p>
           </div>
           <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
             <AdminQuickFind />
@@ -271,7 +272,7 @@ export default function OverviewPage(){
             <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark?'Switch to light mode':'Switch to dark mode'} aria-label={isDark?'Switch to light mode':'Switch to dark mode'}>{isDark?<Sun size={16}/>:<Moon size={16}/>}</button>
             <AdminNotificationCenter />
             <AnnouncementCenter />
-            <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-midnight text-[11px] font-bold tracking-wide text-soft-white" title={user?.name||'Admin'}>{initials(user?.name)}</div>
+            <div className="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-midnight text-[11px] font-bold tracking-wide text-soft-white" title={displayName}>{initials(displayName)}</div>
           </div>
         </header>
 

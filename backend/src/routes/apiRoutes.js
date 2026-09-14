@@ -3973,6 +3973,11 @@ router.patch("/settings", auth, requireRole("admin"), (req, res, next) => {
     if (incoming.postpaidPesoPerMinute != null || incoming.postpaidMinutesPerPeso != null)
       return res.status(410).json({ success:false, code:"POSTPAID_DISABLED", error:"Postpaid billing is disabled in this build." });
     if (incoming.defaultBilling != null) incoming.defaultBilling = "prepaid";
+    if (incoming.displayName != null) {
+      incoming.displayName = String(incoming.displayName).trim();
+      if (incoming.displayName.length > 40)
+        return res.status(400).json({ success:false, code:"INVALID_DISPLAY_NAME", error:"Display name must be 40 characters or fewer." });
+    }
     if (
       incoming.gcashNumber != null &&
       incoming.gcashNumber !== "" &&
@@ -4027,6 +4032,7 @@ router.patch("/settings", auth, requireRole("admin"), (req, res, next) => {
         });
     }
     const allowed = new Set([
+      "displayName",
       "cafeName",
       "branch",
       "branchLocation",

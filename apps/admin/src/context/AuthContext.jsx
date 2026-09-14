@@ -3,7 +3,7 @@ import { apiGet, apiPost, setToken, getToken } from '../lib/api.js'
 import { isCloudAdmin, cloudConfigReady, cloudGetUser, cloudResolveAccess, cloudSignIn, cloudSignOut, cloudUpdatePassword, cloudConsumeAuthCallback, cloudInvitationSetupPending, cloudClearInvitationSetup, cloudActivateRegistration } from '../lib/cloudClient.js'
 
 const C=createContext(null)
-function cloudUserShape(cloudUser,access){const status=access.organizationStatus||null,suspended=status==='suspended'||status==='terminated';return{id:cloudUser.id,email:cloudUser.email,name:cloudUser.user_metadata?.name||cloudUser.email||'Administrator',role:'admin',cloudRole:access.role,authMethod:'password',cloud:true,cloudNeedsSetup:!access.branchId&&!suspended,cloudDeveloper:Boolean(access.platformDeveloper),cloudInviteSetup:cloudInvitationSetupPending(),cloudBusinessStatus:status,cloudBusinessReason:access.organizationReason||null,cloudBusinessSuspended:suspended}}
+function cloudUserShape(cloudUser,access){const status=access.organizationStatus||null,suspended=status==='suspended'||status==='terminated',metadata=cloudUser.user_metadata||{},cloudName=metadata.display_name||metadata.full_name||metadata.name||cloudUser.email||'Administrator';return{id:cloudUser.id,email:cloudUser.email,name:cloudName,role:'admin',cloudRole:access.role,authMethod:'password',cloud:true,cloudNeedsSetup:!access.branchId&&!suspended,cloudDeveloper:Boolean(access.platformDeveloper),cloudInviteSetup:cloudInvitationSetupPending(),cloudBusinessStatus:status,cloudBusinessReason:access.organizationReason||null,cloudBusinessSuspended:suspended}}
 
 export function AuthProvider({children}){
   const [user,setUser]=useState(null),[authLoading,setLoading]=useState(true),[mustChange,setMustChange]=useState(false)

@@ -13,6 +13,7 @@ const AppDataContext = createContext(null)
 const suppressedCommandToastIds = new Set()
 
 const EMPTY_SETTINGS = {
+  displayName:'',
   cafeName:'Aezakmi Cafe',
   branch:'Davao City',
   currency:'PHP',

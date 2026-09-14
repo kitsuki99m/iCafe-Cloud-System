@@ -31,7 +31,7 @@ export default function SettingsPage() {
   const { user, updateCredentials } = useAuth()
   const cloudPrivileged=!cloudMode||['owner','admin'].includes(user?.cloudRole)
   const { settings, updateSettings, refresh } = useAppData()
-  const [profile, setProfile] = useState({ cafeName:'', branch:'',branchLocation:'' })
+  const [profile, setProfile] = useState({ displayName:'', cafeName:'', branch:'',branchLocation:'' })
   const [payment, setPayment] = useState({ gcashName:'', gcashNumber:'' })
   const [station,setStation]=useState({defaultBilling:'prepaid',lowTimeWarningMinutes:'5'})
   const [soundPrefs,setSoundPrefs]=useState(()=>getAdminSoundPreferences())
@@ -61,7 +61,7 @@ export default function SettingsPage() {
   useEffect(()=>{let active=true;if(cloudCacheKey)void readSnapshot(cloudCacheKey).then(snapshot=>{if(!active||!snapshot)return;setCloud(snapshot.cloud??null);setSubscription(snapshot.subscription??null)}).finally(()=>{if(active)void loadCloudStatus()});else void loadCloudStatus();const onOnline=()=>void loadCloudStatus();const onVisible=()=>{if(document.visibilityState==='visible')void loadCloudStatus()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible)}},[cloudCacheKey])
   useEffect(() => {
     const previous=previousServerSettingsRef.current
-    const nextProfile={ cafeName:settings.cafeName ?? '', branch:settings.branch ?? '', branchLocation:settings.branchLocation ?? '' }
+    const nextProfile={ displayName:settings.displayName ?? '', cafeName:settings.cafeName ?? '', branch:settings.branch ?? '', branchLocation:settings.branchLocation ?? '' }
     const nextPayment={ gcashName:settings.gcashName ?? '', gcashNumber:settings.gcashNumber ?? '' }
     const nextStation={ defaultBilling:'prepaid', lowTimeWarningMinutes:String(settings.lowTimeWarningMinutes ?? 5) }
     const nextFormat=settings.numberFormat === 'whole' ? 'whole' : 'decimal'
@@ -70,8 +70,8 @@ export default function SettingsPage() {
     // Preserve unsaved local drafts when unrelated realtime refreshes replace
     // the settings object. Clean sections still follow legitimate server edits.
     setProfile((current)=>{
-      const old={cafeName:previous?.cafeName ?? '',branch:previous?.branch ?? '',branchLocation:previous?.branchLocation ?? ''}
-      return !previous || (current.cafeName===old.cafeName&&current.branch===old.branch&&current.branchLocation===old.branchLocation) ? nextProfile : current
+      const old={displayName:previous?.displayName ?? '',cafeName:previous?.cafeName ?? '',branch:previous?.branch ?? '',branchLocation:previous?.branchLocation ?? ''}
+      return !previous || (current.displayName===old.displayName&&current.cafeName===old.cafeName&&current.branch===old.branch&&current.branchLocation===old.branchLocation) ? nextProfile : current
     })
     setPayment((current)=>{
       const old={gcashName:previous?.gcashName ?? '',gcashNumber:previous?.gcashNumber ?? ''}
@@ -83,7 +83,7 @@ export default function SettingsPage() {
     if(!pendingLogoDataUrl && settings.logoUrl)setLogoUrl(cloudMode ? settings.logoUrl : apiUrl(settings.logoUrl.replace(/^\/api/,'')))
     previousServerSettingsRef.current={...settings}
   }, [settings,pendingLogoDataUrl])
-  const profileDirty = useMemo(() => profile.cafeName !== (settings.cafeName ?? '') || profile.branch !== (settings.branch ?? '')||profile.branchLocation!==(settings.branchLocation??'') || numberFormat !== (settings.numberFormat === 'whole' ? 'whole' : 'decimal') || decimalPlaces !== Math.max(1,Math.min(3,Number(settings.decimalPlaces)||3)), [profile, numberFormat, decimalPlaces, settings])
+  const profileDirty = useMemo(() => profile.displayName !== (settings.displayName ?? '') || profile.cafeName !== (settings.cafeName ?? '') || profile.branch !== (settings.branch ?? '')||profile.branchLocation!==(settings.branchLocation??'') || numberFormat !== (settings.numberFormat === 'whole' ? 'whole' : 'decimal') || decimalPlaces !== Math.max(1,Math.min(3,Number(settings.decimalPlaces)||3)), [profile, numberFormat, decimalPlaces, settings])
   const paymentDirty = useMemo(() => payment.gcashName !== (settings.gcashName ?? '') || payment.gcashNumber !== (settings.gcashNumber ?? ''), [payment, settings])
   const stationDirty=(settings.defaultBilling ?? 'prepaid')!=='prepaid'||station.lowTimeWarningMinutes!==String(settings.lowTimeWarningMinutes ?? 5)
   const soundDirty=JSON.stringify(soundPrefs)!==JSON.stringify(savedSoundPrefs)
@@ -180,7 +180,7 @@ export default function SettingsPage() {
       <div className="space-y-5">
         <Section id="settings-branding" icon={Building2} title="Branding" description="Cafe identity shown across Admin, Customer Station, and generated reports." dirty={(profileDirty || Boolean(pendingLogoDataUrl)) && profile.cafeName.trim() && profile.branch.trim()} saving={saving==='profile'} onSave={saveProfile}>
           <div className="sm:col-span-2 flex items-center gap-3 rounded-xl border border-surface-line bg-surface-raised/45 p-3"><img src={logoUrl} onError={event=>{event.currentTarget.src=fallbackLogo}} className="h-12 w-12 rounded-xl object-contain"/><div><p className="text-xs font-semibold text-ink-900">Brand logo</p><p className="text-[11px] text-slate-soft">{pendingLogoDataUrl?'New logo selected. Save Branding to apply it.':'PNG or safe SVG, up to 512 KB.'}</p></div><label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-xl border border-surface-line bg-surface px-3 py-2 text-xs font-semibold text-ink-900"><ImageUp size={14}/> {saving==='logo'?'Reading…':'Upload'}<input type="file" accept="image/png,image/svg+xml" className="hidden" disabled={saving==='logo'||saving==='profile'} onChange={event=>{selectLogo(event.target.files?.[0]);event.target.value=''}}/></label></div>
-          <Field label="Cafe name"><input value={profile.cafeName} onChange={e=>setProfile({...profile,cafeName:e.target.value})} className={inputClass}/></Field><Field label="Branch"><input value={profile.branch} onChange={e=>setProfile({...profile,branch:e.target.value})} className={inputClass}/></Field><Field label="Branch location"><input value={profile.branchLocation} onChange={e=>setProfile({...profile,branchLocation:e.target.value})} placeholder="Davao City, Philippines" className={inputClass}/></Field>
+          <Field label="Display name"><input value={profile.displayName} onChange={e=>setProfile({...profile,displayName:e.target.value.slice(0,40)})} placeholder="Kyle" maxLength={40} className={inputClass}/></Field><Field label="Cafe name"><input value={profile.cafeName} onChange={e=>setProfile({...profile,cafeName:e.target.value})} className={inputClass}/></Field><Field label="Branch"><input value={profile.branch} onChange={e=>setProfile({...profile,branch:e.target.value})} className={inputClass}/></Field><Field label="Branch location"><input value={profile.branchLocation} onChange={e=>setProfile({...profile,branchLocation:e.target.value})} placeholder="Davao City, Philippines" className={inputClass}/></Field>
           <div className="sm:col-span-2 flex items-center justify-between rounded-xl border border-surface-line bg-surface-raised/45 px-3 py-2.5"><span className="flex items-center gap-2 text-xs text-slate-soft"><PhilippinePeso size={14}/> Currency</span><span className="text-xs font-semibold text-ink-900">Philippine Peso (PHP)</span></div>
           <div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-2">Admin number input format</p><div className="grid gap-2 sm:grid-cols-2">{[['decimal','Decimals','Choose 1–3 places below'],['whole','Whole numbers only','Example: 12']].map(([value,label,example])=><button type="button" key={value} onClick={()=>setNumberFormat(value)} className={`rounded-xl border px-3 py-3 text-left transition-colors ${numberFormat===value?'border-midnight/40 bg-midnight/10':'border-surface-line bg-surface'}`}><p className="text-xs font-semibold text-ink-900">{label}</p><p className="mt-1 text-[11px] text-slate-soft">{example}</p></button>)}</div>{numberFormat==='decimal'&&<div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface px-3 py-2"><span className="text-xs text-slate-soft">Maximum decimal places</span><select value={decimalPlaces} onChange={event=>setDecimalPlaces(Number(event.target.value))} className="rounded-lg border border-surface-line bg-ink px-2 py-1 text-xs text-ink-900"><option value={1}>1 place</option><option value={2}>2 places</option><option value={3}>3 places</option></select></div>}</div>
         </Section>
