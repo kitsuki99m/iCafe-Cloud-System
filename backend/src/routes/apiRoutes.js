@@ -384,6 +384,7 @@ function earningsRevenueRows(start, end) {
          AND event_type NOT IN ('wallet_top_up','member_initial_wallet','session_refund')
          AND (payment_method IS NULL OR payment_method != 'wallet')
          AND source_type != 'wallet_transaction'
+         AND (event_type != 'session_start' OR member_id IS NULL)
        ORDER BY occurred_at,id`,
     )
     .all(start, end);

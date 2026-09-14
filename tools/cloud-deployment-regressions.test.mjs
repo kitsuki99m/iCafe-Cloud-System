@@ -345,6 +345,11 @@ test('cloud Earnings uses wallet funding once and returns wallet activity separa
   assert.match(api,/Promise\.all\(\[revenueRows\(admin,branchId,bounds\.start,bounds\.end\),walletLedgerRows\(admin,branchId,bounds\.start,bounds\.end\)\]\)/)
 })
 
+test('cloud Earnings excludes member prepaid sessions from gross income',()=>{
+  const api=read('supabase/functions/admin-api/index.ts')
+  assert.match(api,/\!\(r\.event_type==='session_start'&&r\.member_id\)/)
+})
+
 test('Cloud Admin can generate a Customer Station pairing code for an unpaired logical PC',()=>{
   const page=read('apps/admin/src/pages/FloorMatrix.jsx')
   const fn=read('supabase/functions/station-admin/index.ts')

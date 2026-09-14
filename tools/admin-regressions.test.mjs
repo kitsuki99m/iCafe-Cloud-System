@@ -342,6 +342,13 @@ test('Earnings counts wallet funding once and keeps wallet spending out of gross
   assert.doesNotMatch(snapshot, /const walletRevenue\s*=\s*[^;\n]*walletBalances/)
 })
 
+test('Earnings counts prepaid revenue only for guest sessions', () => {
+  const source = read('backend/src/routes/apiRoutes.js')
+  const helperStart = source.indexOf('function earningsRevenueRows')
+  const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
+  assert.match(source.slice(helperStart, helperEnd), /event_type != 'session_start' OR member_id IS NULL/)
+})
+
 test('wallet-funded sessions, extensions and settlements write earned revenue events', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   assert.match(source, /"session_start",\s*"wallet_transaction",\s*walletRevenueTransactionId,\s*walletUsed/s)
