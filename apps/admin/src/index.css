@@ -239,11 +239,17 @@
     background: var(--admin-shell-bg);
   }
   .overview-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     border: 1px solid var(--admin-ui-border);
     border-radius: 18px;
     background: var(--admin-card-bg);
   }
   .overview-soft-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     border-radius: 16px;
     background: var(--admin-card-subtle);
   }
@@ -332,6 +338,10 @@
     color: var(--color-dance);
   }
   .admin-table-shell {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
     border: 1px solid var(--admin-ui-border);
     border-radius: 18px;
     background: var(--admin-card-bg);
@@ -406,6 +416,9 @@
     background: color-mix(in srgb, var(--admin-card-bg) 98%, var(--admin-card-subtle) 2%);
   }
   .admin-rail-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     border: 1px solid var(--admin-ui-border);
     border-radius: 18px;
     background: var(--admin-card-bg);
@@ -439,6 +452,9 @@
     @apply mt-0.5 block text-[9px] font-normal leading-4 text-slate-soft;
   }
   .admin-section-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
     border: 1px solid var(--admin-ui-border);
     border-radius: 18px;
     background: var(--admin-card-bg);

@@ -9,6 +9,8 @@ import fallbackLogo from '../assets/aktura-logo.svg'
 import { isCloudAdmin, cloudBranchId, cloudCreateBranch, cloudGetBranchStatus, cloudGetSubscriptionOverview, cloudInvoke, cloudOrganizationId, cloudSelectBranch } from '../lib/cloudClient.js'
 import { SUBSCRIPTION_PACKAGES, normalizeSubscriptionPackages, packageDefinition, formatPackagePrice } from '../lib/subscriptionPackages.js'
 import { getAdminSoundPreferences, saveAdminSoundPreferences, testAdminSound } from '../lib/sound.js'
+import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
+import { scopedPageCacheKey } from '../lib/pageCache.js'
 
 const inputClass = 'w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 outline-none transition-colors focus:border-gold/50'
 
@@ -52,10 +54,11 @@ export default function SettingsPage() {
   const [cloudMessage,setCloudMessage]=useState('')
   const [newBranchName,setNewBranchName]=useState('')
   const previousServerSettingsRef=useRef(null)
+  const cloudCacheKey=useMemo(()=>scopedPageCacheKey('settings-cloud',user),[user,cloudMode])
   useEffect(()=>{
     setSecurity((current)=>({...current,authMethod:user?.authMethod || 'pin'}))
   },[user?.authMethod])
-  useEffect(()=>{ loadCloudStatus() },[])
+  useEffect(()=>{let active=true;if(cloudCacheKey)void readSnapshot(cloudCacheKey).then(snapshot=>{if(!active||!snapshot)return;setCloud(snapshot.cloud??null);setSubscription(snapshot.subscription??null)}).finally(()=>{if(active)void loadCloudStatus()});else void loadCloudStatus();const onOnline=()=>void loadCloudStatus();const onVisible=()=>{if(document.visibilityState==='visible')void loadCloudStatus()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible)}},[cloudCacheKey])
   useEffect(() => {
     const previous=previousServerSettingsRef.current
     const nextProfile={ cafeName:settings.cafeName ?? '', branch:settings.branch ?? '', branchLocation:settings.branchLocation ?? '' }
@@ -129,25 +132,27 @@ export default function SettingsPage() {
     try{
       if(cloudMode){
         const [edge,sub]=await Promise.all([cloudGetBranchStatus(),cloudGetSubscriptionOverview()])
-        setCloud({enabled:true,paired:Boolean(edge),edgeId:edge?.id||null,lastSeenAt:edge?.last_seen_at||null,lastSyncAt:edge?.last_sync_at||null,softwareVersion:edge?.software_version||null,statusSnapshot:edge?.status_snapshot||{}})
-        setSubscription(sub||null)
+        const nextCloud={enabled:true,paired:Boolean(edge),edgeId:edge?.id||null,lastSeenAt:edge?.last_seen_at||null,lastSyncAt:edge?.last_sync_at||null,softwareVersion:edge?.software_version||null,statusSnapshot:edge?.status_snapshot||{}}
+        const nextSubscription=sub||null
+        setCloud(nextCloud);setSubscription(nextSubscription)
+        if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:nextCloud,subscription:nextSubscription})
         return
       }
-      const result=await apiGet('/cloud/status');setCloud(result.cloud||null)
-    }catch(error){setCloudError(error?.message||'Unable to read cloud status.')}
+      const result=await apiGet('/cloud/status');const nextCloud=result.cloud||null;setCloud(nextCloud);if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:nextCloud,subscription:null})
+    }catch(error){setCloudError(error?.message||'Unable to read cloud status. Showing cached status when available.')}
   }
   async function pairCloud(){
     setCloudBusy('pair');setCloudError('');setCloudMessage('')
     try{
       if(cloudMode){const branchId=cloudBranchId();if(!branchId)throw new Error('Select a branch first.');const result=await cloudInvoke('create-pairing-code',{branchId});setCloudPairingCode(result.pairingCode||'');setCloudMessage(`Pairing code generated. It expires ${result.expiresAt?new Date(result.expiresAt).toLocaleString():'in 15 minutes'}. Enter it in the local Emergency Admin → Settings → Aezakmi Cloud.`);return}
-      const code=cloudPairingCode.trim().toUpperCase();if(!code)return;const result=await apiPost('/cloud/pair',{pairingCode:code});setCloud(result.cloud||null);setCloudPairingCode('');setCloudMessage('Edge server paired. Café Edge paired successfully and is now available as the branch fallback and synchronization peer.')
+      const code=cloudPairingCode.trim().toUpperCase();if(!code)return;const result=await apiPost('/cloud/pair',{pairingCode:code});setCloud(result.cloud||null);if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:result.cloud||null,subscription});setCloudPairingCode('');setCloudMessage('Edge server paired. Café Edge paired successfully and is now available as the branch fallback and synchronization peer.')
     }catch(error){setCloudError(error?.message||'Unable to pair this Edge server.')}finally{setCloudBusy('')}
   }
-  async function syncCloud(){setCloudBusy('sync');setCloudError('');setCloudMessage('');try{if(cloudMode){await loadCloudStatus();setCloudMessage('Cloud Edge status refreshed.');return}const result=await apiPost('/cloud/sync-now',{});setCloud(result.status||result.cloud||cloud);setCloudMessage(result.skipped?'Cloud sync was skipped.':'Cloud heartbeat, outbox, and branch configuration sync completed.')}catch(error){setCloudError(error?.message||'Cloud sync failed.')}finally{setCloudBusy('')}}
+  async function syncCloud(){setCloudBusy('sync');setCloudError('');setCloudMessage('');try{if(cloudMode){await loadCloudStatus();setCloudMessage('Cloud Edge status refreshed.');return}const result=await apiPost('/cloud/sync-now',{});setCloud(result.status||result.cloud||cloud);if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:result.status||result.cloud||cloud,subscription});setCloudMessage(result.skipped?'Cloud sync was skipped.':'Cloud heartbeat, outbox, and branch configuration sync completed.')}catch(error){setCloudError(error?.message||'Cloud sync failed.')}finally{setCloudBusy('')}}
   async function unpairCloud(){
     if(!window.confirm(cloudMode?'Revoke this branch Edge server from Aezakmi Cloud? Local LAN operation and SQLite data remain available.':'Unpair this local Edge server from Aezakmi Cloud? Local LAN operation and SQLite data will remain available.'))return
     setCloudBusy('unpair');setCloudError('');setCloudMessage('')
-    try{if(cloudMode){if(!cloud?.edgeId)throw new Error('No Edge server is paired.');await cloudInvoke('revoke-edge',{edgeId:cloud.edgeId});await loadCloudStatus();setCloudMessage('Edge cloud credential revoked. Local café operation was not changed.');return}const result=await apiPost('/cloud/unpair',{remote:true});setCloud(result.cloud||null);setCloudMessage('Cloud pairing removed. Local café operation was not changed.')}catch(error){setCloudError(error?.message||'Unable to unpair this Edge server.')}finally{setCloudBusy('')}
+    try{if(cloudMode){if(!cloud?.edgeId)throw new Error('No Edge server is paired.');await cloudInvoke('revoke-edge',{edgeId:cloud.edgeId});await loadCloudStatus();setCloudMessage('Edge cloud credential revoked. Local café operation was not changed.');return}const result=await apiPost('/cloud/unpair',{remote:true});setCloud(result.cloud||null);if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:result.cloud||null,subscription});setCloudMessage('Cloud pairing removed. Local café operation was not changed.')}catch(error){setCloudError(error?.message||'Unable to unpair this Edge server.')}finally{setCloudBusy('')}
   }
   async function createCloudBranch(){
     if(!cloudMode||!cloudPrivileged||!newBranchName.trim()||cloudBusy)return

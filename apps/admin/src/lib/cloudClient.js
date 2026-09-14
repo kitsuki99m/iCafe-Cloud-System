@@ -549,9 +549,10 @@ async function cloudOverview(branchId) {
   ]);
   const stationById = new Map(pcs.map((pc) => [String(pc.id), pc]));
   const todayManila = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const incomeToday = (revenue || []).filter((item) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.occurred_at)) === todayManila).reduce((sum, item) => sum + Number(item.amount_centavos || 0) / 100, 0);
+  const grossRevenue = (revenue || []).filter((item) => String(item.event_type || "") !== "session_refund" && Number(item.amount_centavos || 0) > 0);
+  const incomeToday = grossRevenue.filter((item) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.occurred_at)) === todayManila).reduce((sum, item) => sum + Number(item.amount_centavos || 0) / 100, 0);
   const daily = new Map();
-  for (const item of revenue || []) {
+  for (const item of grossRevenue) {
     const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.occurred_at));
     daily.set(day, (daily.get(day) || 0) + Number(item.amount_centavos || 0) / 100);
   }
@@ -561,6 +562,8 @@ async function cloudOverview(branchId) {
       available: pcs.filter((pc) => pc.status === "available").length,
       inUse: pcs.filter((pc) => pc.status === "occupied").length,
       maintenance: pcs.filter((pc) => pc.status === "maintenance").length,
+      offline: pcs.filter((pc) => pc.status === "offline").length,
+      reserved: pcs.filter((pc) => pc.status === "reserved").length,
       incomeToday,
     },
     active: (sessions || []).map((row) => ({

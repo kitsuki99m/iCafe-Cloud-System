@@ -24,6 +24,8 @@ import {
   X,
 } from 'lucide-react'
 import { cloudDeveloperRegistrations } from '../lib/cloudClient.js'
+import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
+import { userCacheKey } from '../lib/pageCache.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
@@ -47,14 +49,16 @@ const ACTION_COPY={
 }
 
 export default function DeveloperConsolePage({standalone=false}){
-  const{logout}=useAuth()
+  const{logout,user}=useAuth()
   const[items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[filter,setFilter]=useState('pending'),[query,setQuery]=useState(''),[selected,setSelected]=useState(null),[notes,setNotes]=useState(''),[busy,setBusy]=useState(''),[activationLink,setActivationLink]=useState(''),[confirm,setConfirm]=useState(null),[confirmReason,setConfirmReason]=useState(''),[confirmName,setConfirmName]=useState(''),[subscriptionPlan,setSubscriptionPlan]=useState('bronze'),[ultraStationLimit,setUltraStationLimit]=useState('51')
   const[packageCatalog,setPackageCatalog]=useState(SUBSCRIPTION_PACKAGES),[pricingSettings,setPricingSettings]=useState({deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14}),[pricingOpen,setPricingOpen]=useState(false),[pricingDraft,setPricingDraft]=useState([]),[pricingSettingsDraft,setPricingSettingsDraft]=useState({deploymentFeeMin:'2500',deploymentFeeMax:'5000',quoteValidDays:'14'})
   const[quoteOpen,setQuoteOpen]=useState(false),[quoteDraft,setQuoteDraft]=useState({packageId:'bronze',stationCount:'1',branchCount:'1',monthlyPrice:'499',deploymentFeePerBranch:'2500',validDays:'14',message:''})
   const ultraFloor=Math.max(1,Number(packageDefinition('gold',packageCatalog).maxStations||50)+1)
+  const developerCacheKey=useMemo(()=>userCacheKey('developer-console',user),[user])
 
-  async function load(){setLoading(true);setError('');try{const r=await cloudDeveloperRegistrations('list');setItems(r.requests||[]);const catalog=normalizeSubscriptionPackages(r.packageCatalog);setPackageCatalog(catalog);if(r.pricingSettings)setPricingSettings(r.pricingSettings);if(selected){const next=(r.requests||[]).find(x=>x.id===selected.id);setSelected(next||null)}}catch(e){setError(e.message||'Unable to load registration requests.')}finally{setLoading(false)}}
-  useEffect(()=>{load()},[])
+  function applyDeveloperSnapshot(snapshot){if(!snapshot)return;setItems(snapshot.requests||[]);if(snapshot.packageCatalog)setPackageCatalog(normalizeSubscriptionPackages(snapshot.packageCatalog));if(snapshot.pricingSettings)setPricingSettings(snapshot.pricingSettings)}
+  async function load(){setLoading(true);setError('');try{const r=await cloudDeveloperRegistrations('list');const snapshot={requests:r.requests||[],packageCatalog:normalizeSubscriptionPackages(r.packageCatalog),pricingSettings:r.pricingSettings||pricingSettings};applyDeveloperSnapshot(snapshot);if(developerCacheKey)void writeSnapshot(developerCacheKey,snapshot);if(selected){const next=(r.requests||[]).find(x=>x.id===selected.id);setSelected(next||null)}}catch(e){setError(e.message||'Unable to load registration requests. Showing cached data when available.')}finally{setLoading(false)}}
+  useEffect(()=>{let active=true;if(developerCacheKey)void readSnapshot(developerCacheKey).then(snapshot=>{if(active&&snapshot){applyDeveloperSnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void load()});else void load();const timer=setInterval(()=>void load(),60000);const onOnline=()=>void load();const onVisible=()=>{if(document.visibilityState==='visible')void load()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible)}},[developerCacheKey])
   useEffect(()=>{
     if(!selected)return
     const suggested=packageForStations(selected.expected_station_count||1,packageCatalog)

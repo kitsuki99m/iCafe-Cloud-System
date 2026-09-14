@@ -3715,13 +3715,13 @@ router.get(
       Number(
         db
           .prepare(
-            "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet')",
+            "SELECT COALESCE(SUM(CASE WHEN amount_centavos>0 THEN amount_centavos ELSE 0 END),0) cents FROM revenue_events WHERE occurred_at>=? AND event_type!='session_refund'",
           )
           .get(today).cents,
       ) / 100;
     const analytics = db
       .prepare(
-        `SELECT date(datetime(occurred_at,'+8 hours')) day,COALESCE(SUM(amount_centavos),0)/100.0 revenue FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet') GROUP BY day ORDER BY day`,
+        `SELECT date(datetime(occurred_at,'+8 hours')) day,COALESCE(SUM(CASE WHEN amount_centavos>0 THEN amount_centavos ELSE 0 END),0)/100.0 revenue FROM revenue_events WHERE occurred_at>=? AND event_type!='session_refund' GROUP BY day ORDER BY day`,
       )
       .all(week);
     const feedback = db
@@ -3752,6 +3752,8 @@ router.get(
         available: statuses.available || 0,
         inUse: statuses.occupied || 0,
         maintenance: statuses.maintenance || 0,
+        offline: statuses.offline || 0,
+        reserved: statuses.reserved || 0,
         incomeToday,
       },
       active,
@@ -3777,7 +3779,7 @@ router.get("/analytics", auth, requireRole("admin"), (req, res) => {
     Number(
       db
         .prepare(
-          "SELECT COALESCE(SUM(amount_centavos),0) cents FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet')",
+          "SELECT COALESCE(SUM(CASE WHEN amount_centavos>0 THEN amount_centavos ELSE 0 END),0) cents FROM revenue_events WHERE occurred_at>=? AND event_type!='session_refund'",
         )
         .get(start).cents,
     ) / 100;
@@ -3793,7 +3795,7 @@ router.get("/analytics", auth, requireRole("admin"), (req, res) => {
     .all(start);
   const revenueSeries = db
     .prepare(
-      "SELECT date(datetime(occurred_at,'+8 hours')) day,SUM(amount_centavos)/100.0 revenue FROM revenue_events WHERE occurred_at>=? AND event_type NOT IN ('wallet_top_up','member_initial_wallet') GROUP BY day ORDER BY day",
+      "SELECT date(datetime(occurred_at,'+8 hours')) day,SUM(CASE WHEN amount_centavos>0 THEN amount_centavos ELSE 0 END)/100.0 revenue FROM revenue_events WHERE occurred_at>=? AND event_type!='session_refund' GROUP BY day ORDER BY day",
     )
     .all(start);
   const expenseSeries = db

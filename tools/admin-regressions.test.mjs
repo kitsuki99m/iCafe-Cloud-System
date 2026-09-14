@@ -7,11 +7,15 @@ import { fileURLToPath } from 'node:url'
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8')
 
-test('Overview status cards use the intended semantic icons and status routes', () => {
+test('Overview status cards use live PC state, including offline and reserved stations', () => {
   const source = read('apps/admin/src/pages/OverviewPage.jsx')
-  assert.match(source, /\['Available',summary\.available,MonitorCheck,[^\]]*'available'\]/)
-  assert.match(source, /\['In use',summary\.inUse,MonitorPlay,[^\]]*'occupied'\]/)
-  assert.match(source, /\['Maintenance',summary\.maintenance,Wrench,[^\]]*'maintenance'\]/)
+  assert.match(source, /\['Available',statusCounts\.available,MonitorCheck,[^\]]*'available'\]/)
+  assert.match(source, /\['In use',statusCounts\.occupied,MonitorPlay,[^\]]*'occupied'\]/)
+  assert.match(source, /\['Maintenance',statusCounts\.maintenance,Wrench,[^\]]*'maintenance'\]/)
+  assert.match(source, /\['Offline',statusCounts\.offline,MonitorCog,[^\]]*'offline'\]/)
+  assert.match(source, /\['Reserved',statusCounts\.reserved,Clock3,[^\]]*'reserved'\]/)
+  assert.match(source, /STATUS_META\[pc\.status\]\|\|STATUS_META\.offline/)
+  assert.doesNotMatch(source, /STATUS_META\[pc\.status\]\|\|STATUS_META\.available/)
 })
 
 test('Floor Matrix preserves status filters while opening and closing PC deep-links', () => {

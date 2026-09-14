@@ -21,6 +21,10 @@ import {
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { apiGet } from '../lib/api.js'
+import { connectSocket } from '../lib/socket.js'
+import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
+import { scopedPageCacheKey } from '../lib/pageCache.js'
+import { isCloudAdmin } from '../lib/cloudClient.js'
 import FeedbackInboxModal from '../components/admin/FeedbackInboxModal.jsx'
 import AdminNotificationCenter from '../components/admin/AdminNotificationCenter.jsx'
 import AnnouncementCenter from '../components/admin/AnnouncementCenter.jsx'
@@ -36,6 +40,8 @@ const STATUS_META = {
   available: { label:'Available', icon:MonitorCheck, tone:'text-teal-dim bg-teal/10', dot:'bg-teal' },
   occupied: { label:'In use', icon:MonitorPlay, tone:'text-gold bg-gold/10', dot:'bg-gold' },
   maintenance: { label:'Maintenance', icon:Wrench, tone:'text-ember-dim bg-ember/10', dot:'bg-ember' },
+  offline: { label:'Offline', icon:MonitorCog, tone:'text-slate-soft bg-surface-raised', dot:'bg-slate-soft' },
+  reserved: { label:'Reserved', icon:Clock3, tone:'text-grape bg-trillium/20', dot:'bg-grape' },
 }
 
 function OverviewCard({ title, subtitle, action, children, className='' }) {
@@ -59,11 +65,17 @@ function initials(value='Admin') {
   return String(value).trim().split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]?.toUpperCase()).join('') || 'AD'
 }
 
-function formatRelativeTime(value) {
-  if (!value) return 'Just now'
+function toTimestamp(value) {
+  if (value === null || value === undefined || value === '') return null
   const timestamp = typeof value === 'number' ? value : new Date(value).getTime()
-  if (!Number.isFinite(timestamp)) return 'Just now'
-  const diff = Math.max(0, Date.now() - timestamp)
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+function formatRelativeTime(value, nowMs=Date.now()) {
+  if (!value) return 'Just now'
+  const timestamp = toTimestamp(value)
+  if (timestamp == null) return 'Just now'
+  const diff = Math.max(0, nowMs - timestamp)
   const minutes = Math.floor(diff / 60000)
   if (minutes < 1) return 'Just now'
   if (minutes < 60) return `${minutes} min ago`
@@ -73,9 +85,10 @@ function formatRelativeTime(value) {
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
 
-function formatEndingSoon(value) {
+function formatEndingSoon(value, nowMs=Date.now()) {
   if (!value) return 'Session'
-  const diff = new Date(value).getTime() - Date.now()
+  const timestamp=toTimestamp(value)
+  const diff = timestamp == null ? NaN : timestamp - nowMs
   if (!Number.isFinite(diff)) return 'Time unavailable'
   const minutes = Math.max(0, Math.ceil(diff / 60000))
   if (minutes < 60) return `${minutes} min left`
@@ -122,48 +135,89 @@ export default function OverviewPage(){
   const [error,setError]=useState('')
   const [feedbackOpen,setFeedbackOpen]=useState(false)
   const [manualOpen,setManualOpen]=useState(false)
+  const [nowMs,setNowMs]=useState(()=>Date.now())
   const loadSequenceRef=useRef(0)
   const navigate=useNavigate()
+  const overviewCacheKey=useCallback(()=>scopedPageCacheKey('overview',user),[user])
 
   const load=useCallback(async()=>{
     const requestId=++loadSequenceRef.current
+    const requestCacheKey=overviewCacheKey()
     setError('')
     try{
       const next=await apiGet('/dashboard/overview')
-      if(requestId !== loadSequenceRef.current)return
+      if(requestId !== loadSequenceRef.current || requestCacheKey !== overviewCacheKey())return
       setData(next)
+      if(requestCacheKey)void writeSnapshot(requestCacheKey,next)
     }catch{
       if(requestId !== loadSequenceRef.current)return
-      setError('Live dashboard data is temporarily unavailable. Existing data may be stale.')
+      setError('Live dashboard data is temporarily unavailable. Showing the latest cached data when available.')
     }
-  },[])
+  },[overviewCacheKey])
 
   useEffect(()=>{
-    void load()
-    const timer=setInterval(()=>void load(),30000)
-    return()=>{clearInterval(timer);loadSequenceRef.current += 1}
-  },[load])
+    let active=true
+    const hydrate=async()=>{
+      const key=overviewCacheKey()
+      if(key){const cached=await readSnapshot(key);if(active&&cached)setData(cached)}
+      if(active)void load()
+    }
+    void hydrate()
+    const timer=setInterval(()=>void load(),15000)
+    const clock=setInterval(()=>setNowMs(Date.now()),30000)
+    const onOnline=()=>void load()
+    const onVisible=()=>{if(document.visibilityState==='visible'){setNowMs(Date.now());void load()}}
+    const onBranch=()=>{loadSequenceRef.current += 1;setData(null);void hydrate()}
+    window.addEventListener('online',onOnline)
+    window.addEventListener('aezakmi:cloud-branch-changed',onBranch)
+    document.addEventListener('visibilitychange',onVisible)
+    let socket=null
+    const onChanged=()=>void load()
+    if(!isCloudAdmin()){socket=connectSocket();socket.on('data:changed',onChanged)}
+    return()=>{active=false;clearInterval(timer);clearInterval(clock);window.removeEventListener('online',onOnline);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible);if(socket)socket.off('data:changed',onChanged);loadSequenceRef.current += 1}
+  },[load,overviewCacheKey])
 
   const summary=data?.summary||{}
-  const cards=[['Available',summary.available,MonitorCheck,'text-teal-dim bg-teal/10','available'],['In use',summary.inUse,MonitorPlay,'text-gold bg-gold/10','occupied'],['Maintenance',summary.maintenance,Wrench,'text-ember-dim bg-ember/10','maintenance'],['Revenue today',formatAdminPeso(summary.incomeToday,settings),CircleDollarSign,'text-gold bg-gold/10',null]]
+  const statusCounts=useMemo(()=>{
+    const counts={available:0,occupied:0,maintenance:0,offline:0,reserved:0}
+    for(const pc of pcs||[]){const status=String(pc?.status||'offline').toLowerCase();if(status in counts)counts[status] += 1;else counts.offline += 1}
+    return counts
+  },[pcs])
+  const cards=[['Available',statusCounts.available,MonitorCheck,'text-teal-dim bg-teal/10','available'],['In use',statusCounts.occupied,MonitorPlay,'text-gold bg-gold/10','occupied'],['Maintenance',statusCounts.maintenance,Wrench,'text-ember-dim bg-ember/10','maintenance'],['Offline',statusCounts.offline,MonitorCog,'text-slate-soft bg-surface-raised','offline'],['Revenue today',formatAdminPeso(summary.incomeToday,settings),CircleDollarSign,'text-gold bg-gold/10',null]]
 
   const floorPreview=useMemo(()=>{
-    const rank={occupied:0,available:1,maintenance:2}
+    const rank={occupied:0,reserved:1,maintenance:2,offline:3,available:4}
     return [...(pcs||[])].sort((a,b)=>(rank[a.status]??9)-(rank[b.status]??9)||String(a.label||'').localeCompare(String(b.label||''))).slice(0,12)
   },[pcs])
 
-  const endingSoon=useMemo(()=>{
-    return [...(data?.active||[])]
-      .filter(item=>item.expires_at)
-      .sort((a,b)=>new Date(a.expires_at).getTime()-new Date(b.expires_at).getTime())
-      .slice(0,5)
-  },[data?.active])
+  const liveSessions=useMemo(()=>{
+    return (pcs||[]).filter(pc=>pc?.session).map(pc=>({
+      id:pc.session.id,
+      pc_id:pc.id,
+      pc_label:pc.label||pc.id,
+      customer_name:pc.session.customerName||'Guest',
+      username:pc.session.username||null,
+      billing_type:pc.session.billing||pc.session.billingType||'prepaid',
+      started_at:pc.session.startedAt||pc.session.started_at||null,
+      expires_at:pc.session.expiresAt||pc.session.expires_at||null,
+      is_locked:Boolean(pc.session.isLocked||pc.session.isPaused),
+    }))
+  },[pcs])
+  const currentSessions=useMemo(()=>liveSessions.filter(item=>{
+    if(item.billing_type!=='prepaid'||item.is_locked||!item.expires_at)return true
+    const expires=toTimestamp(item.expires_at)
+    return expires==null||expires>nowMs
+  }),[liveSessions,nowMs])
+  const endingSoon=useMemo(()=>currentSessions
+    .filter(item=>item.billing_type==='prepaid'&&item.expires_at&&!item.is_locked)
+    .sort((a,b)=>(toTimestamp(a.expires_at)||Number.MAX_SAFE_INTEGER)-(toTimestamp(b.expires_at)||Number.MAX_SAFE_INTEGER))
+    .slice(0,5),[currentSessions])
 
   const pendingTopUps=useMemo(()=>topUpRequests.filter(item=>item.status==='pending'),[topUpRequests])
   const openSupport=useMemo(()=>supportRequests.filter(item=>item.status==='open'),[supportRequests])
 
   const activity=useMemo(()=>{
-    const sessions=(data?.active||[]).map(item=>({
+    const sessions=currentSessions.map(item=>({
       id:`session-${item.id}`,
       type:'session',
       title:`${item.pc_label||'PC'} session started`,
@@ -190,12 +244,12 @@ export default function OverviewPage(){
     return [...sessions,...topups,...help]
       .sort((a,b)=>new Date(b.at||0).getTime()-new Date(a.at||0).getTime())
       .slice(0,8)
-  },[data?.active,pendingTopUps,openSupport,settings])
+  },[currentSessions,pendingTopUps,openSupport,settings])
 
-  const week=useMemo(()=>manilaWeek(),[])
-  const todayLabel=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long',day:'numeric',year:'numeric'}).format(new Date())
+  const week=useMemo(()=>manilaWeek(new Date(nowMs)),[nowMs])
+  const todayLabel=new Intl.DateTimeFormat('en-PH',{timeZone:'Asia/Manila',month:'long',day:'numeric',year:'numeric'}).format(new Date(nowMs))
   const weekLabel=formatWeekRange(week)
-  const totalPcs=pcs.length || Number(summary.available||0)+Number(summary.inUse||0)+Number(summary.maintenance||0)
+  const totalPcs=pcs.length
   const feedbackCount=data?.feedback?.length||0
   const firstName=String(user?.name||'Admin').trim().split(/\s+/)[0]||'Admin'
 
@@ -226,7 +280,7 @@ export default function OverviewPage(){
         <div className="px-5 pb-5 sm:px-6 lg:px-7 lg:pb-6">
           {(error||serverError)&&<div className="mb-4 flex items-center justify-between rounded-xl border border-ember/20 bg-ember/10 px-3 py-2 text-xs text-ember-dim"><span>{error||serverError}</span><button onClick={load} className="font-semibold underline">Retry</button></div>}
 
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-5">
             {cards.map(([label,value,Icon,tone,status])=><button key={label} type="button" onClick={()=>status&&navigate(`/clients?status=${status}`)} disabled={!status} className="overview-card group flex min-h-[112px] items-center justify-between p-4 text-left transition-all enabled:hover:-translate-y-0.5 enabled:hover:border-midnight/30">
               <div>
                 <p className="text-[10px] font-medium text-slate-soft">{label}</p>
@@ -239,7 +293,7 @@ export default function OverviewPage(){
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
             <OverviewCard title="Floor status" subtitle="A quick look at the stations that need attention." action={<button onClick={()=>navigate('/clients')} className="flex items-center gap-1 text-[10px] font-semibold text-gold">Open floor <ArrowUpRight size={12}/></button>}>
               {floorPreview.length?<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-4">{floorPreview.map(pc=>{
-                const meta=STATUS_META[pc.status]||STATUS_META.available
+                const meta=STATUS_META[pc.status]||STATUS_META.offline
                 const Icon=meta.icon
                 return <button key={pc.id} onClick={()=>navigate(`/clients?pc=${encodeURIComponent(pc.id)}`)} className="overview-soft-card group min-h-[82px] p-3 text-left transition-all hover:-translate-y-0.5">
                   <div className="flex items-center justify-between gap-2"><span className={`flex h-7 w-7 items-center justify-center rounded-full ${meta.tone}`}><Icon size={13}/></span><span className="h-1.5 w-1.5 rounded-full bg-current opacity-60"/></div>
@@ -258,7 +312,7 @@ export default function OverviewPage(){
             <OverviewCard title="Sessions ending soon" subtitle="Prepaid sessions with the nearest expiry times.">
               {endingSoon.length?<div className="space-y-2">{endingSoon.map(item=><button key={item.id} onClick={()=>navigate(`/clients?pc=${encodeURIComponent(item.pc_id)}`)} className="flex w-full items-center justify-between gap-4 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-[var(--admin-card-subtle)]">
                 <div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold"><Clock3 size={14}/></span><div className="min-w-0"><p className="truncate text-[11px] font-semibold text-ink-900">{item.pc_label} · {item.username||item.customer_name||'Guest'}</p><p className="mt-0.5 text-[9px] text-slate-soft">{item.billing_type==='prepaid'?'Prepaid session':'Session'}</p></div></div>
-                <span className="shrink-0 rounded-full bg-ember/10 px-2.5 py-1 text-[9px] font-semibold text-ember-dim">{formatEndingSoon(item.expires_at)}</span>
+                <span className="shrink-0 rounded-full bg-ember/10 px-2.5 py-1 text-[9px] font-semibold text-ember-dim">{formatEndingSoon(item.expires_at,nowMs)}</span>
               </button>)}</div>:<Empty>No prepaid sessions are ending soon.</Empty>}
             </OverviewCard>
 
@@ -287,10 +341,12 @@ export default function OverviewPage(){
           <section className="overview-card p-4">
             <div className="mb-4 flex items-center justify-between"><div><h2 className="text-[15px] font-semibold text-ink-900">Cafe status</h2><p className="mt-1 text-[9px] text-slate-soft">Live floor capacity</p></div><span className="stat-figure text-[11px] font-semibold text-gold">{totalPcs} PCs</span></div>
             <div className="space-y-2">{[
-              ['Available',summary.available,MonitorCheck,'bg-teal','text-teal-dim'],
-              ['In use',summary.inUse,MonitorPlay,'bg-gold','text-gold'],
-              ['Maintenance',summary.maintenance,Wrench,'bg-ember','text-ember-dim'],
-            ].map(([label,value,Icon,dot,tone])=><button key={label} onClick={()=>navigate(`/clients?status=${label==='Available'?'available':label==='In use'?'occupied':'maintenance'}`)} className="flex w-full items-center justify-between rounded-xl px-2 py-2.5 text-left hover:bg-[var(--admin-card-subtle)]"><div className="flex items-center gap-3"><span className={`h-2 w-2 rounded-full ${dot}`}/><Icon size={13} className={tone}/><span className="text-[10px] font-medium text-ink-900">{label}</span></div><span className="stat-figure text-[11px] font-semibold text-ink-900">{value||0}</span></button>)}</div>
+              ['Available',statusCounts.available,MonitorCheck,'bg-teal','text-teal-dim','available'],
+              ['In use',statusCounts.occupied,MonitorPlay,'bg-gold','text-gold','occupied'],
+              ['Maintenance',statusCounts.maintenance,Wrench,'bg-ember','text-ember-dim','maintenance'],
+              ['Offline',statusCounts.offline,MonitorCog,'bg-slate-soft','text-slate-soft','offline'],
+              ['Reserved',statusCounts.reserved,Clock3,'bg-grape','text-grape','reserved'],
+            ].map(([label,value,Icon,dot,tone,status])=><button key={label} onClick={()=>navigate(`/clients?status=${status}`)} className="flex w-full items-center justify-between rounded-xl px-2 py-2.5 text-left hover:bg-[var(--admin-card-subtle)]"><div className="flex items-center gap-3"><span className={`h-2 w-2 rounded-full ${dot}`}/><Icon size={13} className={tone}/><span className="text-[10px] font-medium text-ink-900">{label}</span></div><span className="stat-figure text-[11px] font-semibold text-ink-900">{value||0}</span></button>)}</div>
             <div className="mt-3 border-t border-[var(--admin-ui-border)] pt-3"><div className="flex items-center justify-between"><span className="text-[10px] text-slate-soft">Open requests</span><div className="flex items-center gap-3 text-[9px] font-semibold"><span className="flex items-center gap-1 text-gold"><WalletCards size={11}/>{pendingTopUps.length}</span><span className="flex items-center gap-1 text-ember-dim"><LifeBuoy size={11}/>{openSupport.length}</span></div></div></div>
           </section>
 
@@ -300,7 +356,7 @@ export default function OverviewPage(){
               const Icon=item.type==='support'?LifeBuoy:item.type==='topup'?WalletCards:MonitorPlay
               const tone=item.type==='support'?'text-ember-dim bg-ember/10':item.type==='topup'?'text-gold bg-gold/10':'text-teal-dim bg-teal/10'
               const route=item.route||(item.pcId?`/clients?pc=${encodeURIComponent(item.pcId)}`:null)
-              return <button key={item.id} disabled={!route} onClick={()=>route&&navigate(route)} className="flex w-full items-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors enabled:hover:bg-[var(--admin-card-subtle)]"><span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}><Icon size={12}/></span><div className="min-w-0 flex-1"><p className="line-clamp-1 text-[10px] font-semibold text-ink-900">{item.title}</p><p className="mt-0.5 line-clamp-1 text-[9px] text-slate-soft">{item.detail}</p></div><span className="shrink-0 pt-0.5 text-[8px] text-slate-soft">{formatRelativeTime(item.at)}</span></button>
+              return <button key={item.id} disabled={!route} onClick={()=>route&&navigate(route)} className="flex w-full items-start gap-3 rounded-xl px-2 py-2.5 text-left transition-colors enabled:hover:bg-[var(--admin-card-subtle)]"><span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${tone}`}><Icon size={12}/></span><div className="min-w-0 flex-1"><p className="line-clamp-1 text-[10px] font-semibold text-ink-900">{item.title}</p><p className="mt-0.5 line-clamp-1 text-[9px] text-slate-soft">{item.detail}</p></div><span className="shrink-0 pt-0.5 text-[8px] text-slate-soft">{formatRelativeTime(item.at,nowMs)}</span></button>
             })}</div>:<Empty>No recent cafe activity.</Empty>}
           </section>
         </div>

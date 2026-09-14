@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, CircleDollarSign, Clock3, RefreshCw, RotateCcw, ScrollText, Search, SlidersHorizontal } from 'lucide-react'
 import { apiGet, apiPost } from '../lib/api.js'
+import { useAuth } from '../context/AuthContext.jsx'
+import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
+import { scopedPageCacheKey } from '../lib/pageCache.js'
 import SidePanel from '../components/common/SidePanel.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import { AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
@@ -33,6 +36,7 @@ function durationFromDetails(details) {
 }
 
 export default function LogsPage() {
+  const { user }=useAuth()
   const [logs, setLogs] = useState([])
   const [pendingSettlements, setPendingSettlements] = useState([])
   const [recoverableGuestSessions, setRecoverableGuestSessions] = useState([])
@@ -45,6 +49,8 @@ export default function LogsPage() {
   const [forfeitTarget, setForfeitTarget] = useState(null)
   const [page,setPage]=useState(1)
   const pageSize=50
+  const loadSequenceRef=useRef(0)
+  const cacheKey=useMemo(()=>scopedPageCacheKey('logs',user),[user])
 
   const actionOptions=useMemo(()=>['all',...new Set(logs.map((log)=>log.action).filter(Boolean))],[logs])
   const filteredLogs=useMemo(()=>{
@@ -63,28 +69,33 @@ export default function LogsPage() {
   const sessionEnds=Number(actionCounts['session.end']||0)
   const latestLog=logs[0]||null
 
-  async function loadLogs() {
+  const applySnapshot=useCallback((snapshot)=>{
+    const nextLogs=Array.isArray(snapshot?.logs)?snapshot.logs:[]
+    setLogs(nextLogs)
+    setPendingSettlements(Array.isArray(snapshot?.pendingSettlements)?snapshot.pendingSettlements:[])
+    setRecoverableGuestSessions(Array.isArray(snapshot?.recoverableGuestSessions)?snapshot.recoverableGuestSessions:[])
+    setPage(current=>Math.min(current,Math.max(1,Math.ceil(nextLogs.length/pageSize))))
+  },[])
+
+  const loadLogs=useCallback(async()=>{
+    const requestId=++loadSequenceRef.current
     setLoading(true)
     setError('')
     try {
       const [data, interrupted] = await Promise.all([apiGet('/logs'), apiGet('/sessions/interrupted')])
-      const nextLogs = Array.isArray(data?.logs) ? data.logs : []
-      setLogs(nextLogs)
-      setPendingSettlements(Array.isArray(interrupted?.pendingSettlements) ? interrupted.pendingSettlements : [])
-      setRecoverableGuestSessions(Array.isArray(interrupted?.recoverableGuestSessions) ? interrupted.recoverableGuestSessions : [])
-      setPage(current => Math.min(current, Math.max(1, Math.ceil(nextLogs.length/pageSize))))
+      if(requestId!==loadSequenceRef.current)return
+      const snapshot={logs:Array.isArray(data?.logs)?data.logs:[],pendingSettlements:Array.isArray(interrupted?.pendingSettlements)?interrupted.pendingSettlements:[],recoverableGuestSessions:Array.isArray(interrupted?.recoverableGuestSessions)?interrupted.recoverableGuestSessions:[]}
+      applySnapshot(snapshot)
+      if(cacheKey)void writeSnapshot(cacheKey,snapshot)
     } catch (err) {
-      setLogs([])
-      setPendingSettlements([])
-      setRecoverableGuestSessions([])
-      setPage(1)
-      setError(err?.message || 'Unable to load session logs.')
+      if(requestId!==loadSequenceRef.current)return
+      setError(err?.message || 'Unable to load session logs. Showing cached records when available.')
     } finally {
-      setLoading(false)
+      if(requestId===loadSequenceRef.current)setLoading(false)
     }
-  }
+  },[applySnapshot,cacheKey])
 
-  useEffect(() => { loadLogs() }, [])
+  useEffect(()=>{let active=true;if(cacheKey)void readSnapshot(cacheKey).then(snapshot=>{if(active&&snapshot){applySnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void loadLogs()});else void loadLogs();const timer=setInterval(()=>void loadLogs(),30000);const onOnline=()=>void loadLogs();const onVisible=()=>{if(document.visibilityState==='visible')void loadLogs()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible);loadSequenceRef.current+=1}},[applySnapshot,cacheKey,loadLogs])
   useEffect(()=>{setPage(1)},[query,actionFilter])
 
   async function settleInterrupted(item, paymentMethod) {

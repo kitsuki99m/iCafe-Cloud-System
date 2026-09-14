@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Clock3, PhilippinePeso, Timer, UserRound, UsersRound } from 'lucide-react'
 import { apiGet } from '../lib/api.js'
 import { Line } from 'react-chartjs-2'
 import { useAppData } from '../context/AppDataContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
+import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
+import { scopedPageCacheKey } from '../lib/pageCache.js'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { formatAdminPeso } from '../lib/numeric.js'
 import { CategoryScale, Chart as ChartJS, Filler, Legend, LinearScale, LineElement, PointElement, Tooltip } from 'chart.js'
@@ -14,8 +17,10 @@ const ranges=[['today','Today'],['7d','7 Days'],['30d','30 Days'],['year','This 
 function duration(seconds){const hours=Math.floor(Number(seconds||0)/3600);const minutes=Math.floor(Number(seconds||0)%3600/60);return `${hours}h ${minutes}m`}
 
 export default function AnalyticsPage(){
-  const { settings }=useAppData();const { isDark }=useTheme();const [range,setRange]=useState('30d');const [data,setData]=useState(null);const [error,setError]=useState('')
-  useEffect(()=>{let active=true;setError('');apiGet(`/analytics?range=${range}&compare=1`).then(result=>active&&setData(result)).catch(err=>active&&setError(err.message));return()=>{active=false}},[range])
+  const { user }=useAuth();const { settings }=useAppData();const { isDark }=useTheme();const [range,setRange]=useState('30d');const [data,setData]=useState(null);const [error,setError]=useState('');const loadSequenceRef=useRef(0)
+  const cacheKey=useMemo(()=>scopedPageCacheKey('analytics',user,range),[user,range])
+  const load=useCallback(async()=>{const requestId=++loadSequenceRef.current;setError('');try{const result=await apiGet(`/analytics?range=${range}&compare=1`);if(requestId!==loadSequenceRef.current)return;setData(result);if(cacheKey)void writeSnapshot(cacheKey,result)}catch(err){if(requestId!==loadSequenceRef.current)return;setError(err.message||'Unable to load analytics. Showing cached data when available.')}},[range,cacheKey])
+  useEffect(()=>{let active=true;setData(null);if(cacheKey)void readSnapshot(cacheKey).then(snapshot=>{if(active&&snapshot)setData(snapshot)}).finally(()=>{if(active)void load()});else void load();const timer=setInterval(()=>void load(),60000);const onOnline=()=>void load();const onVisible=()=>{if(document.visibilityState==='visible')void load()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible);loadSequenceRef.current+=1}},[cacheKey,load])
   const rows=useMemo(()=>{const byRevenue=new Map((data?.revenueSeries||[]).map(item=>[item.day,Number(item.revenue||0)]));return (data?.series||[]).map(item=>({...item,revenue:byRevenue.get(item.day)||0}))},[data]);const max=Math.max(1,...rows.map(row=>Number(row.visits||0)))
   const chartTextColor=isDark?'#C9B27A':'#423D42';const chartGridColor=isDark?'rgba(245,245,245,.08)':'rgba(32,41,55,.08)'
   const financeChart=useMemo(()=>{const days=[...new Set([...(data?.revenueSeries||[]).map(item=>item.day),...(data?.expenseSeries||[]).map(item=>item.day)])].sort();const revenue=new Map((data?.revenueSeries||[]).map(item=>[item.day,Number(item.revenue||0)])),expenses=new Map((data?.expenseSeries||[]).map(item=>[item.day,Number(item.expenses||0)]));return{labels:days.map(day=>day.slice(5)),datasets:[{label:'Revenue',data:days.map(day=>revenue.get(day)||0),borderColor:'#2fa879',backgroundColor:'rgba(47,168,121,.10)',fill:true,tension:.3},{label:'Expenses',data:days.map(day=>expenses.get(day)||0),borderColor:'#e85c62',backgroundColor:'rgba(232,92,98,.06)',tension:.3},{label:'Net',data:days.map(day=>(revenue.get(day)||0)-(expenses.get(day)||0)),borderColor:isDark?'#D4C1B9':'#766664',borderDash:[5,4],tension:.3}]}} ,[data,isDark])

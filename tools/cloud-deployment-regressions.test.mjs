@@ -124,12 +124,14 @@ test('local sync remains durable and advisory licensing never shuts down the caf
 })
 
 test('Vercel Admin uses branch-scoped IndexedDB cache and optimistic local state',()=>{
-  const data=read('apps/admin/src/context/AppDataContext.jsx'),cache=read('apps/admin/src/lib/localCache.js')
-  assert.match(data,/admin:cloud:/)
-  assert.match(data,/cloudBranchId\(\)/)
+  const data=read('apps/admin/src/context/AppDataContext.jsx'),cache=read('apps/admin/src/lib/localCache.js'),pageCache=read('apps/admin/src/lib/pageCache.js')
+  assert.match(data,/scopedPageCacheKey\('app-data',user\)/)
+  assert.match(data,/requestCacheKey !== scopedPageCacheKey\('app-data',user\)/)
   assert.match(data,/optimisticState/)
   assert.match(data,/writeSnapshot/)
   assert.match(data,/setInterval\(cloudRefresh,5000\)/)
+  assert.match(pageCache,/cloudBranchId\(\)/)
+  assert.match(pageCache,/cloud:\$\{user\.id\}/)
   assert.match(cache,/indexedDB/)
 })
 

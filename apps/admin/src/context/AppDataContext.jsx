@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiPatch, apiDelete } from '../lib/api.js'
 import { connectSocket, disconnectSocket } from '../lib/socket.js'
 import { showToast } from '../lib/toast.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
+import { scopedPageCacheKey } from '../lib/pageCache.js'
 import { isCloudAdmin, cloudBranchId } from '../lib/cloudClient.js'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../lib/sessionTime.js'
 import { playAdminSound } from '../lib/sound.js'
@@ -129,11 +130,12 @@ export function AppDataProvider({ children }) {
     realtimeConnected: false,
     clientContext: null,
   })
-  const cacheKey=user ? (isCloudAdmin() ? `admin:cloud:${user.id}:${cloudBranchId() || 'unselected'}` : `admin:${user.id}:${user.role}`) : null
+  const cacheKey=scopedPageCacheKey('app-data',user)
   const refreshGenerationRef=useRef(0)
 
   const refresh = useCallback(async () => {
     const generation=refreshGenerationRef.current
+    const requestCacheKey=scopedPageCacheKey('app-data',user)
     if (!user) {
       if (generation !== refreshGenerationRef.current) return
       setState((s) => ({ ...s, loading:false, serverError:'' }))
@@ -210,9 +212,9 @@ export function AppDataProvider({ children }) {
         serverError:'',
         clientContext:clientContextData ?? null,
       }
-      if (generation !== refreshGenerationRef.current) return
+      if (generation !== refreshGenerationRef.current || requestCacheKey !== scopedPageCacheKey('app-data',user)) return
       setState((current) => ({ ...current, ...snapshot }))
-      if(cacheKey) writeSnapshot(cacheKey,snapshot)
+      if(requestCacheKey) void writeSnapshot(requestCacheKey,snapshot)
     } catch (error) {
       if (generation !== refreshGenerationRef.current) return
       setState((s) => ({ ...s, loading:false, serverError:error.message || 'Backend unavailable.' }))
@@ -234,7 +236,12 @@ export function AppDataProvider({ children }) {
         }catch{if(active)setState(current=>({...current,realtimeConnected:false}))}
       }
       const onOnline=()=>cloudRefresh()
-      const onBranch=()=>cloudRefresh()
+      const onBranch=()=>{
+        refreshGenerationRef.current += 1
+        const nextKey=scopedPageCacheKey('app-data',user)
+        if(nextKey) void readSnapshot(nextKey).then(snapshot=>{if(active&&snapshot)setState(current=>({...current,...snapshot,loading:false,serverError:''}))}).finally(()=>{if(active)void cloudRefresh()})
+        else void cloudRefresh()
+      }
       window.addEventListener('online',onOnline)
       window.addEventListener('aezakmi:cloud-branch-changed',onBranch)
       timer=setInterval(cloudRefresh,5000)
@@ -415,7 +422,8 @@ export function AppDataProvider({ children }) {
   function optimisticState(updater) {
     setState((current) => {
       const next = updater(current)
-      if (cacheKey) writeSnapshot(cacheKey, { ...next, loading:false }).catch?.(() => {})
+      const optimisticCacheKey=scopedPageCacheKey('app-data',user)
+      if (optimisticCacheKey) void writeSnapshot(optimisticCacheKey, { ...next, loading:false })
       return next
     })
   }
