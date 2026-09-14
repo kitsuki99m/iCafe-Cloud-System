@@ -4,28 +4,30 @@ import fs from 'node:fs'
 
 const read=(file)=>fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8')
 
-test('member and guest forfeit/refund wait for Customer Station exit acknowledgement',()=>{
+test('member and guest Forfeit wait for Customer Station forced-logout acknowledgement',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
   assert.match(admin,/prepareSessionClose/)
   assert.match(admin,/waitForStationCommand/)
   assert.match(admin,/sessionClose:true/)
-  assert.match(admin,/disposition === 'save' \|\| disposition === 'forfeit'/)
-  assert.match(admin,/prepareSessionClose\(pc, disposition\)/)
-  assert.match(admin,/await prepareSessionClose\(pc, 'refund'\)/)
+  assert.match(admin,/if \(disposition === 'forfeit'\) prepared=await prepareSessionClose\(pc, disposition\)/)
   assert.match(admin,/command:'game_update'/)
   assert.match(admin,/No Pause & Save, forfeit, or refund was committed/)
 })
 
-test('Customer Station ACKs close only after the Electron kiosk is locally protected',()=>{
+test('Customer Station ACKs Forfeit only after it has returned to login kiosk',()=>{
   const customer=read('apps/customer/src/context/AppDataContext.jsx')
   assert.match(customer,/const sessionClose=Boolean\(payload\?\.payload\?\.sessionClose\)/)
   const start=customer.indexOf('if (sessionClose)')
-  const lock=customer.indexOf("executeRemoteCommand",start)
-  const ack=customer.indexOf("await ack('completed'",lock)
-  assert.ok(start>=0 && lock>start && ack>lock)
-  assert.match(customer.slice(start,ack),/command:'lock'/)
-  assert.match(customer,/sessionExitReady:true/)
-  assert.doesNotMatch(customer.slice(start,ack),/clearStationLifecycleMarker/)
+  const forfeit=customer.indexOf("if (disposition === 'forfeit')",start)
+  const save=customer.indexOf('// Save/refund protection',forfeit)
+  const block=customer.slice(forfeit,save)
+  const login=block.indexOf('showLoginKiosk')
+  const logoutEvent=block.indexOf('aezakmi:admin-forfeit-logout')
+  const ack=block.indexOf("await ack('completed'")
+  assert.ok(forfeit>=0 && login>=0 && logoutEvent>login && ack>logoutEvent)
+  assert.match(block,/sessionExitReady:true/)
+  assert.match(block,/forcedLogout:true/)
+  assert.doesNotMatch(block,/command:'lock'/)
 })
 
 test('refund UI is mutually exclusive with other session actions',()=>{

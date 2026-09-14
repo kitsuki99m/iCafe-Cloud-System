@@ -3,7 +3,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST,OPTIONS'}
 function preflight(req:Request){if(req.method==='OPTIONS')return new Response('ok',{headers:corsHeaders});return null}
 function json(value:unknown,status=200){return new Response(JSON.stringify(value),{status,headers:{...corsHeaders,'Content-Type':'application/json'}})}
-function fail(error:any,fallback='Request failed.'){const status=Number(error?.status||500);return json({success:false,code:error?.code||'SERVER_ERROR',error:status>=500?fallback:(error?.message||fallback)},status)}
+function fail(error:any,fallback='Request failed.'){const status=Number(error?.status||500);return json({success:false,code:error?.code||'SERVER_ERROR',error:status>=500&&!error?.exposeMessage?fallback:(error?.message||fallback)},status)}
 function namedKey(envName:string){const raw=Deno.env.get(envName)||'';if(!raw)return'';try{const parsed=JSON.parse(raw);if(parsed&&typeof parsed==='object')return String(parsed.default||Object.values(parsed)[0]||'')}catch{}return''}
 function projectUrl(){const value=Deno.env.get('SUPABASE_URL')||'';if(!value)throw Object.assign(new Error('SUPABASE_URL unavailable.'),{status:500});return value.replace(/\/+$/,'')}
 function publishableKey(){return Deno.env.get('SUPABASE_PUBLISHABLE_KEY')||namedKey('SUPABASE_PUBLISHABLE_KEYS')||Deno.env.get('SUPABASE_ANON_KEY')||''}
@@ -37,13 +37,16 @@ async function subscriptionPackage(admin:SupabaseClient,planValue:unknown,custom
   const selected:any=catalog.find((item:any)=>String(item.id)===plan)
   if(!selected)throw Object.assign(new Error('Choose Bronze, Silver, Gold, or Ultra.'),{status:400,code:'INVALID_SUBSCRIPTION_PLAN'})
   const fixed=selected.max_stations==null?null:Number(selected.max_stations)
+  const goldCap=Math.max(0,Number(catalog.find((item:any)=>String(item.id)==='gold')?.max_stations||0))
+  const ultraFloor=Math.max(1,goldCap+1)
   let maxStations=fixed
   if(plan==='ultra'||fixed===null){
     const requested=Math.floor(Number(customValue))
-    maxStations=Number.isInteger(requested)&&requested>0?requested:expected
+    maxStations=Number.isInteger(requested)&&requested>0?requested:Math.max(expected,ultraFloor)
+    if(Number(maxStations)<ultraFloor)throw Object.assign(new Error(`Ultra station limit must be at least ${ultraFloor}.`),{status:400,code:'ULTRA_LIMIT_TOO_LOW'})
   }
   if(!Number.isInteger(maxStations)||Number(maxStations)<1||Number(maxStations)>10000)throw Object.assign(new Error('Station limit must be between 1 and 10,000.'),{status:400,code:'INVALID_STATION_LIMIT'})
-  return{plan,maxStations:Number(maxStations),package:selected}
+  return{plan,maxStations:Number(maxStations),ultraFloor,package:selected}
 }
 async function organizationStationCount(admin:SupabaseClient,organizationId:string){const{data:branches,error:branchError}=await admin.from('branches').select('id').eq('organization_id',organizationId);if(branchError)throw branchError;const ids=(branches||[]).map((x:any)=>x.id);if(!ids.length)return 0;const{count,error}=await admin.from('branch_stations').select('local_id',{count:'exact',head:true}).in('branch_id',ids);if(error)throw error;return Number(count||0)}
 async function applySubscription(admin:SupabaseClient,organizationId:string,planValue:unknown,customValue:unknown,expectedStations=1){const pkg=await subscriptionPackage(admin,planValue,customValue,expectedStations),used=await organizationStationCount(admin,organizationId);if(used>pkg.maxStations)throw Object.assign(new Error(`This business already has ${used} stations. Choose a package that supports at least ${used}.`),{status:409,code:'SUBSCRIPTION_BELOW_USAGE'});const{data,error}=await admin.from('subscriptions').update({plan:pkg.plan,max_stations:pkg.maxStations,updated_at:new Date().toISOString()}).eq('organization_id',organizationId).select('plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').single();if(error)throw error;return{...data,station_count:used}}
@@ -128,6 +131,23 @@ Deno.serve(async req=>{
       return json({success:true,requests:merged,packageCatalog:packages,pricingSettings:pricing})
     }
 
+    if(action==='update_pricing_catalog'){
+      const packages=Array.isArray(b.packages)?b.packages:[]
+      if(packages.length!==4)throw Object.assign(new Error('Bronze, Silver, Gold, and Ultra are required.'),{status:400,code:'PACKAGE_CATALOG_INCOMPLETE'})
+      const normalized=packages.map((item:any)=>({id:String(item?.id||'').trim().toLowerCase(),maxStations:item?.maxStations==null||item?.maxStations===''?null:Math.floor(Number(item.maxStations)),monthlyPrice:Number(item?.monthlyPrice),description:note(item?.description)}))
+      const ids=new Set(normalized.map((item:any)=>item.id))
+      if(ids.size!==4||!['bronze','silver','gold','ultra'].every(id=>ids.has(id)))throw Object.assign(new Error('Bronze, Silver, Gold, and Ultra are required.'),{status:400,code:'PACKAGE_CATALOG_INVALID'})
+      const byId=Object.fromEntries(normalized.map((item:any)=>[item.id,item])) as Record<string,any>
+      if(![byId.bronze.maxStations,byId.silver.maxStations,byId.gold.maxStations].every((value:any)=>Number.isInteger(value)&&value>=1&&value<=10000)||!(byId.bronze.maxStations<byId.silver.maxStations&&byId.silver.maxStations<byId.gold.maxStations))throw Object.assign(new Error('PC limits must increase from Bronze to Silver to Gold.'),{status:400,code:'PACKAGE_LIMIT_ORDER_INVALID'})
+      for(const item of normalized)if(!Number.isFinite(item.monthlyPrice)||item.monthlyPrice<0||item.monthlyPrice>1000000)throw Object.assign(new Error(`${item.id} monthly price is invalid.`),{status:400,code:'INVALID_PACKAGE_PRICE'})
+      const min=Number(b.deploymentFeeMin),max=Number(b.deploymentFeeMax),days=Math.floor(Number(b.quoteValidDays))
+      if(!Number.isFinite(min)||min<0||!Number.isFinite(max)||max<min)throw Object.assign(new Error('Deployment fee range is invalid.'),{status:400,code:'INVALID_DEPLOYMENT_FEES'})
+      if(!Number.isInteger(days)||days<1||days>90)throw Object.assign(new Error('Quotation validity must be from 1 to 90 days.'),{status:400,code:'INVALID_QUOTE_VALIDITY'})
+      const{data,error}=await admin.rpc('aezakmi_update_platform_pricing_catalog',{p_packages:normalized,p_deployment_fee_min:min,p_deployment_fee_max:max,p_quote_valid_days:days})
+      if(error){const message=String(error.message||'');if(/aezakmi_update_platform_pricing_catalog|schema cache|could not find|does not exist/i.test(message))throw Object.assign(new Error('Cloud database schema is behind this Developer build. Apply migration 20260914000025_atomic_platform_pricing_catalog.sql, then redeploy developer-registrations.'),{status:503,code:'CLOUD_SCHEMA_OUTDATED',exposeMessage:true});throw error}
+      return json(data&&typeof data==='object'?data:{success:true,packageCatalog:await packageCatalog(admin),pricingSettings:await pricingSettings(admin)})
+    }
+
     if(action==='update_package'){
       const packageId=String(b.packageId||'').trim().toLowerCase()
       if(!['bronze','silver','gold','ultra'].includes(packageId))throw Object.assign(new Error('Unknown package.'),{status:400,code:'INVALID_SUBSCRIPTION_PLAN'})
@@ -170,12 +190,18 @@ Deno.serve(async req=>{
     if(action==='send_quote'){
       const pkg=await subscriptionPackage(admin,b.subscriptionPlan,b.ultraStationLimit||b.stationCount,r.expected_station_count)
       const settings:any=await pricingSettings(admin)
-      const stationCount=Math.max(1,Math.min(10000,Math.floor(Number(b.stationCount)||Number(r.expected_station_count)||1)))
-      const branchCount=Math.max(1,Math.min(1000,Math.floor(Number(b.branchCount)||1)))
-      const monthlyPrice=Number.isFinite(Number(b.monthlyPrice))?Math.max(0,Number(b.monthlyPrice)):Number(pkg.package?.monthly_price||0)
-      const deploymentFeePerBranch=Number.isFinite(Number(b.deploymentFeePerBranch))?Math.max(0,Number(b.deploymentFeePerBranch)):Number(settings.deployment_fee_min||2500)
+      const stationCount=Math.floor(Number(b.stationCount ?? r.expected_station_count ?? 1))
+      const branchCount=Math.floor(Number(b.branchCount ?? 1))
+      const monthlyPrice=Number(b.monthlyPrice ?? pkg.package?.monthly_price ?? 0)
+      const deploymentFeePerBranch=Number(b.deploymentFeePerBranch ?? settings.deployment_fee_min ?? 2500)
+      const validDays=Math.floor(Number(b.validDays ?? settings.quote_valid_days ?? 14))
+      if(!Number.isInteger(stationCount)||stationCount<1||stationCount>10000)throw Object.assign(new Error('Quotation PC count must be between 1 and 10,000.'),{status:400,code:'INVALID_QUOTE_STATION_COUNT'})
+      if(pkg.plan==='ultra'&&stationCount<pkg.ultraFloor)throw Object.assign(new Error(`Ultra quotations require at least ${pkg.ultraFloor} PCs.`),{status:400,code:'ULTRA_LIMIT_TOO_LOW'})
+      if(!Number.isInteger(branchCount)||branchCount<1||branchCount>1000)throw Object.assign(new Error('Quotation branch count must be between 1 and 1,000.'),{status:400,code:'INVALID_QUOTE_BRANCH_COUNT'})
+      if(!Number.isFinite(monthlyPrice)||monthlyPrice<0||monthlyPrice>1000000)throw Object.assign(new Error('Quotation monthly price is invalid.'),{status:400,code:'INVALID_QUOTE_PRICE'})
+      if(!Number.isFinite(deploymentFeePerBranch)||deploymentFeePerBranch<0||deploymentFeePerBranch>1000000)throw Object.assign(new Error('Quotation deployment fee is invalid.'),{status:400,code:'INVALID_QUOTE_DEPLOYMENT_FEE'})
+      if(!Number.isInteger(validDays)||validDays<1||validDays>90)throw Object.assign(new Error('Quotation validity must be from 1 to 90 days.'),{status:400,code:'INVALID_QUOTE_VALIDITY'})
       const deploymentFeeTotal=deploymentFeePerBranch*branchCount
-      const validDays=Math.max(1,Math.min(90,Math.floor(Number(b.validDays)||Number(settings.quote_valid_days)||14)))
       const validUntil=new Date(Date.now()+validDays*86400000)
       const quoteNumber=`AEZ-${new Date().toISOString().slice(0,10).replace(/-/g,'')}-${crypto.randomUUID().slice(0,8).toUpperCase()}`
       const message=note(b.message)

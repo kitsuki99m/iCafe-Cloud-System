@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Modal from '../common/Modal.jsx'
 import Button from '../common/Button.jsx'
 
@@ -30,8 +30,12 @@ function pcNumberFor(pc) {
   return match ? stationNumber(match[0]) : null
 }
 
+function isTransientCreateGhost(pc) {
+  return Boolean(pc?.pending) && !pc?.createdAt && !pc?.created_at
+}
+
 function nextStationNumber(existingPcs = []) {
-  const used = new Set(existingPcs.map(pcNumberFor).filter(Boolean))
+  const used = new Set(existingPcs.filter((pc) => !isTransientCreateGhost(pc)).map(pcNumberFor).filter(Boolean))
   let number = 1
   while (used.has(number)) number += 1
   return number
@@ -48,6 +52,7 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
   const [removeArmed, setRemoveArmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const saveInFlightRef = useRef(false)
   const isEdit = !!pc
   const canRemove = isEdit && pc.status !== 'occupied' && pc.status !== 'reserved' && !pc.session
 
@@ -58,21 +63,24 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
         : { ...BLANK, pcNumber: String(nextStationNumber(existingPcs)) })
       setRemoveArmed(false)
       setSaving(false)
+      saveInFlightRef.current = false
       setError('')
     }
   }, [open, pc])
 
   const effectiveIp = draft.ipAddress.trim()
   const validIp = cloudManaged || validIpv4(effectiveIp)
-  const duplicateIp = Boolean(effectiveIp) && existingPcs.some((item) => String(item.id) !== String(pc?.id ?? '') && String(item.ipAddress ?? '').trim() === effectiveIp)
+  const confirmedPcs = existingPcs.filter((item) => !isTransientCreateGhost(item))
+  const duplicateIp = Boolean(effectiveIp) && confirmedPcs.some((item) => String(item.id) !== String(pc?.id ?? '') && String(item.ipAddress ?? '').trim() === effectiveIp)
   const createNumber = stationNumber(draft.pcNumber)
   const generatedId = createNumber ? pcId(createNumber) : null
-  const duplicateNumber = !isEdit && Boolean(createNumber) && existingPcs.some((item) => pcNumberFor(item) === createNumber)
-  const duplicateId = !isEdit && Boolean(generatedId) && existingPcs.some((item) => String(item.id) === String(generatedId))
+  const duplicateNumber = !isEdit && Boolean(createNumber) && confirmedPcs.some((item) => pcNumberFor(item) === createNumber)
+  const duplicateId = !isEdit && Boolean(generatedId) && confirmedPcs.some((item) => String(item.id) === String(generatedId))
   const valid = (isEdit ? Boolean(draft.label.trim()) : Boolean(createNumber)) && validIp && !duplicateIp && !duplicateNumber && !duplicateId
 
   async function handleSave() {
-    if (!valid || saving) return
+    if (!valid || saving || saveInFlightRef.current) return
+    saveInFlightRef.current = true
     setSaving(true)
     setError('')
     try {
@@ -96,6 +104,7 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
     } catch (err) {
       setError(err?.message || 'Unable to save PC.')
     } finally {
+      saveInFlightRef.current = false
       setSaving(false)
     }
   }

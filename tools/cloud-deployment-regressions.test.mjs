@@ -135,9 +135,14 @@ test('Vercel Admin uses branch-scoped IndexedDB cache and optimistic local state
   assert.match(cache,/indexedDB/)
 })
 
-test('local Admin and Customer cache optimistic state before reconciliation',()=>{
+test('Admin and Customer optimistic mutations stay memory-only until server reconciliation',()=>{
   const a=read('apps/admin/src/context/AppDataContext.jsx'),c=read('apps/customer/src/context/AppDataContext.jsx')
-  for(const s of[a,c]){assert.match(s,/optimisticState/);assert.match(s,/writeSnapshot/);assert.match(s,/\.catch\(\(error\)=>\{refresh\(\)/)}
+  for(const s of[a,c]){
+    const start=s.indexOf('function optimisticState')
+    const block=s.slice(start,s.indexOf('function ',start+20))
+    assert.match(block,/Optimistic UI is memory-only/)
+    assert.doesNotMatch(block,/writeSnapshot/)
+  }
 })
 
 test('Cloud Admin is approval-only while local Emergency Admin keeps local credentials',()=>{

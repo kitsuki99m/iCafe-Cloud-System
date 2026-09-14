@@ -193,23 +193,38 @@ export function AuthProvider({ children }) {
       const terminal=window.aezakmiClient?.showLoginKiosk || window.aezakmiClient?.lockClient;
       terminal?.();
     };
-    const onAuthInvalid = () => {
+    const onAuthInvalid = (event) => {
+      const reason=String(event?.detail?.reason || "").toLowerCase();
+      if (reason === "admin_forfeit" || reason === "session_forfeited") {
+        clearStationLifecycleMarker().catch?.(() => {});
+        lock();
+        return;
+      }
       if (hasActiveStationLifecycle()) releaseStationLifecycle("auth_invalid", { allowDeferred:true }).catch(() => {});
       lock();
     };
     const onAdminSessionInterruption = () => {
       // Power/restart/disconnect interruptions are immediate logout boundaries.
-      // They are separate from the neutral forfeit/refund close barrier below.
+      // They are separate from the session-close transport used by Admin actions.
       clearAdminSessionCloseFence();
       lock();
     };
     const onAdminSessionClosePending = (event) => {
-      // The Customer window is already protected by Electron before this event.
-      // Keep guest auto-detection fenced until Admin either commits the close or
-      // explicitly rolls it back. Do not clear auth/lifecycle state before commit.
+      // Fence Guest auto-detection while Admin owns the close. Forfeit also
+      // emits a dedicated forced-logout event immediately after this fence is set;
+      // Save/Refund may remain in a reversible protected state until commit.
       setAdminSessionCloseFence(event?.detail || {});
     };
     const onAdminSessionCloseRelease = () => { clearAdminSessionCloseFence(); };
+    const onAdminForfeitLogout = (event) => {
+      // Forced staff forfeiture intentionally bypasses normal logout lifecycle
+      // checkpointing: Admin owns the authoritative close and is about to zero
+      // the remaining time. Clearing locally prevents any crash recovery from
+      // resurrecting the forfeited session while immediately returning to login.
+      clearStationLifecycleMarker().catch?.(() => {});
+      if (event?.detail?.committed) setAdminSessionCloseFence(event.detail, ADMIN_SESSION_CLOSE_TERMINAL_GRACE_MS);
+      lock();
+    };
     const onStationSessionInterruption = onAdminSessionInterruption;
     const onGuestSessionEnded = (event) => {
       // Keep a short post-commit grace window so a stale Edge/Cloud read cannot
@@ -223,6 +238,7 @@ export function AuthProvider({ children }) {
     window.addEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
     window.addEventListener("aezakmi:admin-session-close-pending", onAdminSessionClosePending);
     window.addEventListener("aezakmi:admin-session-close-release", onAdminSessionCloseRelease);
+    window.addEventListener("aezakmi:admin-forfeit-logout", onAdminForfeitLogout);
     window.addEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     return () => {
       window.removeEventListener("aezakmi:auth-invalid", onAuthInvalid);
@@ -230,6 +246,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
       window.removeEventListener("aezakmi:admin-session-close-pending", onAdminSessionClosePending);
       window.removeEventListener("aezakmi:admin-session-close-release", onAdminSessionCloseRelease);
+      window.removeEventListener("aezakmi:admin-forfeit-logout", onAdminForfeitLogout);
       window.removeEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     };
   }, []);

@@ -4,15 +4,16 @@ import fs from 'node:fs'
 
 const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8')
 
-test('Admin active prepaid forfeiture uses a destructive confirmation modal for Member and Guest modes',()=>{
+test('Admin active prepaid forfeiture uses a destructive forced-logout confirmation for Member and Guest modes',()=>{
   const modal=read('apps/admin/src/components/floor/SessionModal.jsx')
   assert.match(modal,/import ConfirmModal from '\.\.\/common\/ConfirmModal\.jsx'/)
   assert.match(modal,/Forfeit this \$\{forfeitSubject\} session\?/)
   assert.match(modal,/title="Forfeit remaining time\?"/)
   assert.match(modal,/confirmLabel="Forfeit time"/)
   assert.match(modal,/variant="danger"/)
-  assert.match(modal,/member will stay signed in/)
-  assert.match(modal,/guest session will end immediately/)
+  assert.match(modal,/Customer Station will log out immediately/)
+  assert.match(modal,/this session will stop/)
+  assert.match(modal,/all remaining time will be permanently discarded/)
   assert.match(modal,/runSessionAction\('forfeit'\)/)
   assert.doesNotMatch(modal,/window\.confirm\([^)]*Forfeit this/)
 })
@@ -48,14 +49,18 @@ test('Interrupted Guest recovery UI offers Restore plus a permanent Forfeit conf
   assert.match(logs,/>Forfeit<\/button>/)
 })
 
-test('Guest active forfeiture immediately exits Customer Guest mode locally and through Cloud wakeup',()=>{
+test('Active forfeiture forces both Member and Guest back to login locally and through Cloud wakeup',()=>{
   const app=read('apps/customer/src/context/AppDataContext.jsx')
+  const auth=read('apps/customer/src/context/AuthContext.jsx')
   const cloud=read('apps/customer/src/lib/cloudStation.js')
   const stationAdmin=read('supabase/functions/station-admin/index.ts')
-  assert.match(app,/guestTerminalReasons=new Set\(\['session_saved','session_forfeited','session_refunded','session_ended','session_expired','session_settled'\]\)/)
-  assert.match(app,/aezakmi:guest-session-ended/)
+  assert.match(app,/reason === 'session_forfeited'[\s\S]*showLoginKiosk/)
+  assert.match(app,/aezakmi:admin-forfeit-logout/)
+  assert.match(auth,/aezakmi:admin-forfeit-logout/)
+  assert.match(auth,/clearStationLifecycleMarker\(\)[\s\S]*lock\(\)/)
   assert.match(cloud,/aezakmi:cloud-station-wakeup/)
   assert.match(stationAdmin,/action==='session_close'/)
   assert.match(stationAdmin,/session_forfeited/)
+  assert.match(stationAdmin,/forceLogout:disposition==='forfeit'/)
   assert.match(stationAdmin,/await broadcast/)
 })

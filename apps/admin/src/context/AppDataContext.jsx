@@ -47,6 +47,14 @@ function normalizePc(pc) {
   }
 }
 
+function sanitizeCachedSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot
+  const pcs = Array.isArray(snapshot.pcs)
+    ? snapshot.pcs.filter((pc) => !(pc?.pending && !pc?.createdAt && !pc?.created_at))
+    : snapshot.pcs
+  return { ...snapshot, ...(Array.isArray(pcs) ? { pcs } : {}) }
+}
+
 function finiteOr(value, fallback = 0) {
   const number = Number(value)
   return Number.isFinite(number) ? number : fallback
@@ -225,7 +233,7 @@ export function AppDataProvider({ children }) {
   useEffect(() => {
     const effectGeneration=++refreshGenerationRef.current
     let active=true
-    if (cacheKey) readSnapshot(cacheKey).then((snapshot)=>{if(active&&snapshot)setState((current)=>({...current,...snapshot,loading:false,serverError:''}))}).finally(()=>{if(active)refresh()})
+    if (cacheKey) readSnapshot(cacheKey).then((snapshot)=>{if(active&&snapshot){const confirmed=sanitizeCachedSnapshot(snapshot);setState((current)=>({...current,...confirmed,loading:false,serverError:''}));void writeSnapshot(cacheKey,confirmed)}}).finally(()=>{if(active)refresh()})
     else refresh()
     if (!user) return undefined
     if (isCloudAdmin()) {
@@ -240,7 +248,7 @@ export function AppDataProvider({ children }) {
       const onBranch=()=>{
         refreshGenerationRef.current += 1
         const nextKey=scopedPageCacheKey('app-data',user)
-        if(nextKey) void readSnapshot(nextKey).then(snapshot=>{if(active&&snapshot)setState(current=>({...current,...snapshot,loading:false,serverError:''}))}).finally(()=>{if(active)void cloudRefresh()})
+        if(nextKey) void readSnapshot(nextKey).then(snapshot=>{if(active&&snapshot){const confirmed=sanitizeCachedSnapshot(snapshot);setState(current=>({...current,...confirmed,loading:false,serverError:''}));void writeSnapshot(nextKey,confirmed)}}).finally(()=>{if(active)void cloudRefresh()})
         else void cloudRefresh()
       }
       window.addEventListener('online',onOnline)
@@ -421,12 +429,9 @@ export function AppDataProvider({ children }) {
   }
 
   function optimisticState(updater) {
-    setState((current) => {
-      const next = updater(current)
-      const optimisticCacheKey=scopedPageCacheKey('app-data',user)
-      if (optimisticCacheKey) void writeSnapshot(optimisticCacheKey, { ...next, loading:false })
-      return next
-    })
+    // Optimistic UI is memory-only. IndexedDB remains the last confirmed server
+    // snapshot so failed mutations cannot become stale authority after reload.
+    setState((current) => updater(current))
   }
 
   function startSession(pc, sessionInput) {
@@ -470,11 +475,11 @@ export function AppDataProvider({ children }) {
     // If presence is definitively offline there is no renderer that can race
     // this action. The interrupted-session path already owns persistence.
     if (String(pc.status || '').toLowerCase() === 'offline' || pc.stationOnline === false || pc.isOnline === false || pc.cloudConnectionStatus === 'offline') return null
-    // Session close preparation must never mutate billing state. Using the real
-    // Lock command here used to create a server-side pause before forfeit/refund
-    // committed, which allowed the old paused session to race back into the UI.
-    // game_update is only a transport envelope; Customer Station intercepts the
-    // sessionClose payload and locks its local kiosk before ACKing.
+    // Session close preparation must never mutate billing state. `game_update`
+    // is only the transport envelope. Customer Station interprets sessionClose:
+    // Forfeit logs the user out to the login kiosk immediately; Save/Refund use
+    // the reversible protected-close state. Only after that local boundary ACKs
+    // does Admin mutate the authoritative session.
     const queued=await apiPost('/remote-commands', {
       pcId:pc.id,
       command:'game_update',
@@ -532,17 +537,16 @@ export function AppDataProvider({ children }) {
     const guestSession=memberId == null
     let prepared=null
     try {
-      // Guest session close is an Admin-authoritative accounting operation. Do
-      // not let a stale/broken Customer command queue veto Pause & Save or
-      // Forfeit. Commit Supabase/Edge first; station-admin broadcasts the
-      // terminal session_changed event immediately, and the explicit commit
-      // command below is only a best-effort fast UI signal.
-      //
-      // Members retain the pre-close protection barrier because their account
-      // stays authenticated after the paid session ends.
-      if (!guestSession && (disposition === 'save' || disposition === 'forfeit')) prepared=await prepareSessionClose(pc, disposition)
+      // Admin Forfeit is a forced logout command for both Member and Guest.
+      // Customer Station must leave the paid desktop immediately, ACK that
+      // logout boundary, and only then do we zero/end the authoritative session.
+      // Pause & Save keeps its older semantics: Member closes use a protection
+      // handshake, while Guest save is DB-authoritative and gets a best-effort
+      // terminal signal after commit.
+      if (disposition === 'forfeit') prepared=await prepareSessionClose(pc, disposition)
+      else if (!guestSession && disposition === 'save') prepared=await prepareSessionClose(pc, disposition)
       const result=await apiPost(`/sessions/${sessionId}/end`, { disposition, ...options })
-      if (guestSession && (disposition === 'save' || disposition === 'forfeit')) {
+      if (!prepared && guestSession && disposition === 'save') {
         prepared={ pcId:pc.id, sessionId, disposition, memberId:null, guestSession:true }
       }
       if (prepared) await commitPreparedSessionClose(pc, prepared, result)
@@ -661,9 +665,14 @@ export function AppDataProvider({ children }) {
   }
 
   function addPc(pc) {
-    const optimistic={...pc,id:pc.id||`pending:${Date.now()}`,status:'offline',session:null,pending:true}
-    optimisticState((current)=>({...current,pcs:[...current.pcs,normalizePc(optimistic)]}))
-    return apiPost('/pcs', pc).then((result) => { showToast({ title:'PC added', message:`${pc.label} is now registered.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
+    // Creation is intentionally confirmation-first. Adding a temporary PC to
+    // shared state makes the Add PC modal detect its own optimistic row as a
+    // duplicate and can leave a ghost PC in the offline cache after failure.
+    return apiPost('/pcs', pc).then(async (result) => {
+      showToast({ title:'PC added', message:`${pc.label} is now registered.` })
+      await refresh()
+      return result
+    }).catch(async (error)=>{await refresh();throw error})
   }
 
   function updatePcMeta(id, patch) {

@@ -5350,6 +5350,12 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
           db.prepare(
             "UPDATE members SET session_seconds_remaining=0,updated_at=? WHERE id=?",
           ).run(endedAt, s.member_id);
+        // Staff Forfeit is also a forced station logout. Revoke only Customer
+        // auth sessions attached to this PC; Admin sessions are unaffected.
+        db.prepare(`UPDATE auth_sessions
+          SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,'admin_forfeit')
+          WHERE pc_id=? AND revoked_at IS NULL
+            AND user_id IN (SELECT id FROM users WHERE role='customer')`).run(endedAt,endedAt,s.pc_id);
         closed = { ...s, remainingSeconds: 0, endedAt };
       } else {
         closed = closeSessionAndSaveRemaining(s.id);
@@ -5405,6 +5411,10 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
       amountDue: result.amountDue,
       paymentMethod: disposition === "settle" ? paymentMethod : null,
     });
+    if (disposition === "forfeit") {
+      getIO()?.to(`pc:${s.pc_id}`).emit('auth:revoked',{reason:'admin_forfeit',pcId:s.pc_id,sessionId:s.id,immediate:true});
+    }
+
     if (s.member_id)
       emitDataChanged({
         method: "PATCH",

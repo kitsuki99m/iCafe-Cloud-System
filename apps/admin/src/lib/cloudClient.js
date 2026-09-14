@@ -678,7 +678,7 @@ export async function cloudStationAdmin(action, payload = {}) {
 }
 async function cloudNativeMutation(path, method, body, operationKey) {
   const branchId = cloudBranchId();
-  if (method === "POST" && path === "/pcs") return cloudStationAdmin("create", { branchId, station: body || {} });
+  if (method === "POST" && path === "/pcs") return cloudStationAdmin("create", { branchId, station: body || {}, operationKey: operationKey || null });
   const pcMatch = path.match(/^\/pcs\/([^/?]+)$/);
   if (pcMatch && method === "PATCH") return cloudStationAdmin("update", { branchId, stationId:decodeURIComponent(pcMatch[1]), patch:body || {} });
   if (pcMatch && method === "DELETE") return cloudStationAdmin("delete", { branchId, stationId:decodeURIComponent(pcMatch[1]) });

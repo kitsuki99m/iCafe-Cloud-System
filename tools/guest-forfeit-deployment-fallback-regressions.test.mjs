@@ -13,5 +13,5 @@ test('station-admin forfeiture survives atomic-close RPC migration lag',()=>{
 test('legacy forfeit fallback recovers station/member identity for terminal wakeup',()=>{
   assert.match(fn,/branch_sessions'\)\.select\('pc_id,member_id'\)/)
   assert.match(fn,/reason=disposition==='forfeit'\?'session_forfeited'/)
-  assert.match(fn,/broadcast\(device\.realtime_topic_key,\{kind:'session_changed',reason,sessionId,pcId:stationId,memberId:out\.memberId\|\|null,disposition\}\)/)
+  assert.match(fn,/broadcast\(device\.realtime_topic_key,\{kind:'session_changed',reason,sessionId,pcId:stationId,memberId:out\.memberId\|\|null,disposition,forceLogout:disposition==='forfeit'\}\)/)
 })

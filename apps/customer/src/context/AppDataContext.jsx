@@ -304,14 +304,20 @@ export function AppDataProvider({ children }) {
       setState((current) => ({ ...current, members:current.members.map((member) => sameId(member.id,payload.memberId) ? { ...member, wallet:Number(payload.balance ?? member.wallet ?? 0), walletBalance:Number(payload.balance ?? member.walletBalance ?? 0) } : member) }))
     }
     const onSessionChanged = (payload = {}) => {
-      // Session state and authentication are separate lifecycles. A member
-      // whose prepaid time is forfeited remains signed in and returns to the
-      // no-session dashboard. A Guest has no independent account lifecycle, so
-      // an authoritative Guest forfeiture is an immediate kiosk/logout boundary.
       const reason=String(payload?.reason || '').toLowerCase()
       const belongsToPc=!payload?.pcId || sameId(payload.pcId,user?.pcId)
       const belongsToMember=!payload?.memberId || sameId(payload.memberId,user?.memberId)
-      const guestTerminalReasons=new Set(['session_saved','session_forfeited','session_refunded','session_ended','session_expired','session_settled'])
+      // Staff Forfeit is intentionally stronger than Pause & Save: regardless
+      // of Member or Guest mode, the station must be back at login and the local
+      // paid-session marker must be gone. This is also the local-Edge backstop
+      // if the pre-close remote command was missed.
+      if (reason === 'session_forfeited' && belongsToPc) {
+        clearStationLifecycleMarker().catch?.(() => {})
+        window.aezakmiClient?.showLoginKiosk?.().catch?.(() => {})
+        window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout', { detail:{ reason, sessionId:payload?.sessionId || null, committed:true, source:'session_updated' } }))
+        return
+      }
+      const guestTerminalReasons=new Set(['session_saved','session_refunded','session_ended','session_expired','session_settled'])
       if (guestTerminalReasons.has(reason) && belongsToPc) {
         clearStationLifecycleMarker().catch?.(() => {})
         if (user?.role === 'guest') {
@@ -361,16 +367,17 @@ export function AppDataProvider({ children }) {
         const sessionCloseCommit=Boolean(payload?.payload?.sessionCloseCommit)
         if (sessionCloseCommit) {
           // Phase 2 happens only after the authoritative DB transaction commits.
-          // Clear the preserved lock snapshot so an ended Guest session can never
-          // be restored by a late unlock or renderer refresh.
           const disposition=String(payload?.payload?.disposition || 'save').toLowerCase()
           const reason=disposition==='forfeit'?'session_forfeited':disposition==='refund'?'session_refunded':'session_saved'
           const isGuestClose=payload?.payload?.guestSession === true || (payload?.payload?.guestSession == null && user?.role === 'guest')
           await clearStationLifecycleMarker().catch?.(() => {})
-          if (isGuestClose) {
-            // Commit is a real logout boundary, not a station lock. Remove the
-            // temporary lock overlay/snapshot and expose the login kiosk first;
-            // AuthContext then clears the Guest identity in the same turn.
+          if (disposition === 'forfeit') {
+            const loginKiosk=window.aezakmiClient?.showLoginKiosk
+              ? await window.aezakmiClient.showLoginKiosk()
+              : (window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true)
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout',{detail:{reason,sessionId:payload?.payload?.sessionId || null,source:'admin_commit',committed:true}}))
+            await ack('completed',{executed:loginKiosk !== false,sessionCloseCommitted:true,forcedLogout:true,sessionId:payload?.payload?.sessionId || null,disposition})
+          } else if (isGuestClose) {
             const loginKiosk=window.aezakmiClient?.showLoginKiosk
               ? await window.aezakmiClient.showLoginKiosk()
               : (window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true)
@@ -384,26 +391,51 @@ export function AppDataProvider({ children }) {
           return
         }
         if (sessionCloseRelease) {
-          // Roll back only the local protective window lock. This travels inside
-          // game_update so it never resumes/changes billing on Edge or Cloud.
-          const bridge = window.aezakmiClient?.executeRemoteCommand
-          const locallyRestored = bridge ? await bridge({ command:'unlock' }) : true
-          window.dispatchEvent(new CustomEvent('aezakmi:admin-session-close-release',{detail:{commandId:payload.id,sessionId:payload?.payload?.sessionId || null}}))
-          await ack('completed',{ executed:locallyRestored !== false, sessionCloseReleased:true, sessionId:payload?.payload?.sessionId || null })
+          const disposition=String(payload?.payload?.disposition || '').toLowerCase()
+          // A failed Forfeit commit must never log the customer back in. The
+          // admin sees the accounting error and can retry while the station
+          // stays safely at the login kiosk. Other close modes may restore the
+          // reversible protection lock.
+          if (disposition === 'forfeit') {
+            const loginKiosk=window.aezakmiClient?.showLoginKiosk ? await window.aezakmiClient.showLoginKiosk() : true
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout',{detail:{reason:'session_forfeit_retry_required',sessionId:payload?.payload?.sessionId || null,source:'admin_release'}}))
+            await ack('completed',{executed:loginKiosk !== false,sessionCloseReleased:true,keptLoggedOut:true,sessionId:payload?.payload?.sessionId || null})
+          } else {
+            const bridge = window.aezakmiClient?.executeRemoteCommand
+            const locallyRestored = bridge ? await bridge({ command:'unlock' }) : true
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-session-close-release',{detail:{commandId:payload.id,sessionId:payload?.payload?.sessionId || null}}))
+            await ack('completed',{ executed:locallyRestored !== false, sessionCloseReleased:true, sessionId:payload?.payload?.sessionId || null })
+          }
           queueRefresh()
           return
         }
         if (sessionClose) {
-          // Phase 1 of Admin forfeit/refund: protect the local kiosk without
-          // touching authoritative billing, pause rows, auth identity, or the
-          // lifecycle marker. The DB mutation happens only after this ACK.
+          const disposition=String(payload?.payload?.disposition || 'save').toLowerCase()
+          if (disposition === 'forfeit') {
+            // Admin Forfeit is not Lock Session. Log out Member or Guest now,
+            // fence Guest auto-detection, clear the local paid-session marker,
+            // and ACK only after the login kiosk is visible. Admin then commits
+            // the authoritative zero-time close.
+            const detail={commandId:payload.id,sessionId:payload?.payload?.sessionId || null,disposition:'forfeit',reason:'admin_forfeit'}
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-session-close-pending',{detail}))
+            await clearStationLifecycleMarker().catch?.(() => {})
+            const loginKiosk=window.aezakmiClient?.showLoginKiosk
+              ? await window.aezakmiClient.showLoginKiosk()
+              : (window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true)
+            if (loginKiosk === false) throw Object.assign(new Error('Customer Station could not return to the login kiosk.'),{code:'STATION_FORFEIT_LOGOUT_FAILED'})
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout',{detail}))
+            await ack('completed',{executed:true,sessionExitReady:true,forcedLogout:true,sessionId:detail.sessionId,disposition})
+            return
+          }
+          // Save/refund protection remains reversible until the DB mutation
+          // succeeds. This is the only path that uses the staff lock overlay.
           const bridge = window.aezakmiClient?.executeRemoteCommand
           const locallyLocked = bridge ? await bridge({ command:'lock' }) : false
           if (bridge && locallyLocked === false) throw Object.assign(new Error('Customer Station could not enter the protected close state.'),{code:'STATION_CLOSE_LOCK_FAILED'})
           if (user?.role === 'guest') {
-            window.dispatchEvent(new CustomEvent('aezakmi:admin-session-close-pending',{detail:{commandId:payload.id,sessionId:payload?.payload?.sessionId || null,disposition:payload?.payload?.disposition || null}}))
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-session-close-pending',{detail:{commandId:payload.id,sessionId:payload?.payload?.sessionId || null,disposition}}))
           }
-          await ack('completed',{ executed:true, sessionExitReady:true, stationProtected:Boolean(bridge), sessionId:payload?.payload?.sessionId || null, disposition:payload?.payload?.disposition || null })
+          await ack('completed',{ executed:true, sessionExitReady:true, stationProtected:Boolean(bridge), sessionId:payload?.payload?.sessionId || null, disposition })
           return
         }
         if (['shutdown','reboot'].includes(commandName)) {
@@ -479,7 +511,13 @@ export function AppDataProvider({ children }) {
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
     const onCloudWakeup = (event) => {
       const reason=String(event?.detail?.reason || '').toLowerCase()
-      const guestTerminalReasons=new Set(['session_saved','session_forfeited','session_refunded','session_ended','session_expired','session_settled'])
+      if (reason === 'session_forfeited') {
+        clearStationLifecycleMarker().catch?.(() => {})
+        window.aezakmiClient?.showLoginKiosk?.().catch?.(() => {})
+        window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout', { detail:{ reason, sessionId:event?.detail?.sessionId || null, source:'cloud', committed:true } }))
+        return
+      }
+      const guestTerminalReasons=new Set(['session_saved','session_refunded','session_ended','session_expired','session_settled'])
       if (guestTerminalReasons.has(reason)) {
         clearStationLifecycleMarker().catch?.(() => {})
         const hasWakeMemberIdentity=Boolean(event?.detail && Object.prototype.hasOwnProperty.call(event.detail,'memberId'))

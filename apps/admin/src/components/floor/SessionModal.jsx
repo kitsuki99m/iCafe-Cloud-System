@@ -558,9 +558,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
     }
 
     const forfeitSubject = s.customerId ? 'member' : 'guest'
-    const forfeitEffect = s.customerId
-      ? 'The member will stay signed in, but this active session and all of its remaining time will be permanently discarded.'
-      : 'The guest session will end immediately, the Customer Station will return to the login kiosk, and all remaining time will be permanently discarded.'
+    const forfeitEffect = 'The Customer Station will log out immediately, this session will stop, and all remaining time will be permanently discarded.'
     const forfeitMessage = `Forfeit this ${forfeitSubject} session? ${forfeitEffect} This cannot be undone.`
 
     if (forfeitConfirmOpen) {
