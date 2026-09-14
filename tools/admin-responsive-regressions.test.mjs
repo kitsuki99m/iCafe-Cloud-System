@@ -52,6 +52,14 @@ test('developer lifecycle controls remain usable on phone widths',()=>{
 })
 
 
+test('Developer application list stays compact and sticky beside long application details',()=>{
+  const page=read('apps/admin/src/pages/DeveloperConsolePage.jsx')
+  assert.match(page,/grid min-h-\[520px\] items-start gap-4/)
+  assert.match(page,/lg:sticky lg:top-4 lg:self-start/)
+  assert.match(page,/lg:max-h-\[min\(510px,calc\(100dvh-250px\)\)\]/)
+})
+
+
 test('Cloud login, registration, and invite setup own a scrollable 100dvh viewport on phones and tablets', () => {
   const css=read('apps/admin/src/index.css')
   const login=read('apps/admin/src/components/auth/AdminLoginForm.jsx')
