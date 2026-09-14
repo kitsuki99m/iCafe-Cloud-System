@@ -582,6 +582,8 @@ async function cloudDirectRead(path, branchId) {
   const encoded = encodeURIComponent(branchId);
   const commandStatusMatch = route.match(/^\/remote-commands\/([^/]+)$/);
   if (commandStatusMatch) return cloudStationAdmin("command_status", { branchId, commandId:decodeURIComponent(commandStatusMatch[1]) });
+  const settlementPreviewMatch = route.match(/^\/sessions\/([^/]+)\/settlement-preview$/);
+  if (settlementPreviewMatch) return cloudStationAdmin("session_preview", { branchId, sessionId:decodeURIComponent(settlementPreviewMatch[1]) });
   if (route === "/pcs") return { success: true, pcs: await cloudPcs(branchId) };
   if (route === "/members") {
     const rows = await rest(`branch_members?select=*&branch_id=eq.${encoded}&order=name.asc`);
@@ -680,6 +682,14 @@ async function cloudNativeMutation(path, method, body, operationKey) {
   if (method === "POST" && path === "/remote-commands") {
     const result = await cloudStationAdmin("command", { branchId, stationId:String(body?.pcId || ""), command:String(body?.command || ""), payload:body?.payload || {}, idempotencyKey:operationKey || null });
     return { success:true, commandId:result.commandId, status:result.status, expiresAt:result.expiresAt };
+  }
+  const endSessionMatch = path.match(/^\/sessions\/([^/?]+)\/end$/);
+  if (method === "POST" && endSessionMatch && ["save","forfeit"].includes(String(body?.disposition || "save").toLowerCase())) {
+    return cloudStationAdmin("session_close", { branchId, sessionId:decodeURIComponent(endSessionMatch[1]), disposition:String(body?.disposition || "save").toLowerCase(), operationKey:operationKey || null });
+  }
+  const refundSessionMatch = path.match(/^\/sessions\/([^/?]+)\/refund$/);
+  if (method === "POST" && refundSessionMatch) {
+    return cloudStationAdmin("session_close", { branchId, sessionId:decodeURIComponent(refundSessionMatch[1]), disposition:"refund", operationKey:operationKey || null });
   }
   return null;
 }

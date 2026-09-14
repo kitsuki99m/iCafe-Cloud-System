@@ -55,8 +55,8 @@ exit 0
   const log = fs.readFileSync(commandLog, 'utf8')
   assert.match(log, /npm run build/)
   assert.match(log, /npm exec --yes=false -- electron-builder --win nsis --config/)
-  const manifest = JSON.parse(fs.readFileSync(path.join(appDir, 'installer', 'latest.json'), 'utf8'))
-  assert.equal(manifest.version, '0.1.0')
-  assert.equal(manifest.file, 'Fixture Customer Setup 0.1.0-x64.exe')
-  assert.match(manifest.sha256, /^[a-f0-9]{64}$/)
+  assert.ok(fs.existsSync(path.join(appDir, 'installer', 'Fixture Customer Setup 0.1.0-x64.exe')))
+  // Software updates were intentionally removed. Building an installer must no
+  // longer recreate the legacy latest.json update manifest.
+  assert.equal(fs.existsSync(path.join(appDir, 'installer', 'latest.json')), false)
 })

@@ -5,6 +5,34 @@ import { clearStationLifecycleMarker, hasActiveStationLifecycle, hasPendingStati
 
 const C = createContext(null);
 const CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN = "aezakmi.customer.password-setup.deferred-token";
+const ADMIN_SESSION_CLOSE_PENDING = "aezakmi.customer.admin-session-close-pending";
+const ADMIN_SESSION_CLOSE_FENCE_MS = 12000;
+const ADMIN_SESSION_CLOSE_TERMINAL_GRACE_MS = 2500;
+
+function readAdminSessionCloseFence() {
+  try {
+    const value=JSON.parse(sessionStorage.getItem(ADMIN_SESSION_CLOSE_PENDING) || "null");
+    if (!value || Number(value.expiresAt || 0) <= Date.now()) {
+      sessionStorage.removeItem(ADMIN_SESSION_CLOSE_PENDING);
+      return null;
+    }
+    return value;
+  } catch {
+    sessionStorage.removeItem(ADMIN_SESSION_CLOSE_PENDING);
+    return null;
+  }
+}
+function setAdminSessionCloseFence(detail = {}, durationMs = ADMIN_SESSION_CLOSE_FENCE_MS) {
+  const value={
+    sessionId:detail?.sessionId || null,
+    disposition:detail?.disposition || null,
+    commandId:detail?.commandId || null,
+    expiresAt:Date.now()+Math.max(500,Number(durationMs)||ADMIN_SESSION_CLOSE_FENCE_MS),
+  };
+  sessionStorage.setItem(ADMIN_SESSION_CLOSE_PENDING, JSON.stringify(value));
+  return value;
+}
+function clearAdminSessionCloseFence() { sessionStorage.removeItem(ADMIN_SESSION_CLOSE_PENDING); }
 
 function guestUserFromResponse(data) {
   const session = data?.session || null;
@@ -90,6 +118,11 @@ export function AuthProvider({ children }) {
       if (!getToken()) {
         sessionStorage.removeItem(CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN);
         setPasswordSetupDeferred(false);
+        if (readAdminSessionCloseFence()) {
+          setUser(null);
+          setLoading(false);
+          return;
+        }
         try {
           const d = await apiGet("/guest/session");
           if (!cancelled && d.session) {
@@ -164,21 +197,38 @@ export function AuthProvider({ children }) {
       lock();
     };
     const onAdminSessionInterruption = () => {
-      // Any station interruption that prevents the customer from continuing
-      // to use the PC is an immediate local logout boundary. Session billing is
-      // checkpointed separately through the lifecycle endpoint / recovery marker.
+      // Power/restart/disconnect interruptions are immediate logout boundaries.
+      // They are separate from the neutral forfeit/refund close barrier below.
+      clearAdminSessionCloseFence();
       lock();
     };
+    const onAdminSessionClosePending = (event) => {
+      // The Customer window is already protected by Electron before this event.
+      // Keep guest auto-detection fenced until Admin either commits the close or
+      // explicitly rolls it back. Do not clear auth/lifecycle state before commit.
+      setAdminSessionCloseFence(event?.detail || {});
+    };
+    const onAdminSessionCloseRelease = () => { clearAdminSessionCloseFence(); };
     const onStationSessionInterruption = onAdminSessionInterruption;
-    const onGuestSessionEnded = () => { clearStationLifecycleMarker(); lock(); };
+    const onGuestSessionEnded = (event) => {
+      // Keep a short post-commit grace window so a stale Edge/Cloud read cannot
+      // immediately rediscover the just-ended guest session on the 1s detector.
+      setAdminSessionCloseFence(event?.detail || {}, ADMIN_SESSION_CLOSE_TERMINAL_GRACE_MS);
+      clearStationLifecycleMarker();
+      lock();
+    };
     window.addEventListener("aezakmi:auth-invalid", onAuthInvalid);
     window.addEventListener("aezakmi:admin-session-interruption", onStationSessionInterruption);
     window.addEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
+    window.addEventListener("aezakmi:admin-session-close-pending", onAdminSessionClosePending);
+    window.addEventListener("aezakmi:admin-session-close-release", onAdminSessionCloseRelease);
     window.addEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     return () => {
       window.removeEventListener("aezakmi:auth-invalid", onAuthInvalid);
       window.removeEventListener("aezakmi:admin-session-interruption", onStationSessionInterruption);
       window.removeEventListener("aezakmi:station-session-interruption", onStationSessionInterruption);
+      window.removeEventListener("aezakmi:admin-session-close-pending", onAdminSessionClosePending);
+      window.removeEventListener("aezakmi:admin-session-close-release", onAdminSessionCloseRelease);
       window.removeEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     };
   }, []);
@@ -226,7 +276,7 @@ export function AuthProvider({ children }) {
     if (authLoading || stationPairingRequired || user) return undefined;
     let cancelled=false, running=false;
     const detect = async () => {
-      if (running || hasPendingStationLifecycle()) return;
+      if (running || hasPendingStationLifecycle() || readAdminSessionCloseFence()) return;
       running=true;
       try {
         const d=await apiGet("/guest/session");
@@ -288,6 +338,7 @@ export function AuthProvider({ children }) {
 
   async function enterGuestMode() {
     try {
+      if (readAdminSessionCloseFence()) return { ok:false, error:"Staff is closing the previous guest session. Please wait a moment." };
       const d = await apiGet("/guest/session");
       if (!d.session)
         return {

@@ -311,12 +311,14 @@ export function AppDataProvider({ children }) {
       const reason=String(payload?.reason || '').toLowerCase()
       const belongsToPc=!payload?.pcId || sameId(payload.pcId,user?.pcId)
       const belongsToMember=!payload?.memberId || sameId(payload.memberId,user?.memberId)
-      if (['session_forfeited','session_refunded'].includes(reason) && belongsToPc) {
+      const guestTerminalReasons=new Set(['session_saved','session_forfeited','session_refunded','session_ended','session_expired','session_settled'])
+      if (guestTerminalReasons.has(reason) && belongsToPc) {
         clearStationLifecycleMarker().catch?.(() => {})
         if (user?.role === 'guest') {
-          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason } }))
+          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason, sessionId:payload?.sessionId || null } }))
           return
         }
+        if (user?.role === 'customer') window.aezakmiClient?.showIdleDashboard?.().catch?.(() => {})
       }
       if (user?.role === 'customer' && payload?.memberId && !belongsToMember) return
       queueRefresh()
@@ -355,16 +357,46 @@ export function AppDataProvider({ children }) {
         await ack('running',{ received:true, warningSeconds, warningExpiresAt, expiresAt })
         const commandName=String(payload.command).toLowerCase()
         const sessionClose=Boolean(payload?.payload?.sessionClose)
+        const sessionCloseRelease=Boolean(payload?.payload?.sessionCloseRelease)
+        const sessionCloseCommit=Boolean(payload?.payload?.sessionCloseCommit)
+        if (sessionCloseCommit) {
+          // Phase 2 happens only after the authoritative DB transaction commits.
+          // Clear the preserved lock snapshot so an ended Guest session can never
+          // be restored by a late unlock or renderer refresh.
+          const disposition=String(payload?.payload?.disposition || 'save').toLowerCase()
+          const reason=disposition==='forfeit'?'session_forfeited':disposition==='refund'?'session_refunded':'session_saved'
+          await clearStationLifecycleMarker().catch?.(() => {})
+          if (user?.role === 'guest') {
+            const locallyLocked=window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true
+            window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended',{detail:{reason,sessionId:payload?.payload?.sessionId || null,source:'admin_commit'}}))
+            await ack('completed',{executed:locallyLocked !== false,sessionCloseCommitted:true,sessionId:payload?.payload?.sessionId || null,disposition})
+          } else {
+            const idle=window.aezakmiClient?.showIdleDashboard ? await window.aezakmiClient.showIdleDashboard() : true
+            await ack('completed',{executed:idle !== false,sessionCloseCommitted:true,sessionId:payload?.payload?.sessionId || null,disposition})
+          }
+          queueRefresh()
+          return
+        }
+        if (sessionCloseRelease) {
+          // Roll back only the local protective window lock. This travels inside
+          // game_update so it never resumes/changes billing on Edge or Cloud.
+          const bridge = window.aezakmiClient?.executeRemoteCommand
+          const locallyRestored = bridge ? await bridge({ command:'unlock' }) : true
+          window.dispatchEvent(new CustomEvent('aezakmi:admin-session-close-release',{detail:{commandId:payload.id,sessionId:payload?.payload?.sessionId || null}}))
+          await ack('completed',{ executed:locallyRestored !== false, sessionCloseReleased:true, sessionId:payload?.payload?.sessionId || null })
+          queueRefresh()
+          return
+        }
         if (sessionClose) {
-          // Phase 1 of an Admin forfeit/refund: freeze the local kiosk without
-          // touching the authoritative session, pause rows, auth identity, or
-          // lifecycle marker. The Admin commits the destructive accounting
-          // change only after this local lock has completed and been ACKed.
-          // executeRemoteCommand('lock') preserves the pre-close window state so
-          // an uncommitted close cannot expose the desktop or keep billing alive.
+          // Phase 1 of Admin forfeit/refund: protect the local kiosk without
+          // touching authoritative billing, pause rows, auth identity, or the
+          // lifecycle marker. The DB mutation happens only after this ACK.
           const bridge = window.aezakmiClient?.executeRemoteCommand
           const locallyLocked = bridge ? await bridge({ command:'lock' }) : false
           if (bridge && locallyLocked === false) throw Object.assign(new Error('Customer Station could not enter the protected close state.'),{code:'STATION_CLOSE_LOCK_FAILED'})
+          if (user?.role === 'guest') {
+            window.dispatchEvent(new CustomEvent('aezakmi:admin-session-close-pending',{detail:{commandId:payload.id,sessionId:payload?.payload?.sessionId || null,disposition:payload?.payload?.disposition || null}}))
+          }
           await ack('completed',{ executed:true, sessionExitReady:true, stationProtected:Boolean(bridge), sessionId:payload?.payload?.sessionId || null, disposition:payload?.payload?.disposition || null })
           return
         }
@@ -441,12 +473,15 @@ export function AppDataProvider({ children }) {
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
     const onCloudWakeup = (event) => {
       const reason=String(event?.detail?.reason || '').toLowerCase()
-      if (['session_forfeited','session_refunded'].includes(reason)) {
+      const guestTerminalReasons=new Set(['session_saved','session_forfeited','session_refunded','session_ended','session_expired','session_settled'])
+      if (guestTerminalReasons.has(reason)) {
         clearStationLifecycleMarker().catch?.(() => {})
         if (user?.role === 'guest') {
-          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason, source:'cloud' } }))
+          window.aezakmiClient?.lockClient?.().catch?.(() => {})
+          window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason, sessionId:event?.detail?.sessionId || null, source:'cloud' } }))
           return
         }
+        if (user?.role === 'customer') window.aezakmiClient?.showIdleDashboard?.().catch?.(() => {})
       }
       queueRefresh()
     }

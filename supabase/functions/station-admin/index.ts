@@ -60,6 +60,39 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user
   if(action==='reset_pairing'){
     const branchId=String(body.branchId||''),stationId=String(body.stationId||'');await requireBranch(admin,user.id,branchId);const now=new Date().toISOString();const{data:device,error:deviceError}=await admin.from('station_devices').select('id').eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null).maybeSingle();if(deviceError)throw deviceError;const{data:release,error:releaseError}=await admin.rpc('aezakmi_station_release_session',{p_branch_id:branchId,p_pc_id:stationId,p_reason:'pairing_reset',p_interrupted_at:now,p_expected_member_id:null});if(releaseError)throw releaseError;if(release&&typeof release==='object'&&release.success===false)throw Object.assign(new Error(release.error||'Unable to save the station session before resetting pairing.'),{status:Number(release.status||400),code:release.code||'STATION_INTERRUPTION_FAILED'});if(device?.id)await admin.from('branch_customer_auth_sessions').update({revoked_at:now}).eq('branch_id',branchId).eq('station_device_id',device.id).is('revoked_at',null);await admin.from('station_devices').update({status:'revoked',revoked_at:now,updated_at:now}).eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null);const{data:stationState,error:stationStateError}=await admin.from('branch_stations').select('status').eq('branch_id',branchId).eq('local_id',stationId).maybeSingle();if(stationStateError)throw stationStateError;const persistedStatus=String(stationState?.status||'offline').toLowerCase();const resetStation=await admin.from('branch_stations').update({station_device_id:null,cloud_connection_status:'unpaired',cloud_last_seen_at:null,status:['maintenance','reserved'].includes(persistedStatus)?persistedStatus:'offline',updated_at:now}).eq('branch_id',branchId).eq('local_id',stationId);if(resetStation.error)throw resetStation.error;return json({success:true,interruption:release||null})
   }
+  if(action==='session_preview'){
+    const branchId=String(body.branchId||''),sessionId=String(body.sessionId||'');
+    await requireBranch(admin,user.id,branchId);
+    if(!sessionId)throw Object.assign(new Error('Session id is required.'),{status:400,code:'SESSION_REQUIRED'});
+    const{data,error}=await admin.rpc('aezakmi_cloud_execute',{
+      p_branch_id:branchId,p_action:'session.preview',p_payload:{sessionId},p_actor_kind:'admin',p_actor_id:user.id,p_operation_key:null
+    });
+    if(error)throw error;
+    const out=data&&typeof data==='object'?data:{};
+    if(out.success===false)throw Object.assign(new Error(out.error||'Unable to preview this session.'),{status:Number(out.status||400),code:out.code||'SESSION_PREVIEW_FAILED'});
+    return json(out)
+  }
+  if(action==='session_close'){
+    const branchId=String(body.branchId||''),sessionId=String(body.sessionId||''),disposition=String(body.disposition||'save').toLowerCase();
+    const{branch}=await requireBranch(admin,user.id,branchId);
+    if(!sessionId)throw Object.assign(new Error('Session id is required.'),{status:400,code:'SESSION_REQUIRED'});
+    if(!['save','forfeit','refund'].includes(disposition))throw Object.assign(new Error('Choose Save, Forfeit, or Refund.'),{status:400,code:'INVALID_DISPOSITION'});
+    const operationKey=String(body.operationKey||'').trim()||null;
+    const{data,error}=await admin.rpc('aezakmi_admin_close_session',{
+      p_branch_id:branchId,p_session_id:sessionId,p_disposition:disposition,p_actor_id:user.id,p_operation_key:operationKey
+    });
+    if(error)throw error;
+    const out=data&&typeof data==='object'?data:{};
+    if(out.success===false)throw Object.assign(new Error(out.error||'Unable to close this session.'),{status:Number(out.status||400),code:out.code||'SESSION_CLOSE_FAILED'});
+    const stationId=String(out.pcId||'');
+    if(stationId){
+      const{data:device}=await admin.from('station_devices').select('realtime_topic_key').eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null).maybeSingle();
+      const reason=disposition==='forfeit'?'session_forfeited':disposition==='refund'?'session_refunded':'session_saved';
+      if(device?.realtime_topic_key)await broadcast(device.realtime_topic_key,{kind:'session_changed',reason,sessionId,pcId:stationId,memberId:out.memberId||null,disposition});
+    }
+    await admin.from('cloud_audit_logs').insert({organization_id:branch.organization_id,branch_id:branchId,actor_user_id:user.id,action:`session.${disposition}`,details:{sessionId,pcId:out.pcId||null,remainingSeconds:out.remainingSeconds||0,refundAmount:out.refundAmount||0}});
+    return json(out)
+  }
   if(action==='command_status'){
     const branchId=String(body.branchId||''),commandId=String(body.commandId||'');await requireBranch(admin,user.id,branchId);if(!commandId)throw Object.assign(new Error('Command id is required.'),{status:400,code:'COMMAND_ID_REQUIRED'});
     const{data:command,error}=await admin.from('station_commands').select('id,command,status,requested_at,expires_at,acknowledged_at,result,station_device_id').eq('branch_id',branchId).eq('id',commandId).maybeSingle();if(error)throw error;if(!command)throw Object.assign(new Error('Station command not found.'),{status:404,code:'COMMAND_NOT_FOUND'});

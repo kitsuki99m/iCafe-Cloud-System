@@ -1,7 +1,6 @@
 -- Close any active billing pause when a Cloud session reaches an ended state.
--- Admin guest forfeit/refund now intentionally pauses before waiting for the
--- Customer Station exit acknowledgement, so the pause row must not remain open
--- after the destructive accounting transaction commits.
+-- This is a final cleanup backstop only. Admin session-close preparation is
+-- local/non-billing and must never create a server-side pause before commit.
 
 create or replace function public.aezakmi_close_pause_when_session_ends()
 returns trigger

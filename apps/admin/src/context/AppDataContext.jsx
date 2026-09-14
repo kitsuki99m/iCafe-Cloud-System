@@ -451,7 +451,7 @@ export function AppDataProvider({ children }) {
       }
       await new Promise((resolve)=>setTimeout(resolve,250))
     }
-    const error=new Error(`Customer Station did not confirm the session exit (last status: ${lastStatus}). No forfeit or refund was committed.`)
+    const error=new Error(`Customer Station did not confirm the session exit (last status: ${lastStatus}). No Pause & Save, forfeit, or refund was committed.`)
     error.code='STATION_EXIT_TIMEOUT'
     throw error
   }
@@ -472,21 +472,62 @@ export function AppDataProvider({ children }) {
       payload:{ sessionClose:true, sessionId:pc.session.id, disposition, requestedAt:new Date().toISOString() },
     })
     if (!queued?.commandId) throw Object.assign(new Error('Customer Station close command was not created.'),{code:'STATION_EXIT_COMMAND_MISSING'})
-    return waitForStationCommand(queued.commandId)
+    const command=await waitForStationCommand(queued.commandId)
+    return { commandId:queued.commandId, command, pcId:pc.id, sessionId:pc.session.id, disposition }
+  }
+
+  async function releasePreparedSessionClose(pc, prepared) {
+    if (!prepared?.sessionId || !pc?.id) return null
+    try {
+      return await apiPost('/remote-commands', {
+        pcId:pc.id,
+        command:'game_update',
+        payload:{ sessionCloseRelease:true, sessionId:prepared.sessionId, disposition:prepared.disposition || null, requestedAt:new Date().toISOString() },
+      })
+    } catch {
+      // Best-effort local rollback. The original accounting error remains the
+      // actionable Admin error; Customer also has a short self-expiring fence.
+      return null
+    }
+  }
+
+  async function commitPreparedSessionClose(pc, prepared, result = null) {
+    if (!prepared?.sessionId || !pc?.id) return null
+    try {
+      return await apiPost('/remote-commands', {
+        pcId:pc.id,
+        command:'game_update',
+        payload:{
+          sessionCloseCommit:true,
+          sessionId:prepared.sessionId,
+          disposition:prepared.disposition || null,
+          remainingSeconds:Number(result?.remainingSeconds ?? result?.savedRemainingSeconds ?? 0),
+          requestedAt:new Date().toISOString(),
+        },
+      })
+    } catch {
+      // The accounting transaction is already committed. Never undo it because
+      // a final UI signal could not be queued; Cloud wakeup/polling is the
+      // independent terminal-session backstop on Customer Station.
+      return null
+    }
   }
 
   async function endSession(pc, disposition = 'save', options = {}) {
     if (!pc?.session?.id) return
     const sessionId=pc.session.id
+    let prepared=null
     try {
-      if (disposition === 'forfeit') await prepareSessionClose(pc, 'forfeit')
+      if (disposition === 'save' || disposition === 'forfeit') prepared=await prepareSessionClose(pc, disposition)
       const result=await apiPost(`/sessions/${sessionId}/end`, { disposition, ...options })
+      if (prepared) await commitPreparedSessionClose(pc, prepared, result)
       optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
       playAdminSound('success', { dedupeKey:`session-end:${pc.id}` })
       showToast({ title:disposition==='settle'?'Legacy session settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` })
       refresh()
       return result
     } catch (error) {
+      if (prepared) await releasePreparedSessionClose(pc, prepared)
       refresh()
       throw error
     }
@@ -494,13 +535,16 @@ export function AppDataProvider({ children }) {
 
   async function refundSession(pc) {
     if (!pc?.session?.id) return
+    let prepared=null
     try {
-      await prepareSessionClose(pc, 'refund')
+      prepared=await prepareSessionClose(pc, 'refund')
       const result=await apiPost(`/sessions/${pc.session.id}/refund`)
+      if (prepared) await commitPreparedSessionClose(pc, prepared, result)
       await refresh()
       showToast({ title:'Session refunded', message:`₱${Number(result.refundAmount||0).toFixed(2)} returned by ${result.destination}.` })
       return result
     } catch (error) {
+      if (prepared) await releasePreparedSessionClose(pc, prepared)
       await refresh()
       throw error
     }

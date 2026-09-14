@@ -32,9 +32,9 @@ export default function StationCloudPairing() {
     }
   }
 
-  return <><main className="min-h-screen bg-surface px-4 py-6 sm:px-6">
-    <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-5xl overflow-hidden rounded-[28px] border border-surface-line bg-soft-white shadow-card lg:grid-cols-[.9fr_1.1fr]">
-      <section className="flex flex-col bg-midnight p-6 text-soft-white sm:p-8 lg:p-10">
+  return <><main className="customer-pairing-shell">
+    <div className="customer-pairing-container">
+      <section className="flex min-h-0 flex-col bg-midnight p-6 text-soft-white sm:p-8">
         <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-soft-white/10 p-2"><img src={logo} className="h-full w-full object-contain" alt=""/></span><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-new-wool">Aezakmi Cloud</p><h1 className="font-display text-xl font-semibold">Customer Station</h1></div></div>
         <div className="mt-10 max-w-sm"><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-new-wool">First-time setup</p><h2 className="mt-2 font-display text-3xl font-semibold leading-tight">Connect this PC to the correct café.</h2><p className="mt-3 text-sm leading-6 text-dance">Cloud is the normal connection. Café Edge stays ready as the LAN fallback when the internet is unavailable.</p></div>
         <div className="mt-8 space-y-3 text-sm">
@@ -44,7 +44,7 @@ export default function StationCloudPairing() {
         <div className="mt-auto pt-8 text-[11px] text-new-wool"><ShieldCheck className="mr-2 inline" size={14}/>The one-time pairing code is generated inside the business account and permanently binds this installation to that organization + branch + PC.</div>
       </section>
 
-      <section className="flex items-center p-6 sm:p-8 lg:p-10">
+      <section className="flex min-h-0 items-center p-6 sm:p-8">
         <form onSubmit={submit} className="mx-auto w-full max-w-md">
           <div className="mb-6"><p className="eyebrow">Pair this computer</p><h2 className="mt-1 font-display text-2xl font-semibold text-ink-900">Customer Station setup</h2><p className="mt-2 text-sm leading-6 text-slate-soft">Sign in to the business owner's Cloud Admin, choose this logical PC under Clients, then generate its one-time Customer Station pairing code.</p></div>
           {(error||stationPairingError)&&<div className="mb-4 rounded-xl border border-ember/20 bg-ember/10 px-3 py-2.5 text-sm text-ember-dim">{error||stationPairingError}</div>}

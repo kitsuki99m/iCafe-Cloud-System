@@ -798,10 +798,16 @@ app.whenReady().then(async () => {
   })
 })
 
+// Backward-compatible no-op for older packaged cleanup callbacks. Continuous
+// force-focus enforcement no longer exists, but stale closures must never crash.
+const stopFocusEnforcement = () => true
+
 app.on('will-quit', () => {
   appIsQuitting=true
   if (hookRestartTimer) clearTimeout(hookRestartTimer)
-  stopFocusEnforcement()
+  // Continuous focus enforcement was removed. Do not call the legacy
+  // focus-cleanup hook here; it no longer exists and caused
+  // a ReferenceError whenever Customer Station quit or relaunched after pairing.
   try {
     if (windowsKeyHook?.stdin && !windowsKeyHook.stdin.destroyed && !windowsKeyHook.stdin.writableEnded) windowsKeyHook.stdin.write('stop\n')
   } catch {}

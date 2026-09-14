@@ -8,6 +8,7 @@ test('Customer Electron no longer continuously steals Windows focus',()=>{
   const main=read('apps/customer/electron/main.cjs')
   assert.doesNotMatch(main,/enforceCustomerWindowFocus/)
   assert.doesNotMatch(main,/focusEnforcementTimer/)
+  assert.doesNotMatch(main,/\bstopFocusEnforcement\s*\(/)
   assert.doesNotMatch(main,/mainWindow\.moveTop\(\)/)
   assert.doesNotMatch(main,/mainWindow\.on\('blur'[\s\S]*mainWindow\.focus\(\)/)
   // Kiosk/login protection remains mode-based rather than a 500 ms focus loop.
@@ -28,4 +29,14 @@ test('successful Cloud pairing requires a clean Customer Station relaunch instea
   assert.match(preload,/restartCustomerStation:\(\) => ipcRenderer\.invoke\('client:restart-app'\)/)
   assert.match(main,/client:restart-app/)
   assert.match(main,/app\.relaunch\(\)/)
+})
+
+
+test('Customer Station pairing uses a compact login-style centered container',()=>{
+  const pairing=read('apps/customer/src/components/auth/StationCloudPairing.jsx')
+  const css=read('apps/customer/src/index.css')
+  assert.match(pairing,/className="customer-pairing-shell"/)
+  assert.match(pairing,/className="customer-pairing-container"/)
+  assert.match(css,/\.customer-pairing-container[\s\S]*width: min\(100%, 960px\)[\s\S]*height: min\(640px, calc\(100vh - 32px\)\)/)
+  assert.doesNotMatch(pairing,/min-h-\[calc\(100vh-3rem\)\]/)
 })

@@ -216,6 +216,19 @@
     grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
   }
 
+  .customer-pairing-shell {
+    @apply flex h-screen min-h-0 items-center justify-center overflow-hidden bg-ink px-4 py-4 text-ink-900 sm:px-6;
+  }
+
+  .customer-pairing-container {
+    @apply grid min-h-0 w-full overflow-hidden rounded-[24px] border border-surface-line bg-soft-white shadow-card;
+    width: min(100%, 960px);
+    max-width: 960px;
+    height: min(640px, calc(100vh - 32px));
+    max-height: 640px;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
   .customer-timer-value {
     @apply font-display font-semibold tracking-[-0.04em] tabular-nums text-ink-900;
     font-size: clamp(3.4rem, 8vw, 5.8rem);
@@ -257,6 +270,15 @@
     max-height: none;
   }
   .customer-content-grid, .customer-login-grid {
+    max-height: none;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .customer-pairing-shell {
+    align-items: flex-start;
+    overflow-y: auto;
+  }
+  .customer-pairing-container {
+    height: auto;
     max-height: none;
     grid-template-columns: minmax(0, 1fr);
   }
