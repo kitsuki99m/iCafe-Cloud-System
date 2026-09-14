@@ -4,7 +4,19 @@ const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Heade
 const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 function preflight(req:Request){if(req.method==='OPTIONS')return new Response('ok',{headers:corsHeaders});return null}
 function json(value:unknown,status=200){return new Response(JSON.stringify(value),{status,headers:{...corsHeaders,'Content-Type':'application/json'}})}
-function fail(error:any,fallback='Request failed.'){const status=Number(error?.status||500);return json({success:false,code:error?.code||'SERVER_ERROR',error:status>=500?fallback:(error?.message||fallback)},status)}
+function fail(error:any,fallback='Request failed.'){
+  const status=Number(error?.status||500)
+  return json({success:false,code:error?.code||'SERVER_ERROR',error:status>=500&&!error?.exposeMessage?fallback:(error?.message||fallback)},status)
+}
+function isMissingAtomicCloseRpc(error:any){
+  const code=String(error?.code||'').toUpperCase()
+  const message=`${error?.message||''} ${error?.details||''} ${error?.hint||''}`.toLowerCase()
+  return code==='PGRST202'||code==='42883'||(message.includes('aezakmi_admin_close_session')&&(message.includes('could not find')||message.includes('does not exist')||message.includes('schema cache')))
+}
+function atomicCloseSchemaError(error:any){
+  if(!isMissingAtomicCloseRpc(error))return error
+  return Object.assign(new Error('Cloud database schema is behind this Admin build. Apply migration 20260914000020_admin_atomic_session_close.sql (or newer), then redeploy station-admin before using Pause & Save, Forfeit, or Refund.'),{status:503,code:'CLOUD_SCHEMA_OUTDATED',exposeMessage:true,cause:error})
+}
 async function sha256(value:string){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('')}
 function token(bytes=24){const v=new Uint8Array(bytes);crypto.getRandomValues(v);return btoa(String.fromCharCode(...v)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 function part(){const a=new Uint8Array(4);crypto.getRandomValues(a);let s='';for(const n of a)s+=chars[n%chars.length];return s}
@@ -81,7 +93,7 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user
     const{data,error}=await admin.rpc('aezakmi_admin_close_session',{
       p_branch_id:branchId,p_session_id:sessionId,p_disposition:disposition,p_actor_id:user.id,p_operation_key:operationKey
     });
-    if(error)throw error;
+    if(error)throw atomicCloseSchemaError(error);
     const out=data&&typeof data==='object'?data:{};
     if(out.success===false)throw Object.assign(new Error(out.error||'Unable to close this session.'),{status:Number(out.status||400),code:out.code||'SESSION_CLOSE_FAILED'});
     const stationId=String(out.pcId||'');
@@ -132,4 +144,7 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user
     return json({success:true,commandId:commandRow.id,status:commandRow.status||'queued',expiresAt:commandRow.expires_at,interruption},201)
   }
   return json({success:false,code:'INVALID_ACTION',error:'Unsupported station admin action.'},400)
-}catch(e){return fail(e,'Unable to manage Customer Station.')}})
+}catch(e){
+  console.error('[station-admin]',{code:(e as any)?.code||null,status:(e as any)?.status||500,message:(e as any)?.message||String(e),details:(e as any)?.details||null,hint:(e as any)?.hint||null})
+  return fail(e,'Unable to manage Customer Station.')
+}})

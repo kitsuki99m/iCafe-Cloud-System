@@ -21,6 +21,8 @@ const required=[
   'supabase/migrations/20260913000006_cloud_primary_customer_stations.sql',
   'supabase/migrations/20260913000009_station_repairing.sql',
   'supabase/migrations/20260914000015_presence_jitter_grace.sql',
+  'supabase/migrations/20260914000020_admin_atomic_session_close.sql',
+  'supabase/migrations/20260914000021_admin_close_session_rpc_guard.sql',
   'supabase/functions/admin-api/index.ts',
   'supabase/functions/edge-sync/index.ts',
   'supabase/functions/request-business-access/index.ts',

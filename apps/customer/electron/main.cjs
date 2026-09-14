@@ -638,10 +638,14 @@ async function executeRemoteCommand(command) {
 
 async function executeEmergencyCommand(command) {
   if (String(command || '').toLowerCase() === 'quit') {
+    // Alt+Shift+W is the last-resort local operator escape hatch. Persist only
+    // the local lifecycle marker for recovery, then quit without waiting for
+    // the renderer, Café Edge, Cloud, heartbeat, session validation, or ACKs.
+    // On the next launch the marker can be reconciled normally when authority
+    // is reachable again.
     markSessionExit({reason:'app_exit'})
-    mainWindow?.webContents.send('station:app-exit-requested',{reason:'app_exit'})
     appIsQuitting = true
-    setTimeout(()=>app.quit(),3000)
+    setImmediate(() => app.quit())
     return true
   }
   return executeRemoteCommand(command)

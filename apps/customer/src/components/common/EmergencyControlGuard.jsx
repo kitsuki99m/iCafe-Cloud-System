@@ -32,6 +32,16 @@ export default function EmergencyControlGuard() {
       const verified = await window.aezakmiClient?.verifyStationSetupMasterPin?.(pin)
       if (!verified?.verified) throw Object.assign(new Error('Incorrect Station Setup Master PIN.'), { code:'STATION_SETUP_MASTER_PIN_INVALID' })
 
+      // Emergency QUIT is an absolute local recovery override. Once the local
+      // Station Setup Master PIN is verified, do not consult Café Edge, Cloud,
+      // station registration, pairing state, or session lifecycle APIs. This
+      // shortcut exists specifically so an unreachable/misconfigured server
+      // can never trap the operator inside the Customer kiosk.
+      if (command === 'quit') {
+        await executeLocally()
+        return
+      }
+
       // A not-yet-paired station has no authoritative Café Edge station row to
       // checkpoint. The local master PIN must still be able to recover/lock/
       // unlock the kiosk so pairing or server problems cannot trap the PC.
@@ -40,9 +50,8 @@ export default function EmergencyControlGuard() {
         return
       }
 
-      // For paired stations, Café Edge independently verifies the same master
-      // PIN and checkpoints lock/quit lifecycle state before Electron changes
-      // the local window/process. Unlock ACK resumes a previously paused session.
+      // Lock/Unlock keep the normal Café Edge authorization + ACK lifecycle.
+      // Quit intentionally bypasses this entire block above.
       const authorization = await apiPost('/public/station-control', { command, pin })
       const executed = await window.aezakmiClient?.executeEmergencyCommand?.(command)
       await apiPatch(`/public/station-control/${authorization.controlId}/ack`, {

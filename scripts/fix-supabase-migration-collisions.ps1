@@ -29,7 +29,9 @@ foreach ($Name in $Obsolete) {
 $Required = @(
   '20260914000017_close_session_pause_on_end.sql',
   '20260914000018_platform_pricing_quotes_and_customer_updates.sql',
-  '20260914000019_admin_managed_customer_updates.sql'
+  '20260914000019_admin_managed_customer_updates.sql',
+  '20260914000020_admin_atomic_session_close.sql',
+  '20260914000021_admin_close_session_rpc_guard.sql'
 )
 
 foreach ($Name in $Required) {
@@ -69,3 +71,4 @@ Write-Host ""
 Write-Host 'Next commands:' -ForegroundColor Cyan
 Write-Host '  npx supabase migration list'
 Write-Host '  npx supabase db push'
+Write-Host '  npx supabase functions deploy station-admin --use-api'
