@@ -373,18 +373,17 @@ function taxPolicyView() {
 }
 
 function earningsRevenueRows(start, end) {
-  // Wallet funding is calculated from its immutable ledger below. Excluding
-  // wallet-paid service events here prevents the same prepaid money appearing
-  // once when it is added and again when it is spent.
+  // Gross income is derived only from the revenue ledger. Wallet movements are
+  // a reconciliation/audit view, so transfers, balance edits, and wallet
+  // spending never change an earnings total.
   return db
     .prepare(
       `SELECT *
        FROM revenue_events
        WHERE occurred_at BETWEEN ? AND ?
-         AND event_type NOT IN ('wallet_top_up','member_initial_wallet','session_refund')
+         AND event_type != 'session_refund'
          AND (payment_method IS NULL OR payment_method != 'wallet')
          AND source_type != 'wallet_transaction'
-         AND (event_type != 'session_start' OR member_id IS NULL)
        ORDER BY occurred_at,id`,
     )
     .all(start, end);
@@ -465,20 +464,17 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
       (sum, row) => sum + Number(row.signed_amount ?? row.amount ?? 0),
       0,
     );
-  const walletFunding = walletTransactions
-    .filter((row) => Number(row.amount || 0) > 0 && ['top_up','admin_top_up','paid_deposit'].includes(row.type))
-    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const walletFundingCents = Math.round(walletFunding * 100);
-  if (walletFunding) categories.wallet_top_up = (categories.wallet_top_up || 0) + walletFunding;
+  const walletFunding =
+    Number(categories.wallet_top_up || 0) + Number(categories.initial_wallet || 0);
   const walletRevenue = 0;
   return {
     bounds,
     summary: {
-      gross: (grossCents + walletFundingCents) / 100,
+      gross: grossCents / 100,
       refunds: refundCents / 100,
-      netRevenue: (grossCents + walletFundingCents) / 100,
+      netRevenue: grossCents / 100,
       expenses: expenseCents / 100,
-      net: (grossCents + walletFundingCents - expenseCents) / 100,
+      net: (grossCents - expenseCents) / 100,
       walletBalances,
       walletFunding,
       taxProvision,
@@ -1948,6 +1944,15 @@ router.post("/members", auth, requireRole("admin"), async (req, res, next) => {
           0,
           startingWallet,
           "member_create",
+          now,
+        );
+      if (startingWallet > 0)
+        recordRevenue(
+          "member_initial_wallet",
+          "member",
+          memberId,
+          startingWallet,
+          req.auth.userId,
           now,
         );
       log(req.auth.userId, "member.create", "member", memberId, null);
@@ -4139,9 +4144,10 @@ router.post(
             code: "INVALID_AMOUNT",
             expose: true,
           });
+        const recordedAt = nowIso();
         db.prepare(
           "UPDATE members SET wallet_balance=?,updated_at=? WHERE id=?",
-        ).run(nextBalance, nowIso(), memberId);
+        ).run(nextBalance, recordedAt, memberId);
         db.prepare(
           `INSERT INTO wallet_transactions (id,member_id,type,amount,balance_before,balance_after,reference_type,created_at) VALUES (?,?,?,?,?,?,?,?)`,
         ).run(
@@ -4152,8 +4158,18 @@ router.post(
           Number(m.wallet_balance),
           nextBalance,
           "admin",
-          nowIso(),
+          recordedAt,
         );
+        if (delta > 0 && type === "top_up")
+          recordRevenue(
+            "wallet_top_up",
+            "wallet_adjustment",
+            memberId,
+            delta,
+            req.auth.userId,
+            recordedAt,
+            { memberId },
+          );
         log(req.auth.userId, "wallet.adjust", "member", memberId, null, {
           amount: delta,
           type,
@@ -4340,11 +4356,12 @@ router.patch(
             code: "MEMBER_NOT_FOUND",
             expose: true,
           });
+        const approvedAt = nowIso();
         db.prepare(
           "UPDATE members SET wallet_balance=?,updated_at=? WHERE id=?",
         ).run(
           Number(m.wallet_balance) + Number(r.amount),
-          nowIso(),
+          approvedAt,
           r.member_id,
         );
         db.prepare(
@@ -4358,11 +4375,20 @@ router.patch(
           Number(m.wallet_balance) + Number(r.amount),
           "top_up",
           r.id,
-          nowIso(),
+          approvedAt,
+        );
+        recordRevenue(
+          "wallet_top_up",
+          "top_up_request",
+          r.id,
+          Number(r.amount),
+          req.auth.userId,
+          approvedAt,
+          { paymentMethod: r.payment_method, memberId: r.member_id, pcId: r.pc_id },
         );
         const topUpChanged = db.prepare(
           "UPDATE top_up_requests SET status=?,processed_at=?,processed_by=? WHERE id=? AND status='pending'",
-        ).run("approved", nowIso(), req.auth.userId, r.id);
+        ).run("approved", approvedAt, req.auth.userId, r.id);
         if (topUpChanged.changes !== 1) throw Object.assign(new Error("Top-up request state changed while processing."), { status:409, code:"TOPUP_STATE_CONFLICT", expose:true });
         log(req.auth.userId, "topup.approve", "top_up_request", r.id, r.pc_id, {
           amount: r.amount,

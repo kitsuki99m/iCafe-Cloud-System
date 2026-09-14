@@ -88,11 +88,11 @@ export default function EarningsPage(){
       </div>
       <label className="mt-3 block"><span className="eyebrow mb-1.5 block">Reference date</span><input type="date" value={date} onChange={event=>setDate(event.target.value)} className={`${inputClass} text-xs`}/></label>
     </AdminRailCard>
-    <AdminRailCard title="Wallet-funded usage" action={<WalletCards size={15} className="text-midnight"/>}>
+    <AdminRailCard title="Member payment receipts" action={<WalletCards size={15} className="text-midnight"/>}>
       <div className="space-y-2">
-        <div className="admin-rail-stat"><span className="text-slate-soft">Prepaid</span><b className="stat-figure text-ink-900">{money(data?.walletUsage?.prepaid)}</b></div>
-        <div className="admin-rail-stat"><span className="text-slate-soft">Legacy settlements</span><b className="stat-figure text-ink-900">{money(data?.walletUsage?.postpaid)}</b></div>
-        <div className="admin-rail-stat"><span className="text-slate-soft">Added</span><b className="stat-figure text-ink-900">{money(data?.summary?.walletFunding)}</b></div>
+        <div className="admin-rail-stat"><span className="text-slate-soft">Starting wallets</span><b className="stat-figure text-ink-900">{money(data?.categories?.initial_wallet)}</b></div>
+        <div className="admin-rail-stat"><span className="text-slate-soft">Wallet top-ups</span><b className="stat-figure text-ink-900">{money(data?.categories?.wallet_top_up)}</b></div>
+        <div className="admin-rail-stat"><span className="text-slate-soft">Included in gross</span><b className="stat-figure text-ink-900">{money(data?.summary?.walletFunding)}</b></div>
       </div>
     </AdminRailCard>
     <AdminRailCard title="Period context">
@@ -135,7 +135,7 @@ export default function EarningsPage(){
     </section>
 
     <section className="overview-card mt-3 overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-surface-line px-5 py-4"><div><p className="eyebrow">Wallet activity</p><h2 className="mt-1 text-base font-semibold tracking-[-0.015em] text-ink-900">Money movements</h2></div><span className="rounded-full bg-surface-raised px-3 py-1.5 text-[10px] font-semibold text-slate-soft">{data?.walletActivity?.length||0}</span></div>
+      <div className="flex items-center justify-between gap-3 border-b border-surface-line px-5 py-4"><div><p className="eyebrow">Wallet activity</p><h2 className="mt-1 text-base font-semibold tracking-[-0.015em] text-ink-900">Money movements</h2><p className="mt-1 text-[11px] text-slate-soft">Display only — earnings use paid receipt records, not this activity list.</p></div><span className="rounded-full bg-surface-raised px-3 py-1.5 text-[10px] font-semibold text-slate-soft">{data?.walletActivity?.length||0}</span></div>
       <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-xs"><thead><tr className="border-b border-surface-line text-left text-[10px] uppercase tracking-[0.1em] text-slate-soft"><th className="px-5 py-3">Type</th><th className="px-4 py-3">Date</th><th className="px-5 py-3 text-right">Amount</th></tr></thead><tbody>{data?.walletActivity?.length?data.walletActivity.map(row=><tr key={row.id} className="border-b border-surface-line/60"><td className="px-5 py-3 font-semibold capitalize text-ink-900">{String(row.type).replaceAll('_',' ')}</td><td className="px-4 py-3 text-slate-soft">{dayjs(row.recorded_at).format('MMM D, YYYY')}</td><td className={`stat-figure px-5 py-3 text-right font-semibold ${row.amount<0?'text-ember-dim':'text-teal-dim'}`}>{money(row.amount)}</td></tr>):<tr><td colSpan="3"><Empty>No wallet activity for this period.</Empty></td></tr>}</tbody></table></div>
     </section>
 

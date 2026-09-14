@@ -323,7 +323,7 @@ test('Earnings wallet-funded usage is derived from wallet ledger debits by usage
   assert.doesNotMatch(section, /settlement_method='wallet'/)
 })
 
-test('Earnings counts wallet funding once and keeps wallet spending out of gross income', () => {
+test('Earnings derives gross from receipt events and keeps wallet activity out of totals', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   const helperStart = source.indexOf('function earningsRevenueRows')
   const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
@@ -333,20 +333,22 @@ test('Earnings counts wallet funding once and keeps wallet spending out of gross
   const snapshot = source.slice(snapshotStart, snapshotEnd)
 
   assert.match(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
+  assert.match(helper, /source_type != 'wallet_transaction'/)
   assert.match(snapshot, /const grossCents = revenue\.reduce/)
   assert.match(snapshot, /Math\.max\(0, Number\(row\.amount_centavos \|\| 0\)\)/)
-  assert.match(snapshot, /\['top_up','admin_top_up','paid_deposit'\]\.includes\(row\.type\)/)
-  assert.match(snapshot, /const walletFundingCents = Math\.round\(walletFunding \* 100\)/)
-  assert.match(snapshot, /gross: \(grossCents \+ walletFundingCents\) \/ 100/)
+  assert.doesNotMatch(snapshot, /\['top_up','admin_top_up','paid_deposit'\]\.includes\(row\.type\)/)
+  assert.match(snapshot, /gross: grossCents \/ 100/)
   assert.match(snapshot, /walletActivity/)
   assert.doesNotMatch(snapshot, /const walletRevenue\s*=\s*[^;\n]*walletBalances/)
 })
 
-test('Earnings counts prepaid revenue only for guest sessions', () => {
+test('Earnings includes paid member prepaid revenue while excluding wallet spending', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   const helperStart = source.indexOf('function earningsRevenueRows')
   const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
-  assert.match(source.slice(helperStart, helperEnd), /event_type != 'session_start' OR member_id IS NULL/)
+  const helper = source.slice(helperStart, helperEnd)
+  assert.doesNotMatch(helper, /event_type != 'session_start' OR member_id IS NULL/)
+  assert.match(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
 })
 
 test('wallet-funded sessions, extensions and settlements write earned revenue events', () => {
@@ -364,7 +366,7 @@ test('Earnings retains wallet movements as audit activity without treating refun
   const snapshot = source.slice(start, end)
   assert.match(snapshot, /walletTransactions\.map/)
   assert.match(snapshot, /walletActivity: walletTransactions\.map/)
-  assert.match(snapshot, /net: \(grossCents \+ walletFundingCents - expenseCents\) \/ 100/)
+  assert.match(snapshot, /net: \(grossCents - expenseCents\) \/ 100/)
 })
 
 test('wallet POS sales are recognized when the order is completed', () => {
@@ -608,7 +610,7 @@ test('Overview-pattern migration adds page-specific navigation utilities without
   assert.match(rates, /Session controls/)
   assert.match(members, /Member snapshot/)
   assert.match(members, /Tier distribution/)
-  assert.match(earnings, /Wallet-funded usage/)
+  assert.match(earnings, /Member payment receipts/)
   assert.match(earnings, /Reporting tools/)
   assert.match(analytics, /Key insights/)
   assert.match(analytics, /Traffic mix/)
@@ -678,13 +680,13 @@ test('Earnings promotes Expense logs while keeping important context in a sticky
   assert.match(source, /Expense logs/)
   assert.match(source, /earnings-expense-log/)
   assert.match(source, /Reporting period/)
-  assert.match(source, /Wallet-funded usage/)
+  assert.match(source, /Member payment receipts/)
   assert.match(source, /Reporting tools/)
   assert.match(source, /Expense controls/)
   const railStart = source.indexOf('const earningsRail')
   const returnStart = source.indexOf('return <AdminPageWorkspace', railStart)
   const rail = source.slice(railStart, returnStart)
-  assert.ok(rail.indexOf('Period context') > rail.indexOf('Wallet-funded usage'), 'Period context should remain the final sticky rail card')
+  assert.ok(rail.indexOf('Period context') > rail.indexOf('Member payment receipts'), 'Period context should remain the final sticky rail card')
   assert.match(source, /<AdminPageWorkspace\s+aside=\{earningsRail\}/)
 })
 
@@ -701,7 +703,7 @@ test('Earnings moves report and expense controls above Revenue sources and keeps
   assert.doesNotMatch(rail, /Expense controls/)
   assert.match(rail, /Income snapshot/)
   assert.match(rail, /Reporting period/)
-  assert.match(rail, /Wallet-funded usage/)
+  assert.match(rail, /Member payment receipts/)
   assert.match(rail, /Period context/)
 })
 

@@ -335,19 +335,23 @@ test('Cloud Admin reads branch mirrors directly and never opens Socket.IO agains
   assert.match(notifications,/if \(isCloudAdmin\(\)\) return undefined/)
 })
 
-test('cloud Earnings uses wallet funding once and returns wallet activity separately from expenses',()=>{
+test('cloud Earnings derives gross from receipt events and returns wallet activity as display-only data',()=>{
   const api=read('supabase/functions/admin-api/index.ts')
   assert.match(api,/async function walletLedgerRows/)
   assert.match(api,/function earningsFromRows\(rows:any\[\],walletRows:any\[\],bounds:any\)/)
-  assert.match(api,/funding=walletRows\.filter\(row=>n\(row\.amount\)>0/)
+  assert.match(api,/r\.event_type!=='session_refund'/)
+  assert.match(api,/r\.source_type!=='wallet_transaction'/)
+  assert.doesNotMatch(api,/funding=walletRows\.filter/)
   assert.match(api,/net=gross-expenses/)
   assert.match(api,/walletActivity:/)
+  assert.match(api,/walletFunding=n\(categories\.wallet_top_up\)\+n\(categories\.initial_wallet\)/)
   assert.match(api,/Promise\.all\(\[revenueRows\(admin,branchId,bounds\.start,bounds\.end\),walletLedgerRows\(admin,branchId,bounds\.start,bounds\.end\)\]\)/)
 })
 
-test('cloud Earnings excludes member prepaid sessions from gross income',()=>{
+test('cloud Earnings includes paid member prepaid sessions while excluding wallet spends',()=>{
   const api=read('supabase/functions/admin-api/index.ts')
-  assert.match(api,/\!\(r\.event_type==='session_start'&&r\.member_id\)/)
+  assert.match(api,/r\.payment_method!=='wallet'/)
+  assert.doesNotMatch(api,/\!\(r\.event_type==='session_start'&&r\.member_id\)/)
 })
 
 test('Cloud Admin can generate a Customer Station pairing code for an unpaired logical PC',()=>{
