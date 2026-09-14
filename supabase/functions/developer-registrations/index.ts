@@ -52,13 +52,12 @@ async function organizationStationCount(admin:SupabaseClient,organizationId:stri
 async function applySubscription(admin:SupabaseClient,organizationId:string,planValue:unknown,customValue:unknown,expectedStations=1){const pkg=await subscriptionPackage(admin,planValue,customValue,expectedStations),used=await organizationStationCount(admin,organizationId);if(used>pkg.maxStations)throw Object.assign(new Error(`This business already has ${used} stations. Choose a package that supports at least ${used}.`),{status:409,code:'SUBSCRIPTION_BELOW_USAGE'});const{data,error}=await admin.from('subscriptions').update({plan:pkg.plan,max_stations:pkg.maxStations,updated_at:new Date().toISOString()}).eq('organization_id',organizationId).select('plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').single();if(error)throw error;return{...data,station_count:used}}
 async function audit(admin:SupabaseClient,requestId:string,actor:string,action:string,details:Record<string,unknown>={}){const{error}=await admin.from('registration_audit_logs').insert({registration_request_id:requestId,actor_user_id:actor,action,details});if(error)throw error}
 function activationRedirect(){
-  const base=String(Deno.env.get('AEZAKMI_ADMIN_URL')||'').trim().replace(/\/+$/,'')
-  return base?`${base}/?aezakmi=activate`:undefined
+  const base=String(Deno.env.get('AEZAKMI_ADMIN_URL')||'https://icafe-aezakmi.vercel.app').trim().replace(/\/+$/,'')
+  return `${base}/?aezakmi=activate`
 }
 async function activationLink(admin:SupabaseClient,email:string){
   const redirectTo=activationRedirect()
-  const params:any={type:'recovery',email}
-  if(redirectTo)params.options={redirectTo}
+  const params:any={type:'recovery',email,options:{redirectTo}}
   const{data,error}=await admin.auth.admin.generateLink(params)
   if(error)throw Object.assign(new Error(error.message||'Unable to generate activation link.'),{status:409,code:'ACTIVATION_LINK_FAILED'})
   const props:any=(data as any)?.properties||{}
@@ -68,25 +67,36 @@ async function maybeActivationLink(admin:SupabaseClient,email:string){try{return
 function inviteMetadata(registration:any,pkg:{plan:string,maxStations:number}){return{name:registration.owner_name,business_name:registration.business_name,aezakmi_registration_id:registration.id,subscription_plan:pkg.plan,max_stations:pkg.maxStations}}
 function resendConfig(){
   const apiKey=String(Deno.env.get('RESEND_API_KEY')||'').trim()
-  const from=String(Deno.env.get('AEZAKMI_EMAIL_FROM')||'').trim()
+  const from=String(Deno.env.get('AEZAKMI_EMAIL_FROM')||'Aezakmi Cafe <onboarding@resend.dev>').trim()
   const replyTo=String(Deno.env.get('AEZAKMI_REPLY_TO')||'').trim()
-  if(!apiKey)throw Object.assign(new Error('Email delivery is not configured. Set RESEND_API_KEY in Supabase Edge Function secrets.'),{status:503,code:'EMAIL_NOT_CONFIGURED',exposeMessage:true})
-  if(!from)throw Object.assign(new Error('Email sender is not configured. Verify a sender/domain in Resend, then set AEZAKMI_EMAIL_FROM in Supabase Edge Function secrets.'),{status:503,code:'EMAIL_SENDER_NOT_CONFIGURED',exposeMessage:true})
-  return{apiKey,from,replyTo}
+  const explicitTestRecipient=String(Deno.env.get('AEZAKMI_EMAIL_TEST_RECIPIENT')||'').trim()
+  if(!apiKey)throw Object.assign(new Error('Resend is not configured. Add RESEND_API_KEY to Supabase Edge Function secrets.'),{status:503,code:'EMAIL_NOT_CONFIGURED',exposeMessage:true})
+  return{apiKey,from,replyTo,explicitTestRecipient,testSender:/@resend\.dev(?:>|$)/i.test(from)}
 }
-async function sendResendEmail(input:{to:string;subject:string;html:string;tags?:Array<{name:string;value:string}>}){
-  const{apiKey,from,replyTo}=resendConfig()
-  const payload:any={from,to:[input.to],subject:input.subject,html:input.html}
+async function sendResendEmail(input:{to:string;subject:string;html:string;tags?:Array<{name:string;value:string}>;developerEmail?:string}){
+  const{apiKey,from,replyTo,explicitTestRecipient,testSender}=resendConfig()
+  const intendedTo=String(input.to||'').trim()
+  const fallbackTestRecipient=String(explicitTestRecipient||input.developerEmail||'').trim()
+  const deliveredTo=testSender&&fallbackTestRecipient?fallbackTestRecipient:intendedTo
+  const redirected=testSender&&Boolean(deliveredTo)&&deliveredTo.toLowerCase()!==intendedTo.toLowerCase()
+  const subject=redirected?`[TEST for ${intendedTo}] ${input.subject}`:input.subject
+  const testBanner=redirected?`<div style="margin:0 0 18px;padding:12px 14px;border-radius:10px;background:#fff3cd;color:#664d03;font:12px Arial,sans-serif"><strong>Resend test mode:</strong> this message was intended for ${htmlEscape(intendedTo)} but was delivered to the developer email because onboarding@resend.dev cannot send to arbitrary recipients.</div>`:''
+  const payload:any={from,to:[deliveredTo],subject,html:testBanner+input.html}
   if(replyTo)payload.reply_to=replyTo
   if(input.tags?.length)payload.tags=input.tags
   const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(payload)})
   const data=await response.json().catch(()=>({}))
-  if(!response.ok)throw Object.assign(new Error(String(data?.message||data?.error||'Email provider rejected the message.')),{status:502,code:'EMAIL_DELIVERY_FAILED',exposeMessage:true})
-  return String(data?.id||'')||null
+  if(!response.ok){
+    const providerMessage=String(data?.message||data?.error||'Email provider rejected the message.')
+    const message=response.status===403&&testSender
+      ?`${providerMessage} Resend test mode can only deliver to the email address that owns the Resend account. If that is not ${deliveredTo}, set AEZAKMI_EMAIL_TEST_RECIPIENT to the Resend account email.`
+      :providerMessage
+    throw Object.assign(new Error(message),{status:502,code:'EMAIL_DELIVERY_FAILED',exposeMessage:true})
+  }
+  return{id:String(data?.id||'')||null,intendedTo,deliveredTo,testMode:testSender,redirected}
 }
 async function generateInviteLink(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
-  const options:any={data:inviteMetadata(registration,pkg)}
-  const redirectTo=activationRedirect();if(redirectTo)options.redirectTo=redirectTo
+  const options:any={data:inviteMetadata(registration,pkg),redirectTo:activationRedirect()}
   const{data,error}=await admin.auth.admin.generateLink({type:'invite',email:registration.email,options} as any)
   if(error)throw Object.assign(new Error(error.message||'Unable to generate invitation link.'),{status:409,code:'INVITE_LINK_FAILED',exposeMessage:true})
   const userId=(data as any)?.user?.id||null
@@ -95,20 +105,20 @@ async function generateInviteLink(admin:SupabaseClient,registration:any,pkg:{pla
   if(!userId||!link)throw Object.assign(new Error('Supabase did not return a complete invitation link.'),{status:500,code:'INVITE_LINK_MISSING'})
   return{userId,link}
 }
-async function sendInviteEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
+async function sendInviteEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number},developerEmail=''){
   const generated=await generateInviteLink(admin,registration,pkg)
   try{
-    await sendResendEmail({to:registration.email,subject:`You're invited to Aezakmi Café Cloud — ${registration.business_name}`,html:inviteHtml({...registration,actionLink:generated.link,packageLabel:String(pkg.plan||'').replace(/^./,(c)=>c.toUpperCase()),maxStations:pkg.maxStations}),tags:[{name:'category',value:'business-invite'}]})
+    const delivery=await sendResendEmail({to:registration.email,developerEmail,subject:`You're invited to Aezakmi Café Cloud — ${registration.business_name}`,html:inviteHtml({...registration,actionLink:generated.link,packageLabel:String(pkg.plan||'').replace(/^./,(c)=>c.toUpperCase()),maxStations:pkg.maxStations}),tags:[{name:'category',value:'business-invite'}]})
+    return{userId:generated.userId,delivery}
   }catch(error){
     try{await admin.auth.admin.deleteUser(generated.userId)}catch{}
     throw error
   }
-  return generated.userId
 }
-async function resendActivationEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
+async function resendActivationEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number},developerEmail=''){
   const link=await activationLink(admin,registration.email)
   if(!link)throw Object.assign(new Error('Unable to generate activation link.'),{status:409,code:'ACTIVATION_LINK_FAILED'})
-  await sendResendEmail({to:registration.email,subject:`Your Aezakmi Café Cloud activation link — ${registration.business_name}`,html:inviteHtml({...registration,actionLink:link,packageLabel:String(pkg.plan||'').replace(/^./,(c)=>c.toUpperCase()),maxStations:pkg.maxStations,resend:true}),tags:[{name:'category',value:'business-activation'}]})
+  return await sendResendEmail({to:registration.email,developerEmail,subject:`Your Aezakmi Café Cloud activation link — ${registration.business_name}`,html:inviteHtml({...registration,actionLink:link,packageLabel:String(pkg.plan||'').replace(/^./,(c)=>c.toUpperCase()),maxStations:pkg.maxStations,resend:true}),tags:[{name:'category',value:'business-activation'}]})
 }
 
 function htmlEscape(value:unknown){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch))}
@@ -126,8 +136,8 @@ function quoteHtml(input:any){
   const logo=logoUrl?`<img src="${htmlEscape(logoUrl)}" width="48" height="48" alt="Aezakmi Café" style="display:block;border-radius:12px;object-fit:contain;background:#ffffff">`:`<div style="width:48px;height:48px;border-radius:12px;background:#E8A33D;color:#0B1017;font-weight:800;font-size:22px;line-height:48px;text-align:center">A</div>`
   return `<!doctype html><html><body style="margin:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif;color:#111827"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f2;padding:28px 12px"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb"><tr><td style="background:#0B1017;padding:24px 28px"><table role="presentation" width="100%"><tr><td width="60">${logo}</td><td><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700">Aezakmi Café</div><div style="margin-top:4px;font-size:22px;color:#ffffff;font-weight:700">Business quotation</div></td></tr></table></td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 8px;font-size:15px">Hello ${htmlEscape(input.recipientName||'there')},</p><p style="margin:0;color:#4b5563;font-size:14px;line-height:1.7">Thank you for considering Aezakmi Café for <strong style="color:#111827">${htmlEscape(input.businessName)}</strong>. Based on the information provided, here is a tailored estimate for your café.</p><div style="margin:24px 0 0;padding:18px;border:1px solid #e5e7eb;border-radius:16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Quotation</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.quoteNumber)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Package</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.packageLabel)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">PCs</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.stationCount)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Branches</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.branchCount)}</td></tr><tr><td style="padding:12px 0 7px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px">Monthly subscription</td><td align="right" style="padding:12px 0 7px;border-top:1px solid #e5e7eb;font-size:18px;color:#0B1017;font-weight:800">${htmlEscape(input.monthlyLabel||`${peso(input.monthlyPrice)} / month`)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Initial deployment</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${peso(input.deploymentFeePerBranch)} × ${htmlEscape(input.branchCount)} branch${Number(input.branchCount)===1?'':'es'}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Deployment total</td><td align="right" style="padding:7px 0;font-size:16px;color:#E8A33D;font-weight:800">${peso(input.deploymentFeeTotal)}</td></tr></table></div>${noteHtml}<div style="margin-top:24px;padding:16px 18px;border-left:4px solid #E8A33D;background:#fffaf0;color:#4b5563;font-size:13px;line-height:1.6">This quotation is valid until <strong style="color:#111827">${htmlEscape(input.validUntilLabel)}</strong>. Final pricing may change if the requested PC count, number of branches, onsite requirements, networking, or deployment scope changes.</div><p style="margin:24px 0 0;color:#4b5563;font-size:13px;line-height:1.7">If you would like to proceed, simply reply to this email and we can finalize the deployment scope and onboarding schedule.</p><p style="margin:24px 0 0;font-size:13px;color:#111827"><strong>Aezakmi Café</strong><br><span style="color:#6b7280">Cloud café management · Customer Stations · Branch operations</span></p></td></tr></table><div style="max-width:640px;padding:16px 8px;color:#9ca3af;font-size:11px;line-height:1.5;text-align:center">This quotation was generated by the Aezakmi developer console for ${htmlEscape(input.businessName)}.</div></td></tr></table></body></html>`
 }
-async function sendQuotationEmail(input:any){
-  return await sendResendEmail({to:input.recipientEmail,subject:`Aezakmi Café quotation — ${input.businessName}`,html:quoteHtml(input),tags:[{name:'category',value:'quotation'}]})
+async function sendQuotationEmail(input:any,developerEmail=''){
+  return await sendResendEmail({to:input.recipientEmail,developerEmail,subject:`Aezakmi Café quotation — ${input.businessName}`,html:quoteHtml(input),tags:[{name:'category',value:'quotation'}]})
 }
 async function lifecycle(admin:SupabaseClient,organizationId:string){const{data,error}=await admin.from('organizations').select('id,name,lifecycle_status,lifecycle_reason,lifecycle_updated_at,suspended_at,terminated_at').eq('id',organizationId).maybeSingle();if(error)throw error;return data}
 
@@ -135,7 +145,7 @@ Deno.serve(async req=>{
   const o=preflight(req);if(o)return o
   if(req.method!=='POST')return json({success:false,error:'Method not allowed.'},405)
   try{
-    const user=await authenticatedUser(req),admin=adminClient();await requireDeveloper(admin,user.id)
+    const user=await authenticatedUser(req),admin=adminClient();const developer=await requireDeveloper(admin,user.id)
     const b=await req.json().catch(()=>({})),action=String(b.action||'list'),requestId=String(b.requestId||''),reviewNotes=note(b.reviewNotes)
 
     if(action==='list'){
@@ -154,7 +164,8 @@ Deno.serve(async req=>{
       const orgMap=new Map(orgs.map((x:any)=>[x.id,x])),subMap=new Map(subs.map((x:any)=>[x.organization_id,x]))
       const merged=(requests||[]).map((r:any)=>{const org:any=r.organization_id?orgMap.get(r.organization_id):null,sub:any=r.organization_id?subMap.get(r.organization_id):null;return{...r,organization_status:org?.lifecycle_status||null,organization_reason:org?.lifecycle_reason||null,lifecycle_updated_at:org?.lifecycle_updated_at||null,suspended_at:org?.suspended_at||null,terminated_at:org?.terminated_at||null,subscription_plan:sub?.plan||null,subscription_status:sub?.status||null,subscription_max_stations:sub?.max_stations??null,subscription_max_branches:sub?.max_branches??null,grace_until:sub?.grace_until||null,current_period_end:sub?.current_period_end||null,purge_eligible_at:org?.terminated_at?addDays(org.terminated_at,30):null}})
       const[packages,pricing]=await Promise.all([packageCatalog(admin),pricingSettings(admin)])
-      return json({success:true,requests:merged,packageCatalog:packages,pricingSettings:pricing})
+      const emailCfg=(()=>{try{const cfg=resendConfig();return{configured:true,from:cfg.from,testMode:cfg.testSender,testRecipient:cfg.explicitTestRecipient||developer.email||user.email||null,adminUrl:activationRedirect()}}catch(error:any){return{configured:false,error:error?.message||'Email not configured.',from:'Aezakmi Cafe <onboarding@resend.dev>',testMode:true,testRecipient:developer.email||user.email||null,adminUrl:activationRedirect()}}})()
+      return json({success:true,requests:merged,packageCatalog:packages,pricingSettings:pricing,emailDelivery:emailCfg})
     }
 
     if(action==='update_pricing_catalog'){
@@ -199,6 +210,13 @@ Deno.serve(async req=>{
       return json({success:true,pricingSettings:data})
     }
 
+    if(action==='test_email'){
+      const target=String(Deno.env.get('AEZAKMI_EMAIL_TEST_RECIPIENT')||developer.email||user.email||'').trim()
+      if(!target)throw Object.assign(new Error('No developer email is available for the Resend test.'),{status:400,code:'TEST_EMAIL_REQUIRED'})
+      const delivery=await sendResendEmail({to:target,developerEmail:target,subject:'Aezakmi Café email test',html:`<!doctype html><html><body style="font-family:Arial,sans-serif;background:#eef0f2;padding:24px"><div style="max-width:560px;margin:auto;background:#fff;border-radius:16px;padding:24px"><h2 style="margin:0 0 10px">Email delivery is working</h2><p style="color:#4b5563">This message was sent from the Aezakmi Developer Console through Resend.</p><p style="color:#6b7280;font-size:12px">Admin URL: ${htmlEscape(activationRedirect())}</p></div></body></html>`,tags:[{name:'category',value:'email-test'}]})
+      return json({success:true,emailSent:true,email:delivery.deliveredTo,intendedEmail:delivery.intendedTo,testMode:delivery.testMode,redirected:delivery.redirected})
+    }
+
     if(!requestId)throw Object.assign(new Error('Registration request is required.'),{status:400,code:'REQUEST_REQUIRED'})
     const{data:r,error:requestError}=await admin.from('registration_requests').select('*').eq('id',requestId).maybeSingle()
     if(requestError)throw requestError
@@ -233,11 +251,12 @@ Deno.serve(async req=>{
       const message=note(b.message)
       const suffix=String(pkg.package?.price_suffix||'/month').trim();const monthlyLabel=`${peso(monthlyPrice)}${suffix?(suffix.startsWith('+')?suffix:` ${suffix}`):''}`
       const emailInput={quoteNumber,recipientEmail:r.email,recipientName:r.owner_name,businessName:r.business_name,packageLabel:String(pkg.package?.label||pkg.plan),stationCount,branchCount,monthlyPrice,monthlyLabel,deploymentFeePerBranch,deploymentFeeTotal,message,validUntilLabel:validUntil.toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric',timeZone:'Asia/Manila'})}
-      const providerMessageId=await sendQuotationEmail(emailInput)
+      const delivery=await sendQuotationEmail(emailInput,developer.email||user.email||'')
+      const providerMessageId=delivery.id
       const{data:quotation,error:quoteError}=await admin.from('platform_quotations').insert({quote_number:quoteNumber,registration_request_id:r.id,recipient_email:r.email,recipient_name:r.owner_name,business_name:r.business_name,package_id:pkg.plan,station_count:stationCount,branch_count:branchCount,monthly_price:monthlyPrice,deployment_fee_per_branch:deploymentFeePerBranch,deployment_fee_total:deploymentFeeTotal,valid_until:validUntil.toISOString().slice(0,10),message,provider_message_id:providerMessageId,status:'sent',created_by:user.id,sent_at:new Date().toISOString()}).select('*').single()
       if(quoteError)throw quoteError
       await audit(admin,requestId,user.id,'quotation_sent',{quoteNumber,email:r.email,package:pkg.plan,stationCount,branchCount,monthlyPrice,deploymentFeePerBranch})
-      return json({success:true,emailSent:true,email:r.email,quotation})
+      return json({success:true,emailSent:true,email:delivery.deliveredTo,intendedEmail:r.email,testMode:delivery.testMode,redirected:delivery.redirected,quotation})
     }
 
     if(action==='approve'){
@@ -247,8 +266,9 @@ Deno.serve(async req=>{
       const pkg=await subscriptionPackage(admin,b.subscriptionPlan,b.ultraStationLimit,r.expected_station_count)
       let authUserId=r.auth_user_id as string|null
       const inviteSentAt=new Date().toISOString()
-      if(!authUserId)authUserId=await sendInviteEmail(admin,r,pkg)
-      else{await admin.auth.admin.updateUserById(authUserId,{user_metadata:inviteMetadata(r,pkg)});await resendActivationEmail(admin,r,pkg)}
+      let delivery:any=null
+      if(!authUserId){const sent=await sendInviteEmail(admin,r,pkg,developer.email||user.email||'');authUserId=sent.userId;delivery=sent.delivery}
+      else{await admin.auth.admin.updateUserById(authUserId,{user_metadata:inviteMetadata(r,pkg)});delivery=await resendActivationEmail(admin,r,pkg,developer.email||user.email||'')}
       const{error:markError}=await admin.from('registration_requests').update({status:'approved',auth_user_id:authUserId,reviewed_by:user.id,reviewed_at:inviteSentAt,review_notes:reviewNotes,invite_sent_at:inviteSentAt,invite_cancelled_at:null,owner_deleted_at:null,updated_at:inviteSentAt}).eq('id',requestId)
       if(markError)throw markError
       const{data:finalized,error:finalizeError}=await admin.rpc('aezakmi_finalize_registration_approval',{p_request_id:requestId,p_auth_user_id:authUserId,p_reviewer_id:user.id,p_review_notes:reviewNotes})
@@ -257,19 +277,19 @@ Deno.serve(async req=>{
       const subscription=await applySubscription(admin,String(tenant?.organization_id||r.organization_id||''),pkg.plan,pkg.maxStations,r.expected_station_count)
       const{data:updated}=await admin.from('registration_requests').select('*').eq('id',requestId).single()
       await audit(admin,requestId,user.id,'invite_email_sent',{email:r.email,automatic:true,subscriptionPlan:pkg.plan,maxStations:pkg.maxStations})
-      return json({success:true,request:updated,tenant,subscription,emailSent:true,email:r.email})
+      return json({success:true,request:updated,tenant,subscription,emailSent:true,email:delivery?.deliveredTo||r.email,intendedEmail:r.email,testMode:Boolean(delivery?.testMode),redirected:Boolean(delivery?.redirected)})
     }
 
     if(action==='resend_invite'){
       if(!['approved','invited'].includes(r.status)||!r.auth_user_id||r.activated_at)throw Object.assign(new Error('Only an outstanding invitation can be resent.'),{status:409,code:'INVITE_NOT_ACTIVE'})
       const{data:sub,error:subError}=await admin.from('subscriptions').select('plan,max_stations').eq('organization_id',r.organization_id).maybeSingle();if(subError)throw subError
       if(r.auth_user_id&&sub)await admin.auth.admin.updateUserById(r.auth_user_id,{user_metadata:inviteMetadata(r,{plan:String(sub.plan||'bronze'),maxStations:Number(sub.max_stations||50)})})
-      await resendActivationEmail(admin,r,{plan:String(sub?.plan||'bronze'),maxStations:Number(sub?.max_stations||50)})
+      const delivery=await resendActivationEmail(admin,r,{plan:String(sub?.plan||'bronze'),maxStations:Number(sub?.max_stations||50)},developer.email||user.email||'')
       const now=new Date().toISOString()
       const{data,error}=await admin.from('registration_requests').update({invite_sent_at:now,updated_at:now}).eq('id',requestId).select('*').single()
       if(error)throw error
       await audit(admin,requestId,user.id,'invite_email_resent',{email:r.email})
-      return json({success:true,request:data,emailSent:true,email:r.email,resent:true})
+      return json({success:true,request:data,emailSent:true,email:delivery.deliveredTo,intendedEmail:r.email,testMode:delivery.testMode,redirected:delivery.redirected,resent:true})
     }
 
     if(action==='copy_activation_link'){

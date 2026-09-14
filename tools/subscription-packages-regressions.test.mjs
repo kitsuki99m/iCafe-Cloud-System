@@ -84,3 +84,11 @@ test('owner invitation and resend templates remain Aezakmi branded and package a
   assert.match(developer, /subscription_plan:pkg\.plan/)
   assert.match(developer, /max_stations:pkg\.maxStations/)
 })
+
+test('Resend free-tier mode defaults to resend.dev and exposes a developer test email action', () => {
+  assert.match(developer, /onboarding@resend\.dev/)
+  assert.match(developer, /AEZAKMI_EMAIL_TEST_RECIPIENT/)
+  assert.match(developer, /action==='test_email'/)
+  assert.match(developerUi, /Test email/)
+  assert.match(developerUi, /Resend test mode/)
+})

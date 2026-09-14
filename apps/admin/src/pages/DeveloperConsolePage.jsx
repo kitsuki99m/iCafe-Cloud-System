@@ -51,13 +51,13 @@ const ACTION_COPY={
 export default function DeveloperConsolePage({standalone=false}){
   const{logout,user}=useAuth()
   const[items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[filter,setFilter]=useState('pending'),[query,setQuery]=useState(''),[selected,setSelected]=useState(null),[notes,setNotes]=useState(''),[busy,setBusy]=useState(''),[activationLink,setActivationLink]=useState(''),[confirm,setConfirm]=useState(null),[confirmReason,setConfirmReason]=useState(''),[confirmName,setConfirmName]=useState(''),[subscriptionPlan,setSubscriptionPlan]=useState('bronze'),[ultraStationLimit,setUltraStationLimit]=useState('51')
-  const[packageCatalog,setPackageCatalog]=useState(SUBSCRIPTION_PACKAGES),[pricingSettings,setPricingSettings]=useState({deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14}),[pricingOpen,setPricingOpen]=useState(false),[pricingDraft,setPricingDraft]=useState([]),[pricingSettingsDraft,setPricingSettingsDraft]=useState({deploymentFeeMin:'2500',deploymentFeeMax:'5000',quoteValidDays:'14'})
+  const[packageCatalog,setPackageCatalog]=useState(SUBSCRIPTION_PACKAGES),[pricingSettings,setPricingSettings]=useState({deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14}),[emailDelivery,setEmailDelivery]=useState(null),[pricingOpen,setPricingOpen]=useState(false),[pricingDraft,setPricingDraft]=useState([]),[pricingSettingsDraft,setPricingSettingsDraft]=useState({deploymentFeeMin:'2500',deploymentFeeMax:'5000',quoteValidDays:'14'})
   const[quoteOpen,setQuoteOpen]=useState(false),[quoteDraft,setQuoteDraft]=useState({packageId:'bronze',stationCount:'1',branchCount:'1',monthlyPrice:'499',deploymentFeePerBranch:'2500',validDays:'14',message:''})
   const ultraFloor=Math.max(1,Number(packageDefinition('gold',packageCatalog).maxStations||50)+1)
   const developerCacheKey=useMemo(()=>userCacheKey('developer-console',user),[user])
 
-  function applyDeveloperSnapshot(snapshot){if(!snapshot)return;setItems(snapshot.requests||[]);if(snapshot.packageCatalog)setPackageCatalog(normalizeSubscriptionPackages(snapshot.packageCatalog));if(snapshot.pricingSettings)setPricingSettings(snapshot.pricingSettings)}
-  async function load(){setLoading(true);setError('');try{const r=await cloudDeveloperRegistrations('list');const requests=r.requests||[];const snapshot={requests,packageCatalog:r.packageCatalog||SUBSCRIPTION_PACKAGES,pricingSettings:r.pricingSettings||{deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14}};applyDeveloperSnapshot(snapshot);if(developerCacheKey)void writeSnapshot(developerCacheKey,snapshot);setSelected(current=>current?(requests.find(x=>x.id===current.id)||null):current)}catch(e){setError(e.message||'Unable to load registration requests. Showing cached data when available.')}finally{setLoading(false)}}
+  function applyDeveloperSnapshot(snapshot){if(!snapshot)return;setItems(snapshot.requests||[]);if(snapshot.packageCatalog)setPackageCatalog(normalizeSubscriptionPackages(snapshot.packageCatalog));if(snapshot.pricingSettings)setPricingSettings(snapshot.pricingSettings);if(snapshot.emailDelivery)setEmailDelivery(snapshot.emailDelivery)}
+  async function load(){setLoading(true);setError('');try{const r=await cloudDeveloperRegistrations('list');const requests=r.requests||[];const snapshot={requests,packageCatalog:r.packageCatalog||SUBSCRIPTION_PACKAGES,pricingSettings:r.pricingSettings||{deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14},emailDelivery:r.emailDelivery||null};applyDeveloperSnapshot(snapshot);if(developerCacheKey)void writeSnapshot(developerCacheKey,snapshot);setSelected(current=>current?(requests.find(x=>x.id===current.id)||null):current)}catch(e){setError(e.message||'Unable to load registration requests. Showing cached data when available.')}finally{setLoading(false)}}
   useEffect(()=>{let active=true;if(developerCacheKey)void readSnapshot(developerCacheKey).then(snapshot=>{if(active&&snapshot){applyDeveloperSnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void load()});else void load();const timer=setInterval(()=>void load(),60000);const onOnline=()=>void load();const onVisible=()=>{if(document.visibilityState==='visible')void load()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible)}},[developerCacheKey])
   useEffect(()=>{
     if(!selected)return
@@ -74,10 +74,16 @@ export default function DeveloperConsolePage({standalone=false}){
     setBusy(action);setError('');setNotice('')
     try{
       const result=await cloudDeveloperRegistrations(action,{requestId:selected.id,reviewNotes:notes.trim()||null,...payload})
-      if(action==='send_quote'&&result?.emailSent){setActivationLink('');setNotice(`Quotation ${result.quotation?.quote_number||''} sent to ${result.email||selected.email}.`)}else if(result?.emailSent){setActivationLink('');setNotice(result.resent?`Activation email resent automatically to ${result.email||selected.email}.`:`Invitation email sent automatically to ${result.email||selected.email}.`)}else if(result?.activationLink){setActivationLink(result.activationLink);setNotice('Manual activation link generated. Use it only if email delivery is unavailable.')}
+      if(action==='send_quote'&&result?.emailSent){setActivationLink('');setNotice(result.redirected?`Quotation ${result.quotation?.quote_number||''} test-delivered to ${result.email}. Intended recipient: ${result.intendedEmail||selected.email}.`:`Quotation ${result.quotation?.quote_number||''} sent to ${result.email||selected.email}.`)}else if(result?.emailSent){setActivationLink('');setNotice(result.redirected?`${result.resent?'Activation':'Invitation'} email test-delivered to ${result.email}. Intended recipient: ${result.intendedEmail||selected.email}.`:(result.resent?`Activation email resent automatically to ${result.email||selected.email}.`:`Invitation email sent automatically to ${result.email||selected.email}.`))}else if(result?.activationLink){setActivationLink(result.activationLink);setNotice('Manual activation link generated. Use it only if email delivery is unavailable.')}
       setNotes('');await load();return result
     }catch(e){setError(e.message||'Unable to update application.');return null}
     finally{setBusy('')}
+  }
+
+  async function testEmail(){
+    if(busy)return
+    setBusy('test_email');setError('');setNotice('')
+    try{const result=await cloudDeveloperRegistrations('test_email');setNotice(`Test email sent to ${result.email}.`);await load()}catch(e){setError(e.message||'Unable to send test email.')}finally{setBusy('')}
   }
 
   async function copyActivationLink(){
@@ -170,10 +176,11 @@ export default function DeveloperConsolePage({standalone=false}){
   const content=<div className={standalone?'developer-console-page developer-console-standalone':'developer-console-page'}>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><p className="eyebrow">Platform access</p><h1 className="font-display text-xl font-semibold text-ink-900 sm:text-2xl">Developer approvals</h1></div>
-      <div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={Settings2} onClick={openPricingEditor}>Pricing</Button><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={RefreshCw} onClick={load} disabled={loading}>{loading?'Refreshing…':'Refresh'}</Button>{standalone&&<Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={LogOut} onClick={logout}>Sign out</Button>}</div>
+      <div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={Settings2} onClick={openPricingEditor}>Pricing</Button><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={Mail} onClick={testEmail} disabled={Boolean(busy)}>{busy==='test_email'?'Sending…':'Test email'}</Button><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={RefreshCw} onClick={load} disabled={loading}>{loading?'Refreshing…':'Refresh'}</Button>{standalone&&<Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={LogOut} onClick={logout}>Sign out</Button>}</div>
     </div>
     {error&&<div className="rounded-xl border border-ember/25 bg-ember/10 px-3 py-2.5 text-xs text-ember-dim">{error}</div>}
     {notice&&<div className="rounded-xl border border-teal/20 bg-teal/5 px-3 py-2.5 text-xs text-teal-dim">{notice}</div>}
+    {emailDelivery?.testMode&&<div className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-[11px] text-gold-dim">Resend test mode · delivery goes to {emailDelivery.testRecipient||'the Resend account email'}.</div>}
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
       {[['pending','Pending',Clock3],['reviewing','Reviewing',ShieldCheck],['invited','Invited',Mail],['activated','Active',UserRoundCheck]].map(([key,label,Icon])=><div key={key} className="rounded-2xl border border-surface-line bg-surface p-3 sm:p-4"><Icon size={17} className="text-gold-dim"/><p className="mt-2 text-xl font-semibold text-ink-900 sm:mt-3 sm:text-2xl">{counts[key]||0}</p><p className="text-[11px] text-slate-soft">{label}</p></div>)}
     </div>
