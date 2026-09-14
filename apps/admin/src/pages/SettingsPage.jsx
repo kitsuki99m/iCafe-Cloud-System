@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Building2, BellRing, Check, Cloud, CreditCard, ImageUp, Link2, LockKeyhole, PhilippinePeso, MonitorSmartphone, RefreshCw, ShieldCheck, Unplug, Volume2 } from 'lucide-react'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
+import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiUrl } from '../lib/api.js'
@@ -52,6 +53,7 @@ export default function SettingsPage() {
   const [cloudBusy,setCloudBusy]=useState('')
   const [cloudError,setCloudError]=useState('')
   const [cloudMessage,setCloudMessage]=useState('')
+  const [cloudUnpairConfirmOpen,setCloudUnpairConfirmOpen]=useState(false)
   const [newBranchName,setNewBranchName]=useState('')
   const previousServerSettingsRef=useRef(null)
   const cloudCacheKey=useMemo(()=>scopedPageCacheKey('settings-cloud',user),[user,cloudMode])
@@ -150,9 +152,23 @@ export default function SettingsPage() {
   }
   async function syncCloud(){setCloudBusy('sync');setCloudError('');setCloudMessage('');try{if(cloudMode){await loadCloudStatus();setCloudMessage('Cloud Edge status refreshed.');return}const result=await apiPost('/cloud/sync-now',{});setCloud(result.status||result.cloud||cloud);if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:result.status||result.cloud||cloud,subscription});setCloudMessage(result.skipped?'Cloud sync was skipped.':'Cloud heartbeat, outbox, and branch configuration sync completed.')}catch(error){setCloudError(error?.message||'Cloud sync failed.')}finally{setCloudBusy('')}}
   async function unpairCloud(){
-    if(!window.confirm(cloudMode?'Revoke this branch Edge server from Aezakmi Cloud? Local LAN operation and SQLite data remain available.':'Unpair this local Edge server from Aezakmi Cloud? Local LAN operation and SQLite data will remain available.'))return
+    if(cloudBusy)return
     setCloudBusy('unpair');setCloudError('');setCloudMessage('')
-    try{if(cloudMode){if(!cloud?.edgeId)throw new Error('No Edge server is paired.');await cloudInvoke('revoke-edge',{edgeId:cloud.edgeId});await loadCloudStatus();setCloudMessage('Edge cloud credential revoked. Local café operation was not changed.');return}const result=await apiPost('/cloud/unpair',{remote:true});setCloud(result.cloud||null);if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:result.cloud||null,subscription});setCloudMessage('Cloud pairing removed. Local café operation was not changed.')}catch(error){setCloudError(error?.message||'Unable to unpair this Edge server.')}finally{setCloudBusy('')}
+    try{
+      if(cloudMode){
+        if(!cloud?.edgeId)throw new Error('No Edge server is paired.')
+        await cloudInvoke('revoke-edge',{edgeId:cloud.edgeId})
+        await loadCloudStatus()
+        setCloudMessage('Edge cloud credential revoked. Local café operation was not changed.')
+      }else{
+        const result=await apiPost('/cloud/unpair',{remote:true})
+        setCloud(result.cloud||null)
+        if(cloudCacheKey)void writeSnapshot(cloudCacheKey,{cloud:result.cloud||null,subscription})
+        setCloudMessage('Cloud pairing removed. Local café operation was not changed.')
+      }
+      setCloudUnpairConfirmOpen(false)
+    }catch(error){setCloudError(error?.message||'Unable to unpair this Edge server.')}
+    finally{setCloudBusy('')}
   }
   async function createCloudBranch(){
     if(!cloudMode||!cloudPrivileged||!newBranchName.trim()||cloudBusy)return
@@ -234,7 +250,7 @@ export default function SettingsPage() {
               {(cloudMode?[['Branch',cloudBranchId()],['Edge server',cloud.edgeId],['Version',cloud.softwareVersion],['Last sync',cloud.lastSyncAt?new Date(cloud.lastSyncAt).toLocaleString():'—']]:[['Organization',cloud.organizationId],['Branch',cloud.branchId],['Edge server',cloud.edgeId],['Installation',cloud.installationId]]).map(([label,value])=><div key={label} className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">{label}</p><p className="break-all font-mono text-[10px] leading-4 text-ink-900">{value||'—'}</p></div>)}
               <div className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">Cloud status</p><p className="text-xs font-semibold text-teal-dim">Paired</p><p className="mt-1 text-[11px] text-slate-soft">Last heartbeat: {cloud.lastSeenAt?new Date(cloud.lastSeenAt).toLocaleString():'Not yet synced'}</p></div>
               <div className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">Synchronization</p><p className="text-xs font-semibold text-ink-900">{cloudMode?'Supabase ↔ Edge':'Outbox'}</p><p className="mt-1 text-[11px] text-slate-soft">{cloudMode?'Operational data is mirrored in the background.':`${cloud.sync?.pending??0} pending · ${cloud.sync?.failed??0} failed`}</p></div>
-              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface p-3"><p className="text-[11px] leading-5 text-slate-soft">Cloud unavailable? Edge keeps local sessions running.</p><Button variant="danger" size="sm" icon={Unplug} disabled={Boolean(cloudBusy)||!cloudPrivileged} onClick={unpairCloud}>{cloudBusy==='unpair'?(cloudMode?'Revoking…':'Unpairing…'):(cloudMode?'Revoke Edge':'Unpair cloud')}</Button></div>
+              <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface p-3"><p className="text-[11px] leading-5 text-slate-soft">Cloud unavailable? Edge keeps local sessions running.</p><Button variant="danger" size="sm" icon={Unplug} disabled={Boolean(cloudBusy)||!cloudPrivileged} onClick={()=>setCloudUnpairConfirmOpen(true)}>{cloudBusy==='unpair'?(cloudMode?'Revoking…':'Unpairing…'):(cloudMode?'Revoke Edge':'Unpair cloud')}</Button></div>
             </>}
             {cloudError&&<div className="sm:col-span-2 rounded-xl border border-ember/30 bg-ember/10 px-3 py-2 text-xs font-medium text-ember-dim">{cloudError}</div>}
             {cloudMessage&&<div className="sm:col-span-2 rounded-xl border border-teal/30 bg-teal/10 px-3 py-2 text-xs font-medium text-teal-dim">{cloudMessage}</div>}
@@ -276,5 +292,17 @@ export default function SettingsPage() {
         </Section>
       </div>
     </div>
-  </div><Modal open={Boolean(logoWarning)} onClose={()=>setLogoWarning('')} title="Logo upload warning" footer={<Button variant="primary" onClick={()=>setLogoWarning('')}>OK</Button>}><p className="text-sm leading-6 text-slate-soft">{logoWarning}</p></Modal></>
+  </div>
+  <ConfirmModal
+    open={cloudUnpairConfirmOpen}
+    onClose={()=>!cloudBusy&&setCloudUnpairConfirmOpen(false)}
+    onConfirm={unpairCloud}
+    busy={cloudBusy==='unpair'}
+    eyebrow="Aezakmi Cloud"
+    title={cloudMode?'Revoke this Edge server?':'Unpair this Edge server?'}
+    message={cloudMode?'Revoke this branch Edge server from Aezakmi Cloud? Local LAN operation and SQLite data remain available.':'Unpair this local Edge server from Aezakmi Cloud? Local LAN operation and SQLite data will remain available.'}
+    confirmLabel={cloudMode?'Revoke Edge':'Unpair cloud'}
+    variant="danger"
+  />
+  <Modal open={Boolean(logoWarning)} onClose={()=>setLogoWarning('')} title="Logo upload warning" footer={<Button variant="primary" onClick={()=>setLogoWarning('')}>OK</Button>}><p className="text-sm leading-6 text-slate-soft">{logoWarning}</p></Modal></>
 }

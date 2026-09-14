@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Clock3, Copy, Link2, LockKeyhole, Monitor, MonitorCheck, MonitorPlay, Plus, Search, WifiOff, Wrench } from 'lucide-react'
+import { Clock3, Copy, Link2, LockKeyhole, Monitor, MonitorCheck, MonitorPlay, Plus, Search, WifiOff, Wrench } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import PcCard from '../components/floor/PcCard.jsx'
 import SessionModal from '../components/floor/SessionModal.jsx'
 import PcFormModal from '../components/floor/PcFormModal.jsx'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
+import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import SidePanel from '../components/common/SidePanel.jsx'
 import AnchoredPopover from '../components/common/AnchoredPopover.jsx'
 import StationActions from '../components/floor/StationActions.jsx'
@@ -73,6 +74,7 @@ export default function FloorMatrix() {
   const [controlsPcId, setControlsPcId] = useState(null)
   const controlsAnchorRef = useRef(null)
   const [commandBusy, setCommandBusy] = useState('')
+  const [commandConfirmTarget,setCommandConfirmTarget]=useState(null)
   const [timeAction,setTimeAction]=useState(null)
   const [pendingTimeAction,setPendingTimeAction]=useState(null)
   const [timeMinutes,setTimeMinutes]=useState(15)
@@ -84,6 +86,7 @@ export default function FloorMatrix() {
   const [forfeitTarget,setForfeitTarget]=useState(null)
   const [forfeitBusy,setForfeitBusy]=useState(false)
   const [pauseSaveBusy,setPauseSaveBusy]=useState('')
+  const [pauseSaveTarget,setPauseSaveTarget]=useState(null)
   const alerted = useRef(new Set())
   const [searchParams, setSearchParams] = useSearchParams()
   const [stationPairingOpen,setStationPairingOpen]=useState(false)
@@ -214,45 +217,63 @@ export default function FloorMatrix() {
     setPendingTimeAction(null)
   },[requestedPcId,pendingTimeAction,ratePlans,settings.defaultAddTimeRatePlanId])
 
+  function isSelectedSessionPc(pc) {
+    return Boolean(pc?.id) && String(selectedId ?? '') === String(pc.id)
+  }
+
+  // Session mutations can change a station from available -> occupied or
+  // occupied -> available before their promise resolves. If the modal remains
+  // selected during that state change, SessionModal legitimately switches its
+  // content mode and appears to "jump" into another modal. Close the selected
+  // station in the same click batch as the mutation, then restore it only when
+  // the mutation fails. This keeps one user action bound to one modal lifecycle.
   async function handleStart(pc, sessionInput) {
+    const restoreOnFailure = isSelectedSessionPc(pc)
+    if (restoreOnFailure) setSelectedId(null)
     setActionError('')
     try {
       await startSession(pc, sessionInput)
-      setSelectedId(null)
     } catch (error) {
       setActionError(error?.message || 'Unable to start the session.')
+      if (restoreOnFailure) setSelectedId(String(pc.id))
       throw error
     }
   }
 
   async function handleEnd(pc, disposition = 'save', options = {}) {
+    const restoreOnFailure = isSelectedSessionPc(pc)
+    if (restoreOnFailure) setSelectedId(null)
     setActionError('')
     try {
       await endSession(pc, disposition, options)
-      setSelectedId(null)
     } catch (error) {
       setActionError(error?.message || 'Unable to end the session.')
+      if (restoreOnFailure) setSelectedId(String(pc.id))
       throw error
     }
   }
 
   async function handleSetMaintenance(pc, toMaintenance = true) {
+    const restoreOnFailure = isSelectedSessionPc(pc)
+    if (restoreOnFailure) setSelectedId(null)
     setActionError('')
     try {
       await setMaintenance(pc, toMaintenance)
-      setSelectedId(null)
     } catch (error) {
       setActionError(error?.message || 'Unable to update PC status.')
+      if (restoreOnFailure) setSelectedId(String(pc.id))
       throw error
     }
   }
   async function handleRefund(pc) {
+    const restoreOnFailure = isSelectedSessionPc(pc)
+    if (restoreOnFailure) setSelectedId(null)
     setActionError('')
     try {
       await refundSession(pc)
-      setSelectedId(null)
     } catch (error) {
       setActionError(error?.message || 'Unable to refund the session.')
+      if (restoreOnFailure) setSelectedId(String(pc.id))
       throw error
     }
   }
@@ -275,8 +296,10 @@ export default function FloorMatrix() {
     setActionError('')
     try {
       await handleEnd(pc, 'save')
+      setPauseSaveTarget(null)
     } catch {
-      // handleEnd already surfaces the backend error in actionError.
+      // handleEnd already surfaces the backend error in actionError. Keep the
+      // confirmation open so the operator can retry or cancel intentionally.
     } finally {
       setPauseSaveBusy('')
     }
@@ -305,7 +328,7 @@ export default function FloorMatrix() {
     try{await navigator.clipboard.writeText(stationPairingResult.pairingCode);showToast({title:'Pairing code copied',message:'Paste it into the Customer Station setup screen.'})}
     catch{setStationPairingError('Copy failed. Select the code manually.')}
   }
-  async function quickCommand(pc,command){
+  async function executeQuickCommand(pc,command){
     if(commandBusy)return
     setCommandBusy(command)
     const commandRequest=requestStationCommand(pc,command)
@@ -313,7 +336,20 @@ export default function FloorMatrix() {
     // leave the action menu in the way while the station acknowledgement travels.
     closePopover()
     closeControls()
-    try{await commandRequest}finally{setCommandBusy('')}
+    try{
+      await commandRequest
+      setCommandConfirmTarget(null)
+    }finally{setCommandBusy('')}
+  }
+  function quickCommand(pc,command){
+    if(commandBusy)return
+    if(command==='restart'||command==='shutdown'){
+      closePopover()
+      closeControls()
+      setCommandConfirmTarget({pc,command})
+      return
+    }
+    return executeQuickCommand(pc,command)
   }
   const timeActionRatePlans = allowedRatePlansForSession(ratePlans, members, timeAction?.session)
   const selectedTimeRatePlan=timeActionRatePlans.find(item=>String(item.id)===String(timeRatePlanId))
@@ -415,7 +451,7 @@ export default function FloorMatrix() {
           onTimeAction={openTimeAction}
           onForfeit={(pc)=>afterControlsClose(()=>setForfeitTarget(pc))}
           onCommand={quickCommand}
-          onPauseSave={(pc)=>afterControlsClose(()=>pauseAndSaveTime(pc))}
+          onPauseSave={(pc)=>afterControlsClose(()=>setPauseSaveTarget(pc))}
           onMaintenance={(pc,toMaintenance)=>afterControlsClose(()=>handleSetMaintenance(pc,toMaintenance).catch(()=>{}))}
           onEdit={(pc)=>afterControlsClose(()=>setEditingPcId(pc.id))}
         />}
@@ -445,7 +481,7 @@ export default function FloorMatrix() {
               onTimeAction={openTimeAction}
               onForfeit={(pc)=>afterPopoverClose(()=>setForfeitTarget(pc))}
               onCommand={quickCommand}
-              onPauseSave={(pc)=>afterPopoverClose(()=>pauseAndSaveTime(pc))}
+              onPauseSave={(pc)=>afterPopoverClose(()=>setPauseSaveTarget(pc))}
               onMaintenance={(pc,toMaintenance)=>afterPopoverClose(()=>handleSetMaintenance(pc,toMaintenance).catch(()=>{}))}
               onEdit={(pc)=>afterPopoverClose(()=>setEditingPcId(pc.id))}
             />
@@ -510,18 +546,39 @@ export default function FloorMatrix() {
         onSetMaintenance={handleSetMaintenance}
         onPowerCommand={requestStationCommand}
       />
-      <Modal
+      <ConfirmModal
+        open={Boolean(commandConfirmTarget)}
+        onClose={() => !commandBusy && setCommandConfirmTarget(null)}
+        onConfirm={() => executeQuickCommand(commandConfirmTarget?.pc, commandConfirmTarget?.command)}
+        busy={Boolean(commandBusy)}
+        eyebrow="Remote station command"
+        title={`${commandConfirmTarget?.command === 'shutdown' ? 'Shutdown' : 'Restart'} ${commandConfirmTarget?.pc?.label || 'this station'}?`}
+        message={commandConfirmTarget?.command === 'shutdown' ? 'The Customer Station will receive a shutdown warning, preserve recoverable prepaid time, and then power off.' : 'The Customer Station will receive a restart warning, preserve recoverable prepaid time, and then reboot.'}
+        confirmLabel={commandConfirmTarget?.command === 'shutdown' ? 'Shutdown' : 'Restart'}
+        variant={commandConfirmTarget?.command === 'shutdown' ? 'danger' : 'primary'}
+      />
+      <ConfirmModal
         open={Boolean(forfeitTarget)}
         onClose={() => !forfeitBusy && setForfeitTarget(null)}
-        onSubmit={forfeitOfflineSession}
-        canSubmit={Boolean(forfeitTarget?.session)}
+        onConfirm={forfeitOfflineSession}
         busy={forfeitBusy}
         eyebrow="Offline station recovery"
         title="Forfeit saved time?"
-        footer={<><Button variant="ghost" disabled={forfeitBusy} onClick={() => setForfeitTarget(null)}>Cancel</Button><Button variant="danger" disabled={forfeitBusy} onClick={forfeitOfflineSession}>{forfeitBusy ? 'Forfeiting…' : 'Forfeit time'}</Button></>}
-      >
-        <div className="flex gap-3 text-sm text-slate-soft"><AlertTriangle className="mt-0.5 shrink-0 text-ember-dim" size={18}/><p><b className="text-ink-900">{forfeitTarget?.label}</b> is offline with a paused prepaid session. This permanently ends the session and removes any remaining saved time. It cannot be undone.</p></div>
-      </Modal>
+        confirmLabel="Forfeit time"
+        variant="danger"
+        message={forfeitTarget ? <><b className="text-ink-900">{forfeitTarget.label}</b> is offline with a paused prepaid session. This permanently ends the session and removes any remaining saved time. It cannot be undone.</> : ''}
+      />
+      <ConfirmModal
+        open={Boolean(pauseSaveTarget)}
+        onClose={() => !pauseSaveBusy && setPauseSaveTarget(null)}
+        onConfirm={() => pauseAndSaveTime(pauseSaveTarget)}
+        busy={Boolean(pauseSaveTarget?.id && pauseSaveBusy === pauseSaveTarget.id)}
+        eyebrow="Session control"
+        title="Pause & save this session?"
+        confirmLabel="Pause & save"
+        variant="primary"
+        message={pauseSaveTarget ? <>End the active session on <b className="text-ink-900">{pauseSaveTarget.label}</b>, return the Customer Station to login, and preserve its remaining prepaid time for later use?</> : ''}
+      />
       <BulkTopUpWalletModal open={bulkWalletOpen} targets={bulkMemberTargets} onClose={() => setBulkWalletOpen(false)} onConfirm={async (ids, amount) => { const key=bulkWalletOperationKey||createOperationKey(); if(!bulkWalletOperationKey)setBulkWalletOperationKey(key); await runBulkMutation(ids,(id,operationKey)=>adminTopUp(id,amount,{operationKey,refresh:false}),key); setBulkWalletOperationKey(null); setBulkWalletOpen(false) }} />
       <BulkTopUpSessionModal open={bulkSessionOpen} targets={bulkSessionTargets} ratePlans={ratePlans.filter((plan) => plan.isActive !== false)} onClose={() => setBulkSessionOpen(false)} onConfirm={async (ids, ratePlanId, amount) => { const key=bulkSessionOperationKey||createOperationKey(); if(!bulkSessionOperationKey)setBulkSessionOperationKey(key); await runBulkMutation(ids,(id,operationKey)=>topUpMemberSession(id,ratePlanId,amount,{operationKey,refresh:false}),key); setBulkSessionOperationKey(null); setBulkSessionOpen(false) }} />
       <BulkPowerModal open={!!bulkPower} command={bulkPower} targets={bulkPower==='remove'?removablePcTargets:bulkPcTargets.filter(target=>{const pc=pcs.find(item=>item.id===target.id);if(bulkPower==='lock')return pc?.session&&!pc.session.isLocked;if(bulkPower==='unlock')return pc?.session?.isLocked;return true})} onClose={() => setBulkPower(null)} onConfirm={async (ids) => { if(bulkPower==='remove'){await Promise.all(ids.map((id) => removePc(id,{silent:true})));showToast({title:'PCs removed',message:`${ids.length} station${ids.length===1?'':'s'} removed from the floor.`})}else{await Promise.all(ids.map((id) => powerCommand(pcs.find((pc) => pc.id === id), bulkPower,{suppressToast:true})));showToast({title:`${bulkPower==='restart'?'Restart':bulkPower==='shutdown'?'Shutdown':bulkPower==='lock'?'Lock':'Unlock'} sent`,message:`Command sent to ${ids.length} station${ids.length===1?'':'s'}.`})} setBulkPower(null) }} />

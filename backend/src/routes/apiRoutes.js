@@ -1637,6 +1637,25 @@ router.post("/pcs", auth, requireRole("admin"), (req, res, next) => {
       return res
         .status(400)
         .json({ success: false, error: "A valid PC label is required." });
+    // Deterministic ids make a create retry recoverable even when the first
+    // response was lost. If the same logical PC already exists, return the
+    // confirmed row instead of turning a successful retry into a false 409.
+    const duplicateId = db.prepare("SELECT * FROM pcs WHERE id=?").get(pcId);
+    if (duplicateId) {
+      const existingNumber = String(duplicateId.pc_number ?? "").trim();
+      if (!cleanPcNumber || existingNumber === cleanPcNumber)
+        return res.status(200).json({
+          success: true,
+          duplicate: true,
+          recovered: true,
+          pc: pcView(duplicateId),
+        });
+      return res.status(409).json({
+        success: false,
+        code: "PC_ID_EXISTS",
+        error: `A PC with ID ${pcId} already exists.`,
+      });
+    }
     if (cleanPcNumber) {
       const duplicateNumber = db.prepare("SELECT id,label FROM pcs WHERE pc_number=?").get(cleanPcNumber);
       if (duplicateNumber)
@@ -1646,15 +1665,6 @@ router.post("/pcs", auth, requireRole("admin"), (req, res, next) => {
           error:`PC - ${cleanPcNumber} already exists.`,
         });
     }
-    const duplicateId = db.prepare("SELECT id FROM pcs WHERE id=?").get(pcId);
-    if (duplicateId)
-      return res
-        .status(409)
-        .json({
-          success: false,
-          code: "PC_ID_EXISTS",
-          error: `A PC with ID ${pcId} already exists.`,
-        });
     const duplicateIp = db
       .prepare("SELECT id,label FROM pcs WHERE ip_address=?")
       .get(cleanIp);
@@ -1847,9 +1857,22 @@ router.delete(
             code: "PC_IN_USE",
             error: "Cannot remove an occupied, reserved, or actively used PC.",
           });
-      db.prepare("DELETE FROM pcs WHERE id=?").run(p.id);
-      log(req.auth.userId, "pc.delete", "pc", p.id, null);
-      res.json({ success: true });
+      const now = nowIso();
+      const revokedSessions = transaction(() => {
+        const revoked = db.prepare(`
+          UPDATE auth_sessions
+          SET revoked_at=?, ended_at=?, end_reason='station_removed'
+          WHERE pc_id=? AND revoked_at IS NULL
+        `).run(now, now, p.id).changes;
+        db.prepare("DELETE FROM pcs WHERE id=?").run(p.id);
+        log(req.auth.userId, "pc.delete", "pc", p.id, null, { revokedSessions:revoked });
+        return revoked;
+      });
+      const io = getIO();
+      io?.to(`pc:${p.id}`).emit('auth:revoked', { reason:'station_removed', pcId:p.id, at:Date.now() });
+      io?.in(`pc:${p.id}`).disconnectSockets(true);
+      emitDataChanged({ method:'DELETE', path:`/pcs/${p.id}`, pcId:p.id });
+      res.json({ success: true, revokedSessions });
     } catch (e) {
       next(e);
     }

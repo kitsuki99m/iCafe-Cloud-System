@@ -26,7 +26,7 @@ function formatDuration(totalMinutes) {
 }
 
 function PowerControl({ pc, onPowerCommand }) {
-  const [armed, setArmed] = useState(null) // 'restart' | 'shutdown' | null
+  const [confirmCommand, setConfirmCommand] = useState(null)
   const [sending, setSending] = useState(false)
   const [sentLabel, setSentLabel] = useState(null)
   const [error, setError] = useState('')
@@ -37,66 +37,73 @@ function PowerControl({ pc, onPowerCommand }) {
   }, [])
 
   async function fire(command) {
-    if (armed !== command) {
-      setArmed(command)
-      return
-    }
-    setArmed(null)
+    if (sending) return
     setSending(true)
     setError('')
     try {
       await onPowerCommand(pc, command)
+      setConfirmCommand(null)
       setSentLabel(command)
       if (sentTimerRef.current) clearTimeout(sentTimerRef.current)
       sentTimerRef.current = setTimeout(() => {
         sentTimerRef.current = null
         setSentLabel(null)
       }, 3000)
-    } catch (cause) { setError(cause?.message || 'Unable to send command.') }
-    finally { setSending(false) }
+    } catch (cause) {
+      setError(cause?.message || 'Unable to send command.')
+      setConfirmCommand(null)
+    } finally { setSending(false) }
   }
 
+  const commandLabel = confirmCommand === 'restart' ? 'Restart' : 'Shutdown'
+
   return (
-    <div className="rounded-lg border border-surface-line bg-surface-raised px-3 py-2.5">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="eyebrow">Machine Power</span>
-        {sentLabel && (
-          <span className="text-[10px] text-teal-dim">
-            {sentLabel === 'restart' ? 'Restart' : 'Shutdown'} command sent
-          </span>
-        )}
+    <>
+      <div className="rounded-lg border border-surface-line bg-surface-raised px-3 py-2.5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="eyebrow">Machine Power</span>
+          {sentLabel && (
+            <span className="text-[10px] text-teal-dim">
+              {sentLabel === 'restart' ? 'Restart' : 'Shutdown'} command sent
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setConfirmCommand('restart')}
+            disabled={sending}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-surface-line px-3 py-2 text-xs font-medium text-slate-soft transition-colors hover:text-ink-900 disabled:opacity-50"
+          >
+            {sending ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
+            Restart
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmCommand('shutdown')}
+            disabled={sending}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-ember/25 px-3 py-2 text-xs font-medium text-ember-dim transition-colors hover:bg-ember/10 disabled:opacity-50"
+          >
+            <Power size={13} />
+            Shutdown
+          </button>
+        </div>
+        {error && <p className="mt-1.5 text-[10px] text-ember-dim">{error}</p>}
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          onClick={() => fire('restart')}
-          disabled={sending}
-          className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
-            armed === 'restart'
-              ? 'border-gold/50 bg-gold/10 text-gold-dim'
-              : 'border-surface-line text-slate-soft hover:text-ink-900'
-          }`}
-        >
-          {sending ? <Loader2 size={13} className="animate-spin" /> : <RotateCw size={13} />}
-          {armed === 'restart' ? 'Confirm Restart' : 'Restart'}
-        </button>
-        <button
-          onClick={() => fire('shutdown')}
-          disabled={sending}
-          className={`flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:opacity-50 ${
-            armed === 'shutdown'
-              ? 'border-ember/50 bg-ember/10 text-ember-dim'
-              : 'border-surface-line text-slate-soft hover:text-ink-900'
-          }`}
-        >
-          <Power size={13} />
-          {armed === 'shutdown' ? 'Confirm Shutdown' : 'Shutdown'}
-        </button>
-      </div>
-      <p className="mt-1.5 text-[10px] text-slate-soft/70">
-        Sends a remote command to {pc.ipAddress}. Click once to arm, again to confirm.
-      </p>
-      {error && <p className="mt-1 text-[10px] text-ember-dim">{error}</p>}
-    </div>
+      <ConfirmModal
+        open={Boolean(confirmCommand)}
+        onClose={() => !sending && setConfirmCommand(null)}
+        onConfirm={() => fire(confirmCommand)}
+        busy={sending}
+        eyebrow="Remote station command"
+        title={`${commandLabel} ${pc.label || 'this station'}?`}
+        message={confirmCommand === 'shutdown'
+          ? 'The Customer Station will receive a shutdown warning, save any recoverable prepaid session state, and then power off.'
+          : 'The Customer Station will receive a restart warning, save any recoverable prepaid session state, and then reboot.'}
+        confirmLabel={commandLabel}
+        variant={confirmCommand === 'shutdown' ? 'danger' : 'primary'}
+      />
+    </>
   )
 }
 
@@ -193,53 +200,56 @@ function RateAndAmount({ ratePlans, ratePlanId, setRatePlanId, amount, setAmount
 }
 
 function RefundControl({ pc, refundableAmount, onRefund, busy = false }) {
-  const [armed, setArmed] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const hasMember = !!pc.session?.customerId
   const disabled = refundableAmount <= 0 || busy
 
+  async function confirmRefund() {
+    if (disabled || submitting) return
+    setSubmitting(true)
+    setError('')
+    try {
+      await onRefund(pc)
+      setConfirmOpen(false)
+    } catch (cause) {
+      setError(cause?.message || 'Unable to refund this session.')
+      setConfirmOpen(false)
+    } finally { setSubmitting(false) }
+  }
+
   return (
-    <div className="rounded-lg border border-surface-line bg-surface-raised px-3 py-2.5">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="eyebrow">Refund Remaining Time</span>
-        <span className="stat-figure text-sm font-semibold text-ink-900">{peso(refundableAmount)}</span>
+    <>
+      <div className="rounded-lg border border-surface-line bg-surface-raised px-3 py-2.5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="eyebrow">Refund Remaining Time</span>
+          <span className="stat-figure text-sm font-semibold text-ink-900">{peso(refundableAmount)}</span>
+        </div>
+        <button
+          type="button"
+          disabled={disabled || submitting}
+          onClick={() => setConfirmOpen(true)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-surface-line px-3 py-2 text-xs font-medium text-slate-soft transition-colors hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {busy ? 'Waiting for current session action…' : submitting ? 'Refunding…' : hasMember ? 'Refund to Wallet & End Session' : 'Refund Cash & End Session'}
+        </button>
+        {error && <p className="mt-1.5 text-[10px] text-ember-dim">{error}</p>}
       </div>
-      <button
-        disabled={disabled || submitting}
-        onClick={async () => {
-          if (!armed) {
-            setArmed(true)
-            return
-          }
-          setSubmitting(true)
-          setError('')
-          try { await onRefund(pc) }
-          catch (cause) { setError(cause?.message || 'Unable to refund this session.'); setArmed(false) }
-          finally { setSubmitting(false) }
-        }}
-        className={`flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-          armed
-            ? 'border-teal/50 bg-teal/10 text-teal-dim'
-            : 'border-surface-line text-slate-soft hover:text-ink-900'
-        }`}
-      >
-        {busy ? 'Waiting for current session action…' : submitting ? 'Waiting for Customer Station…' : armed
-          ? hasMember
-            ? `Confirm — credit ${peso(refundableAmount)} to wallet & end session`
-            : `Confirm — hand back ${peso(refundableAmount)} cash & end session`
-          : hasMember
-            ? 'Refund to Wallet & End Session'
-            : 'Refund Cash & End Session'}
-      </button>
-      {error && <p className="mt-1.5 text-[10px] text-ember-dim">{error}</p>}
-      <p className="mt-1.5 text-[10px] text-slate-soft/70">
-        {hasMember
-          ? 'Linked member — refund credits their wallet directly.'
-          : 'Walk-in, no member on file — refund is a cash hand-back at the counter.'}
-        {' '}Click once to arm, again to confirm.
-      </p>
-    </div>
+      <ConfirmModal
+        open={confirmOpen}
+        onClose={() => !submitting && setConfirmOpen(false)}
+        onConfirm={confirmRefund}
+        busy={submitting || busy}
+        eyebrow="Session refund"
+        title="Refund remaining time?"
+        message={hasMember
+          ? `Credit ${peso(refundableAmount)} back to the member wallet and end this session? The Customer Station will return to login.`
+          : `Record a ${peso(refundableAmount)} cash refund and end this guest session? The Customer Station will return to login.`}
+        confirmLabel={hasMember ? 'Refund to wallet' : 'Refund cash'}
+        variant="primary"
+      />
+    </>
   )
 }
 
@@ -282,6 +292,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
   [allActiveRatePlans, customerMode, selectedMember, memberTierRank])
   const [ratePlanId, setRatePlanId] = useState(() => allActiveRatePlans.find((p) => String(p.customerTier ?? 'Regular') === 'Regular')?.id ?? allActiveRatePlans[0]?.id ?? null)
   const manualRateSelectionRef = useRef(false)
+  const openedModeRef = useRef({ pcId:null, mode:null })
   const [amount, setAmount] = useState('1')
   const [sessionAction, setSessionAction] = useState(null)
   const [startBusy, setStartBusy] = useState(false)
@@ -289,6 +300,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
   const [localError, setLocalError] = useState('')
   const [preview, setPreview] = useState(null)
   const [forfeitConfirmOpen, setForfeitConfirmOpen] = useState(false)
+  const [pauseSaveConfirmOpen, setPauseSaveConfirmOpen] = useState(false)
 
   async function runSessionAction(disposition, options = {}) {
     if (sessionAction) return
@@ -347,6 +359,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
 
   useEffect(() => {
     setForfeitConfirmOpen(false)
+    setPauseSaveConfirmOpen(false)
   }, [pc?.id, pc?.session?.id])
 
   useEffect(() => {
@@ -380,10 +393,27 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId, customerMode])
 
-  if (!pc) return null
+  const sessionActionMode = getStationSessionActionMode(pc)
+  const trackedMode = openedModeRef.current
+  const modalModeChanged = Boolean(pc?.id && trackedMode.pcId === String(pc.id) && trackedMode.mode !== sessionActionMode)
+
+  useEffect(() => {
+    if (!pc?.id) {
+      openedModeRef.current = { pcId:null, mode:null }
+      return
+    }
+    const pcId = String(pc.id)
+    const current = openedModeRef.current
+    if (current.pcId !== pcId) {
+      openedModeRef.current = { pcId, mode:sessionActionMode }
+      return
+    }
+    if (current.mode !== sessionActionMode) onClose?.()
+  }, [pc?.id, pc?.status, pc?.session?.id, sessionActionMode, onClose])
+
+  if (!pc || modalModeChanged) return null
 
   const eyebrow = `${pc.label} · ${pc.ipAddress}`
-  const sessionActionMode = getStationSessionActionMode(pc)
 
   if (sessionActionMode === 'start') {
     const memberWallet = Number(selectedMember?.wallet ?? selectedMember?.walletBalance ?? 0)
@@ -578,6 +608,23 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
       />
     }
 
+    if (pauseSaveConfirmOpen) {
+      return <ConfirmModal
+        open
+        eyebrow="Session control"
+        title="Pause & save this session?"
+        message={`End the session on ${pc.label}, return the Customer Station to login, and preserve the remaining prepaid time for later use?`}
+        confirmLabel="Pause & save"
+        variant="primary"
+        busy={sessionAction === 'save'}
+        onClose={() => !sessionAction && setPauseSaveConfirmOpen(false)}
+        onConfirm={async () => {
+          await runSessionAction('save')
+          setPauseSaveConfirmOpen(false)
+        }}
+      />
+    }
+
     return (
       <Modal
         open
@@ -589,7 +636,7 @@ export default function SessionModal({ pc, ratePlans, members, onClose, onStart,
           <>
             <Button variant="ghost" disabled={!!sessionAction} onClick={onClose}>Close</Button>
             {s.billing === 'prepaid' && <Button variant="danger" disabled={!!sessionAction} onClick={() => setForfeitConfirmOpen(true)}>{sessionAction==='forfeit'?'Forfeiting…':'Forfeit Time'}</Button>}
-            {s.billing === 'prepaid' && <Button variant="primary" disabled={!!sessionAction || sessionFrozen} onClick={() => runSessionAction('save')}>{sessionFrozen ? 'Session Paused' : sessionAction==='save' ? 'Saving…' : 'Pause & Save'}</Button>}
+            {s.billing === 'prepaid' && <Button variant="primary" disabled={!!sessionAction || sessionFrozen} onClick={() => setPauseSaveConfirmOpen(true)}>{sessionFrozen ? 'Session Paused' : sessionAction==='save' ? 'Saving…' : 'Pause & Save'}</Button>}
           </>
         }
       >

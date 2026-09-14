@@ -34,12 +34,18 @@ test('Floor Matrix and Members normalize member/session IDs before comparison', 
   assert.match(members, /String\(p\.session\?\.customerId\)===String\(m\.id\)/)
 })
 
-test('PC removal is blocked by any live session and awaits backend removal before closing', () => {
+test('PC removal is blocked by any live session, requires a confirmation modal, and awaits backend removal before closing', () => {
   const source = read('apps/admin/src/components/floor/PcFormModal.jsx')
   assert.match(source, /const canRemove =[^\n]*!pc\.session/)
-  assert.match(source, /async function handleRemoveClick\(\)/)
+  assert.match(source, /const \[removeConfirmOpen, setRemoveConfirmOpen\]/)
+  assert.match(source, /async function handleRemoveConfirmed\(\)/)
+  assert.match(source, /setRemoveConfirmOpen\(true\)/)
+  assert.match(source, /<ConfirmModal[\s\S]*open=\{removeConfirmOpen\}[\s\S]*onConfirm=\{handleRemoveConfirmed\}/)
   assert.match(source, /await onRemove\(pc\.id\)/)
   assert.match(source, /disabled=\{!canRemove \|\| saving\}/)
+  const remove = source.slice(source.indexOf('async function handleRemoveConfirmed'), source.indexOf('return ('))
+  assert.ok(remove.indexOf('await onRemove(pc.id)') < remove.indexOf('onClose()'), 'backend removal must finish before the edit modal closes')
+  assert.doesNotMatch(source, /removeArmed/)
 })
 
 test('admin member session start imports tierAllowsPlan instead of throwing at runtime', () => {

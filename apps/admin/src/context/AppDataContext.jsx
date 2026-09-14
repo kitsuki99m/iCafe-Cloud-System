@@ -660,12 +660,17 @@ export function AppDataProvider({ children }) {
       })
   }
 
-  function addPc(pc) {
+  function addPc(pc, options = {}) {
     // Creation is intentionally confirmation-first. Adding a temporary PC to
     // shared state makes the Add PC modal detect its own optimistic row as a
     // duplicate and can leave a ghost PC in the offline cache after failure.
-    return apiPost('/pcs', pc).then(async (result) => {
-      showToast({ title:'PC added', message:`${pc.label} is now registered.` })
+    // The modal keeps one operation key across network retries so a response
+    // timeout cannot turn a successful create into a false "already exists".
+    return apiPost('/pcs', pc, { operationKey:options.operationKey }).then(async (result) => {
+      showToast({
+        title:result?.duplicate ? 'PC already registered' : 'PC added',
+        message:result?.duplicate ? `${pc.label} was already saved and has been restored to the floor.` : `${pc.label} is now registered.`,
+      })
       await refresh()
       return result
     }).catch(async (error)=>{await refresh();throw error})
@@ -677,8 +682,15 @@ export function AppDataProvider({ children }) {
   }
 
   function removePc(id, options = {}) {
-    optimisticState((current)=>({...current,pcs:current.pcs.filter((pc)=>String(pc.id)!==String(id))}))
-    return apiDelete(`/pcs/${id}`).then((result) => { if (!options.silent) showToast({ title:'PC removed', message:'The station was removed from the floor.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
+    // Deletion is confirmation-first as well. Optimistically removing the row
+    // unmounted the edit modal while DELETE was still in flight; if Cloud/Edge
+    // reconciliation returned the station for a moment, React reopened the same
+    // Edit PC modal. Keep the confirmed row visible until the server commits.
+    return apiDelete(`/pcs/${id}`).then(async (result) => {
+      if (!options.silent) showToast({ title:'PC removed', message:'The station was removed from the floor.' })
+      await refresh()
+      return result
+    }).catch(async (error)=>{await refresh();throw error})
   }
 
   function getMemberWallet(memberId) {

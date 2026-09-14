@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Modal from '../common/Modal.jsx'
+import ConfirmModal from '../common/ConfirmModal.jsx'
 import Button from '../common/Button.jsx'
+import { createOperationKey } from '../../lib/api.js'
 
 const inputClass =
   'w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
@@ -49,10 +51,11 @@ const pcId = (number) => `pc-${number}`
 // is resolved on the LAN without Cloud pairing metadata.
 export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRemove, existingPcs = [], cloudManaged = false }) {
   const [draft, setDraft] = useState(BLANK)
-  const [removeArmed, setRemoveArmed] = useState(false)
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const saveInFlightRef = useRef(false)
+  const createOperationKeyRef = useRef(null)
   const isEdit = !!pc
   const canRemove = isEdit && pc.status !== 'occupied' && pc.status !== 'reserved' && !pc.session
 
@@ -61,9 +64,10 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
       setDraft(pc
         ? { pcNumber: String(pcNumberFor(pc) ?? ''), label: pc.label, ipAddress: pc.ipAddress || '', spec: pc.spec ?? '' }
         : { ...BLANK, pcNumber: String(nextStationNumber(existingPcs)) })
-      setRemoveArmed(false)
+      setRemoveConfirmOpen(false)
       setSaving(false)
       saveInFlightRef.current = false
+      createOperationKeyRef.current = pc ? null : createOperationKey()
       setError('')
     }
   }, [open, pc])
@@ -91,6 +95,8 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
         await onSave(pc.id, patch)
       } else {
         if (!createNumber || !generatedId) throw new Error('Enter a valid PC number.')
+        const operationKey = createOperationKeyRef.current || createOperationKey()
+        createOperationKeyRef.current = operationKey
         await onCreate({
           id: generatedId,
           pcNumber: String(createNumber),
@@ -98,7 +104,7 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
           ipAddress: cloudManaged ? '' : effectiveIp,
           spec: draft.spec,
           status: 'offline',
-        })
+        }, { operationKey })
       }
       onClose()
     } catch (err) {
@@ -109,26 +115,25 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
     }
   }
 
-  async function handleRemoveClick() {
+  async function handleRemoveConfirmed() {
     if (!canRemove || saving) return
-    if (!removeArmed) {
-      setRemoveArmed(true)
-      return
-    }
     setSaving(true)
     setError('')
     try {
       await onRemove(pc.id)
+      setRemoveConfirmOpen(false)
       onClose()
     } catch (err) {
       setError(err?.message || 'Unable to remove PC.')
-      setRemoveArmed(false)
+      setRemoveConfirmOpen(false)
     } finally {
       setSaving(false)
     }
   }
 
+
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -143,11 +148,11 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
             <Button
               variant="danger"
               disabled={!canRemove || saving}
-              onClick={handleRemoveClick}
+              onClick={() => setRemoveConfirmOpen(true)}
               className="mr-auto"
               title={canRemove ? undefined : 'End the session before removing this unit'}
             >
-              {saving ? 'Removing…' : removeArmed ? 'Confirm Remove' : 'Remove PC'}
+              {saving ? 'Removing…' : 'Remove PC'}
             </Button>
           )}
           <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
@@ -180,7 +185,7 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
                 min="1"
                 step="1"
                 value={draft.pcNumber}
-                onChange={(e) => setDraft({ ...draft, pcNumber: e.target.value.replace(/[^0-9]/g, '') })}
+                onChange={(e) => { createOperationKeyRef.current = createOperationKey(); setDraft({ ...draft, pcNumber: e.target.value.replace(/[^0-9]/g, '') }) }}
                 placeholder="1"
                 className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink-900 outline-none"
               />
@@ -199,7 +204,7 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
             <label className="eyebrow mb-1.5 block">IP Address</label>
             <input
               value={draft.ipAddress}
-              onChange={(e) => setDraft({ ...draft, ipAddress: e.target.value.replace(/[^0-9.]/g, '') })}
+              onChange={(e) => { if (!isEdit) createOperationKeyRef.current = createOperationKey(); setDraft({ ...draft, ipAddress: e.target.value.replace(/[^0-9.]/g, '') }) }}
               placeholder="192.168.100.35"
               className={inputClass}
             />
@@ -211,7 +216,7 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
           <label className="eyebrow mb-1.5 block">Spec</label>
           <input
             value={draft.spec}
-            onChange={(e) => setDraft({ ...draft, spec: e.target.value })}
+            onChange={(e) => { if (!isEdit) createOperationKeyRef.current = createOperationKey(); setDraft({ ...draft, spec: e.target.value }) }}
             placeholder="i5 · RTX 3060"
             className={inputClass}
           />
@@ -223,5 +228,17 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
         {error && <p className="rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-xs text-ember-dim">{error}</p>}
       </div>
     </Modal>
+    <ConfirmModal
+      open={removeConfirmOpen}
+      onClose={() => !saving && setRemoveConfirmOpen(false)}
+      onConfirm={handleRemoveConfirmed}
+      busy={saving}
+      eyebrow="Floor Matrix"
+      title={`Remove ${pc?.label || 'this PC'}?`}
+      message="This removes the station from the branch floor and invalidates its current pairing. Active or reserved PCs must be ended first."
+      confirmLabel="Remove PC"
+      variant="danger"
+    />
+    </>
   )
 }

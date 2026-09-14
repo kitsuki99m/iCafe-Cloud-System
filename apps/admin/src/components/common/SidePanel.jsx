@@ -34,6 +34,10 @@ export default function SidePanel({
       ;(first || panel).focus?.()
     })
     const onKey = (event) => {
+      // A common Modal/ConfirmModal can open from a side-panel action. It sits
+      // above this panel and owns keyboard focus while open; do not let one
+      // Escape/Tab keystroke mutate both layers.
+      if (document.querySelector('[data-admin-modal-root="true"]')) return
       if (event.key === 'Escape') {
         if (busyRef.current) return
         event.preventDefault()
@@ -55,10 +59,15 @@ export default function SidePanel({
         event.preventDefault(); first.focus()
       }
     }
+    const closeForNewOverlay = () => {
+      if (!busyRef.current) closeRef.current?.()
+    }
     window.addEventListener('keydown', onKey)
+    window.addEventListener('aezakmi:overlay-open', closeForNewOverlay)
     return () => {
       window.cancelAnimationFrame(focusPanel)
       window.removeEventListener('keydown', onKey)
+      window.removeEventListener('aezakmi:overlay-open', closeForNewOverlay)
       document.body.style.overflow = previousOverflow
       const previous = previousFocusedRef.current
       if (previous?.isConnected) previous.focus?.()

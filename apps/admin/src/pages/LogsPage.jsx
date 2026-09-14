@@ -46,6 +46,8 @@ export default function LogsPage() {
   const [query, setQuery] = useState('')
   const [actionFilter, setActionFilter] = useState('all')
   const [selectedLog, setSelectedLog] = useState(null)
+  const [settlementTarget, setSettlementTarget] = useState(null)
+  const [restoreTarget, setRestoreTarget] = useState(null)
   const [forfeitTarget, setForfeitTarget] = useState(null)
   const [page,setPage]=useState(1)
   const pageSize=50
@@ -98,14 +100,20 @@ export default function LogsPage() {
   useEffect(()=>{let active=true;if(cacheKey)void readSnapshot(cacheKey).then(snapshot=>{if(active&&snapshot){applySnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void loadLogs()});else void loadLogs();const timer=setInterval(()=>void loadLogs(),30000);const onOnline=()=>void loadLogs();const onVisible=()=>{if(document.visibilityState==='visible')void loadLogs()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible);loadSequenceRef.current+=1}},[applySnapshot,cacheKey,loadLogs])
   useEffect(()=>{setPage(1)},[query,actionFilter])
 
-  async function settleInterrupted(item, paymentMethod) {
+  function requestInterruptedSettlement(item, paymentMethod) {
     if (!item?.id || processingId) return
-    const label = paymentMethod === 'wallet' ? 'member wallet' : 'cash'
-    if (!window.confirm(`Settle ${item.customerName || 'this customer'}'s legacy interrupted session for ₱${Number(item.amountDue || 0).toFixed(2)} using ${label}?`)) return
+    setSettlementTarget({ item, paymentMethod })
+  }
+
+  async function settleInterrupted() {
+    const item = settlementTarget?.item
+    const paymentMethod = settlementTarget?.paymentMethod
+    if (!item?.id || processingId || !paymentMethod) return
     setProcessingId(item.id)
     setError('')
     try {
       await apiPost(`/sessions/${encodeURIComponent(item.id)}/settle-interrupted`, { paymentMethod })
+      setSettlementTarget(null)
       await loadLogs()
     } catch (err) {
       setError(err?.message || 'Unable to settle the interrupted session.')
@@ -114,13 +122,19 @@ export default function LogsPage() {
     }
   }
 
-  async function restoreGuest(item) {
+  function requestRestoreGuest(item) {
     if (!item?.id || processingId) return
-    if (!window.confirm(`Restore ${Math.max(0, Math.floor(Number(item.remainingSeconds || 0) / 60))} saved guest minutes to ${item.pcLabel || 'the original station'}? No new charge will be created.`)) return
+    setRestoreTarget(item)
+  }
+
+  async function restoreGuest() {
+    const item = restoreTarget
+    if (!item?.id || processingId) return
     setProcessingId(item.id)
     setError('')
     try {
       await apiPost(`/sessions/${encodeURIComponent(item.id)}/restore-interrupted-guest`, {})
+      setRestoreTarget(null)
       await loadLogs()
     } catch (err) {
       setError(err?.message || 'Unable to restore the interrupted guest session.')
@@ -185,17 +199,41 @@ export default function LogsPage() {
       <div className="grid gap-2 xl:grid-cols-2">
         {pendingSettlements.map((item)=><div key={`settle-${item.id}`} className="overview-soft-card flex flex-wrap items-center justify-between gap-3 p-3">
           <div className="min-w-0"><p className="text-xs font-semibold text-ink-900">{item.customerName || 'Guest'} · {item.pcLabel || item.pcId || 'Station'}</p><p className="mt-1 text-[10px] text-slate-soft">Legacy session stopped at {formatTime(item.endedAt)} · {String(item.endReason || 'interrupted').replaceAll('_',' ')}</p><p className="stat-figure mt-1 text-sm font-semibold text-ember-dim">₱{Number(item.amountDue || 0).toFixed(2)} due</p></div>
-          <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>settleInterrupted(item,'cash')} className="rounded-lg border border-surface-line bg-surface px-3 py-2 text-[10px] font-semibold text-ink-900 disabled:opacity-50">Cash</button>{item.memberId&&<button type="button" disabled={processingId===item.id || Number(item.walletBalance || 0)<Number(item.amountDue || 0)} onClick={()=>settleInterrupted(item,'wallet')} className="rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-40">Wallet</button>}</div>
+          <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>requestInterruptedSettlement(item,'cash')} className="rounded-lg border border-surface-line bg-surface px-3 py-2 text-[10px] font-semibold text-ink-900 disabled:opacity-50">Cash</button>{item.memberId&&<button type="button" disabled={processingId===item.id || Number(item.walletBalance || 0)<Number(item.amountDue || 0)} onClick={()=>requestInterruptedSettlement(item,'wallet')} className="rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-40">Wallet</button>}</div>
         </div>)}
         {recoverableGuestSessions.map((item)=><div key={`restore-${item.id}`} className="overview-soft-card flex flex-wrap items-center justify-between gap-3 p-3">
           <div className="min-w-0"><p className="text-xs font-semibold text-ink-900">Saved guest time · {item.pcLabel || item.pcId || 'Station'}</p><p className="mt-1 text-[10px] text-slate-soft">Interrupted {formatTime(item.endedAt)} · {String(item.endReason || 'interrupted').replaceAll('_',' ')}</p><p className="stat-figure mt-1 text-sm font-semibold text-teal-dim">{Math.floor(Number(item.remainingSeconds || 0)/3600)}h {String(Math.floor((Number(item.remainingSeconds || 0)%3600)/60)).padStart(2,'0')}m saved</p></div>
-          <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>restoreGuest(item)} className="inline-flex items-center gap-2 rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-50"><RotateCcw size={13}/>Restore guest</button><button type="button" disabled={processingId===item.id} onClick={()=>setForfeitTarget(item)} className="inline-flex items-center gap-2 rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-[10px] font-semibold text-ember-dim disabled:opacity-50"><AlertTriangle size={13}/>Forfeit</button></div>
+          <div className="flex gap-2"><button type="button" disabled={processingId===item.id} onClick={()=>requestRestoreGuest(item)} className="inline-flex items-center gap-2 rounded-lg bg-ink-900 px-3 py-2 text-[10px] font-semibold text-white disabled:opacity-50"><RotateCcw size={13}/>Restore guest</button><button type="button" disabled={processingId===item.id} onClick={()=>setForfeitTarget(item)} className="inline-flex items-center gap-2 rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-[10px] font-semibold text-ember-dim disabled:opacity-50"><AlertTriangle size={13}/>Forfeit</button></div>
         </div>)}
       </div>
     </section>}
 
     {!loading && !error && filteredLogs.length === 0 ? <div className="overview-card flex flex-col items-center gap-2 py-16 text-center"><ScrollText size={22} className="text-slate-soft"/><p className="text-sm font-medium text-ink-900">No logs match this view.</p></div> : <div className="admin-table-shell overflow-hidden"><div className="max-h-[calc(100vh-300px)] overflow-auto"><table className="w-full min-w-[780px] text-[11px]"><thead className="sticky top-0 z-10 bg-surface"><tr className="text-left text-[10px] uppercase tracking-[0.12em] text-slate-soft"><th className="px-4 py-3 font-medium">Action</th><th className="px-4 py-3 font-medium">Entity</th><th className="px-4 py-3 font-medium">PC</th><th className="px-4 py-3 font-medium">Duration</th><th className="px-4 py-3 font-medium">Amount</th><th className="px-4 py-3 font-medium">Time</th></tr></thead><tbody>{loading?<tr><td colSpan="6" className="px-4 py-12 text-center text-sm text-slate-soft">Loading logs…</td></tr>:visibleLogs.map((log)=>{const details=log.details||{};const amount=Number(details.amount??details.amountPaid??0);const badge=BADGE[log.action]||'text-slate-soft bg-surface-raised';return <tr key={log.id} onClick={()=>setSelectedLog(log)} className="cursor-pointer border-b border-surface-line/50 last:border-0 hover:bg-surface-raised/45"><td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badge}`}>{labelForAction(log.action)}</span></td><td className="px-4 py-2.5 text-slate-soft">{log.entityType||log.entity_type||'—'}</td><td className="px-4 py-2.5 font-medium text-ink-900">{log.pcId||'—'}</td><td className="stat-figure px-4 py-2.5 text-slate-soft">{durationFromDetails(details)}</td><td className="stat-figure px-4 py-2.5 text-ink-900">{amount>0?`₱${amount.toFixed(2)}`:'—'}</td><td className="px-4 py-2.5 text-slate-soft">{formatTime(log.createdAt)}</td></tr>})}</tbody></table></div><div className="flex items-center justify-between gap-2 border-t border-surface-line bg-surface px-4 py-2.5 text-[10px] text-slate-soft"><span>{filteredLogs.length} record{filteredLogs.length===1?'':'s'} · Page {page} of {pages}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(v=>v-1)} className="rounded-lg border border-surface-line px-2.5 py-1.5 disabled:opacity-40">Previous</button><button disabled={page>=pages} onClick={()=>setPage(v=>v+1)} className="rounded-lg border border-surface-line px-2.5 py-1.5 disabled:opacity-40">Next</button></div></div></div>}
 
+
+    <ConfirmModal
+      open={Boolean(settlementTarget)}
+      eyebrow="Interrupted session settlement"
+      title="Settle this interrupted session?"
+      message={settlementTarget ? `Charge ₱${Number(settlementTarget.item.amountDue || 0).toFixed(2)} for ${settlementTarget.item.customerName || 'this customer'} using ${settlementTarget.paymentMethod === 'wallet' ? 'member wallet' : 'cash'}? This records the legacy session as settled.` : ''}
+      confirmLabel={settlementTarget?.paymentMethod === 'wallet' ? 'Charge wallet' : 'Settle cash'}
+      variant="primary"
+      busy={Boolean(settlementTarget?.item?.id && processingId === settlementTarget.item.id)}
+      onClose={()=>!processingId&&setSettlementTarget(null)}
+      onConfirm={settleInterrupted}
+    />
+
+    <ConfirmModal
+      open={Boolean(restoreTarget)}
+      eyebrow="Interrupted guest recovery"
+      title="Restore saved guest session?"
+      message={restoreTarget ? `Restore ${Math.max(0, Math.floor(Number(restoreTarget.remainingSeconds || 0) / 60))} saved guest minutes to ${restoreTarget.pcLabel || 'the original station'}? No new charge will be created.` : ''}
+      confirmLabel="Restore session"
+      variant="primary"
+      busy={Boolean(restoreTarget?.id && processingId === restoreTarget.id)}
+      onClose={()=>!processingId&&setRestoreTarget(null)}
+      onConfirm={restoreGuest}
+    />
 
     <ConfirmModal
       open={Boolean(forfeitTarget)}

@@ -448,10 +448,12 @@ export function AppDataProvider({ children }) {
       })
   }
 
-  function addPc(pc) {
-    const optimistic={...pc,id:pc.id||`pending:${Date.now()}`,status:'offline',session:null,pending:true}
-    optimisticState((current)=>({...current,pcs:[...current.pcs,normalizePc(optimistic)]}))
-    return apiPost('/pcs', pc).then((result) => { showToast({ title:'PC added', message:`${pc.label} is now registered.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
+  function addPc(pc, options = {}) {
+    return apiPost('/pcs', pc, { operationKey:options.operationKey }).then(async (result) => {
+      showToast({ title:result?.duplicate ? 'PC already registered' : 'PC added', message:result?.duplicate ? `${pc.label} was already saved and has been restored to the floor.` : `${pc.label} is now registered.` })
+      await refresh()
+      return result
+    }).catch(async (error)=>{await refresh();throw error})
   }
 
   function updatePcMeta(id, patch) {
@@ -460,8 +462,7 @@ export function AppDataProvider({ children }) {
   }
 
   function removePc(id, options = {}) {
-    optimisticState((current)=>({...current,pcs:current.pcs.filter((pc)=>String(pc.id)!==String(id))}))
-    return apiDelete(`/pcs/${id}`).then((result) => { if (!options.silent) showToast({ title:'PC removed', message:'The station was removed from the floor.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
+    return apiDelete(`/pcs/${id}`).then(async (result) => { if (!options.silent) showToast({ title:'PC removed', message:'The station was removed from the floor.' }); await refresh(); return result }).catch(async (error)=>{await refresh();throw error})
   }
 
   function getMemberWallet(memberId) {

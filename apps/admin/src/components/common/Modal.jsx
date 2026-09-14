@@ -4,6 +4,23 @@ import { X } from 'lucide-react'
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+// Multiple Admin overlays can legitimately stack (for example an Edit PC modal
+// followed by a destructive-action confirmation). Only the top-most Modal may
+// react to Escape/Enter. Without this stack guard, one key press is delivered to
+// every open Modal listener and can close/submit the parent underneath the
+// confirmation, which caused several modal transition races.
+const modalStack = []
+function pushModal(token) {
+  const existing = modalStack.indexOf(token)
+  if (existing >= 0) modalStack.splice(existing, 1)
+  modalStack.push(token)
+}
+function popModal(token) {
+  const index = modalStack.lastIndexOf(token)
+  if (index >= 0) modalStack.splice(index, 1)
+}
+function isTopModal(token) { return modalStack.at(-1) === token }
+
 export default function Modal({ open, onClose, title, eyebrow, description, children, footer, maxWidth = 'max-w-md', onSubmit, canSubmit = true, busy = false }) {
   const onCloseRef = useRef(onClose)
   const onSubmitRef = useRef(onSubmit)
@@ -12,6 +29,7 @@ export default function Modal({ open, onClose, title, eyebrow, description, chil
   const dialogRef = useRef(null)
   const previousFocusedRef = useRef(null)
   const titleId = useId()
+  const stackTokenRef = useRef(Symbol('admin-modal'))
 
   useEffect(() => {
     onCloseRef.current = onClose
@@ -22,6 +40,8 @@ export default function Modal({ open, onClose, title, eyebrow, description, chil
 
   useEffect(() => {
     if (!open) return undefined
+    const stackToken = stackTokenRef.current
+    pushModal(stackToken)
     window.dispatchEvent(new CustomEvent('aezakmi:overlay-open'))
     previousFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
 
@@ -33,6 +53,7 @@ export default function Modal({ open, onClose, title, eyebrow, description, chil
     })
 
     const onKey = (e) => {
+      if (!isTopModal(stackToken)) return
       if (e.key === 'Escape') {
         if (busyRef.current) return
         e.preventDefault()
@@ -58,6 +79,7 @@ export default function Modal({ open, onClose, title, eyebrow, description, chil
       }
     }
     const onEnter = (e) => {
+      if (!isTopModal(stackToken)) return
       if (e.key !== 'Enter' || !onSubmitRef.current || !canSubmitRef.current || busyRef.current || e.target?.tagName === 'TEXTAREA' || e.target?.tagName === 'BUTTON') return
       if (e.target?.closest?.('input,select') && !e.defaultPrevented) { e.preventDefault(); onSubmitRef.current() }
     }
@@ -66,6 +88,7 @@ export default function Modal({ open, onClose, title, eyebrow, description, chil
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
+      popModal(stackToken)
       window.cancelAnimationFrame(focusDialog)
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('keydown', onEnter)
@@ -79,7 +102,7 @@ export default function Modal({ open, onClose, title, eyebrow, description, chil
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-6">
+    <div data-admin-modal-root="true" className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-6">
       <div
         data-overlay-backdrop="true"
         className="admin-modal-backdrop absolute inset-0 bg-midnight/70"

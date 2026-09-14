@@ -159,6 +159,9 @@ export async function applyCloudRuntime(runtime={}){
   const deviceMap=new Map(stationDevices.map(d=>[String(d.local_station_id||d.localStationId||''),d]))
   const cloudMemberIds=new Set(preparedMembers.map(x=>x.id))
   const cloudCredentialIds=new Set(credentials.map(r=>String(r.member_id||r.memberId||'')))
+  const cloudStationIds=new Set(stations.map(r=>String(r.local_id||r.id||'')).filter(Boolean))
+  const fullStations=runtime.fullStations===true
+  let removedStations=0
 
   withCloudApply(()=>{
     for(const member of preparedMembers)upsertMember(member)
@@ -170,6 +173,22 @@ export async function applyCloudRuntime(runtime={}){
     for(const credential of credentials)upsertCloudCredential(credential)
     for(const row of db.prepare('SELECT member_id FROM cloud_member_credentials').all())if(!cloudCredentialIds.has(String(row.member_id)))db.prepare('DELETE FROM cloud_member_credentials WHERE member_id=?').run(row.member_id)
     for(const station of stations)upsertRuntimeStation(station,deviceMap)
+    if(fullStations){
+      // fullStations means Cloud is the authoritative station roster. A Cloud
+      // delete used to remove branch_stations only, leaving the old SQLite PC
+      // behind; its next presence update then uploaded station.upsert and
+      // resurrected the deleted PC. Do not prune a station whose bootstrap/
+      // local mutation is still waiting in the outbox, and never remove one
+      // while a local active session still needs to be reconciled.
+      const pendingStation=db.prepare("SELECT 1 FROM sync_outbox WHERE synced_at IS NULL AND entity_type='station' AND entity_id=? LIMIT 1")
+      const activeSession=db.prepare("SELECT 1 FROM computer_sessions WHERE pc_id=? AND status='active' LIMIT 1")
+      const deleteStation=db.prepare('DELETE FROM pcs WHERE id=?')
+      for(const row of db.prepare('SELECT id FROM pcs').all()){
+        const id=String(row.id||'')
+        if(!id||cloudStationIds.has(id)||pendingStation.get(id)||activeSession.get(id))continue
+        removedStations+=deleteStation.run(id).changes
+      }
+    }
     replaceCloudAuthSessions(Array.isArray(runtime.authSessions)?runtime.authSessions:[],deviceMap)
     for(const session of Array.isArray(runtime.sessions)?runtime.sessions:[])upsertRuntimeSession(session)
     for(const row of Array.isArray(runtime.walletLedger)?runtime.walletLedger:[])upsertWalletLedger(row)
@@ -179,5 +198,5 @@ export async function applyCloudRuntime(runtime={}){
     for(const row of Array.isArray(runtime.revenueEvents)?runtime.revenueEvents:[])upsertRevenue(row)
     for(const row of Array.isArray(runtime.pauses)?runtime.pauses:[])upsertPause(row)
   })
-  return{applied:true,cursor:runtime.cursor||null,members:preparedMembers.length,credentials:credentials.length,stations:stations.length,sessions:Array.isArray(runtime.sessions)?runtime.sessions.length:0}
+  return{applied:true,cursor:runtime.cursor||null,members:preparedMembers.length,credentials:credentials.length,stations:stations.length,stationsRemoved:removedStations,sessions:Array.isArray(runtime.sessions)?runtime.sessions.length:0}
 }

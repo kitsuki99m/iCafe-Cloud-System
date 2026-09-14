@@ -2,12 +2,9 @@ import { useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
-  CircleDollarSign,
   KeyRound,
-  MonitorCheck,
   ShieldCheck,
   Server,
-  UsersRound,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Button from "../common/Button.jsx";
@@ -25,23 +22,6 @@ import {
 const inputClass =
   "w-full min-h-11 rounded-xl border border-surface-line bg-soft-white px-3.5 text-sm text-midnight placeholder:text-slate-soft focus:border-midnight/45 focus:outline-none focus:ring-2 focus:ring-midnight/10";
 
-const CONTEXT_ITEMS = [
-  {
-    icon: MonitorCheck,
-    title: "Stations",
-    copy: "See PC status and active sessions.",
-  },
-  {
-    icon: UsersRound,
-    title: "Members",
-    copy: "Manage accounts, wallets, and saved time.",
-  },
-  {
-    icon: CircleDollarSign,
-    title: "Earnings",
-    copy: "Review revenue, expenses, and reports.",
-  },
-];
 
 export default function AdminLoginForm() {
   const cloud = isCloudAdmin();
@@ -114,9 +94,7 @@ export default function AdminLoginForm() {
           ...request,
           expectedStationCount: Number(request.expectedStationCount) || 1,
         });
-        setMessage(
-          "Application received. Aezakmi will email you after developer review. No Cloud account has been created yet.",
-        );
+        setMessage("Application submitted. We’ll email you after review.");
         setRequest({
           ownerName: "",
           businessName: "",
@@ -177,40 +155,12 @@ export default function AdminLoginForm() {
                 Admin workspace
               </p>
               <h2 className="mt-2 font-display text-[30px] font-semibold leading-[1.08] tracking-[-0.03em] text-soft-white">
-                Run cafe operations from one clear workspace.
+                Manage your café.
               </h2>
-              <p className="mt-3 text-[13px] leading-6 text-dance">
-                Sign in to manage stations, members, rates, earnings, analytics,
-                and cafe settings.
-              </p>
+
             </div>
           </div>
-          <div className="admin-login-feature-list mt-8 space-y-2.5">
-            {CONTEXT_ITEMS.map(({ icon: Icon, title, copy }) => (
-              <div
-                key={title}
-                className="flex items-center gap-3 rounded-2xl border border-soft-white/10 bg-soft-white/[0.06] px-3.5 py-3"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-soft-white/10 text-soft-white">
-                  <Icon size={16} />
-                </span>
-                <div>
-                  <p className="text-[12px] font-semibold text-soft-white">
-                    {title}
-                  </p>
-                  <p className="mt-0.5 text-[11px] leading-4 text-new-wool">
-                    {copy}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="admin-login-security-note mt-auto pt-8">
-            <div className="flex items-center gap-2 text-[11px] text-new-wool">
-              <ShieldCheck size={14} />
-              <span>Secure access for authorized staff only</span>
-            </div>
-          </div>
+
         </section>
 
         <section className="admin-login-card">
@@ -220,16 +170,14 @@ export default function AdminLoginForm() {
                 {requesting ? "Business access" : "Admin access"}
               </p>
               <h2 className="mt-1 font-display text-[24px] font-semibold tracking-[-0.025em] text-ink-900">
-                {requesting
-                  ? "Request Aezakmi Cloud access"
-                  : "Sign in to Admin"}
+                {requesting ? "Request Cloud access" : "Sign in"}
               </h2>
               <p className="mt-1.5 max-w-sm text-[12px] leading-5 text-slate-soft">
                 {cloud
                   ? requesting
-                    ? "Submit your café for developer review. An account is created only after approval."
-                    : "Use an approved Aezakmi Cloud owner/staff account."
-                  : "Use the sign-in method configured during first-time security setup."}
+                    ? "Approval required before account activation."
+                    : "Approved Cloud accounts only."
+                  : "Use your configured Admin credentials."}
               </p>
             </div>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-midnight/8 text-gold-dim">
@@ -252,17 +200,6 @@ export default function AdminLoginForm() {
               </button>
             </div>
           )}
-          {cloud && (
-            <div className="mb-4 rounded-xl border border-teal/20 bg-teal/5 px-3 py-2.5 text-xs text-slate-soft">
-              <span className="font-semibold text-ink-900">Aezakmi Cloud</span>{" "}
-              ·{" "}
-              {requesting
-                ? "Approval-only registration"
-                : "Developer-approved accounts only"}
-              .
-            </div>
-          )}
-
           {requesting && (
             <div className="mb-4">
               <div className="flex items-center gap-2" aria-label={`Registration step ${requestStep} of 3`}>
@@ -274,7 +211,6 @@ export default function AdminLoginForm() {
                   </div>
                 ))}
               </div>
-              <p className="mt-2 text-[10px] text-slate-soft">Step {requestStep} of 3</p>
             </div>
           )}
 
@@ -449,9 +385,7 @@ export default function AdminLoginForm() {
                   inputClassName={`${inputClass} text-lg tracking-[0.28em]`}
                   placeholder="Enter PIN"
                 />
-                <p className="mt-1.5 text-[11px] leading-4 text-slate-soft">
-                  Enter the PIN configured for this cafe.
-                </p>
+
               </div>
             ) : (
               <>
@@ -559,11 +493,7 @@ export default function AdminLoginForm() {
             </button>
           )}
 
-          <div className="mt-5 border-t border-surface-line pt-4">
-            <p className="text-center text-[10px] leading-4 text-slate-soft">
-              {branding.branch || "Cafe operations"} · Authorized staff only
-            </p>
-          </div>
+          <p className="mt-4 text-center text-[10px] text-slate-soft">Authorized staff only</p>
         </section>
       </div>
       {!cloud && (

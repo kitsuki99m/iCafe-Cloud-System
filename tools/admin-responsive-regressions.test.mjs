@@ -84,8 +84,10 @@ test('Cloud login, registration, and invite setup own a scrollable 100dvh viewpo
   assert.match(css, /scrollbar-gutter: stable/)
   assert.match(css, /\.admin-login-card input,[\s\S]*?font-size: 16px/)
   assert.match(css, /\.admin-auth-single/)
-  assert.match(login, /admin-login-feature-list/)
-  assert.match(login, /admin-login-security-note/)
+  assert.match(login, /admin-login-shell/)
+  assert.match(login, /admin-login-card/)
+  assert.doesNotMatch(login, /admin-login-feature-list/)
+  assert.doesNotMatch(login, /admin-login-security-note/)
   assert.match(invite, /admin-auth-single/)
 })
 

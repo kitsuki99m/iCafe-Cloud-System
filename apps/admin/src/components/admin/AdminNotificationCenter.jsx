@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AnchoredPopover from '../common/AnchoredPopover.jsx'
+import ConfirmModal from '../common/ConfirmModal.jsx'
 import { Bell, CheckCircle2, XCircle, Wallet, History, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import { connectSocket } from '../../lib/socket.js'
@@ -16,7 +17,8 @@ export default function AdminNotificationCenter() {
   const [open, setOpen] = useState(false)
   const location=useLocation()
   const [tab, setTab] = useState('pending') // 'pending' | 'support' | 'history'
-  const [clearArmed, setClearArmed] = useState(false)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [clearHistoryBusy, setClearHistoryBusy] = useState(false)
   const [toasts, setToasts] = useState([])
   const [actionBusyIds, setActionBusyIds] = useState(() => new Set())
   const triggerRef = useRef(null)
@@ -140,6 +142,17 @@ export default function AdminNotificationCenter() {
     return runRequestAction(id, () => rejectTopUp(id))
   }
 
+  async function confirmClearHistory() {
+    if (clearHistoryBusy) return
+    setClearHistoryBusy(true)
+    try {
+      await clearResolvedTopUps()
+      setClearConfirmOpen(false)
+    } finally {
+      setClearHistoryBusy(false)
+    }
+  }
+
   return (
     <>
       <div className="relative">
@@ -222,27 +235,28 @@ export default function AdminNotificationCenter() {
                   ))}
                 </div>
                 <button
-                  onBlur={() => setClearArmed(false)}
-                  onClick={() => {
-                    if (!clearArmed) {
-                      setClearArmed(true)
-                      return
-                    }
-                    clearResolvedTopUps()
-                    setClearArmed(false)
-                  }}
-                  className={`mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                    clearArmed
-                      ? 'border-ember/50 bg-ember/10 text-ember-dim'
-                      : 'border-surface-line text-slate-soft hover:text-ember-dim'
-                  }`}
+                  type="button"
+                  onClick={() => setClearConfirmOpen(true)}
+                  className="mt-1.5 flex w-full items-center justify-center gap-1.5 rounded-md border border-surface-line px-2 py-1.5 text-[11px] font-medium text-slate-soft transition-colors hover:border-ember/40 hover:bg-ember/10 hover:text-ember-dim"
                 >
-                  <Trash2 size={11} /> {clearArmed ? 'Click again to confirm' : 'Clear history'}
+                  <Trash2 size={11} /> Clear history
                 </button>
               </>
             )}
           </AnchoredPopover>
       </div>
+
+      <ConfirmModal
+        open={clearConfirmOpen}
+        onClose={() => !clearHistoryBusy && setClearConfirmOpen(false)}
+        onConfirm={confirmClearHistory}
+        busy={clearHistoryBusy}
+        eyebrow="Notification history"
+        title="Clear resolved history?"
+        message="Remove all resolved top-up notifications from this history view? This does not reverse any completed wallet credit."
+        confirmLabel="Clear history"
+        variant="danger"
+      />
 
       <div className="pointer-events-none fixed right-4 top-4 z-[1100] flex w-80 flex-col gap-2">
         {toasts.map((r) => r.support ? (

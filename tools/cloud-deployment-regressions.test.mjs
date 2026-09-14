@@ -151,7 +151,7 @@ test('Cloud Admin is approval-only while local Emergency Admin keeps local crede
   assert.doesNotMatch(auth,/cloudSignUp|registerCloud/)
   assert.doesNotMatch(client,/\/auth\/v1\/signup/)
   assert.match(client,/cloudRequestBusinessAccess/)
-  assert.match(login,/Request Aezakmi Cloud access/)
+  assert.match(login,/Request Cloud access/)
   assert.match(login,/BackendStatusIndicator/)
 })
 

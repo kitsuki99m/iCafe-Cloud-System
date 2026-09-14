@@ -67,6 +67,11 @@ export default function MainLayout({ children }) {
   useEffect(() => { const timer = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(timer) }, [])
   useEffect(()=>{setMobileNavOpen(false);setManualOpen(false)},[location.pathname])
   useEffect(()=>{
+    const closeMobileLayer=()=>setMobileNavOpen(false)
+    window.addEventListener('aezakmi:overlay-open',closeMobileLayer)
+    return()=>window.removeEventListener('aezakmi:overlay-open',closeMobileLayer)
+  },[])
+  useEffect(()=>{
     if(!mobileNavOpen)return undefined
     const previous=document.body.style.overflow
     document.body.style.overflow='hidden'
