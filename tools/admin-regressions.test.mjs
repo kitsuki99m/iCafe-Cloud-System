@@ -323,7 +323,7 @@ test('Earnings wallet-funded usage is derived from wallet ledger debits by usage
   assert.doesNotMatch(section, /settlement_method='wallet'/)
 })
 
-test('Earnings derives gross from receipt events and keeps wallet activity out of totals', () => {
+test('Earnings derives gross from every paid revenue event while keeping wallet activity display-only', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   const helperStart = source.indexOf('function earningsRevenueRows')
   const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
@@ -332,8 +332,8 @@ test('Earnings derives gross from receipt events and keeps wallet activity out o
   const snapshotEnd = source.indexOf('\nfunction taxEstimate', snapshotStart)
   const snapshot = source.slice(snapshotStart, snapshotEnd)
 
-  assert.match(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
-  assert.match(helper, /source_type != 'wallet_transaction'/)
+  assert.doesNotMatch(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
+  assert.doesNotMatch(helper, /source_type != 'wallet_transaction'/)
   assert.match(snapshot, /const grossCents = revenue\.reduce/)
   assert.match(snapshot, /Math\.max\(0, Number\(row\.amount_centavos \|\| 0\)\)/)
   assert.doesNotMatch(snapshot, /\['top_up','admin_top_up','paid_deposit'\]\.includes\(row\.type\)/)
@@ -342,13 +342,13 @@ test('Earnings derives gross from receipt events and keeps wallet activity out o
   assert.doesNotMatch(snapshot, /const walletRevenue\s*=\s*[^;\n]*walletBalances/)
 })
 
-test('Earnings includes paid member prepaid revenue while excluding wallet spending', () => {
+test('Earnings includes paid member prepaid revenue regardless of payment method', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   const helperStart = source.indexOf('function earningsRevenueRows')
   const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
   const helper = source.slice(helperStart, helperEnd)
   assert.doesNotMatch(helper, /event_type != 'session_start' OR member_id IS NULL/)
-  assert.match(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
+  assert.doesNotMatch(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
 })
 
 test('wallet-funded sessions, extensions and settlements write earned revenue events', () => {

@@ -373,17 +373,15 @@ function taxPolicyView() {
 }
 
 function earningsRevenueRows(start, end) {
-  // Gross income is derived only from the revenue ledger. Wallet movements are
-  // a reconciliation/audit view, so transfers, balance edits, and wallet
-  // spending never change an earnings total.
+  // Gross income is the complete revenue-event ledger: guest payments,
+  // member starting wallets, wallet top-ups, and prepaid additions. The
+  // wallet ledger itself remains an audit/display-only data source.
   return db
     .prepare(
       `SELECT *
        FROM revenue_events
        WHERE occurred_at BETWEEN ? AND ?
          AND event_type != 'session_refund'
-         AND (payment_method IS NULL OR payment_method != 'wallet')
-         AND source_type != 'wallet_transaction'
        ORDER BY occurred_at,id`,
     )
     .all(start, end);

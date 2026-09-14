@@ -335,12 +335,12 @@ test('Cloud Admin reads branch mirrors directly and never opens Socket.IO agains
   assert.match(notifications,/if \(isCloudAdmin\(\)\) return undefined/)
 })
 
-test('cloud Earnings derives gross from receipt events and returns wallet activity as display-only data',()=>{
+test('cloud Earnings derives gross from every paid revenue event and returns wallet activity as display-only data',()=>{
   const api=read('supabase/functions/admin-api/index.ts')
   assert.match(api,/async function walletLedgerRows/)
   assert.match(api,/function earningsFromRows\(rows:any\[\],walletRows:any\[\],bounds:any\)/)
   assert.match(api,/r\.event_type!=='session_refund'/)
-  assert.match(api,/r\.source_type!=='wallet_transaction'/)
+  assert.doesNotMatch(api,/r\.source_type!=='wallet_transaction'/)
   assert.doesNotMatch(api,/funding=walletRows\.filter/)
   assert.match(api,/net=gross-expenses/)
   assert.match(api,/walletActivity:/)
@@ -348,9 +348,9 @@ test('cloud Earnings derives gross from receipt events and returns wallet activi
   assert.match(api,/Promise\.all\(\[revenueRows\(admin,branchId,bounds\.start,bounds\.end\),walletLedgerRows\(admin,branchId,bounds\.start,bounds\.end\)\]\)/)
 })
 
-test('cloud Earnings includes paid member prepaid sessions while excluding wallet spends',()=>{
+test('cloud Earnings includes paid member prepaid sessions regardless of payment method',()=>{
   const api=read('supabase/functions/admin-api/index.ts')
-  assert.match(api,/r\.payment_method!=='wallet'/)
+  assert.doesNotMatch(api,/r\.payment_method!=='wallet'/)
   assert.doesNotMatch(api,/\!\(r\.event_type==='session_start'&&r\.member_id\)/)
 })
 
