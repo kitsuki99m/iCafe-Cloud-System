@@ -55,6 +55,16 @@ test('developer console owns package assignment, editable pricing, and branded q
   assert.match(pricingMigration, /platform_quotations/)
 })
 
+test('Resend owns both branded quotation and owner invitation delivery', () => {
+  assert.match(developer, /sendResendEmail/)
+  assert.match(developer, /generateLink\(\{type:'invite'/)
+  assert.match(developer, /business-invite/)
+  assert.match(developer, /business-activation/)
+  assert.match(developer, /quotation/)
+  assert.match(developer, /AEZAKMI_EMAIL_FROM/)
+  assert.doesNotMatch(developer, /inviteUserByEmail|resetPasswordForEmail/)
+})
+
 test('business owner settings exposes dynamic package and organization station usage', () => {
   assert.match(settings, /cloudGetSubscriptionOverview/)
   assert.match(settings, /Subscription/)

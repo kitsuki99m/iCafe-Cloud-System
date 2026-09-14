@@ -201,10 +201,24 @@ Every destructive lifecycle action requires a developer-entered reason and is re
 
 ### SMTP fallback
 
-`Approve & invite` still uses Supabase Auth email invitations. Configure custom SMTP for production delivery. If email is unavailable, use **Copy activation link** and send that link to the verified owner through a trusted channel. The activation link redirects to `AEZAKMI_ADMIN_URL` with the activation marker and the owner still chooses their own password.
+`Approve & send invite` now uses Supabase Auth only to generate the secure one-time invitation link. Delivery is handled by Resend through the `developer-registrations` Edge Function, so quotation and invitation emails use the same transactional provider and branding. If email delivery is unavailable, use **Copy activation link** and send that link to the verified owner through a trusted channel. The activation link redirects to `AEZAKMI_ADMIN_URL` with the activation marker and the owner still chooses their own password.
 
 ## Automatic invitation email delivery
 
-`Approve & send invite` calls Supabase Auth `inviteUserByEmail()` and only completes the approval when the Auth API accepts the invitation email. The invite uses `AEZAKMI_ADMIN_URL/?aezakmi=activate` as the redirect so the owner lands directly in the password-setup flow.
+`Approve & send invite` calls Supabase Auth `generateLink({ type: 'invite' })`, then sends that generated link with Resend. Approval completes only after Resend accepts the message. If Resend rejects the first invitation, the provisional Auth user is removed so the Developer can retry safely. Resending an outstanding invitation generates a fresh recovery/activation link and sends it through Resend as well.
 
 For production owners, configure **Authentication → SMTP Settings** in Supabase. The built-in Supabase SMTP service is development-only and refuses delivery to addresses that are not members of the Supabase project team. When an invitation is already outstanding, **Resend invite email** sends a fresh activation/password email. **Copy activation link** remains a manual fallback only.
+
+
+## Resend transactional email
+
+Developer quotations, first-time owner invitations, and invitation resends are sent by the `developer-registrations` Edge Function through Resend. Keep the API key in Supabase secrets; never place it in Vite variables or source files.
+
+```powershell
+npx supabase secrets set RESEND_API_KEY="YOUR_ROTATED_RESEND_KEY"
+npx supabase secrets set AEZAKMI_EMAIL_FROM="Aezakmi Café <hello@YOUR_VERIFIED_DOMAIN>"
+npx supabase secrets set AEZAKMI_REPLY_TO="YOUR_REPLY_ADDRESS"
+npx supabase secrets set AEZAKMI_ADMIN_URL="https://YOUR_ADMIN_DOMAIN"
+```
+
+`AEZAKMI_EMAIL_FROM` must use a sender/domain verified in Resend for production recipients. `AEZAKMI_REPLY_TO` is optional. After changing secrets, redeploy `developer-registrations`.

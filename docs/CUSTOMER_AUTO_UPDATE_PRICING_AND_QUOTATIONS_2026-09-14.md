@@ -57,9 +57,9 @@ supabase functions deploy developer-registrations
 supabase functions deploy station-runtime
 ```
 
-`developer-registrations` now owns pricing edits and quotation sending. `station-runtime` receives the Customer Electron version/update state through the normal heartbeat.
+`developer-registrations` now owns pricing edits plus Resend delivery for quotations and owner invitation/activation links. `station-runtime` receives the Customer Electron version/update state through the normal heartbeat.
 
-## 4. Configure quotation email
+## 4. Configure transactional email
 
 Quotation email is sent server-side through Resend. Do not put the provider API key in the Admin frontend.
 
@@ -77,7 +77,7 @@ supabase secrets set AEZAKMI_REPLY_TO="sales@your-domain.com"
 supabase secrets set AEZAKMI_BRAND_LOGO_URL="https://your-domain.com/aezakmi-logo.png"
 ```
 
-If `AEZAKMI_BRAND_LOGO_URL` is omitted, the email uses an Aezakmi gold "A" fallback mark. The email contains the business name, quotation number, selected package, PC count, branch count, monthly price, initial deployment pricing, validity date, and an optional developer message.
+If `AEZAKMI_BRAND_LOGO_URL` is omitted, the email uses an Aezakmi gold "A" fallback mark. Resend is also used for owner invitation and activation-link resends, while Supabase Auth remains responsible for generating the secure one-time link. The quotation email contains the business name, quotation number, selected package, PC count, branch count, monthly price, initial deployment pricing, validity date, and an optional developer message.
 
 ## 5. Send a quotation
 

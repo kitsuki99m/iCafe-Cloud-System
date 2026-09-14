@@ -66,25 +66,60 @@ async function activationLink(admin:SupabaseClient,email:string){
 }
 async function maybeActivationLink(admin:SupabaseClient,email:string){try{return await activationLink(admin,email)}catch{return null}}
 function inviteMetadata(registration:any,pkg:{plan:string,maxStations:number}){return{name:registration.owner_name,business_name:registration.business_name,aezakmi_registration_id:registration.id,subscription_plan:pkg.plan,max_stations:pkg.maxStations}}
-async function sendInviteEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
+function resendConfig(){
+  const apiKey=String(Deno.env.get('RESEND_API_KEY')||'').trim()
+  const from=String(Deno.env.get('AEZAKMI_EMAIL_FROM')||'').trim()
+  const replyTo=String(Deno.env.get('AEZAKMI_REPLY_TO')||'').trim()
+  if(!apiKey)throw Object.assign(new Error('Email delivery is not configured. Set RESEND_API_KEY in Supabase Edge Function secrets.'),{status:503,code:'EMAIL_NOT_CONFIGURED',exposeMessage:true})
+  if(!from)throw Object.assign(new Error('Email sender is not configured. Verify a sender/domain in Resend, then set AEZAKMI_EMAIL_FROM in Supabase Edge Function secrets.'),{status:503,code:'EMAIL_SENDER_NOT_CONFIGURED',exposeMessage:true})
+  return{apiKey,from,replyTo}
+}
+async function sendResendEmail(input:{to:string;subject:string;html:string;tags?:Array<{name:string;value:string}>}){
+  const{apiKey,from,replyTo}=resendConfig()
+  const payload:any={from,to:[input.to],subject:input.subject,html:input.html}
+  if(replyTo)payload.reply_to=replyTo
+  if(input.tags?.length)payload.tags=input.tags
+  const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  const data=await response.json().catch(()=>({}))
+  if(!response.ok)throw Object.assign(new Error(String(data?.message||data?.error||'Email provider rejected the message.')),{status:502,code:'EMAIL_DELIVERY_FAILED',exposeMessage:true})
+  return String(data?.id||'')||null
+}
+async function generateInviteLink(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
   const options:any={data:inviteMetadata(registration,pkg)}
   const redirectTo=activationRedirect();if(redirectTo)options.redirectTo=redirectTo
-  const{data,error}=await admin.auth.admin.inviteUserByEmail(registration.email,options)
-  if(error)throw Object.assign(new Error(error.message||'Unable to send invitation email.'),{status:409,code:'INVITE_EMAIL_FAILED'})
-  const userId=data.user?.id||null
-  if(!userId)throw Object.assign(new Error('Supabase did not return the invited user.'),{status:500,code:'INVITE_USER_MISSING'})
-  return userId
+  const{data,error}=await admin.auth.admin.generateLink({type:'invite',email:registration.email,options} as any)
+  if(error)throw Object.assign(new Error(error.message||'Unable to generate invitation link.'),{status:409,code:'INVITE_LINK_FAILED',exposeMessage:true})
+  const userId=(data as any)?.user?.id||null
+  const props:any=(data as any)?.properties||{}
+  const link=String(props.action_link||props.actionLink||'')||null
+  if(!userId||!link)throw Object.assign(new Error('Supabase did not return a complete invitation link.'),{status:500,code:'INVITE_LINK_MISSING'})
+  return{userId,link}
 }
-async function resendActivationEmail(email:string){
-  const key=publishableKey();if(!key)throw Object.assign(new Error('Supabase publishable key unavailable.'),{status:500,code:'SUPABASE_KEY_MISSING'})
-  const client=createClient(projectUrl(),key,{auth:{persistSession:false,autoRefreshToken:false}})
-  const redirectTo=activationRedirect()
-  const{error}=await client.auth.resetPasswordForEmail(email,redirectTo?{redirectTo}:undefined)
-  if(error)throw Object.assign(new Error(error.message||'Unable to resend activation email.'),{status:409,code:'INVITE_EMAIL_FAILED'})
+async function sendInviteEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
+  const generated=await generateInviteLink(admin,registration,pkg)
+  try{
+    await sendResendEmail({to:registration.email,subject:`You're invited to Aezakmi Café Cloud — ${registration.business_name}`,html:inviteHtml({...registration,actionLink:generated.link,packageLabel:String(pkg.plan||'').replace(/^./,(c)=>c.toUpperCase()),maxStations:pkg.maxStations}),tags:[{name:'category',value:'business-invite'}]})
+  }catch(error){
+    try{await admin.auth.admin.deleteUser(generated.userId)}catch{}
+    throw error
+  }
+  return generated.userId
+}
+async function resendActivationEmail(admin:SupabaseClient,registration:any,pkg:{plan:string,maxStations:number}){
+  const link=await activationLink(admin,registration.email)
+  if(!link)throw Object.assign(new Error('Unable to generate activation link.'),{status:409,code:'ACTIVATION_LINK_FAILED'})
+  await sendResendEmail({to:registration.email,subject:`Your Aezakmi Café Cloud activation link — ${registration.business_name}`,html:inviteHtml({...registration,actionLink:link,packageLabel:String(pkg.plan||'').replace(/^./,(c)=>c.toUpperCase()),maxStations:pkg.maxStations,resend:true}),tags:[{name:'category',value:'business-activation'}]})
 }
 
 function htmlEscape(value:unknown){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch))}
 function peso(value:unknown){return `₱${Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:0,maximumFractionDigits:2})}`}
+function inviteHtml(input:any){
+  const logoUrl=String(Deno.env.get('AEZAKMI_BRAND_LOGO_URL')||'').trim()
+  const logo=logoUrl?`<img src="${htmlEscape(logoUrl)}" width="48" height="48" alt="Aezakmi Café" style="display:block;border-radius:12px;object-fit:contain;background:#ffffff">`:`<div style="width:48px;height:48px;border-radius:12px;background:#E8A33D;color:#0B1017;font-weight:800;font-size:22px;line-height:48px;text-align:center">A</div>`
+  const title=input.resend?'Your activation link':'Your workspace is ready'
+  const intro=input.resend?'Here is a fresh secure link to finish activating your account.':'Your Aezakmi Café Cloud application has been approved.'
+  return `<!doctype html><html><body style="margin:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif;color:#111827"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f2;padding:28px 12px"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb"><tr><td style="background:#0B1017;padding:24px 28px"><table role="presentation" width="100%"><tr><td width="60">${logo}</td><td><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700">Aezakmi Café</div><div style="margin-top:4px;font-size:22px;color:#ffffff;font-weight:700">${htmlEscape(title)}</div></td></tr></table></td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 8px;font-size:15px">Hello ${htmlEscape(input.owner_name||input.recipientName||'there')},</p><p style="margin:0;color:#4b5563;font-size:14px;line-height:1.7">${htmlEscape(intro)} Use the secure button below to set your password and open the workspace for <strong style="color:#111827">${htmlEscape(input.business_name||input.businessName)}</strong>.</p><div style="margin:22px 0;padding:16px;border-radius:14px;background:#f4f1e8"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:5px 0;color:#6b7280;font-size:13px">Package</td><td align="right" style="padding:5px 0;font-size:13px;font-weight:700">${htmlEscape(input.packageLabel||'Cloud')}</td></tr><tr><td style="padding:5px 0;color:#6b7280;font-size:13px">Station limit</td><td align="right" style="padding:5px 0;font-size:13px;font-weight:700">${htmlEscape(input.maxStations||'—')}</td></tr></table></div><div style="text-align:center;margin:26px 0"><a href="${htmlEscape(input.actionLink)}" style="display:inline-block;background:#0B1017;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 22px;border-radius:12px">Activate Aezakmi Cloud</a></div><p style="margin:0;color:#6b7280;font-size:12px;line-height:1.6">For security, use this link only for the invited owner account. If the button does not open, copy this URL into your browser:</p><p style="margin:8px 0 0;word-break:break-all;color:#6b7280;font-size:11px;line-height:1.6">${htmlEscape(input.actionLink)}</p><p style="margin:24px 0 0;font-size:13px;color:#111827"><strong>Aezakmi Café</strong><br><span style="color:#6b7280">Cloud café management · Customer Stations · Branch operations</span></p></td></tr></table></td></tr></table></body></html>`
+}
 function quoteHtml(input:any){
   const logoUrl=String(Deno.env.get('AEZAKMI_BRAND_LOGO_URL')||'').trim()
   const noteHtml=input.message?`<div style="margin-top:22px;padding:16px;border-radius:14px;background:#f4f1e8;color:#4b5563;font-size:14px;line-height:1.6"><strong style="color:#111827">Message from Aezakmi</strong><br>${htmlEscape(input.message).replace(/\n/g,'<br>')}</div>`:''
@@ -92,16 +127,7 @@ function quoteHtml(input:any){
   return `<!doctype html><html><body style="margin:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif;color:#111827"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f2;padding:28px 12px"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb"><tr><td style="background:#0B1017;padding:24px 28px"><table role="presentation" width="100%"><tr><td width="60">${logo}</td><td><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700">Aezakmi Café</div><div style="margin-top:4px;font-size:22px;color:#ffffff;font-weight:700">Business quotation</div></td></tr></table></td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 8px;font-size:15px">Hello ${htmlEscape(input.recipientName||'there')},</p><p style="margin:0;color:#4b5563;font-size:14px;line-height:1.7">Thank you for considering Aezakmi Café for <strong style="color:#111827">${htmlEscape(input.businessName)}</strong>. Based on the information provided, here is a tailored estimate for your café.</p><div style="margin:24px 0 0;padding:18px;border:1px solid #e5e7eb;border-radius:16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Quotation</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.quoteNumber)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Package</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.packageLabel)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">PCs</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.stationCount)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Branches</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.branchCount)}</td></tr><tr><td style="padding:12px 0 7px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px">Monthly subscription</td><td align="right" style="padding:12px 0 7px;border-top:1px solid #e5e7eb;font-size:18px;color:#0B1017;font-weight:800">${htmlEscape(input.monthlyLabel||`${peso(input.monthlyPrice)} / month`)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Initial deployment</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${peso(input.deploymentFeePerBranch)} × ${htmlEscape(input.branchCount)} branch${Number(input.branchCount)===1?'':'es'}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Deployment total</td><td align="right" style="padding:7px 0;font-size:16px;color:#E8A33D;font-weight:800">${peso(input.deploymentFeeTotal)}</td></tr></table></div>${noteHtml}<div style="margin-top:24px;padding:16px 18px;border-left:4px solid #E8A33D;background:#fffaf0;color:#4b5563;font-size:13px;line-height:1.6">This quotation is valid until <strong style="color:#111827">${htmlEscape(input.validUntilLabel)}</strong>. Final pricing may change if the requested PC count, number of branches, onsite requirements, networking, or deployment scope changes.</div><p style="margin:24px 0 0;color:#4b5563;font-size:13px;line-height:1.7">If you would like to proceed, simply reply to this email and we can finalize the deployment scope and onboarding schedule.</p><p style="margin:24px 0 0;font-size:13px;color:#111827"><strong>Aezakmi Café</strong><br><span style="color:#6b7280">Cloud café management · Customer Stations · Branch operations</span></p></td></tr></table><div style="max-width:640px;padding:16px 8px;color:#9ca3af;font-size:11px;line-height:1.5;text-align:center">This quotation was generated by the Aezakmi developer console for ${htmlEscape(input.businessName)}.</div></td></tr></table></body></html>`
 }
 async function sendQuotationEmail(input:any){
-  const apiKey=String(Deno.env.get('RESEND_API_KEY')||'').trim()
-  const from=String(Deno.env.get('AEZAKMI_EMAIL_FROM')||'').trim()
-  if(!apiKey||!from)throw Object.assign(new Error('Quotation email is not configured. Set RESEND_API_KEY and AEZAKMI_EMAIL_FROM in Supabase Edge Function secrets.'),{status:503,code:'QUOTE_EMAIL_NOT_CONFIGURED'})
-  const replyTo=String(Deno.env.get('AEZAKMI_REPLY_TO')||'').trim()
-  const payload:any={from,to:[input.recipientEmail],subject:`Aezakmi Café quotation — ${input.businessName}`,html:quoteHtml(input)}
-  if(replyTo)payload.reply_to=replyTo
-  const response=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify(payload)})
-  const data=await response.json().catch(()=>({}))
-  if(!response.ok)throw Object.assign(new Error(String(data?.message||data?.error||'Email provider rejected the quotation.')),{status:502,code:'QUOTE_EMAIL_FAILED'})
-  return String(data?.id||'')||null
+  return await sendResendEmail({to:input.recipientEmail,subject:`Aezakmi Café quotation — ${input.businessName}`,html:quoteHtml(input),tags:[{name:'category',value:'quotation'}]})
 }
 async function lifecycle(admin:SupabaseClient,organizationId:string){const{data,error}=await admin.from('organizations').select('id,name,lifecycle_status,lifecycle_reason,lifecycle_updated_at,suspended_at,terminated_at').eq('id',organizationId).maybeSingle();if(error)throw error;return data}
 
@@ -222,7 +248,7 @@ Deno.serve(async req=>{
       let authUserId=r.auth_user_id as string|null
       const inviteSentAt=new Date().toISOString()
       if(!authUserId)authUserId=await sendInviteEmail(admin,r,pkg)
-      else{await admin.auth.admin.updateUserById(authUserId,{user_metadata:inviteMetadata(r,pkg)});await resendActivationEmail(r.email)}
+      else{await admin.auth.admin.updateUserById(authUserId,{user_metadata:inviteMetadata(r,pkg)});await resendActivationEmail(admin,r,pkg)}
       const{error:markError}=await admin.from('registration_requests').update({status:'approved',auth_user_id:authUserId,reviewed_by:user.id,reviewed_at:inviteSentAt,review_notes:reviewNotes,invite_sent_at:inviteSentAt,invite_cancelled_at:null,owner_deleted_at:null,updated_at:inviteSentAt}).eq('id',requestId)
       if(markError)throw markError
       const{data:finalized,error:finalizeError}=await admin.rpc('aezakmi_finalize_registration_approval',{p_request_id:requestId,p_auth_user_id:authUserId,p_reviewer_id:user.id,p_review_notes:reviewNotes})
@@ -238,7 +264,7 @@ Deno.serve(async req=>{
       if(!['approved','invited'].includes(r.status)||!r.auth_user_id||r.activated_at)throw Object.assign(new Error('Only an outstanding invitation can be resent.'),{status:409,code:'INVITE_NOT_ACTIVE'})
       const{data:sub,error:subError}=await admin.from('subscriptions').select('plan,max_stations').eq('organization_id',r.organization_id).maybeSingle();if(subError)throw subError
       if(r.auth_user_id&&sub)await admin.auth.admin.updateUserById(r.auth_user_id,{user_metadata:inviteMetadata(r,{plan:String(sub.plan||'bronze'),maxStations:Number(sub.max_stations||50)})})
-      await resendActivationEmail(r.email)
+      await resendActivationEmail(admin,r,{plan:String(sub?.plan||'bronze'),maxStations:Number(sub?.max_stations||50)})
       const now=new Date().toISOString()
       const{data,error}=await admin.from('registration_requests').update({invite_sent_at:now,updated_at:now}).eq('id',requestId).select('*').single()
       if(error)throw error
