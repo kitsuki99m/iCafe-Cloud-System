@@ -56,7 +56,23 @@ test('Developer application list stays compact and sticky beside long applicatio
   const page=read('apps/admin/src/pages/DeveloperConsolePage.jsx')
   assert.match(page,/grid min-h-\[520px\] items-start gap-4/)
   assert.match(page,/lg:sticky lg:top-4 lg:self-start/)
-  assert.match(page,/lg:max-h-\[min\(510px,calc\(100dvh-250px\)\)\]/)
+  assert.match(page,/lg:max-h-\[calc\(100dvh-120px\)\]/)
+  assert.match(page,/lg:min-h-0 lg:flex-1 lg:max-h-none/)
+})
+
+
+test('Cloud business registration is a compact three-step wizard instead of one tall form',()=>{
+  const login=read('apps/admin/src/components/auth/AdminLoginForm.jsx')
+  assert.match(login,/const \[requestStep, setRequestStep\] = useState\(1\)/)
+  assert.match(login,/Registration step \${requestStep} of 3/)
+  assert.match(login,/requestStep === 1/)
+  assert.match(login,/requestStep === 2/)
+  assert.match(login,/requestStep === 3/)
+  assert.match(login,/Business/)
+  assert.match(login,/Contact/)
+  assert.match(login,/Review/)
+  assert.match(login,/requestStep < 3 \? "Next" : "Submit application"/)
+  assert.match(login,/setRequestStep\(\(step\) => Math\.max\(1, step - 1\)\)/)
 })
 
 

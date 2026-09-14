@@ -55,6 +55,7 @@ export default function AdminLoginForm() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [cloudAuthMode, setCloudAuthMode] = useState("signin");
+  const [requestStep, setRequestStep] = useState(1);
   const [request, setRequest] = useState({
     ownerName: "",
     businessName: "",
@@ -79,6 +80,14 @@ export default function AdminLoginForm() {
       : mode === "pin"
         ? !pin
         : !username.trim() || !password || (mode === "pin_password" && !pin);
+  const expectedStations = Number(request.expectedStationCount);
+  const requestStepMissing = requesting && (
+    requestStep === 1
+      ? !request.ownerName.trim() || !request.businessName.trim()
+      : requestStep === 2
+        ? !username.trim() || !Number.isInteger(expectedStations) || expectedStations < 1 || expectedStations > 10000
+        : missingCredentials
+  );
 
   function updateRequest(key, value) {
     setRequest((current) => ({ ...current, [key]: value }));
@@ -86,7 +95,15 @@ export default function AdminLoginForm() {
 
   async function submit(event) {
     event.preventDefault();
-    if (busy || (!cloud && !backendReady) || missingCredentials) return;
+    if (busy || (!cloud && !backendReady)) return;
+    if (requesting && requestStep < 3) {
+      if (requestStepMissing) return;
+      setError("");
+      setMessage("");
+      setRequestStep((step) => Math.min(3, step + 1));
+      return;
+    }
+    if (missingCredentials) return;
     setBusy(true);
     setError("");
     setMessage("");
@@ -109,6 +126,8 @@ export default function AdminLoginForm() {
           note: "",
           website: "",
         });
+        setUsername("");
+        setRequestStep(1);
       } else {
         const result = cloud
           ? await loginAdminPassword(username.trim(), password)
@@ -244,6 +263,21 @@ export default function AdminLoginForm() {
             </div>
           )}
 
+          {requesting && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2" aria-label={`Registration step ${requestStep} of 3`}>
+                {[1, 2, 3].map((step) => (
+                  <div key={step} className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${step <= requestStep ? "bg-midnight text-soft-white" : "bg-midnight/7 text-slate-soft"}`}>{step}</span>
+                    <span className={`hidden truncate text-[10px] font-semibold sm:block ${step === requestStep ? "text-ink-900" : "text-slate-soft"}`}>{step === 1 ? "Business" : step === 2 ? "Contact" : "Review"}</span>
+                    {step < 3 && <span className={`h-px min-w-3 flex-1 ${step < requestStep ? "bg-midnight/45" : "bg-surface-line"}`} />}
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] text-slate-soft">Step {requestStep} of 3</p>
+            </div>
+          )}
+
           {!cloud && (
             <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl border border-surface-line bg-dance/30 p-1">
               <button
@@ -295,90 +329,103 @@ export default function AdminLoginForm() {
           <form onSubmit={submit} className="space-y-4">
             {requesting ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="eyebrow mb-2 block">Owner name</span>
-                    <input
-                      autoFocus
-                      value={request.ownerName}
-                      onChange={(e) =>
-                        updateRequest("ownerName", e.target.value)
-                      }
-                      className={inputClass}
-                      placeholder="Business owner"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="eyebrow mb-2 block">Business / café</span>
-                    <input
-                      value={request.businessName}
-                      onChange={(e) =>
-                        updateRequest("businessName", e.target.value)
-                      }
-                      className={inputClass}
-                      placeholder="Kai Gaming Lounge"
-                    />
-                  </label>
-                </div>
-                <label className="block">
-                  <span className="eyebrow mb-2 block">Email</span>
-                  <input
-                    type="email"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoComplete="email"
-                    className={inputClass}
-                    placeholder="owner@example.com"
-                  />
-                </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block">
-                    <span className="eyebrow mb-2 block">Phone</span>
-                    <input
-                      value={request.phone}
-                      onChange={(e) => updateRequest("phone", e.target.value)}
-                      className={inputClass}
-                      placeholder="09xx xxx xxxx"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="eyebrow mb-2 block">Expected PCs</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="10000"
-                      value={request.expectedStationCount}
-                      onChange={(e) =>
-                        updateRequest("expectedStationCount", e.target.value)
-                      }
-                      className={inputClass}
-                    />
-                  </label>
-                </div>
-                <label className="block">
-                  <span className="eyebrow mb-2 block">City / province</span>
-                  <input
-                    value={request.location}
-                    onChange={(e) => updateRequest("location", e.target.value)}
-                    className={inputClass}
-                    placeholder="Puerto Princesa, Palawan"
-                  />
-                </label>
-                <label className="block">
-                  <span className="eyebrow mb-2 block">
-                    Notes{" "}
-                    <span className="normal-case tracking-normal text-slate-soft">
-                      (optional)
-                    </span>
-                  </span>
-                  <textarea
-                    rows={3}
-                    value={request.note}
-                    onChange={(e) => updateRequest("note", e.target.value)}
-                    className={`${inputClass} min-h-[84px] py-3`}
-                    placeholder="Tell us anything useful about the café."
-                  />
-                </label>
+                {requestStep === 1 && (
+                  <div className="space-y-4">
+                    <label className="block">
+                      <span className="eyebrow mb-2 block">Owner name</span>
+                      <input
+                        autoFocus
+                        required
+                        value={request.ownerName}
+                        onChange={(e) => updateRequest("ownerName", e.target.value)}
+                        className={inputClass}
+                        placeholder="Business owner"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="eyebrow mb-2 block">Business / café</span>
+                      <input
+                        required
+                        value={request.businessName}
+                        onChange={(e) => updateRequest("businessName", e.target.value)}
+                        className={inputClass}
+                        placeholder="Kai Gaming Lounge"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {requestStep === 2 && (
+                  <div className="space-y-4">
+                    <label className="block">
+                      <span className="eyebrow mb-2 block">Email</span>
+                      <input
+                        autoFocus
+                        required
+                        type="email"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        autoComplete="email"
+                        className={inputClass}
+                        placeholder="owner@example.com"
+                      />
+                    </label>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="eyebrow mb-2 block">Phone</span>
+                        <input
+                          value={request.phone}
+                          onChange={(e) => updateRequest("phone", e.target.value)}
+                          className={inputClass}
+                          placeholder="09xx xxx xxxx"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="eyebrow mb-2 block">Expected PCs</span>
+                        <input
+                          required
+                          type="number"
+                          min="1"
+                          max="10000"
+                          value={request.expectedStationCount}
+                          onChange={(e) => updateRequest("expectedStationCount", e.target.value)}
+                          className={inputClass}
+                        />
+                      </label>
+                    </div>
+                    <label className="block">
+                      <span className="eyebrow mb-2 block">City / province</span>
+                      <input
+                        value={request.location}
+                        onChange={(e) => updateRequest("location", e.target.value)}
+                        className={inputClass}
+                        placeholder="Puerto Princesa, Palawan"
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {requestStep === 3 && (
+                  <div className="space-y-4">
+                    <div className="grid gap-2 rounded-xl border border-surface-line bg-surface-raised/45 p-3 text-xs sm:grid-cols-2">
+                      <div className="min-w-0"><span className="eyebrow block">Owner</span><strong className="mt-1 block truncate text-ink-900">{request.ownerName}</strong></div>
+                      <div className="min-w-0"><span className="eyebrow block">Business</span><strong className="mt-1 block truncate text-ink-900">{request.businessName}</strong></div>
+                      <div className="min-w-0"><span className="eyebrow block">Email</span><strong className="mt-1 block truncate text-ink-900">{username}</strong></div>
+                      <div className="min-w-0"><span className="eyebrow block">Expected PCs</span><strong className="mt-1 block text-ink-900">{request.expectedStationCount}</strong></div>
+                    </div>
+                    <label className="block">
+                      <span className="eyebrow mb-2 block">Notes <span className="normal-case tracking-normal text-slate-soft">(optional)</span></span>
+                      <textarea
+                        autoFocus
+                        rows={3}
+                        value={request.note}
+                        onChange={(e) => updateRequest("note", e.target.value)}
+                        className={`${inputClass} min-h-[84px] py-3`}
+                        placeholder="Anything the developer should know?"
+                      />
+                    </label>
+                  </div>
+                )}
                 <input
                   className="hidden"
                   tabIndex="-1"
@@ -449,34 +496,47 @@ export default function AdminLoginForm() {
               </>
             )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              className="min-h-11 w-full"
-              disabled={busy || (!cloud && !backendReady) || missingCredentials}
-            >
-              {busy ? (
-                requesting ? (
-                  "Submitting…"
-                ) : (
-                  "Signing in…"
-                )
-              ) : !cloud && backendStatus === "connecting" ? (
-                "Connecting…"
-              ) : backendUnavailable ? (
-                "Server unavailable"
-              ) : requesting ? (
-                <>
-                  <span>Submit application</span>
-                  <ArrowRight size={16} />
-                </>
-              ) : (
-                <>
-                  <span>Continue to Admin</span>
-                  <ArrowRight size={16} />
-                </>
+            <div className={requesting && requestStep > 1 ? "grid grid-cols-[auto_minmax(0,1fr)] gap-2" : ""}>
+              {requesting && requestStep > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="min-h-11"
+                  disabled={busy}
+                  onClick={() => { setError(""); setRequestStep((step) => Math.max(1, step - 1)); }}
+                >
+                  Back
+                </Button>
               )}
-            </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                className="min-h-11 w-full"
+                disabled={busy || (!cloud && !backendReady) || (requesting ? requestStepMissing : missingCredentials)}
+              >
+                {busy ? (
+                  requesting ? (
+                    "Submitting…"
+                  ) : (
+                    "Signing in…"
+                  )
+                ) : !cloud && backendStatus === "connecting" ? (
+                  "Connecting…"
+                ) : backendUnavailable ? (
+                  "Server unavailable"
+                ) : requesting ? (
+                  <>
+                    <span>{requestStep < 3 ? "Next" : "Submit application"}</span>
+                    <ArrowRight size={16} />
+                  </>
+                ) : (
+                  <>
+                    <span>Continue to Admin</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
 
           {cloud && (
@@ -487,6 +547,7 @@ export default function AdminLoginForm() {
                 setCloudAuthMode((value) =>
                   value === "signin" ? "request" : "signin",
                 );
+                setRequestStep(1);
                 setError("");
                 setMessage("");
                 setPassword("");
