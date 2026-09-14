@@ -90,12 +90,32 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user
     if(!sessionId)throw Object.assign(new Error('Session id is required.'),{status:400,code:'SESSION_REQUIRED'});
     if(!['save','forfeit','refund'].includes(disposition))throw Object.assign(new Error('Choose Save, Forfeit, or Refund.'),{status:400,code:'INVALID_DISPOSITION'});
     const operationKey=String(body.operationKey||'').trim()||null;
-    const{data,error}=await admin.rpc('aezakmi_admin_close_session',{
+    let{data,error}=await admin.rpc('aezakmi_admin_close_session',{
       p_branch_id:branchId,p_session_id:sessionId,p_disposition:disposition,p_actor_id:user.id,p_operation_key:operationKey
     });
+    // Forfeit/refund existed in the original Cloud transaction engine before
+    // the newer atomic-close RPC was introduced. If station-admin deploys
+    // before migrations 00020/00021 reach the project, do not make an Admin
+    // Guest forfeiture unusable: fall back to that already-deployed authority.
+    // Pause & Save still requires the newer RPC because Guest saved time must
+    // be persisted on the ended session for later restore.
+    if(error&&isMissingAtomicCloseRpc(error)&&(disposition==='forfeit'||disposition==='refund')){
+      const fallbackAction=disposition==='refund'?'session.refund':'session.end';
+      const fallbackPayload=disposition==='refund'?{sessionId}:{sessionId,disposition:'forfeit'};
+      const fallback=await admin.rpc('aezakmi_cloud_execute',{
+        p_branch_id:branchId,p_action:fallbackAction,p_payload:fallbackPayload,p_actor_kind:'admin',p_actor_id:user.id,p_operation_key:operationKey
+      });
+      if(fallback.error)throw fallback.error;
+      data=fallback.data;error=null;
+    }
     if(error)throw atomicCloseSchemaError(error);
-    const out=data&&typeof data==='object'?data:{};
+    let out:any=data&&typeof data==='object'?data:{};
     if(out.success===false)throw Object.assign(new Error(out.error||'Unable to close this session.'),{status:Number(out.status||400),code:out.code||'SESSION_CLOSE_FAILED'});
+    if(!out.pcId||!Object.prototype.hasOwnProperty.call(out,'memberId')){
+      const{data:closedSession,error:closedSessionError}=await admin.from('branch_sessions').select('pc_id,member_id').eq('branch_id',branchId).eq('local_id',sessionId).maybeSingle();
+      if(closedSessionError)throw closedSessionError;
+      out={...out,pcId:out.pcId||closedSession?.pc_id||null,memberId:Object.prototype.hasOwnProperty.call(out,'memberId')?out.memberId:(closedSession?.member_id||null)};
+    }
     const stationId=String(out.pcId||'');
     if(stationId){
       const{data:device}=await admin.from('station_devices').select('realtime_topic_key').eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null).maybeSingle();

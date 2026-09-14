@@ -519,10 +519,23 @@ export function AppDataProvider({ children }) {
   async function endSession(pc, disposition = 'save', options = {}) {
     if (!pc?.session?.id) return
     const sessionId=pc.session.id
+    const memberId=pc.session?.customerId ?? pc.session?.memberId ?? null
+    const guestSession=memberId == null
     let prepared=null
     try {
-      if (disposition === 'save' || disposition === 'forfeit') prepared=await prepareSessionClose(pc, disposition)
+      // Guest session close is an Admin-authoritative accounting operation. Do
+      // not let a stale/broken Customer command queue veto Pause & Save or
+      // Forfeit. Commit Supabase/Edge first; station-admin broadcasts the
+      // terminal session_changed event immediately, and the explicit commit
+      // command below is only a best-effort fast UI signal.
+      //
+      // Members retain the pre-close protection barrier because their account
+      // stays authenticated after the paid session ends.
+      if (!guestSession && (disposition === 'save' || disposition === 'forfeit')) prepared=await prepareSessionClose(pc, disposition)
       const result=await apiPost(`/sessions/${sessionId}/end`, { disposition, ...options })
+      if (guestSession && (disposition === 'save' || disposition === 'forfeit')) {
+        prepared={ pcId:pc.id, sessionId, disposition, memberId:null, guestSession:true }
+      }
       if (prepared) await commitPreparedSessionClose(pc, prepared, result)
       optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
       playAdminSound('success', { dedupeKey:`session-end:${pc.id}` })
@@ -538,10 +551,17 @@ export function AppDataProvider({ children }) {
 
   async function refundSession(pc) {
     if (!pc?.session?.id) return
+    const sessionId=pc.session.id
+    const memberId=pc.session?.customerId ?? pc.session?.memberId ?? null
+    const guestSession=memberId == null
     let prepared=null
     try {
-      prepared=await prepareSessionClose(pc, 'refund')
-      const result=await apiPost(`/sessions/${pc.session.id}/refund`)
+      // Same authority rule as Guest Forfeit/Pause & Save: refund must not be
+      // blocked by Customer Station command delivery. The DB transaction is
+      // authoritative; realtime + best-effort commit command logs the Guest out.
+      if (!guestSession) prepared=await prepareSessionClose(pc, 'refund')
+      const result=await apiPost(`/sessions/${sessionId}/refund`)
+      if (guestSession) prepared={ pcId:pc.id, sessionId, disposition:'refund', memberId:null, guestSession:true }
       if (prepared) await commitPreparedSessionClose(pc, prepared, result)
       await refresh()
       showToast({ title:'Session refunded', message:`₱${Number(result.refundAmount||0).toFixed(2)} returned by ${result.destination}.` })
