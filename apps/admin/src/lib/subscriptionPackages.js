@@ -8,16 +8,26 @@ export const SUBSCRIPTION_PACKAGES = [
 export function normalizeSubscriptionPackages(rows) {
   if (!Array.isArray(rows) || !rows.length) return SUBSCRIPTION_PACKAGES
   const normalized = rows
-    .filter((item) => item && item.is_active !== false)
-    .map((item) => ({
-      id: String(item.id || '').toLowerCase(),
-      label: String(item.label || item.id || ''),
-      maxStations: item.max_stations == null ? null : Number(item.max_stations),
-      monthlyPrice: Number(item.monthly_price || 0),
-      priceSuffix: String(item.price_suffix || '/month'),
-      description: String(item.description || ''),
-      displayOrder: Number(item.display_order || 0),
-    }))
+    .filter((item) => item && (item.isActive ?? item.is_active) !== false)
+    .map((item) => {
+      // This normalizer is intentionally idempotent. Cloud REST responses use
+      // snake_case while page snapshots store the already-normalized camelCase
+      // shape. Accept both so cached Developer data cannot turn every package
+      // into a null cap / PHP 0 package when it is normalized a second time.
+      const maxStationsRaw = item.maxStations !== undefined ? item.maxStations : item.max_stations
+      const monthlyPriceRaw = item.monthlyPrice !== undefined ? item.monthlyPrice : item.monthly_price
+      const priceSuffixRaw = item.priceSuffix !== undefined ? item.priceSuffix : item.price_suffix
+      const displayOrderRaw = item.displayOrder !== undefined ? item.displayOrder : item.display_order
+      return {
+        id: String(item.id || '').toLowerCase(),
+        label: String(item.label || item.id || ''),
+        maxStations: maxStationsRaw == null || maxStationsRaw === '' ? null : Number(maxStationsRaw),
+        monthlyPrice: Number(monthlyPriceRaw ?? 0),
+        priceSuffix: String(priceSuffixRaw || '/month'),
+        description: String(item.description || ''),
+        displayOrder: Number(displayOrderRaw || 0),
+      }
+    })
     .filter((item) => item.id)
     .sort((a, b) => a.displayOrder - b.displayOrder)
   return normalized.length ? normalized : SUBSCRIPTION_PACKAGES

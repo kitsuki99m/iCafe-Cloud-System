@@ -56,3 +56,27 @@ test('Developer function exposes actionable schema-lag error for atomic pricing 
   assert.match(fn,/code:'CLOUD_SCHEMA_OUTDATED',exposeMessage:true/)
   assert.match(fn,/status>=500&&!error\?\.exposeMessage\?fallback/)
 })
+
+
+test('subscription package normalization is idempotent across REST rows and cached snapshots',async()=>{
+  const { normalizeSubscriptionPackages } = await import('../apps/admin/src/lib/subscriptionPackages.js')
+  const restRows=[
+    {id:'bronze',label:'Bronze',display_order:10,max_stations:10,monthly_price:499,price_suffix:'/month',description:'Up to 10 PCs',is_active:true},
+    {id:'silver',label:'Silver',display_order:20,max_stations:25,monthly_price:799,price_suffix:'/month',description:'Up to 25 PCs',is_active:true},
+    {id:'gold',label:'Gold',display_order:30,max_stations:50,monthly_price:1299,price_suffix:'/month',description:'Up to 50 PCs',is_active:true},
+    {id:'ultra',label:'Ultra',display_order:40,max_stations:null,monthly_price:1999,price_suffix:'+ / month',description:'50+ PCs',is_active:true},
+  ]
+  const once=normalizeSubscriptionPackages(restRows)
+  const twice=normalizeSubscriptionPackages(once)
+  assert.deepEqual(twice,once)
+  assert.deepEqual(twice.map(pkg=>[pkg.id,pkg.maxStations,pkg.monthlyPrice]),[
+    ['bronze',10,499],['silver',25,799],['gold',50,1299],['ultra',null,1999],
+  ])
+})
+
+test('Developer list snapshot keeps raw catalog rows and normalizes only at the state boundary',()=>{
+  const ui=read('apps/admin/src/pages/DeveloperConsolePage.jsx')
+  assert.match(ui,/packageCatalog:r\.packageCatalog\|\|SUBSCRIPTION_PACKAGES/)
+  assert.match(ui,/setPackageCatalog\(normalizeSubscriptionPackages\(snapshot\.packageCatalog\)\)/)
+  assert.doesNotMatch(ui,/packageCatalog:normalizeSubscriptionPackages\(r\.packageCatalog\)/)
+})
