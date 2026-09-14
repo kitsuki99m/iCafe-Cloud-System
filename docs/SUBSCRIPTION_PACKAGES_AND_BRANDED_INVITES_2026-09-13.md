@@ -33,7 +33,7 @@ SUPABASE_ACCESS_TOKEN=... SUPABASE_PROJECT_REF=... npm run deploy:auth-templates
 
 Developer Approvals now includes **Send quotation** for a registration/prospect. Quotation emails use the Aezakmi transactional template implemented in `developer-registrations` and are stored as immutable snapshots in `platform_quotations`.
 
-See `CUSTOMER_AUTO_UPDATE_PRICING_AND_QUOTATIONS_2026-09-14.md` for Resend secrets and the complete deployment/update guide.
+See `CUSTOMER_AUTO_UPDATE_PRICING_AND_QUOTATIONS_2026-09-14.md` for Brevo secrets and the complete deployment/update guide.
 
 ## Deployment
 

@@ -51,17 +51,17 @@ test('developer console owns package assignment, editable pricing, and branded q
   assert.match(developer, /SUBSCRIPTION_BELOW_USAGE/)
   assert.match(developer, /subscription_package_changed/)
   assert.match(developer, /send_quote/)
-  assert.match(developer, /RESEND_API_KEY/)
+  assert.match(developer, /BREVO_API_KEY/)
   assert.match(pricingMigration, /platform_quotations/)
 })
 
-test('Resend owns both branded quotation and owner invitation delivery', () => {
-  assert.match(developer, /sendResendEmail/)
+test('Brevo owns both branded quotation and owner invitation delivery', () => {
+  assert.match(developer, /sendBrevoEmail/)
   assert.match(developer, /generateLink\(\{type:'invite'/)
   assert.match(developer, /business-invite/)
   assert.match(developer, /business-activation/)
   assert.match(developer, /quotation/)
-  assert.match(developer, /AEZAKMI_EMAIL_FROM/)
+  assert.match(developer, /BREVO_SENDER_EMAIL/)
   assert.doesNotMatch(developer, /inviteUserByEmail|resetPasswordForEmail/)
 })
 
@@ -75,20 +75,24 @@ test('business owner settings exposes dynamic package and organization station u
 
 test('owner invitation and resend templates remain Aezakmi branded and package aware', () => {
   for (const template of [invite, recovery]) {
-    assert.match(template, /AEZAKMI CAFÉ/)
+    assert.match(template, /AEZAKMI CAFE MANAGEMENT/)
     assert.match(template, /\.Data\.business_name/)
     assert.match(template, /\.Data\.subscription_plan/)
     assert.match(template, /\.Data\.max_stations/)
     assert.match(template, /\.ConfirmationURL/)
+    assert.match(template, /aezakmi-logo\.png/)
   }
   assert.match(developer, /subscription_plan:pkg\.plan/)
   assert.match(developer, /max_stations:pkg\.maxStations/)
 })
 
-test('Resend free-tier mode defaults to resend.dev and exposes a developer test email action', () => {
-  assert.match(developer, /onboarding@resend\.dev/)
-  assert.match(developer, /AEZAKMI_EMAIL_TEST_RECIPIENT/)
-  assert.match(developer, /action==='test_email'/)
-  assert.match(developerUi, /Test email/)
-  assert.match(developerUi, /Resend test mode/)
+test('Brevo production delivery targets each business owner directly with Aezakmi Cafe Management branding', () => {
+  assert.match(developer, /BREVO_SENDER_EMAIL/); assert.match(developer, /kyle\.serina05@gmail\.com/)
+  assert.doesNotMatch(developer, /AEZAKMI_EMAIL_TEST_RECIPIENT/)
+  assert.doesNotMatch(developer, /\[TEST for/)
+  assert.doesNotMatch(developerUi, /Resend test mode/)
+  assert.match(developer, /to:\[\{email:deliveredTo/)
+  assert.match(developer, /recipientEmail:r\.email/)
+  assert.match(developer, /Aezakmi Cafe Management quotation/)
+  assert.match(developer, /aezakmi-logo\.png/)
 })

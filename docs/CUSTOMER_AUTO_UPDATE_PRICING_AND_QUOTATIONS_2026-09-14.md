@@ -57,17 +57,18 @@ supabase functions deploy developer-registrations
 supabase functions deploy station-runtime
 ```
 
-`developer-registrations` now owns pricing edits plus Resend delivery for quotations and owner invitation/activation links. `station-runtime` receives the Customer Electron version/update state through the normal heartbeat.
+`developer-registrations` now owns pricing edits plus Brevo delivery for quotations and owner invitation/activation links. `station-runtime` receives the Customer Electron version/update state through the normal heartbeat.
 
 ## 4. Configure transactional email
 
-Quotation email is sent server-side through Resend. Do not put the provider API key in the Admin frontend.
+Quotation email is sent server-side through Brevo. Do not put the provider API key in the Admin frontend.
 
-Create/verify the sender domain in Resend, then configure Supabase Edge Function secrets:
+Register and verify the sender email in Brevo, then configure Supabase Edge Function secrets:
 
 ```bash
-supabase secrets set RESEND_API_KEY="re_xxxxxxxxx"
-supabase secrets set AEZAKMI_EMAIL_FROM="Aezakmi Café <quotes@your-domain.com>"
+supabase secrets set BREVO_API_KEY="xkeysib-xxxxxxxxxxxxxxxx"
+supabase secrets set BREVO_SENDER_EMAIL="kyle.serina05@gmail.com"
+BREVO_SENDER_NAME="Aezakmi Cafe Management"
 ```
 
 Optional branded settings:
@@ -77,7 +78,7 @@ supabase secrets set AEZAKMI_REPLY_TO="sales@your-domain.com"
 supabase secrets set AEZAKMI_BRAND_LOGO_URL="https://your-domain.com/aezakmi-logo.png"
 ```
 
-If `AEZAKMI_BRAND_LOGO_URL` is omitted, the email uses an Aezakmi gold "A" fallback mark. Resend is also used for owner invitation and activation-link resends, while Supabase Auth remains responsible for generating the secure one-time link. The quotation email contains the business name, quotation number, selected package, PC count, branch count, monthly price, initial deployment pricing, validity date, and an optional developer message.
+If `AEZAKMI_BRAND_LOGO_URL` is omitted, the email uses an Aezakmi gold "A" fallback mark. Brevo is also used for owner invitation and activation-link resends, while Supabase Auth remains responsible for generating the secure one-time link. The quotation email contains the business name, quotation number, selected package, PC count, branch count, monthly price, initial deployment pricing, validity date, and an optional developer message.
 
 ## 5. Send a quotation
 

@@ -9,15 +9,27 @@ import { useAuth } from '../context/AuthContext.jsx'
 import Modal from '../components/common/Modal.jsx'
 import Button from '../components/common/Button.jsx'
 import { AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
+import defaultAezakmiLogoSvg from '../assets/aktura-logo.svg?raw'
 
 // jsPDF's built-in Helvetica font maps ₱ to ±. Use the unambiguous Peso code
 // in exported reports until a Unicode PDF font is embedded.
 const money=value=>`PHP ${Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})}`
 const inputClass='w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 outline-none focus:border-gold/50'
 
+function svgFromDataUrl(dataUrl){const raw=String(dataUrl||''),body=raw.split(',').slice(1).join(',');return /;base64,/i.test(raw)?atob(body):decodeURIComponent(body)}
+async function addReportLogo(doc,logoDataUrl){
+  const logo=String(logoDataUrl||'')
+  if(logo.startsWith('data:image/png')){doc.addImage(logo,'PNG',14,12,12,12);return}
+  if(/^data:image\/(?:jpeg|jpg)/i.test(logo)){doc.addImage(logo,'JPEG',14,12,12,12);return}
+  const markup=logo.startsWith('data:image/svg')?svgFromDataUrl(logo):defaultAezakmiLogoSvg
+  const {svg2pdf}=await import('svg2pdf.js')
+  const svg=new DOMParser().parseFromString(markup,'image/svg+xml').documentElement
+  await svg2pdf(svg,doc,{x:14,y:12,width:12,height:12})
+}
+
 async function downloadReport(reportId){
   const [{jsPDF},{default:autoTable}]=await Promise.all([import('jspdf'),import('jspdf-autotable')]);const {report,branding}=await apiGet(`/earnings/reports/${reportId}/pdf-data`);const doc=new jsPDF({unit:'mm',format:'a4'});const width=doc.internal.pageSize.getWidth()
-  if(branding.logoDataUrl?.startsWith('data:image/png'))doc.addImage(branding.logoDataUrl,'PNG',14,12,12,12);else if(branding.logoDataUrl?.startsWith('data:image/svg')){const {svg2pdf}=await import('svg2pdf.js');const svg=new DOMParser().parseFromString(atob(branding.logoDataUrl.split(',')[1]),'image/svg+xml').documentElement;await svg2pdf(svg,doc,{x:14,y:12,width:12,height:12})}else{doc.setFillColor(232,163,61);doc.roundedRect(14,12,12,12,2,2,'F');doc.setTextColor(11,16,23);doc.setFont('helvetica','bold');doc.text('A',20,20,{align:'center'})}doc.setFontSize(14);doc.setTextColor(20);doc.setFont('helvetica','bold');doc.text(branding.cafeName||'Aezakmi Cafe',30,17);doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(90);doc.text([branding.branch||'Davao Branch',branding.branchLocation||''].filter(Boolean).join(' · '),30,22)
+  await addReportLogo(doc,branding.logoDataUrl);doc.setFontSize(14);doc.setTextColor(20);doc.setFont('helvetica','bold');doc.text(branding.cafeName||'Aezakmi Cafe',30,17);doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(90);doc.text([branding.branch||'Davao Branch',branding.branchLocation||''].filter(Boolean).join(' · '),30,22)
   doc.setTextColor(20);doc.setFontSize(9);doc.text(`REPORT ${report.reportNumber}`,width-14,16,{align:'right'});doc.setTextColor(100);doc.text(dayjs(report.createdAt).format('MMM D, YYYY h:mm A [PHT]'),width-14,21,{align:'right'});doc.setDrawColor(225);doc.line(14,29,width-14,29);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.setTextColor(20);doc.text('Earnings report',14,39);doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(100);doc.text(`${report.bounds.label} · ${report.bounds.period.toUpperCase()}`,14,45)
   const cards=[['Gross income',money(report.summary.gross)],['Expenses',money(report.summary.expenses)],['Net income',money(report.summary.net)]];cards.forEach((item,index)=>{const x=14+index*55;doc.setFontSize(7);doc.setTextColor(110);doc.text(item[0].toUpperCase(),x,57);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.setTextColor(20);doc.text(item[1],x,65);doc.setFont('helvetica','normal')})
   autoTable(doc,{startY:76,head:[['Revenue source','Amount']],body:Object.entries(report.categories||{}).map(([key,value])=>[key.replaceAll('_',' '),money(value)]),theme:'plain',styles:{fontSize:8,cellPadding:2.2,lineColor:[220,220,220],lineWidth:{bottom:0.15}},headStyles:{textColor:[20,24,32],fontStyle:'bold',lineColor:[20,24,32],lineWidth:{bottom:0.3}}});autoTable(doc,{startY:doc.lastAutoTable.finalY+6,head:[['Expense','Note','Amount']],body:(report.expenses||[]).map(row=>[row.category,row.description||'—',money(row.amount)]),theme:'plain',styles:{fontSize:8,cellPadding:2.1,lineColor:[220,220,220],lineWidth:{bottom:0.15}},headStyles:{textColor:[20,24,32],fontStyle:'bold',lineColor:[20,24,32],lineWidth:{bottom:0.3}}})

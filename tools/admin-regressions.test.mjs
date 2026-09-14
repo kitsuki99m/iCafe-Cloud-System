@@ -313,6 +313,14 @@ test('admin Aktura fallback logo matches Midnight Express branding', () => {
   assert.match(svg, /fill="#F5F5F5"/i)
 })
 
+test('Earnings PDF uses the current Aezakmi logo until the owner uploads custom branding', () => {
+  const source = read('apps/admin/src/pages/EarningsPage.jsx')
+  assert.match(source, /aktura-logo\.svg\?raw/)
+  assert.match(source, /defaultAezakmiLogoSvg/)
+  assert.match(source, /await addReportLogo\(doc,branding\.logoDataUrl\)/)
+  assert.doesNotMatch(source, /doc\.text\('A',20,20/)
+})
+
 test('Earnings wallet-funded usage is derived from wallet ledger debits by usage type and transaction time', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   const start = source.indexOf('function earningsSnapshot')
