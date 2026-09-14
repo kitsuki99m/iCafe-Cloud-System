@@ -497,3 +497,27 @@ test('Admin and Customer no longer require Cafe Edge for normal online live sess
   assert.match(station,/cloudExecute\(admin,station,'extension\.request'/)
   assert.doesNotMatch(station,/EDGE_REQUIRED/)
 })
+
+test('database guarantees one starting-wallet receipt for Cloud member creation and repairs missing historical receipts',()=>{
+  const migration=read('supabase/migrations/20260914000024_member_starting_wallet_receipt_guard.sql')
+  assert.match(migration,/branch_member_starting_wallet_revenue/)
+  assert.match(migration,/aezakmi_record_cloud_member_starting_wallet/)
+  assert.match(migration,/new\.edge_id is not null/)
+  assert.match(migration,/branch_revenue_initial_wallet_member_uidx/)
+  assert.match(migration,/coalesce\(member_id, source_id\)/)
+  assert.match(migration,/reference_type = 'member_create'/)
+  assert.match(migration,/inferredFromMemberCreate/)
+  assert.match(migration,/not exists \([\s\S]*from public\.branch_wallet_ledger w[\s\S]*w\.member_id = m\.local_id/)
+})
+
+test('local member creation tags starting-wallet revenue with the member and cash receipt metadata',()=>{
+  const api=read('backend/src/routes/apiRoutes.js')
+  const marker='recordRevenue(\n          "member_initial_wallet"'
+  const start=api.indexOf(marker)
+  assert.notEqual(start,-1)
+  const block=api.slice(start,start+700)
+  assert.match(block,/paymentMethod: "cash"/)
+  assert.match(block,/memberId,/)
+  assert.match(block,/receiptRecorded: true/)
+  assert.match(block,/memberCreate: true/)
+})

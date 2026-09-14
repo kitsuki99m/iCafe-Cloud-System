@@ -2001,6 +2001,11 @@ router.post("/members", auth, requireRole("admin"), async (req, res, next) => {
           startingWallet,
           req.auth.userId,
           now,
+          {
+            paymentMethod: "cash",
+            memberId,
+            metadata: { receiptRecorded: true, memberCreate: true },
+          },
         );
       log(req.auth.userId, "member.create", "member", memberId, null);
     });
