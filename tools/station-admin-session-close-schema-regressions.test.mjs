@@ -4,18 +4,19 @@ import fs from 'node:fs'
 
 const read=(file)=>fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8')
 
-test('station-admin reports an explicit schema mismatch instead of a generic 500',()=>{
+test('station-admin does not turn atomic close schema/runtime skew into the generic station error',()=>{
   const fn=read('supabase/functions/station-admin/index.ts')
   assert.match(fn,/function isMissingAtomicCloseRpc/)
   assert.match(fn,/PGRST202/)
   assert.match(fn,/42883/)
-  assert.match(fn,/CLOUD_SCHEMA_OUTDATED/)
-  assert.match(fn,/20260914000020_admin_atomic_session_close\.sql/)
-  assert.match(fn,/throw atomicCloseSchemaError\(error\)/)
+  assert.match(fn,/if\(error\)\{[\s\S]*compatibility path/)
+  assert.match(fn,/aezakmi_station_release_session/)
+  assert.match(fn,/SESSION_CLOSE_BACKEND_FAILED/)
+  assert.match(fn,/exposeMessage:true/)
   assert.match(fn,/console\.error\('\[station-admin\]'/)
 })
 
-test('release gate requires the atomic close RPC and repair guard migrations',()=>{
+test('release gate still carries the atomic close RPC and repair guard migrations',()=>{
   const readiness=read('tools/release-readiness.mjs')
   const cleanup=read('scripts/fix-supabase-migration-collisions.ps1')
   for(const file of [

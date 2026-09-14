@@ -221,12 +221,45 @@
   }
 
   .customer-pairing-container {
-    @apply grid min-h-0 w-full overflow-hidden rounded-[24px] border border-surface-line bg-soft-white shadow-card;
+    @apply grid min-h-0 w-full overflow-hidden rounded-[24px] border border-surface-line bg-surface shadow-card;
     width: min(100%, 960px);
     max-width: 960px;
     height: min(640px, calc(100vh - 32px));
     max-height: 640px;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  }
+
+  .customer-pairing-brand-panel {
+    background: #202937;
+    color: #F5F5F5;
+    border-right: 1px solid rgba(245, 245, 245, 0.08);
+  }
+
+  .customer-pairing-form-panel {
+    min-width: 0;
+    background: var(--color-surface);
+    color: var(--color-ink-900);
+  }
+
+  .customer-pairing-code-input {
+    background: var(--color-ink);
+    color: var(--color-ink-900);
+    border-color: var(--color-surface-line);
+    caret-color: var(--color-teal);
+  }
+
+  .customer-pairing-code-input-filled {
+    border-color: color-mix(in srgb, var(--color-teal) 58%, var(--color-surface-line));
+    background: color-mix(in srgb, var(--color-teal) 8%, var(--color-ink));
+  }
+
+  html[data-theme="dark"] .customer-pairing-brand-panel {
+    background: #171E29;
+    border-right-color: rgba(245, 245, 245, 0.1);
+  }
+
+  html[data-theme="dark"] .customer-pairing-form-panel {
+    background: var(--color-surface);
   }
 
   .customer-timer-value {
@@ -281,6 +314,10 @@
     height: auto;
     max-height: none;
     grid-template-columns: minmax(0, 1fr);
+  }
+  .customer-pairing-brand-panel {
+    border-right: 0;
+    border-bottom: 1px solid rgba(245, 245, 245, 0.08);
   }
   .customer-content-grid {
     flex: 0 0 auto;

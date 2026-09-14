@@ -195,7 +195,7 @@ export function AuthProvider({ children }) {
     };
     const onAuthInvalid = (event) => {
       const reason=String(event?.detail?.reason || "").toLowerCase();
-      if (reason === "admin_forfeit" || reason === "session_forfeited") {
+      if (["admin_forfeit","session_forfeited","admin_pause_save","session_saved","admin_session_close"].includes(reason)) {
         clearStationLifecycleMarker().catch?.(() => {});
         lock();
         return;
@@ -217,10 +217,15 @@ export function AuthProvider({ children }) {
     };
     const onAdminSessionCloseRelease = () => { clearAdminSessionCloseFence(); };
     const onAdminForfeitLogout = (event) => {
-      // Forced staff forfeiture intentionally bypasses normal logout lifecycle
-      // checkpointing: Admin owns the authoritative close and is about to zero
-      // the remaining time. Clearing locally prevents any crash recovery from
-      // resurrecting the forfeited session while immediately returning to login.
+      // Admin owns the authoritative close. Never run normal customer logout
+      // checkpointing here, because that can recreate/extend time after a close.
+      clearStationLifecycleMarker().catch?.(() => {});
+      if (event?.detail?.committed) setAdminSessionCloseFence(event.detail, ADMIN_SESSION_CLOSE_TERMINAL_GRACE_MS);
+      lock();
+    };
+    const onAdminSessionLogout = (event) => {
+      // Pause & Save is also a terminal Admin action: saved entitlement belongs
+      // to the account/ended Guest session, while this station returns to login.
       clearStationLifecycleMarker().catch?.(() => {});
       if (event?.detail?.committed) setAdminSessionCloseFence(event.detail, ADMIN_SESSION_CLOSE_TERMINAL_GRACE_MS);
       lock();
@@ -239,6 +244,7 @@ export function AuthProvider({ children }) {
     window.addEventListener("aezakmi:admin-session-close-pending", onAdminSessionClosePending);
     window.addEventListener("aezakmi:admin-session-close-release", onAdminSessionCloseRelease);
     window.addEventListener("aezakmi:admin-forfeit-logout", onAdminForfeitLogout);
+    window.addEventListener("aezakmi:admin-session-logout", onAdminSessionLogout);
     window.addEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     return () => {
       window.removeEventListener("aezakmi:auth-invalid", onAuthInvalid);
@@ -247,6 +253,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener("aezakmi:admin-session-close-pending", onAdminSessionClosePending);
       window.removeEventListener("aezakmi:admin-session-close-release", onAdminSessionCloseRelease);
       window.removeEventListener("aezakmi:admin-forfeit-logout", onAdminForfeitLogout);
+      window.removeEventListener("aezakmi:admin-session-logout", onAdminSessionLogout);
       window.removeEventListener("aezakmi:guest-session-ended", onGuestSessionEnded);
     };
   }, []);

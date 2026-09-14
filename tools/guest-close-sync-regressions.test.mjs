@@ -4,28 +4,28 @@ import fs from 'node:fs'
 
 const read=(file)=>fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8')
 
-test('member and guest Forfeit wait for Customer Station forced-logout acknowledgement',()=>{
+test('Member and Guest Admin Save/Forfeit never wait for Customer Station acknowledgement',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
-  assert.match(admin,/prepareSessionClose/)
-  assert.match(admin,/waitForStationCommand/)
-  assert.match(admin,/sessionClose:true/)
-  assert.match(admin,/if \(disposition === 'forfeit'\) prepared=await prepareSessionClose\(pc, disposition\)/)
-  assert.match(admin,/command:'game_update'/)
-  assert.match(admin,/No Pause & Save, forfeit, or refund was committed/)
+  const start=admin.indexOf('async function endSession')
+  const end=admin.indexOf('async function refundSession',start)
+  const block=admin.slice(start,end)
+  assert.match(block,/apiPost\(`\/sessions\/\$\{sessionId\}\/end`/)
+  assert.match(block,/commitPreparedSessionClose/)
+  assert.doesNotMatch(block,/await prepareSessionClose/)
+  assert.doesNotMatch(block,/waitForStationCommand/)
+  assert.doesNotMatch(block,/No Pause & Save, forfeit, or refund was committed/)
 })
 
-test('Customer Station ACKs Forfeit only after it has returned to login kiosk',()=>{
+test('Customer Station terminal commit ACKs only after it has returned to login kiosk',()=>{
   const customer=read('apps/customer/src/context/AppDataContext.jsx')
-  assert.match(customer,/const sessionClose=Boolean\(payload\?\.payload\?\.sessionClose\)/)
-  const start=customer.indexOf('if (sessionClose)')
-  const forfeit=customer.indexOf("if (disposition === 'forfeit')",start)
-  const save=customer.indexOf('// Save/refund protection',forfeit)
-  const block=customer.slice(forfeit,save)
+  const start=customer.indexOf('if (sessionCloseCommit)')
+  const end=customer.indexOf('if (sessionCloseRelease)',start)
+  const block=customer.slice(start,end)
   const login=block.indexOf('showLoginKiosk')
-  const logoutEvent=block.indexOf('aezakmi:admin-forfeit-logout')
+  const event=block.indexOf('aezakmi:admin-session-logout')
   const ack=block.indexOf("await ack('completed'")
-  assert.ok(forfeit>=0 && login>=0 && logoutEvent>login && ack>logoutEvent)
-  assert.match(block,/sessionExitReady:true/)
+  assert.ok(login>=0 && event>login && ack>event)
+  assert.match(block,/sessionCloseCommitted:true/)
   assert.match(block,/forcedLogout:true/)
   assert.doesNotMatch(block,/command:'lock'/)
 })
@@ -35,7 +35,7 @@ test('refund UI is mutually exclusive with other session actions',()=>{
   assert.match(modal,/function RefundControl\(\{ pc, refundableAmount, onRefund, busy = false \}\)/)
   assert.match(modal,/const disabled = refundableAmount <= 0 \|\| busy/)
   assert.match(modal,/busy=\{!!sessionAction\}/)
-  assert.match(modal,/Protecting Customer Station and waiting for its close acknowledgement/)
+  assert.match(modal,/Closing the session and committing the refund/)
 })
 
 test('command status can be polled locally and through Cloud Admin',()=>{

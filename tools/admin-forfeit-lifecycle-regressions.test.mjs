@@ -61,6 +61,6 @@ test('Active forfeiture forces both Member and Guest back to login locally and t
   assert.match(cloud,/aezakmi:cloud-station-wakeup/)
   assert.match(stationAdmin,/action==='session_close'/)
   assert.match(stationAdmin,/session_forfeited/)
-  assert.match(stationAdmin,/forceLogout:disposition==='forfeit'/)
+  assert.match(stationAdmin,/forceLogout:true/)
   assert.match(stationAdmin,/await broadcast/)
 })

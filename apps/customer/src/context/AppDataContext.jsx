@@ -307,14 +307,16 @@ export function AppDataProvider({ children }) {
       const reason=String(payload?.reason || '').toLowerCase()
       const belongsToPc=!payload?.pcId || sameId(payload.pcId,user?.pcId)
       const belongsToMember=!payload?.memberId || sameId(payload.memberId,user?.memberId)
-      // Staff Forfeit is intentionally stronger than Pause & Save: regardless
-      // of Member or Guest mode, the station must be back at login and the local
-      // paid-session marker must be gone. This is also the local-Edge backstop
-      // if the pre-close remote command was missed.
-      if (reason === 'session_forfeited' && belongsToPc) {
+      // Admin terminal closes are logout boundaries for BOTH Members and Guests.
+      // `forceLogout` is emitted by the Admin close path after the server commit.
+      // Forfeit keeps the legacy event name for backward compatibility; Save uses
+      // the generic Admin-session logout event. Neither path uses Lock Session.
+      if ((payload?.forceLogout === true || reason === 'session_forfeited') && belongsToPc) {
         clearStationLifecycleMarker().catch?.(() => {})
         window.aezakmiClient?.showLoginKiosk?.().catch?.(() => {})
-        window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout', { detail:{ reason, sessionId:payload?.sessionId || null, committed:true, source:'session_updated' } }))
+        const detail={ reason, sessionId:payload?.sessionId || null, committed:true, source:'session_updated', disposition:payload?.disposition || null }
+        if (reason === 'session_forfeited') window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout', { detail }))
+        else window.dispatchEvent(new CustomEvent('aezakmi:admin-session-logout', { detail }))
         return
       }
       const guestTerminalReasons=new Set(['session_saved','session_refunded','session_ended','session_expired','session_settled'])
@@ -366,26 +368,22 @@ export function AppDataProvider({ children }) {
         const sessionCloseRelease=Boolean(payload?.payload?.sessionCloseRelease)
         const sessionCloseCommit=Boolean(payload?.payload?.sessionCloseCommit)
         if (sessionCloseCommit) {
-          // Phase 2 happens only after the authoritative DB transaction commits.
+          // Admin Pause & Save / Forfeit are terminal station actions for BOTH
+          // Members and Guests. The server has already committed the authoritative
+          // accounting state, so the client must simply clear local lifecycle/auth
+          // state and return to the login kiosk. Never turn this into a lock overlay.
           const disposition=String(payload?.payload?.disposition || 'save').toLowerCase()
           const reason=disposition==='forfeit'?'session_forfeited':disposition==='refund'?'session_refunded':'session_saved'
-          const isGuestClose=payload?.payload?.guestSession === true || (payload?.payload?.guestSession == null && user?.role === 'guest')
+          const isTerminalAdminClose=disposition === 'save' || disposition === 'forfeit' || disposition === 'refund'
           await clearStationLifecycleMarker().catch?.(() => {})
-          if (disposition === 'forfeit') {
+          if (isTerminalAdminClose) {
             const loginKiosk=window.aezakmiClient?.showLoginKiosk
               ? await window.aezakmiClient.showLoginKiosk()
               : (window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true)
-            window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout',{detail:{reason,sessionId:payload?.payload?.sessionId || null,source:'admin_commit',committed:true}}))
-            await ack('completed',{executed:loginKiosk !== false,sessionCloseCommitted:true,forcedLogout:true,sessionId:payload?.payload?.sessionId || null,disposition})
-          } else if (isGuestClose) {
-            const loginKiosk=window.aezakmiClient?.showLoginKiosk
-              ? await window.aezakmiClient.showLoginKiosk()
-              : (window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true)
-            window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended',{detail:{reason,sessionId:payload?.payload?.sessionId || null,source:'admin_commit'}}))
-            await ack('completed',{executed:loginKiosk !== false,sessionCloseCommitted:true,guestLoggedOut:true,sessionId:payload?.payload?.sessionId || null,disposition})
-          } else {
-            const idle=window.aezakmiClient?.showIdleDashboard ? await window.aezakmiClient.showIdleDashboard() : true
-            await ack('completed',{executed:idle !== false,sessionCloseCommitted:true,sessionId:payload?.payload?.sessionId || null,disposition})
+            const detail={reason,sessionId:payload?.payload?.sessionId || null,source:'admin_commit',committed:true,disposition}
+            if (disposition === 'forfeit') window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout',{detail}))
+            else window.dispatchEvent(new CustomEvent('aezakmi:admin-session-logout',{detail}))
+            await ack('completed',{executed:loginKiosk !== false,sessionCloseCommitted:true,forcedLogout:true,sessionId:detail.sessionId,disposition})
           }
           queueRefresh()
           return
@@ -511,10 +509,13 @@ export function AppDataProvider({ children }) {
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
     const onCloudWakeup = (event) => {
       const reason=String(event?.detail?.reason || '').toLowerCase()
-      if (reason === 'session_forfeited') {
+      const forceLogout=event?.detail?.forceLogout === true
+      if (forceLogout || reason === 'session_forfeited') {
         clearStationLifecycleMarker().catch?.(() => {})
         window.aezakmiClient?.showLoginKiosk?.().catch?.(() => {})
-        window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout', { detail:{ reason, sessionId:event?.detail?.sessionId || null, source:'cloud', committed:true } }))
+        const detail={ reason, sessionId:event?.detail?.sessionId || null, source:'cloud', committed:true, disposition:event?.detail?.disposition || null }
+        if (reason === 'session_forfeited') window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout', { detail }))
+        else window.dispatchEvent(new CustomEvent('aezakmi:admin-session-logout', { detail }))
         return
       }
       const guestTerminalReasons=new Set(['session_saved','session_refunded','session_ended','session_expired','session_settled'])

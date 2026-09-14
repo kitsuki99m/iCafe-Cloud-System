@@ -4,16 +4,18 @@ import fs from 'node:fs'
 
 const admin=fs.readFileSync(new URL('../apps/admin/src/context/AppDataContext.jsx', import.meta.url),'utf8')
 
-test('Guest Pause & Save stays DB-authoritative while Admin Forfeit requires forced logout ACK',()=>{
-  assert.match(admin,/const guestSession=memberId == null/)
-  assert.match(admin,/if \(disposition === 'forfeit'\) prepared=await prepareSessionClose\(pc, disposition\)/)
-  assert.match(admin,/else if \(!guestSession && disposition === 'save'\) prepared=await prepareSessionClose\(pc, disposition\)/)
-  assert.match(admin,/const result=await apiPost\(`\/sessions\/\$\{sessionId\}\/end`, \{ disposition, \.\.\.options \}\)/)
-  assert.match(admin,/if \(!prepared && guestSession && disposition === 'save'\) \{[\s\S]*guestSession:true/)
+test('Member and Guest Pause & Save / Forfeit are DB-authoritative and do not wait for Customer Station',()=>{
+  const start=admin.indexOf('async function endSession')
+  const end=admin.indexOf('async function refundSession',start)
+  const block=admin.slice(start,end)
+  assert.match(block,/const result=await apiPost\(`\/sessions\/\$\{sessionId\}\/end`, \{ disposition, \.\.\.options \}\)/)
+  assert.match(block,/if \(disposition === 'save' \|\| disposition === 'forfeit'\)/)
+  assert.match(block,/await commitPreparedSessionClose\(pc, committed, result\)/)
+  assert.doesNotMatch(block,/await prepareSessionClose/)
+  assert.doesNotMatch(block,/waitForStationCommand/)
 })
 
-test('Guest Refund is DB-authoritative and Customer terminal signal is best effort',()=>{
-  assert.match(admin,/if \(!guestSession\) prepared=await prepareSessionClose\(pc, 'refund'\)/)
+test('Guest Refund remains DB-authoritative and Customer terminal signal is best effort',()=>{
   assert.match(admin,/const result=await apiPost\(`\/sessions\/\$\{sessionId\}\/refund`\)/)
   assert.match(admin,/if \(guestSession\) prepared=\{ pcId:pc\.id, sessionId, disposition:'refund', memberId:null, guestSession:true \}/)
   assert.match(admin,/if \(prepared\) await commitPreparedSessionClose\(pc, prepared, result\)/)

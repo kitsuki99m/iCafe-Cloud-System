@@ -3,17 +3,19 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 const read=(file)=>fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8')
 
-test('Admin Forfeit prepares both guest and member logout before authoritative close',()=>{
+test('Admin Pause & Save and Forfeit commit authority before any station terminal signal',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
-  assert.match(admin,/async function prepareSessionClose\(pc, disposition\)/)
-  assert.match(admin,/command:'game_update'/)
-  assert.match(admin,/if \(disposition === 'forfeit'\) prepared=await prepareSessionClose\(pc, disposition\)/)
-  assert.match(admin,/else if \(!guestSession && disposition === 'save'\) prepared=await prepareSessionClose\(pc, disposition\)/)
-  assert.match(admin,/if \(!guestSession\) prepared=await prepareSessionClose\(pc, 'refund'\)/)
-  assert.doesNotMatch(admin,/prepareGuestSessionClose/)
+  const start=admin.indexOf('async function endSession')
+  const end=admin.indexOf('async function refundSession',start)
+  const block=admin.slice(start,end)
+  const close=block.indexOf('apiPost(`/sessions/${sessionId}/end`')
+  const commit=block.indexOf('commitPreparedSessionClose',close)
+  assert.ok(close>=0&&commit>close)
+  assert.doesNotMatch(block,/await prepareSessionClose/)
+  assert.doesNotMatch(block,/releasePreparedSessionClose/)
 })
 
-test('forfeit close fence forces logout before ACK and does not checkpoint remaining time',()=>{
+test('legacy prepared Forfeit compatibility path logs out before ACK and never checkpoints remaining time',()=>{
   const auth=read('apps/customer/src/context/AuthContext.jsx')
   const customer=read('apps/customer/src/context/AppDataContext.jsx')
   assert.match(auth,/ADMIN_SESSION_CLOSE_PENDING/)
@@ -31,15 +33,13 @@ test('forfeit close fence forces logout before ACK and does not checkpoint remai
   assert.doesNotMatch(forfeitBlock,/command:'lock'/)
 })
 
-test('failed final forfeit remains logged out while reversible close modes can roll back',()=>{
+test('failed authoritative close does not send an unlock rollback because Admin never pre-locks Save/Forfeit',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
-  const customer=read('apps/customer/src/context/AppDataContext.jsx')
-  assert.match(admin,/sessionCloseRelease:true/)
-  assert.match(admin,/if \(prepared\) await releasePreparedSessionClose\(pc, prepared\)/)
-  assert.match(customer,/sessionCloseRelease/)
-  assert.match(customer,/if \(disposition === 'forfeit'\)[\s\S]*showLoginKiosk[\s\S]*keptLoggedOut:true/)
-  assert.match(customer,/executeRemoteCommand[\s\S]*command:'unlock'/)
-  assert.match(customer,/aezakmi:admin-session-close-release/)
+  const start=admin.indexOf('async function endSession')
+  const end=admin.indexOf('async function refundSession',start)
+  const block=admin.slice(start,end)
+  assert.match(block,/catch \(error\) \{[\s\S]*refresh\(\)[\s\S]*throw error/)
+  assert.doesNotMatch(block,/releasePreparedSessionClose/)
 })
 
 test('guest terminal reasons cover every normal session-ending lifecycle plus dedicated forfeit',()=>{
@@ -55,7 +55,6 @@ test('latest Electron quit and compact pairing fixes are preserved',()=>{
   assert.match(pairing,/customer-pairing-container/)
 })
 
-
 test('Cloud Admin final close does not fall through to Cafe Edge',()=>{
   const cloud=read('apps/admin/src/lib/cloudClient.js')
   const fn=read('supabase/functions/station-admin/index.ts')
@@ -64,17 +63,23 @@ test('Cloud Admin final close does not fall through to Cafe Edge',()=>{
   assert.match(cloud,/session_close/)
   assert.match(cloud,/refundSessionMatch/)
   assert.match(fn,/aezakmi_admin_close_session/)
+  assert.match(fn,/aezakmi_station_release_session/)
   assert.match(migration,/savedRemainingSeconds/)
   assert.match(migration,/cloud_operation_receipts/)
 })
 
-test('successful prepared close has a terminal commit signal and only failed DB commit releases it',()=>{
+test('successful Admin close terminal signal logs both Member and Guest back to login',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
   const customer=read('apps/customer/src/context/AppDataContext.jsx')
   assert.match(admin,/sessionCloseCommit:true/)
   assert.match(customer,/const sessionCloseCommit=/)
   assert.match(customer,/sessionCloseCommitted:true/)
-  assert.match(customer,/showIdleDashboard/)
-  assert.match(customer,/aezakmi:guest-session-ended/)
-  assert.match(customer,/forcedLogout:true/)
+  const start=customer.indexOf('if (sessionCloseCommit)')
+  const end=customer.indexOf('if (sessionCloseRelease)',start)
+  const block=customer.slice(start,end)
+  assert.match(block,/showLoginKiosk/)
+  assert.match(block,/aezakmi:admin-session-logout/)
+  assert.match(block,/aezakmi:admin-forfeit-logout/)
+  assert.match(block,/forcedLogout:true/)
+  assert.doesNotMatch(block,/showIdleDashboard/)
 })

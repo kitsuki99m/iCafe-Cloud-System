@@ -5211,6 +5211,7 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
           error: "You can only end your own session.",
         });
     const disposition = String(req.body?.disposition || "save").toLowerCase();
+    const adminTerminalClose = req.auth.role === "admin" && ["save", "forfeit"].includes(disposition);
     if (!["save", "forfeit", "settle"].includes(disposition))
       return res
         .status(400)
@@ -5396,6 +5397,18 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
         reason: "postpaid_settlement",
         amount: result.amountDue,
       });
+    // Admin Pause & Save and Forfeit are terminal station actions. The database
+    // has already committed the close, so force the paired Customer Station back
+    // to login for both Member and Guest modes. This deliberately does not use
+    // Lock Session and does not depend on a remote-command acknowledgement.
+    if (adminTerminalClose) {
+      const endedAt = result?.endedAt || nowIso();
+      db.prepare(`UPDATE auth_sessions
+        SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,?)
+        WHERE pc_id=? AND revoked_at IS NULL
+          AND user_id IN (SELECT id FROM users WHERE role='customer')`)
+        .run(endedAt,endedAt,disposition === "forfeit" ? "admin_forfeit" : "admin_pause_save",s.pc_id);
+    }
     emitSessionUpdated(s.id, {
       pcId: s.pc_id,
       memberId: s.member_id,
@@ -5404,15 +5417,22 @@ router.post("/sessions/:id/end", auth, (req, res, next) => {
           ? "session_settled"
           : disposition === "forfeit"
             ? "session_forfeited"
-            : result.remainingSeconds > 0
-              ? "session_paused"
-              : "session_expired",
+            : adminTerminalClose
+              ? "session_saved"
+              : result.remainingSeconds > 0
+                ? "session_paused"
+                : "session_expired",
       remainingSeconds: result.remainingSeconds,
       amountDue: result.amountDue,
       paymentMethod: disposition === "settle" ? paymentMethod : null,
+      disposition,
+      forceLogout: adminTerminalClose,
     });
-    if (disposition === "forfeit") {
-      getIO()?.to(`pc:${s.pc_id}`).emit('auth:revoked',{reason:'admin_forfeit',pcId:s.pc_id,sessionId:s.id,immediate:true});
+    if (adminTerminalClose) {
+      getIO()?.to(`pc:${s.pc_id}`).emit('auth:revoked',{
+        reason:disposition === "forfeit" ? 'admin_forfeit' : 'admin_pause_save',
+        pcId:s.pc_id,sessionId:s.id,disposition,immediate:true
+      });
     }
 
     if (s.member_id)

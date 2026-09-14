@@ -15,17 +15,19 @@ test('terminal Guest close is a login-kiosk transition, not a reversible station
   assert.match(main,/client:show-login-kiosk/)
   assert.match(preload,/showLoginKiosk:\(\) => ipcRenderer\.invoke\('client:show-login-kiosk'\)/)
   assert.match(customer,/window\.aezakmiClient\?\.showLoginKiosk/)
-  assert.match(customer,/guestLoggedOut:true/)
+  assert.match(customer,/aezakmi:admin-session-logout/)
+  assert.match(customer,/forcedLogout:true/)
   assert.match(auth,/showLoginKiosk \|\| window\.aezakmiClient\?\.lockClient/)
 })
 
-test('Pause & Save and Forfeit carry immutable Guest identity through ACK to terminal commit',()=>{
+test('Pause & Save and Forfeit preserve close identity through terminal commit',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
   const customer=read('apps/customer/src/context/AppDataContext.jsx')
-  assert.match(admin,/guestSession:memberId == null/)
-  assert.match(admin,/guestSession:result\?\.memberId != null \? false : prepared\.guestSession === true/)
-  assert.match(customer,/const isGuestClose=payload\?\.payload\?\.guestSession === true/)
-  assert.match(customer,/Object\.prototype\.hasOwnProperty\.call\(event\.detail,'memberId'\)/)
+  assert.match(admin,/guestSession/)
+  assert.match(admin,/memberId:result\?\.memberId \?\? prepared\.memberId \?\? null/)
+  assert.match(customer,/sessionId:payload\?\.payload\?\.sessionId \|\| null/)
+  assert.match(customer,/disposition/)
+  assert.match(customer,/aezakmi:admin-session-logout/)
 })
 
 test('member idle transition also dismisses the temporary prepared-close overlay',()=>{

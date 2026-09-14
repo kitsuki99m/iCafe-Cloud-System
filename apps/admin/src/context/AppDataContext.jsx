@@ -535,28 +535,24 @@ export function AppDataProvider({ children }) {
     const sessionId=pc.session.id
     const memberId=pc.session?.customerId ?? pc.session?.memberId ?? null
     const guestSession=memberId == null
-    let prepared=null
     try {
-      // Admin Forfeit is a forced logout command for both Member and Guest.
-      // Customer Station must leave the paid desktop immediately, ACK that
-      // logout boundary, and only then do we zero/end the authoritative session.
-      // Pause & Save keeps its older semantics: Member closes use a protection
-      // handshake, while Guest save is DB-authoritative and gets a best-effort
-      // terminal signal after commit.
-      if (disposition === 'forfeit') prepared=await prepareSessionClose(pc, disposition)
-      else if (!guestSession && disposition === 'save') prepared=await prepareSessionClose(pc, disposition)
+      // Admin session closure is server-authoritative. Do NOT make Pause & Save
+      // or Forfeit depend on a remote-command ACK first: a stale/pending station
+      // command used to surface the generic "Unable to manage Customer Station"
+      // error and leave billing active. Commit the close first, then send the
+      // terminal station signal as best effort. Cloud/local backends independently
+      // revoke Customer auth and broadcast the terminal close as another backstop.
       const result=await apiPost(`/sessions/${sessionId}/end`, { disposition, ...options })
-      if (!prepared && guestSession && disposition === 'save') {
-        prepared={ pcId:pc.id, sessionId, disposition, memberId:null, guestSession:true }
+      if (disposition === 'save' || disposition === 'forfeit') {
+        const committed={ pcId:pc.id, sessionId, disposition, memberId, guestSession }
+        await commitPreparedSessionClose(pc, committed, result)
       }
-      if (prepared) await commitPreparedSessionClose(pc, prepared, result)
       optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>String(item.id)===String(pc.id)?{...item,status:'available',session:null,pendingSessionEnd:sessionId}:item)}))
       playAdminSound('success', { dedupeKey:`session-end:${pc.id}` })
       showToast({ title:disposition==='settle'?'Legacy session settled':disposition==='forfeit'?'Session forfeited':'Session saved', message:disposition==='settle'?`₱${Number(result.amountDue||0).toFixed(2)} paid by ${result.paymentMethod}.`:`${pc.label} is available again.` })
       refresh()
       return result
     } catch (error) {
-      if (prepared) await releasePreparedSessionClose(pc, prepared)
       refresh()
       throw error
     }

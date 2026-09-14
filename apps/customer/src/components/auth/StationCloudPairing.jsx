@@ -90,7 +90,7 @@ export default function StationCloudPairing() {
 
   return <><main className="customer-pairing-shell">
     <div className="customer-pairing-container">
-      <section className="flex min-h-0 flex-col bg-midnight p-6 text-soft-white sm:p-8">
+      <section className="customer-pairing-brand-panel flex min-h-0 flex-col p-6 text-soft-white sm:p-8">
         <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-soft-white/10 p-2"><img src={logo} className="h-full w-full object-contain" alt=""/></span><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-new-wool">Aezakmi Cloud</p><h1 className="font-display text-xl font-semibold">Customer Station</h1></div></div>
         <div className="mt-10 max-w-sm"><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-new-wool">First-time setup</p><h2 className="mt-2 font-display text-3xl font-semibold leading-tight">Connect this PC to the correct café.</h2><p className="mt-3 text-sm leading-6 text-dance">Cloud primary · Edge fallback.</p></div>
         <div className="mt-8 space-y-3 text-sm">
@@ -100,7 +100,7 @@ export default function StationCloudPairing() {
         <div className="mt-auto pt-8 text-[11px] text-new-wool"><ShieldCheck className="mr-2 inline" size={14}/>Pairing binds this installation to one branch and PC.</div>
       </section>
 
-      <section className="flex min-h-0 items-center p-6 sm:p-8">
+      <section className="customer-pairing-form-panel flex min-h-0 items-center p-6 sm:p-8">
         <form onSubmit={submit} className="mx-auto w-full max-w-md">
           <div className="mb-6"><p className="eyebrow">Pair this computer</p><h2 className="mt-1 font-display text-2xl font-semibold text-ink-900">Customer Station setup</h2><p className="mt-2 text-sm leading-6 text-slate-soft">Generate a pairing code in Cloud Admin → Clients.</p></div>
           {(error||stationPairingError)&&<div className="mb-4 rounded-xl border border-ember/20 bg-ember/10 px-3 py-2.5 text-sm text-ember-dim">{error||stationPairingError}</div>}
@@ -121,7 +121,7 @@ export default function StationCloudPairing() {
                   autoCapitalize="characters"
                   spellCheck={false}
                   aria-label={`Pairing code character ${index+1} of ${PAIRING_CODE_LENGTH}`}
-                  className={`h-14 min-w-0 flex-1 rounded-xl border bg-ink text-center font-mono text-xl font-bold uppercase text-ink-900 outline-none transition ${pairingCode[index]?'border-teal/50 bg-teal/5':'border-surface-line'} focus:border-teal focus:ring-2 focus:ring-teal/15`}
+                  className={`customer-pairing-code-input h-14 min-w-0 flex-1 rounded-xl border text-center font-mono text-xl font-bold uppercase outline-none transition ${pairingCode[index]?'customer-pairing-code-input-filled':'border-surface-line'} focus:border-teal focus:ring-2 focus:ring-teal/15`}
                 />)}
                 <span aria-hidden="true" className="w-3 shrink-0 text-center font-mono text-xl font-bold text-slate-soft">–</span>
                 {[4,5,6,7].map(index=><input
@@ -136,7 +136,7 @@ export default function StationCloudPairing() {
                   autoCapitalize="characters"
                   spellCheck={false}
                   aria-label={`Pairing code character ${index+1} of ${PAIRING_CODE_LENGTH}`}
-                  className={`h-14 min-w-0 flex-1 rounded-xl border bg-ink text-center font-mono text-xl font-bold uppercase text-ink-900 outline-none transition ${pairingCode[index]?'border-teal/50 bg-teal/5':'border-surface-line'} focus:border-teal focus:ring-2 focus:ring-teal/15`}
+                  className={`customer-pairing-code-input h-14 min-w-0 flex-1 rounded-xl border text-center font-mono text-xl font-bold uppercase outline-none transition ${pairingCode[index]?'customer-pairing-code-input-filled':'border-surface-line'} focus:border-teal focus:ring-2 focus:ring-teal/15`}
                 />)}
               </div>
             </div>

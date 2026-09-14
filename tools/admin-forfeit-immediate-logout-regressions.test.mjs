@@ -3,21 +3,21 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 const read=(file)=>fs.readFileSync(new URL(`../${file}`,import.meta.url),'utf8')
 
-test('Admin Forfeit is a forced logout command, not the ordinary Lock Session command',()=>{
+test('Admin Forfeit is server-authoritative and never gated by Lock Session or a station ACK',()=>{
   const admin=read('apps/admin/src/context/AppDataContext.jsx')
-  const customer=read('apps/customer/src/context/AppDataContext.jsx')
-  const start=customer.indexOf('if (sessionClose)')
-  const forfeit=customer.indexOf("if (disposition === 'forfeit')",start)
-  const save=customer.indexOf('// Save/refund protection',forfeit)
-  const block=customer.slice(forfeit,save)
-  assert.match(admin,/if \(disposition === 'forfeit'\) prepared=await prepareSessionClose\(pc, disposition\)/)
-  assert.match(block,/showLoginKiosk/)
-  assert.match(block,/aezakmi:admin-forfeit-logout/)
-  assert.doesNotMatch(block,/executeRemoteCommand/)
+  const start=admin.indexOf('async function endSession')
+  const end=admin.indexOf('async function refundSession',start)
+  const block=admin.slice(start,end)
+  const close=block.indexOf('apiPost(`/sessions/${sessionId}/end`')
+  const commit=block.indexOf('commitPreparedSessionClose',close)
+  assert.ok(close>=0,'Admin must close the authoritative session')
+  assert.ok(commit>close,'station terminal signal must happen only after the close commits')
+  assert.doesNotMatch(block,/await prepareSessionClose/)
+  assert.doesNotMatch(block,/releasePreparedSessionClose/)
   assert.doesNotMatch(block,/command:'lock'/)
 })
 
-test('forced forfeit logout bypasses normal customer lifecycle saving',()=>{
+test('forced Admin close bypasses normal customer lifecycle saving',()=>{
   const auth=read('apps/customer/src/context/AuthContext.jsx')
   const start=auth.indexOf('const onAdminForfeitLogout')
   const end=auth.indexOf('const onStationSessionInterruption',start)
@@ -27,16 +27,20 @@ test('forced forfeit logout bypasses normal customer lifecycle saving',()=>{
   assert.doesNotMatch(block,/releaseStationLifecycle/)
 })
 
-test('Cafe Edge revokes active customer auth when staff forfeits a session',()=>{
+test('Cafe Edge revokes active customer auth for both Admin Pause & Save and Forfeit',()=>{
   const api=read('backend/src/routes/apiRoutes.js')
-  assert.match(api,/end_reason=COALESCE\(end_reason,'admin_forfeit'\)/)
+  assert.match(api,/const adminTerminalClose = req\.auth\.role === "admin" && \["save", "forfeit"\]\.includes\(disposition\)/)
+  assert.match(api,/end_reason=COALESCE\(end_reason,\?\)/)
+  assert.match(api,/disposition === "forfeit" \? "admin_forfeit" : "admin_pause_save"/)
   assert.match(api,/user_id IN \(SELECT id FROM users WHERE role='customer'\)/)
-  assert.match(api,/emit\('auth:revoked',\{reason:'admin_forfeit'/)
+  assert.match(api,/emit\('auth:revoked',[\s\S]*admin_pause_save/)
+  assert.match(api,/forceLogout: adminTerminalClose/)
 })
 
-test('Cloud forfeiture revokes station customer auth and broadcasts forced logout',()=>{
+test('Cloud Admin closes revoke station customer auth and broadcast forced logout',()=>{
   const fn=read('supabase/functions/station-admin/index.ts')
-  assert.match(fn,/disposition==='forfeit'&&device\?\.id/)
   assert.match(fn,/branch_customer_auth_sessions/)
-  assert.match(fn,/forceLogout:disposition==='forfeit'/)
+  assert.match(fn,/reason=disposition==='forfeit'\?'session_forfeited':disposition==='refund'\?'session_refunded':'session_saved'/)
+  assert.match(fn,/forceLogout:true/)
+  assert.match(fn,/aezakmi_station_release_session/)
 })

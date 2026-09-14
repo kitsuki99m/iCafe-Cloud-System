@@ -13,10 +13,6 @@ function isMissingAtomicCloseRpc(error:any){
   const message=`${error?.message||''} ${error?.details||''} ${error?.hint||''}`.toLowerCase()
   return code==='PGRST202'||code==='42883'||(message.includes('aezakmi_admin_close_session')&&(message.includes('could not find')||message.includes('does not exist')||message.includes('schema cache')))
 }
-function atomicCloseSchemaError(error:any){
-  if(!isMissingAtomicCloseRpc(error))return error
-  return Object.assign(new Error('Cloud database schema is behind this Admin build. Apply migration 20260914000020_admin_atomic_session_close.sql (or newer), then redeploy station-admin before using Pause & Save, Forfeit, or Refund.'),{status:503,code:'CLOUD_SCHEMA_OUTDATED',exposeMessage:true,cause:error})
-}
 async function sha256(value:string){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('')}
 function token(bytes=24){const v=new Uint8Array(bytes);crypto.getRandomValues(v);return btoa(String.fromCharCode(...v)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
 function part(){const a=new Uint8Array(4);crypto.getRandomValues(a);let s='';for(const n of a)s+=chars[n%chars.length];return s}
@@ -93,49 +89,99 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user
     if(!sessionId)throw Object.assign(new Error('Session id is required.'),{status:400,code:'SESSION_REQUIRED'});
     if(!['save','forfeit','refund'].includes(disposition))throw Object.assign(new Error('Choose Save, Forfeit, or Refund.'),{status:400,code:'INVALID_DISPOSITION'});
     const operationKey=String(body.operationKey||'').trim()||null;
-    let{data,error}=await admin.rpc('aezakmi_admin_close_session',{
+    const{data:before,error:beforeError}=await admin.from('branch_sessions').select('local_id,pc_id,member_id,billing_type,data').eq('branch_id',branchId).eq('local_id',sessionId).eq('status','active').maybeSingle();
+    if(beforeError)throw Object.assign(new Error('Cloud could not read the active session for this Admin action. Retry once; if it persists, redeploy station-admin and verify the database migrations.'),{status:503,code:'SESSION_CLOSE_READ_FAILED',exposeMessage:true,cause:beforeError});
+    if(!before)throw Object.assign(new Error('Active session not found.'),{status:404,code:'NO_ACTIVE_SESSION'});
+    if(String(before.billing_type||'')!=='prepaid')throw Object.assign(new Error('Postpaid sessions must be settled before they can end.'),{status:409,code:'SETTLEMENT_REQUIRED'});
+
+    let data:any=null,error:any=null,compatibilityFallback:string|null=null;
+    const atomic=await admin.rpc('aezakmi_admin_close_session',{
       p_branch_id:branchId,p_session_id:sessionId,p_disposition:disposition,p_actor_id:user.id,p_operation_key:operationKey
     });
-    // Forfeit/refund existed in the original Cloud transaction engine before
-    // the newer atomic-close RPC was introduced. If station-admin deploys
-    // before migrations 00020/00021 reach the project, do not make an Admin
-    // Guest forfeiture unusable: fall back to that already-deployed authority.
-    // Pause & Save still requires the newer RPC because Guest saved time must
-    // be persisted on the ended session for later restore.
-    if(error&&isMissingAtomicCloseRpc(error)&&(disposition==='forfeit'||disposition==='refund')){
-      const fallbackAction=disposition==='refund'?'session.refund':'session.end';
-      const fallbackPayload=disposition==='refund'?{sessionId}:{sessionId,disposition:'forfeit'};
-      const fallback=await admin.rpc('aezakmi_cloud_execute',{
-        p_branch_id:branchId,p_action:fallbackAction,p_payload:fallbackPayload,p_actor_kind:'admin',p_actor_id:user.id,p_operation_key:operationKey
-      });
-      if(fallback.error)throw fallback.error;
-      data=fallback.data;error=null;
+    data=atomic.data;error=atomic.error;
+
+    // Admin close must stay independent of the station command queue and of one
+    // particular database RPC revision. If the newer atomic RPC is missing or
+    // fails at runtime, use the older production paths that Customer logout has
+    // already exercised for months. Save uses station-release because it
+    // atomically persists Guest savedRemainingSeconds; Forfeit/Refund use the
+    // established cloud transaction engine. A failed RPC transaction cannot
+    // partially commit, so this compatibility retry is safe.
+    if(error){
+      console.warn('[station-admin] atomic session close failed; using compatibility path',{code:error?.code||null,message:error?.message||String(error),sessionId,disposition});
+      if(disposition==='save'){
+        const fallback=await admin.rpc('aezakmi_station_release_session',{
+          p_branch_id:branchId,
+          p_pc_id:String(before.pc_id||''),
+          p_reason:'logout',
+          p_interrupted_at:new Date().toISOString(),
+          p_expected_member_id:before.member_id||null,
+        });
+        if(fallback.error){
+          const message=isMissingAtomicCloseRpc(error)
+            ? 'Cloud session-close schema is unavailable and the proven logout fallback also failed. Apply the latest migrations and redeploy station-admin.'
+            : 'Cloud could not save and close the session. No Admin station command is required; retry the action.';
+          throw Object.assign(new Error(message),{status:503,code:'SESSION_CLOSE_BACKEND_FAILED',exposeMessage:true,cause:fallback.error});
+        }
+        data=fallback.data;error=null;compatibilityFallback='station_release';
+      }else{
+        const fallbackAction=disposition==='refund'?'session.refund':'session.end';
+        const fallbackPayload=disposition==='refund'?{sessionId}:{sessionId,disposition:'forfeit'};
+        const fallback=await admin.rpc('aezakmi_cloud_execute',{
+          p_branch_id:branchId,p_action:fallbackAction,p_payload:fallbackPayload,p_actor_kind:'admin',p_actor_id:user.id,p_operation_key:operationKey
+        });
+        if(fallback.error){
+          const message=isMissingAtomicCloseRpc(error)
+            ? 'Cloud session-close schema is unavailable and the compatibility close also failed. Apply the latest migrations and redeploy station-admin.'
+            : 'Cloud could not close the session. No session time was changed; retry the Admin action.';
+          throw Object.assign(new Error(message),{status:503,code:'SESSION_CLOSE_BACKEND_FAILED',exposeMessage:true,cause:fallback.error});
+        }
+        data=fallback.data;error=null;compatibilityFallback='cloud_execute';
+      }
     }
-    if(error)throw atomicCloseSchemaError(error);
     let out:any=data&&typeof data==='object'?data:{};
-    if(out.success===false)throw Object.assign(new Error(out.error||'Unable to close this session.'),{status:Number(out.status||400),code:out.code||'SESSION_CLOSE_FAILED'});
-    if(!out.pcId||!Object.prototype.hasOwnProperty.call(out,'memberId')){
-      const{data:closedSession,error:closedSessionError}=await admin.from('branch_sessions').select('pc_id,member_id').eq('branch_id',branchId).eq('local_id',sessionId).maybeSingle();
-      if(closedSessionError)throw closedSessionError;
-      out={...out,pcId:out.pcId||closedSession?.pc_id||null,memberId:Object.prototype.hasOwnProperty.call(out,'memberId')?out.memberId:(closedSession?.member_id||null)};
+    if(out.success===false)throw Object.assign(new Error(out.error||'Unable to close this session.'),{status:Number(out.status||400),code:out.code||'SESSION_CLOSE_FAILED',exposeMessage:true});
+
+    const now=new Date().toISOString();
+    if(compatibilityFallback){
+      const remaining=Math.max(0,Number(out.remainingSeconds||0)||0);
+      const savedRemainingSeconds=disposition==='save'?remaining:0;
+      // Compatibility paths already committed the authoritative accounting.
+      // Enrich the ended row for Admin audit/recovery, but never convert a
+      // successful close into a false UI failure because this metadata write
+      // races replication/schema drift.
+      const{data:ended,error:endedReadError}=await admin.from('branch_sessions').select('data').eq('branch_id',branchId).eq('local_id',sessionId).maybeSingle();
+      if(endedReadError)console.warn('[station-admin] close metadata read warning',endedReadError);
+      else{
+        const existingData=ended?.data&&typeof ended.data==='object'?ended.data:{};
+        const endedPatch=await admin.from('branch_sessions').update({
+          data:{...existingData,lifecycle:disposition==='save'?'admin_saved':disposition==='forfeit'?'forfeited':'refunded',endReason:`admin_${disposition}`,closeDisposition:disposition,savedRemainingSeconds,closedAt:now},
+          updated_at:now,
+        }).eq('branch_id',branchId).eq('local_id',sessionId);
+        if(endedPatch.error)console.warn('[station-admin] close metadata write warning',endedPatch.error);
+      }
+      out={...out,sessionId:out.sessionId||sessionId,savedRemainingSeconds,remainingSeconds:savedRemainingSeconds};
     }
+
+    out={...out,pcId:out.pcId||before.pc_id||null,memberId:Object.prototype.hasOwnProperty.call(out,'memberId')?out.memberId:(before.member_id||null)};
     const stationId=String(out.pcId||'');
     let authRevokeWarning:string|null=null;
     if(stationId){
-      const{data:device}=await admin.from('station_devices').select('id,realtime_topic_key').eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null).maybeSingle();
+      const{data:device,error:deviceError}=await admin.from('station_devices').select('id,realtime_topic_key').eq('branch_id',branchId).eq('local_station_id',stationId).is('revoked_at',null).maybeSingle();
+      if(deviceError)console.warn('[station-admin] station lookup after session close warning',deviceError);
       const reason=disposition==='forfeit'?'session_forfeited':disposition==='refund'?'session_refunded':'session_saved';
-      if(disposition==='forfeit'&&device?.id){
-        const{error:revokeError}=await admin.from('branch_customer_auth_sessions').update({revoked_at:new Date().toISOString()}).eq('branch_id',branchId).eq('station_device_id',device.id).is('revoked_at',null);
-        // The session transaction is already committed. Never turn a successful
-        // forfeiture into a false Admin failure because this secondary token
-        // revocation write failed; the pre-close command already cleared local
-        // auth and the forced terminal broadcast remains the independent backstop.
+      // Every Admin close is a terminal use of this station. Revoke the Customer
+      // auth session after accounting commits, then broadcast an immediate login
+      // boundary. This mirrors normal Customer logout without re-checkpointing.
+      if(device?.id){
+        const{error:revokeError}=await admin.from('branch_customer_auth_sessions').update({revoked_at:now}).eq('branch_id',branchId).eq('station_device_id',device.id).is('revoked_at',null);
         if(revokeError)authRevokeWarning='CUSTOMER_AUTH_REVOKE_FAILED';
       }
-      if(device?.realtime_topic_key)await broadcast(device.realtime_topic_key,{kind:'session_changed',reason,sessionId,pcId:stationId,memberId:out.memberId||null,disposition,forceLogout:disposition==='forfeit'});
+      if(device?.realtime_topic_key)await broadcast(device.realtime_topic_key,{kind:'session_changed',reason,sessionId,pcId:stationId,memberId:out.memberId||null,disposition,forceLogout:true});
     }
     if(authRevokeWarning)out={...out,warnings:[...(Array.isArray(out.warnings)?out.warnings:[]),authRevokeWarning]};
-    await admin.from('cloud_audit_logs').insert({organization_id:branch.organization_id,branch_id:branchId,actor_user_id:user.id,action:`session.${disposition}`,details:{sessionId,pcId:out.pcId||null,remainingSeconds:out.remainingSeconds||0,refundAmount:out.refundAmount||0,authRevokeWarning}});
+    const audit=await admin.from('cloud_audit_logs').insert({organization_id:branch.organization_id,branch_id:branchId,actor_user_id:user.id,action:`session.${disposition}`,details:{sessionId,pcId:out.pcId||null,remainingSeconds:out.remainingSeconds||0,refundAmount:out.refundAmount||0,authRevokeWarning,compatibilityFallback}});
+    if(audit.error)console.warn('[station-admin] session close audit warning',audit.error);
     return json(out)
   }
   if(action==='command_status'){
