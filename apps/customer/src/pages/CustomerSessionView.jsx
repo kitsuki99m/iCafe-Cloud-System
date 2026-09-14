@@ -97,7 +97,6 @@ function AnnouncementBox({ announcements, onFeedback, birthdayAnnouncement = nul
           <div className="flex min-h-[150px] items-center justify-center rounded-xl border border-dashed border-surface-line customer-neutral-surface px-4 text-center">
             <div>
               <p className="text-sm font-semibold text-ink-900">No new announcements</p>
-              <p className="mt-1 text-[12px] leading-5 text-slate-soft">Cafe updates will appear here when staff posts them.</p>
             </div>
           </div>
         )}
@@ -723,16 +722,16 @@ export default function CustomerSessionView() {
                   <h2 className="mt-1 font-display text-[22px] font-semibold tracking-tight text-ink-900">
                     Start using this PC
                   </h2>
-                  <p className="mt-1 max-w-xl text-[12px] leading-5 text-slate-soft">
+                  <p className="mt-1 text-[12px] text-slate-soft">
                     {isGuest
-                      ? (loading ? "Loading the guest session started for this PC…" : "The guest session is reconnecting. Ask staff for help if it does not return.")
+                      ? (loading ? "Reconnecting guest session…" : "Guest session reconnecting.")
                       : canStartImmediately
-                        ? "Choose Start Session to use your wallet or resume saved time."
+                        ? "Start or resume."
                         : canSelfStart
-                          ? "Your wallet is ready. Open Start Session and choose a preset amount or enter a custom amount."
+                          ? "Start with wallet."
                           : pc
-                            ? "Top up your wallet or ask staff for help before starting."
-                            : "This PC is still waiting to be registered with the cafe server."}
+                            ? "Top up to start."
+                            : "Waiting for PC registration."}
                   </p>
                 </div>
                 <div className="hidden rounded-2xl bg-midnight/8 p-3 text-ink-900 sm:block">
@@ -800,7 +799,6 @@ export default function CustomerSessionView() {
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div>
                       <p className="eyebrow">Rates you can use</p>
-                      <p className="mt-0.5 text-[12px] text-slate-soft">Your available prepaid choices</p>
                     </div>
                     <span className="text-[11px] font-semibold text-slate-soft">{selfServicePlans.length} available</span>
                   </div>
@@ -832,7 +830,6 @@ export default function CustomerSessionView() {
           {(window.aezakmiClient?.restartClient || window.aezakmiClient?.shutdownClient) && (
             <div className="customer-support-card">
               <p className="eyebrow">PC controls</p>
-              <p className="mt-1 text-[12px] leading-5 text-slate-soft">Save your work before restarting or shutting down this PC.</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {window.aezakmiClient?.restartClient && (
                   <button

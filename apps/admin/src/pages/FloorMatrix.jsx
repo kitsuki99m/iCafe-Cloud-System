@@ -394,7 +394,7 @@ export default function FloorMatrix() {
               ))}
             </div>
           ) : (
-            <AdminEmptyState icon={Monitor} title="No PC clients registered" description="Add a logical PC, then generate its Cloud pairing code. The Customer Station binds to your organization, branch, and PC identity; the LAN IP is used only for local fallback." action={<Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>Add PC</Button>}/>
+            <AdminEmptyState icon={Monitor} title="No PC clients registered" description="Add a PC to begin." action={<Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>Add PC</Button>}/>
           )}
         </div>
       </section>

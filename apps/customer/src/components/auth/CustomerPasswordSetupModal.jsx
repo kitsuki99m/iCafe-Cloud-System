@@ -58,7 +58,7 @@ export default function CustomerPasswordSetupModal() {
       busy={busy}
       eyebrow="Account security"
       title="Create your password"
-      description="Your account is using the temporary password 1234. Create a personal password now, or choose Set Later. We will ask again the next time you log in."
+      description="Replace the temporary password."
       maxWidth="max-w-md"
       zIndexClass="z-[575]"
       showCloseButton={false}

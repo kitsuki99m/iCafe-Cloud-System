@@ -44,12 +44,11 @@ const STATUS_META = {
   reserved: { label:'Reserved', icon:Clock3, tone:'text-grape bg-trillium/20', dot:'bg-grape' },
 }
 
-function OverviewCard({ title, subtitle, action, children, className='' }) {
+function OverviewCard({ title, action, children, className='' }) {
   return <section className={`overview-card min-w-0 p-4 lg:p-5 ${className}`}>
     <div className="mb-4 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-[15px] font-semibold tracking-[-0.015em] text-ink-900">{title}</h2>
-        {subtitle&&<p className="mt-1 text-[10px] leading-4 text-slate-soft">{subtitle}</p>}
       </div>
       {action}
     </div>
@@ -261,7 +260,6 @@ export default function OverviewPage(){
         <header className="overview-header flex min-h-[96px] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
           <div className="min-w-0">
             <p className="text-[24px] font-semibold tracking-[-0.03em] text-ink-900">Hi, {firstName}</p>
-            <p className="mt-1 text-[11px] leading-4 text-slate-soft">Here’s what’s happening across {settings?.cafeName||'the cafe'} today.</p>
           </div>
           <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
             <AdminQuickFind />
@@ -339,7 +337,7 @@ export default function OverviewPage(){
           </section>
 
           <section className="overview-card p-4">
-            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-[15px] font-semibold text-ink-900">Cafe status</h2><p className="mt-1 text-[9px] text-slate-soft">Live floor capacity</p></div><span className="stat-figure text-[11px] font-semibold text-gold">{totalPcs} PCs</span></div>
+            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-[15px] font-semibold text-ink-900">Cafe status</h2></div><span className="stat-figure text-[11px] font-semibold text-gold">{totalPcs} PCs</span></div>
             <div className="space-y-2">{[
               ['Available',statusCounts.available,MonitorCheck,'bg-teal','text-teal-dim','available'],
               ['In use',statusCounts.occupied,MonitorPlay,'bg-gold','text-gold','occupied'],
@@ -351,7 +349,7 @@ export default function OverviewPage(){
           </section>
 
           <section className="overview-card p-4">
-            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-[15px] font-semibold text-ink-900">Live cafe activity</h2><p className="mt-1 text-[9px] text-slate-soft">Sessions, top-ups, and help requests</p></div><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-led rounded-full bg-teal"/></span></div>
+            <div className="mb-4 flex items-center justify-between"><div><h2 className="text-[15px] font-semibold text-ink-900">Live cafe activity</h2></div><span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-led rounded-full bg-teal"/></span></div>
             {activity.length?<div className="space-y-1">{activity.map(item=>{
               const Icon=item.type==='support'?LifeBuoy:item.type==='topup'?WalletCards:MonitorPlay
               const tone=item.type==='support'?'text-ember-dim bg-ember/10':item.type==='topup'?'text-gold bg-gold/10':'text-teal-dim bg-teal/10'

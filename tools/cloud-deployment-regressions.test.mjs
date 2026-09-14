@@ -422,7 +422,9 @@ test('Cloud Admin management pages are Supabase-native before any Cafe Edge look
   }
   assert.match(fn,/refreshManagedConfig/)
   assert.match(branding,/isCloudAdmin\(\)[\s\S]{0,120}String\(raw\.logoUrl\)/)
-  assert.match(settings,/Customer Stations are cloud-primary/)
+  assert.match(settings,/cloudGetBranchStatus/)
+  assert.match(settings,/cloudPairingCode/)
+  assert.match(settings,/Pair branch/)
   assert.doesNotMatch(settings,/Customer Stations connect only to the local Edge/)
 })
 

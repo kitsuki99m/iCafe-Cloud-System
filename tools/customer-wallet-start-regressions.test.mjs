@@ -27,7 +27,7 @@ test('Customer Start Session appears from wallet credit and offers preset/custom
   assert.match(page,/stationCanAttemptStart/)
   assert.match(page,/canResumeSavedTime \|\| wallet > 0/)
   assert.doesNotMatch(page,/pc\?\.status === "available"/)
-  assert.match(page,/choose a preset amount or enter a custom amount/)
+  assert.match(page,/Start with wallet\./)
   assert.match(page,/ratePlans=\{walletStartPlans\}/)
   const modal=read('apps/customer/src/components/customer/StartSessionModal.jsx')
   assert.match(modal,/function startPresets\(plan, wallet\)/)

@@ -213,7 +213,7 @@ export default function CustomerLoginForm() {
                 Member sign in
               </h2>
               <p className="mt-1.5 text-[13px] leading-5 text-slate-soft">
-                Enter your cafe username and password. Your Wallet Balance and saved time will appear after you sign in.
+                Enter your username and password.
               </p>
             </div>
             <div className="mb-5 flex items-start gap-3 rounded-xl border border-teal/25 bg-teal/5 px-4 py-4">
@@ -228,11 +228,6 @@ export default function CustomerLoginForm() {
                   {serverError
                     ? "Cloud and Café Edge are currently unavailable. Cached café information is being shown."
                     : (clientIp || currentClientPc?.ipAddress || "Detecting local IP…")}
-                </p>
-                <p className="mt-1 text-[11px] text-slate-soft">
-                  {serverError
-                    ? "Member sign-in and wallet/session changes require Cloud or the cashier/Admin Café Edge."
-                    : "You can use one cafe PC at a time with this account."}
                 </p>
               </div>
             </div>
@@ -316,9 +311,6 @@ export default function CustomerLoginForm() {
               <UserRound size={15} />
               Continue as Guest
             </button>
-            <p className="mt-2 text-center text-[10px] text-slate-soft">
-              Guest mode is available after staff starts a session for this PC.
-            </p>
           </section>
           <aside id="customer-login-announcements" className="customer-support-card min-h-0 overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-center justify-between">
@@ -395,9 +387,6 @@ export default function CustomerLoginForm() {
                           </span>
                         </div>
                         <p className="mt-1 text-xs font-medium text-teal-dim">{detail}</p>
-                        {plan.description && (
-                          <p className="mt-1 text-[11px] leading-relaxed text-slate-soft">{plan.description}</p>
-                        )}
                       </div>
                     );
                   })}
@@ -415,7 +404,7 @@ export default function CustomerLoginForm() {
         onClose={() => setAnnouncementsOpen(false)}
         eyebrow="Cafe updates"
         title="Announcements"
-        description="Read the latest cafe updates, promos, and notices before you sign in."
+        description="Cafe updates."
         maxWidth="max-w-xl"
         footer={
           <Button variant="primary" onClick={() => setAnnouncementsOpen(false)}>

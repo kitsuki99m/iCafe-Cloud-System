@@ -43,7 +43,8 @@ test('active prepaid checkpoint persists locally in Electron lifecycle marker', 
 test('login kiosk explains cached offline state without claiming bad credentials', () => {
   const login=read('apps/customer/src/components/auth/CustomerLoginForm.jsx')
   assert.match(login,/Cloud and Café Edge are currently unavailable/)
-  assert.match(login,/Member sign-in and wallet\/session changes require Cloud or the cashier\/Admin Café Edge/)
+  assert.match(login,/Connection required/)
+  assert.doesNotMatch(login,/invalid credentials|wrong password/i)
 })
 
 test('optimistic Customer mutations cannot overwrite the persistent last-known-good cache', () => {

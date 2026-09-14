@@ -840,6 +840,17 @@ test('Admin dark secondary text uses the approved champagne-gold accent without 
   assert.match(analytics, /const\s+chartTextColor\s*=\s*isDark\?'#C9B27A':'#423D42'/)
 })
 
+test('Floor Matrix PC status icon uses green when available, orange when in use, and keeps offline neutral', () => {
+  const card = read('apps/admin/src/components/floor/PcCard.jsx')
+  const css = read('apps/admin/src/index.css')
+  assert.match(card, /available:\{[^\n]*color:'text-teal-dim'[^\n]*iconBg:'bg-teal\/10'/)
+  assert.match(card, /occupied:\{[^\n]*color:'text-orange-dim'[^\n]*iconBg:'bg-orange\/15'/)
+  assert.match(card, /offline:\{[^\n]*color:'text-slate-soft'[^\n]*iconBg:'bg-surface-raised'/)
+  assert.match(card, /session \|\| \['occupied','in-use','busy'\]\.includes\(rawStatus\)/)
+  assert.match(css, /--color-orange:\s*#D97706/i)
+  assert.match(css, /--color-orange-dim:\s*#B45309/i)
+})
+
 test('PC cards expose anchored station controls and Station Details reuses the same action component', () => {
   const card = read('apps/admin/src/components/floor/PcCard.jsx')
   const floor = read('apps/admin/src/pages/FloorMatrix.jsx')

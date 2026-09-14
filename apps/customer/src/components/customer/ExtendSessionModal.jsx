@@ -158,7 +158,7 @@ export default function ExtendSessionModal({
       onClose={close}
       eyebrow={pc ? `${pc.label} · ${pc.ipAddress}` : "Add Time"}
       title="Add Time"
-      description="Choose a rate, enter a peso amount, and pick how you want to pay. We will show the time you will receive."
+      description="Choose rate, amount, and payment."
       busy={busy}
       onSubmit={submit}
       footer={

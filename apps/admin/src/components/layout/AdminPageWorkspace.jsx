@@ -15,13 +15,12 @@ export function AdminPageWorkspace({ children, aside, className = '' }) {
   )
 }
 
-export function AdminRailCard({ title, subtitle, action, children, className = '' }) {
+export function AdminRailCard({ title, action, children, className = '' }) {
   return (
     <section className={`admin-rail-card ${className}`}>
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-[14px] font-semibold tracking-[-0.015em] text-ink-900">{title}</h2>
-          {subtitle ? <p className="mt-1 text-[10px] leading-4 text-slate-soft">{subtitle}</p> : null}
         </div>
         {action}
       </div>
@@ -30,7 +29,7 @@ export function AdminRailCard({ title, subtitle, action, children, className = '
   )
 }
 
-export function AdminMetricCard({ label, value, hint, icon: Icon, tone = 'neutral', onClick }) {
+export function AdminMetricCard({ label, value, icon: Icon, tone = 'neutral', onClick }) {
   const toneClass = tone === 'success'
     ? 'bg-teal/10 text-teal-dim'
     : tone === 'warning'
@@ -44,7 +43,6 @@ export function AdminMetricCard({ label, value, hint, icon: Icon, tone = 'neutra
       <div className="min-w-0">
         <p className="eyebrow">{label}</p>
         <p className="stat-figure mt-2 text-[21px] font-bold tracking-[-0.03em] text-ink-900">{value}</p>
-        {hint ? <p className="mt-1 text-[10px] leading-4 text-slate-soft">{hint}</p> : null}
       </div>
       {Icon ? <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClass}`}><Icon size={17}/></span> : null}
     </Wrapper>

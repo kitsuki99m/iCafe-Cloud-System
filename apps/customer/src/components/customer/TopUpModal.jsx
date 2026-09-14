@@ -81,7 +81,7 @@ export default function TopUpModal({ open, onClose, pc, customerId, customerName
       onClose={handleClose}
       eyebrow={pc ? `${pc.label} · ${pc.ipAddress}` : 'Top Up'}
       title="Top Up Wallet"
-      description="Choose an amount and payment method. Staff will add the approved amount to your wallet."
+      description="Choose amount and payment."
       busy={busy}
       onSubmit={submit}
       footer={

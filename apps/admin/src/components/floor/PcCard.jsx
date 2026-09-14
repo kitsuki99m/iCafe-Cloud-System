@@ -3,7 +3,7 @@ import { elapsedSessionSeconds, remainingSessionSeconds } from '../../lib/sessio
 
 const STATUS = {
   available:{ label:'Available', icon:MonitorCheck, color:'text-teal-dim', iconBg:'bg-teal/10', border:'hover:border-teal/50' },
-  occupied:{ label:'In use', icon:MonitorPlay, color:'text-gold-dim', iconBg:'bg-gold/15', border:'border-gold/35' },
+  occupied:{ label:'In use', icon:MonitorPlay, color:'text-orange-dim', iconBg:'bg-orange/15', border:'border-orange/40' },
   reserved:{ label:'Reserved', icon:CalendarClock, color:'text-grape', iconBg:'bg-trillium/25', border:'border-trillium/60' },
   maintenance:{ label:'Maintenance', icon:Wrench, color:'text-ember-dim', iconBg:'bg-ember/10', border:'border-ember/30' },
   offline:{ label:'Offline', icon:MonitorOff, color:'text-slate-soft', iconBg:'bg-surface-raised', border:'border-surface-line' },
@@ -12,9 +12,21 @@ const STATUS = {
 function formatClock(total) { const seconds=Math.max(0,Math.floor(total)); const h=Math.floor(seconds/3600); const m=Math.floor(seconds%3600/60); const s=seconds%60; return `${h?`${String(h).padStart(2,'0')}:`:''}${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` }
 
 export default function PcCard({ pc, now=Date.now(), lowTimeWarningMinutes=5, onSelect, onControls }) {
-  const state=STATUS[pc.status] ?? STATUS.offline
-  const Icon=state.icon
   const session=pc.session
+  const rawStatus=String(pc.status||'').trim().toLowerCase().replaceAll('_','-')
+  const statusKey=rawStatus==='offline'
+    ? 'offline'
+    : rawStatus==='maintenance'
+      ? 'maintenance'
+      : rawStatus==='reserved'
+        ? 'reserved'
+        : session || ['occupied','in-use','busy'].includes(rawStatus)
+          ? 'occupied'
+          : rawStatus==='available'
+            ? 'available'
+            : 'offline'
+  const state=STATUS[statusKey]
+  const Icon=state.icon
   const elapsed=session ? elapsedSessionSeconds(session,now) : 0
   const remaining=session?.billing==='prepaid' ? remainingSessionSeconds(session,now) : null
   const lowTime=remaining != null && remaining>0 && remaining<=Number(lowTimeWarningMinutes||5)*60

@@ -59,7 +59,8 @@ test('business owner settings exposes dynamic package and organization station u
   assert.match(settings, /cloudGetSubscriptionOverview/)
   assert.match(settings, /Subscription/)
   assert.match(settings, /stationCount/)
-  assert.match(settings, /platform developer/)
+  assert.match(settings, /normalizeSubscriptionPackages/)
+  assert.match(settings, /formatPackagePrice/)
 })
 
 test('owner invitation and resend templates remain Aezakmi branded and package aware', () => {

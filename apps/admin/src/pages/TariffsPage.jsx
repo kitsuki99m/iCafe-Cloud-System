@@ -640,7 +640,6 @@ export default function TariffsPage() {
           <section className="overview-card p-3">
             <div className="px-1 pb-2">
               <p className="eyebrow">Plan status</p>
-              <p className="mt-1 text-[10px] leading-4 text-slate-soft">Live pricing readiness at a glance.</p>
             </div>
             <div className="space-y-2">
               {rateStatusCards.map(({ label, value, hint, icon: Icon, tone }) => (
@@ -664,7 +663,6 @@ export default function TariffsPage() {
             <div className="space-y-2">
               {["Regular","Gold","VIP"].map(tier=><div key={tier} className="admin-rail-stat"><span className="text-slate-soft">{tier}</span><b className="stat-figure text-ink-900">{tierCounts[tier]||0}</b></div>)}
             </div>
-            <p className="mt-3 text-[9px] leading-4 text-slate-soft">Regular sees Regular plans. Gold adds Gold. VIP can use all three tiers.</p>
           </AdminRailCard>
         </aside>
         <main className="min-w-0">
@@ -680,7 +678,6 @@ export default function TariffsPage() {
         <div>
           <p className="eyebrow">Pricing catalog</p>
           <h2 className="mt-1 text-base font-semibold tracking-[-0.015em] text-ink-900">Rate plans</h2>
-          <p className="mt-1 text-[11px] leading-5 text-slate-soft">Manage Regular, Gold, VIP, package, and promotional pricing from one catalog.</p>
         </div>
       </div>
 
@@ -723,7 +720,6 @@ export default function TariffsPage() {
             <div className="admin-empty-state-stage min-h-[260px] py-6">
               <div className="admin-empty-state-card max-w-md py-8">
                 <p className="text-sm font-semibold text-ink-900">No matching rate plans</p>
-                <p className="mt-1 text-xs text-slate-soft">Try another filter or search term.</p>
               </div>
             </div>
           ) : (

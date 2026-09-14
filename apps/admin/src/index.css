@@ -29,6 +29,11 @@
   --color-teal-soft: #E1F3EA;
   --color-teal-dim: #237A54;
 
+  /* Floor/session status orange: active/in-use stations. */
+  --color-orange: #D97706;
+  --color-orange-soft: #FFF0D6;
+  --color-orange-dim: #B45309;
+
   --color-ember: #DD5353;
   --color-ember-soft: #FBE4E4;
   --color-ember-dim: #B53E3E;
@@ -77,6 +82,8 @@
     --color-gold-dim: #E6D7CD;
     --color-teal-soft: #55C9A0;
     --color-teal-dim: #8ED8B8;
+    --color-orange-soft: #7C3F12;
+    --color-orange-dim: #FDBA74;
     --color-ember-soft: #C86B6B;
     --color-ember-dim: #FFB1B1;
     --color-slate: #A99898;

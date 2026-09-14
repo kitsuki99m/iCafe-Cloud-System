@@ -10,7 +10,6 @@ export default function LogsPage() {
       <div className="panel flex flex-col items-center gap-2 py-16 text-center">
         <ScrollText size={22} className="text-slate-soft" />
         <p className="text-sm font-medium text-ink-900">Session history is managed by staff.</p>
-        <p className="text-xs text-slate-soft">No frontend mock session records are used.</p>
       </div>
     </div>
   )

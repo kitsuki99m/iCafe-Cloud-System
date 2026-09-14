@@ -115,7 +115,7 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
       onClose={handleClose}
       eyebrow={pc ? `${pc.label} · ${pc.ipAddress}` : 'Start Session'}
       title="Start Session"
-      description={hasSavedTime ? "Resume the time already saved to your account." : "Choose a rate, tap a preset amount, or enter a custom wallet amount. We will show the time before you start."}
+      description={hasSavedTime ? "Resume saved time." : "Choose a rate and amount."}
       busy={busy}
       onSubmit={submit}
       footer={

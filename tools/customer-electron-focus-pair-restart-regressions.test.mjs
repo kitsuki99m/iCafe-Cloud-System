@@ -25,7 +25,7 @@ test('successful Cloud pairing requires a clean Customer Station relaunch instea
   assert.doesNotMatch(auth,/window\.location\.reload\(\)/)
   assert.match(pairing,/title="Restart Customer Station"/)
   assert.match(pairing,/restartCustomerStation/)
-  assert.match(pairing,/Windows and the PC itself will not reboot/)
+  assert.match(pairing,/Only Customer Station restarts; Windows stays running/)
   assert.match(preload,/restartCustomerStation:\(\) => ipcRenderer\.invoke\('client:restart-app'\)/)
   assert.match(main,/client:restart-app/)
   assert.match(main,/app\.relaunch\(\)/)
