@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   unlockClient:() => ipcRenderer.invoke('client:unlock'),
   unlockClientOnly:() => ipcRenderer.invoke('client:unlock-only'),
   showIdleDashboard:() => ipcRenderer.invoke('client:show-idle-dashboard'),
+  showLoginKiosk:() => ipcRenderer.invoke('client:show-login-kiosk'),
   deactivateSession:() => ipcRenderer.invoke('client:deactivate-session'),
   getSessionLifecycleMarker:() => ipcRenderer.sendSync('client:get-session-lifecycle-marker'),
   markSessionExit:data => ipcRenderer.invoke('client:mark-session-exit', data),

@@ -427,7 +427,9 @@ function showIdleDashboard() {
   }
   windowState = WINDOW_STATES.IDLE
   sessionStartTransitionPending = false
+  const hadRemoteLock = Boolean(remoteLockSnapshot)
   remoteLockSnapshot = null
+  if (hadRemoteLock) notifyStationLocked(false)
   // Keep the shell key hook active while the station is signed in. This
   // prevents Win+Tab/virtual-desktop switching from bypassing the station.
   setWindowsKeyLocked(true)
@@ -518,18 +520,35 @@ function notifyStationLocked(locked) {
   mainWindow.webContents.send('client:station-locked', locked)
 }
 
+function showLoginKiosk() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  // A terminal logout/session-close is NOT a staff "Lock Session" state.
+  // Destroy any prepared-close snapshot and explicitly dismiss the renderer
+  // lock overlay before showing the normal login kiosk. Without this signal,
+  // AuthContext can already be logged out while SessionLockedOverlay remains
+  // above the login screen, making Pause & Save / Forfeit look like a lock.
+  remoteLockSnapshot = null
+  notifyStationLocked(false)
+  windowState = WINDOW_STATES.LOCKED
+  sessionStartTransitionPending = false
+  dashboardVisible = false
+  setWindowsKeyLocked(true)
+  applyLockedWindowMode()
+  updateTrayMenu()
+  return true
+}
+
 function lockClientWindow({ preserveState = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return false
-  // A normal/final lock (logout, terminal guest close, boot) must never retain
-  // a prior prepared-close snapshot. Otherwise the next login could restore an
-  // already-ended ACTIVE window. Only an explicit preserveState lock may keep it.
-  if (!preserveState) remoteLockSnapshot = null
+  // Normal/final client lock means "logged out at the kiosk". Only an explicit
+  // preserveState lock is a reversible staff station/session lock.
+  if (!preserveState) return showLoginKiosk()
+
   // Only a lock that interrupts a live/idle session (i.e. triggered remotely
   // by staff or the emergency shortcut) should surface the in-app "session is
-  // locked" overlay. A lock that happens while already locked (e.g. the
-  // normal boot/login state) has no session to interrupt.
-  const isRemoteInterrupt = preserveState && !remoteLockSnapshot && windowState !== WINDOW_STATES.LOCKED
-  if (preserveState && !remoteLockSnapshot) remoteLockSnapshot = { windowState, dashboardVisible }
+  // locked" overlay.
+  const isRemoteInterrupt = !remoteLockSnapshot && windowState !== WINDOW_STATES.LOCKED
+  if (!remoteLockSnapshot) remoteLockSnapshot = { windowState, dashboardVisible }
   windowState = WINDOW_STATES.LOCKED
   sessionStartTransitionPending = false
   dashboardVisible = false
@@ -724,6 +743,7 @@ app.whenReady().then(async () => {
 
   handleTrusted('client:unlock', () => applyAuthenticatedWindowMode())
   handleTrusted('client:show-idle-dashboard', () => showIdleDashboard())
+  handleTrusted('client:show-login-kiosk', () => showLoginKiosk())
   handleTrusted('client:unlock-only', () => { setWindowsKeyLocked(false); return true })
   handleTrusted('client:activate-session', (_event, data) => { markActiveSession(data || {}); return enterActiveState() })
   handleTrusted('client:begin-session-start', () => beginSessionStartTransition())
@@ -801,6 +821,8 @@ app.whenReady().then(async () => {
 // Backward-compatible no-op for older packaged cleanup callbacks. Continuous
 // force-focus enforcement no longer exists, but stale closures must never crash.
 const stopFocusEnforcement = () => true
+const stopForceFocusEnforcement = stopFocusEnforcement
+const stopForcedFocusEnforcement = stopFocusEnforcement
 
 app.on('will-quit', () => {
   appIsQuitting=true

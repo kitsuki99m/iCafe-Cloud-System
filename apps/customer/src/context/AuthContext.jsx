@@ -190,7 +190,8 @@ export function AuthProvider({ children }) {
       sessionStorage.removeItem(CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN);
       setPasswordSetupDeferred(false);
       setUser(null);
-      window.aezakmiClient?.lockClient?.();
+      const terminal=window.aezakmiClient?.showLoginKiosk || window.aezakmiClient?.lockClient;
+      terminal?.();
     };
     const onAuthInvalid = () => {
       if (hasActiveStationLifecycle()) releaseStationLifecycle("auth_invalid", { allowDeferred:true }).catch(() => {});
@@ -411,7 +412,8 @@ export function AuthProvider({ children }) {
     setToken(null);
     clearDeferredPasswordSetup();
     setUser(null);
-    window.aezakmiClient?.lockClient?.();
+    const terminal=window.aezakmiClient?.showLoginKiosk || window.aezakmiClient?.lockClient;
+    terminal?.();
     return lifecycle;
   }
 

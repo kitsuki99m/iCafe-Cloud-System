@@ -365,11 +365,17 @@ export function AppDataProvider({ children }) {
           // be restored by a late unlock or renderer refresh.
           const disposition=String(payload?.payload?.disposition || 'save').toLowerCase()
           const reason=disposition==='forfeit'?'session_forfeited':disposition==='refund'?'session_refunded':'session_saved'
+          const isGuestClose=payload?.payload?.guestSession === true || (payload?.payload?.guestSession == null && user?.role === 'guest')
           await clearStationLifecycleMarker().catch?.(() => {})
-          if (user?.role === 'guest') {
-            const locallyLocked=window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true
+          if (isGuestClose) {
+            // Commit is a real logout boundary, not a station lock. Remove the
+            // temporary lock overlay/snapshot and expose the login kiosk first;
+            // AuthContext then clears the Guest identity in the same turn.
+            const loginKiosk=window.aezakmiClient?.showLoginKiosk
+              ? await window.aezakmiClient.showLoginKiosk()
+              : (window.aezakmiClient?.lockClient ? await window.aezakmiClient.lockClient() : true)
             window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended',{detail:{reason,sessionId:payload?.payload?.sessionId || null,source:'admin_commit'}}))
-            await ack('completed',{executed:locallyLocked !== false,sessionCloseCommitted:true,sessionId:payload?.payload?.sessionId || null,disposition})
+            await ack('completed',{executed:loginKiosk !== false,sessionCloseCommitted:true,guestLoggedOut:true,sessionId:payload?.payload?.sessionId || null,disposition})
           } else {
             const idle=window.aezakmiClient?.showIdleDashboard ? await window.aezakmiClient.showIdleDashboard() : true
             await ack('completed',{executed:idle !== false,sessionCloseCommitted:true,sessionId:payload?.payload?.sessionId || null,disposition})
@@ -476,8 +482,11 @@ export function AppDataProvider({ children }) {
       const guestTerminalReasons=new Set(['session_saved','session_forfeited','session_refunded','session_ended','session_expired','session_settled'])
       if (guestTerminalReasons.has(reason)) {
         clearStationLifecycleMarker().catch?.(() => {})
-        if (user?.role === 'guest') {
-          window.aezakmiClient?.lockClient?.().catch?.(() => {})
+        const hasWakeMemberIdentity=Boolean(event?.detail && Object.prototype.hasOwnProperty.call(event.detail,'memberId'))
+        const isGuestClose=hasWakeMemberIdentity ? event.detail.memberId == null : user?.role === 'guest'
+        if (isGuestClose) {
+          const terminal=window.aezakmiClient?.showLoginKiosk || window.aezakmiClient?.lockClient
+          terminal?.().catch?.(() => {})
           window.dispatchEvent(new CustomEvent('aezakmi:guest-session-ended', { detail:{ reason, sessionId:event?.detail?.sessionId || null, source:'cloud' } }))
           return
         }

@@ -473,7 +473,8 @@ export function AppDataProvider({ children }) {
     })
     if (!queued?.commandId) throw Object.assign(new Error('Customer Station close command was not created.'),{code:'STATION_EXIT_COMMAND_MISSING'})
     const command=await waitForStationCommand(queued.commandId)
-    return { commandId:queued.commandId, command, pcId:pc.id, sessionId:pc.session.id, disposition }
+    const memberId=pc.session?.customerId ?? pc.session?.memberId ?? null
+    return { commandId:queued.commandId, command, pcId:pc.id, sessionId:pc.session.id, disposition, memberId, guestSession:memberId == null }
   }
 
   async function releasePreparedSessionClose(pc, prepared) {
@@ -501,6 +502,8 @@ export function AppDataProvider({ children }) {
           sessionCloseCommit:true,
           sessionId:prepared.sessionId,
           disposition:prepared.disposition || null,
+          memberId:result?.memberId ?? prepared.memberId ?? null,
+          guestSession:result?.memberId != null ? false : prepared.guestSession === true,
           remainingSeconds:Number(result?.remainingSeconds ?? result?.savedRemainingSeconds ?? 0),
           requestedAt:new Date().toISOString(),
         },
