@@ -323,7 +323,7 @@ test('Earnings wallet-funded usage is derived from wallet ledger debits by usage
   assert.doesNotMatch(section, /settlement_method='wallet'/)
 })
 
-test('Earnings recognizes consumed wallet value instead of top-ups or remaining wallet balances', () => {
+test('Earnings counts wallet funding once and keeps wallet spending out of gross income', () => {
   const source = read('backend/src/routes/apiRoutes.js')
   const helperStart = source.indexOf('function earningsRevenueRows')
   const helperEnd = source.indexOf('\nfunction earningsSnapshot', helperStart)
@@ -332,11 +332,13 @@ test('Earnings recognizes consumed wallet value instead of top-ups or remaining 
   const snapshotEnd = source.indexOf('\nfunction taxEstimate', snapshotStart)
   const snapshot = source.slice(snapshotStart, snapshotEnd)
 
-  assert.match(helper, /event_type NOT IN \('wallet_top_up','member_initial_wallet'\)/)
+  assert.match(helper, /payment_method IS NULL OR payment_method != 'wallet'/)
   assert.match(snapshot, /const grossCents = revenue\.reduce/)
   assert.match(snapshot, /Math\.max\(0, Number\(row\.amount_centavos \|\| 0\)\)/)
-  assert.match(snapshot, /type IN \('top_up','admin_top_up','paid_deposit'\)/)
-  assert.match(snapshot, /const walletRevenue =\s*Number\(walletUsage\.prepaid \|\| 0\) \+ Number\(walletUsage\.postpaid \|\| 0\)/)
+  assert.match(snapshot, /\['top_up','admin_top_up','paid_deposit'\]\.includes\(row\.type\)/)
+  assert.match(snapshot, /const walletFundingCents = Math\.round\(walletFunding \* 100\)/)
+  assert.match(snapshot, /gross: \(grossCents \+ walletFundingCents\) \/ 100/)
+  assert.match(snapshot, /walletActivity/)
   assert.doesNotMatch(snapshot, /const walletRevenue\s*=\s*[^;\n]*walletBalances/)
 })
 
@@ -348,11 +350,14 @@ test('wallet-funded sessions, extensions and settlements write earned revenue ev
   assert.match(source, /"postpaid_settlement","wallet_transaction",walletRevenueTransactionId,amountDue/s)
 })
 
-test('wallet top-ups stay in the wallet ledger and are not recorded as immediate revenue', () => {
+test('Earnings retains wallet movements as audit activity without treating refunds as expenses', () => {
   const source = read('backend/src/routes/apiRoutes.js')
-  const calls = [...source.matchAll(/recordRevenue\([\s\S]{0,160}?\)/g)].map((match) => match[0]).join('\n')
-  assert.doesNotMatch(calls, /["']wallet_top_up["']/)
-  assert.doesNotMatch(calls, /["']member_initial_wallet["']/)
+  const start = source.indexOf('function earningsSnapshot')
+  const end = source.indexOf('\nfunction taxEstimate', start)
+  const snapshot = source.slice(start, end)
+  assert.match(snapshot, /walletTransactions\.map/)
+  assert.match(snapshot, /walletActivity: walletTransactions\.map/)
+  assert.match(snapshot, /net: \(grossCents \+ walletFundingCents - expenseCents\) \/ 100/)
 })
 
 test('wallet POS sales are recognized when the order is completed', () => {

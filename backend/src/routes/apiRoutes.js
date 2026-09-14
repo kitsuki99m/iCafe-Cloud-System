@@ -373,16 +373,17 @@ function taxPolicyView() {
 }
 
 function earningsRevenueRows(start, end) {
-  // Earned revenue is recognized when a service/product is consumed or
-  // settled. Wallet top-ups and starting wallet credits are stored customer
-  // value (a liability) until that value is actually spent, so legacy top-up
-  // revenue events are intentionally excluded from every earnings snapshot.
+  // Wallet funding is calculated from its immutable ledger below. Excluding
+  // wallet-paid service events here prevents the same prepaid money appearing
+  // once when it is added and again when it is spent.
   return db
     .prepare(
       `SELECT *
        FROM revenue_events
        WHERE occurred_at BETWEEN ? AND ?
-         AND event_type NOT IN ('wallet_top_up','member_initial_wallet')
+         AND event_type NOT IN ('wallet_top_up','member_initial_wallet','session_refund')
+         AND (payment_method IS NULL OR payment_method != 'wallet')
+         AND source_type != 'wallet_transaction'
        ORDER BY occurred_at,id`,
     )
     .all(start, end);
@@ -391,6 +392,13 @@ function earningsRevenueRows(start, end) {
 function earningsSnapshot(period = "monthly", dateValue = null) {
   const bounds = reportBounds(period, dateValue);
   const revenue = earningsRevenueRows(bounds.start, bounds.end);
+  const walletTransactions = db
+    .prepare(
+      `SELECT * FROM wallet_transactions
+       WHERE created_at BETWEEN ? AND ?
+       ORDER BY created_at,id`,
+    )
+    .all(bounds.start, bounds.end);
   const expenses = db
     .prepare(
       "SELECT * FROM expense_records WHERE voided_at IS NULL AND recorded_at BETWEEN ? AND ? ORDER BY recorded_at,id",
@@ -400,11 +408,7 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
     (sum, row) => sum + Math.max(0, Number(row.amount_centavos || 0)),
     0,
   );
-  const refundCents = revenue.reduce(
-    (sum, row) => sum + Math.max(0, -Number(row.amount_centavos || 0)),
-    0,
-  );
-  const netRevenueCents = grossCents - refundCents;
+  const refundCents = 0;
   const expenseCents = expenses.reduce(
     (sum, row) =>
       sum + Math.round(Number((row.signed_amount ?? row.amount) || 0) * 100),
@@ -460,27 +464,20 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
       (sum, row) => sum + Number(row.signed_amount ?? row.amount ?? 0),
       0,
     );
-  const walletFunding = Number(
-    db
-      .prepare(
-        `SELECT COALESCE(SUM(amount),0) total
-         FROM wallet_transactions
-         WHERE created_at BETWEEN ? AND ?
-           AND amount > 0
-           AND type IN ('top_up','admin_top_up','paid_deposit')`,
-      )
-      .get(bounds.start, bounds.end).total || 0,
-  );
-  const walletRevenue =
-    Number(walletUsage.prepaid || 0) + Number(walletUsage.postpaid || 0);
+  const walletFunding = walletTransactions
+    .filter((row) => Number(row.amount || 0) > 0 && ['top_up','admin_top_up','paid_deposit'].includes(row.type))
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const walletFundingCents = Math.round(walletFunding * 100);
+  if (walletFunding) categories.wallet_top_up = (categories.wallet_top_up || 0) + walletFunding;
+  const walletRevenue = 0;
   return {
     bounds,
     summary: {
-      gross: grossCents / 100,
+      gross: (grossCents + walletFundingCents) / 100,
       refunds: refundCents / 100,
-      netRevenue: netRevenueCents / 100,
+      netRevenue: (grossCents + walletFundingCents) / 100,
       expenses: expenseCents / 100,
-      net: (netRevenueCents - expenseCents) / 100,
+      net: (grossCents + walletFundingCents - expenseCents) / 100,
       walletBalances,
       walletFunding,
       taxProvision,
@@ -500,6 +497,12 @@ function earningsSnapshot(period = "monthly", dateValue = null) {
       amount: Number(row.signed_amount ?? row.amount),
       formulaSnapshot: parseJson(row.formula_snapshot, null),
     })),
+    walletActivity: walletTransactions.map((row) => ({
+      id: row.id,
+      type: row.type,
+      amount: Number(row.amount || 0),
+      recorded_at: row.created_at,
+    })),
     walletUsage,
     taxPolicy: taxPolicyView(),
   };
@@ -516,11 +519,7 @@ function taxEstimate(dateValue = null, rateOverride = null) {
     rateOverride == null ? policy.ratePercent : Number(rateOverride);
   const start = manilaIso(year, 1, 1),
     end = manilaIso(year, month, day, true);
-  const grossYtd =
-    earningsRevenueRows(start, end).reduce(
-      (sum, row) => sum + Math.max(0, Number(row.amount_centavos || 0)),
-      0,
-    ) / 100;
+  const grossYtd = earningsSnapshot("ytd", `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`).summary.gross;
   const taxableGross = Math.max(0, grossYtd - policy.annualReduction);
   const liability = Math.round(taxableGross * (ratePercent / 100) * 100) / 100;
   const priorProvision = Number(

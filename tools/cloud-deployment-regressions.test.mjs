@@ -335,6 +335,16 @@ test('Cloud Admin reads branch mirrors directly and never opens Socket.IO agains
   assert.match(notifications,/if \(isCloudAdmin\(\)\) return undefined/)
 })
 
+test('cloud Earnings uses wallet funding once and returns wallet activity separately from expenses',()=>{
+  const api=read('supabase/functions/admin-api/index.ts')
+  assert.match(api,/async function walletLedgerRows/)
+  assert.match(api,/function earningsFromRows\(rows:any\[\],walletRows:any\[\],bounds:any\)/)
+  assert.match(api,/funding=walletRows\.filter\(row=>n\(row\.amount\)>0/)
+  assert.match(api,/net=gross-expenses/)
+  assert.match(api,/walletActivity:/)
+  assert.match(api,/Promise\.all\(\[revenueRows\(admin,branchId,bounds\.start,bounds\.end\),walletLedgerRows\(admin,branchId,bounds\.start,bounds\.end\)\]\)/)
+})
+
 test('Cloud Admin can generate a Customer Station pairing code for an unpaired logical PC',()=>{
   const page=read('apps/admin/src/pages/FloorMatrix.jsx')
   const fn=read('supabase/functions/station-admin/index.ts')
