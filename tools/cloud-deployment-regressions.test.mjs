@@ -211,16 +211,17 @@ test('cloud admin launcher avoids direct npm.cmd spawning on modern Windows Node
   assert.doesNotMatch(source, /const npmCommand = process\.platform === ['"]win32['"] \? ['"]npm\.cmd['"]/)
 })
 
-test('Supabase Edge Functions are single-file for Docker-free API bundling',()=>{
+test('Supabase Edge Functions keep one entrypoint and use the audited shared security helper only where needed',()=>{
   const functionNames=['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge','request-business-access','developer-registrations','activate-registration','station-admin','pair-station','station-runtime','station-api']
-  assert.equal(exists('supabase/functions/_shared'),false,'shared filesystem helpers must not be required by API deployment')
+  assert.equal(exists('supabase/functions/_shared/security.ts'),true,'shared security helper must be present')
   for(const name of functionNames){
     const dir=`supabase/functions/${name}`
     const index=read(`${dir}/index.ts`)
     const files=walk(dir).filter(f=>f.endsWith('.ts'))
-    assert.deepEqual(files,[`${dir}/index.ts`],`${name} must deploy from index.ts alone`)
-    assert.doesNotMatch(index,/from\s*['"]\.\.?\//,`${name} must not use local filesystem imports`)
-    assert.match(index,/npm:@supabase\/supabase-js@2/,`${name} may only rely on remotely resolvable Supabase client import`)
+    assert.deepEqual(files,[`${dir}/index.ts`],`${name} must keep a single function entrypoint`)
+    const localImports=[...index.matchAll(/from\s*['"](\.\.?\/[^'"]+)['"]/g)].map(match=>match[1])
+    assert.ok(localImports.every(value=>value==='../_shared/security.ts'),`${name} may only use the audited shared security helper`)
+    assert.match(index,/npm:@supabase\/supabase-js@2/,`${name} must use the Supabase client import`)
   }
 })
 

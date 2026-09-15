@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { enforceRateLimit, reportCloudError, requestIp } from '../_shared/security.ts'
 
 const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type, x-aezakmi-station-id, x-aezakmi-station-token','Access-Control-Allow-Methods':'POST,OPTIONS'}
 const METHODS=new Set(['GET','POST','PATCH','DELETE'])
@@ -111,7 +112,7 @@ async function bundledAppData(req:Request,admin:SupabaseClient,localAuthToken:st
   return{success:true,pc:pcView,member:data.member?memberView(data.member,station,Boolean(data.mustChangeCredentials)):null,ratePlans:(data.ratePlans||[]).map((r:any)=>canonicalRatePlan(r.data,r.local_id)),announcements:(data.announcements||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)})),settings:{...rawSettings,defaultBilling:'prepaid',postpaidMinutesPerPeso:0},clientContext:{success:true,cloud:true,stationId:station.id,pcId:station.local_station_id,branchId:station.branch_id,organizationId:station.organization_id,transport:'cloud',pc:pcView}}
 }
 
-Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admin=adminClient(),body=await req.json().catch(()=>({})),method=String(body.method||'GET').toUpperCase(),path=cleanPath(body.path),base=path.split('?')[0],requestBody=body.body&&typeof body.body==='object'?body.body:{},operationKey=String(body.operationKey||'').trim()||null,localAuthToken=String(body.localAuthToken||'');if(!METHODS.has(method))return json({success:false,code:'METHOD_NOT_ALLOWED',error:'Unsupported method.'},400);
+Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;let admin:SupabaseClient|null=null;try{admin=adminClient();const body=await req.json().catch(()=>({})),method=String(body.method||'GET').toUpperCase(),path=cleanPath(body.path),base=path.split('?')[0],requestBody=body.body&&typeof body.body==='object'?body.body:{},operationKey=String(body.operationKey||'').trim()||null,localAuthToken=String(body.localAuthToken||'');if(!METHODS.has(method))return json({success:false,code:'METHOD_NOT_ALLOWED',error:'Unsupported method.'},400);
   // The frequently refreshed app snapshot and Guest-session probe validate the
   // paired station inside one RPC. This intentionally bypasses stationAuth's two
   // separate PostgREST lookups and prevents the idle login screen from fanning one
@@ -127,7 +128,7 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admi
   }
   const station=await stationAuth(req,admin);
   if(method==='GET'){const direct=await directRead(admin,station,path,localAuthToken);if(direct)return json(direct)}
-  if(method==='POST'&&base==='/auth/login')return json(await login(admin,station,requestBody));
+  if(method==='POST'&&base==='/auth/login'){const username=String(requestBody?.username||'').trim().toLowerCase();const ip=requestIp(req);await enforceRateLimit(admin,'station_member_login',`${station.id}:${username||'blank'}:${ip}`,20,600);await enforceRateLimit(admin,'station_member_login_device',`${station.id}:${ip}`,80,600);return json(await login(admin,station,requestBody));}
   if(method==='POST'&&base==='/auth/heartbeat'){const auth=await customerSession(admin,station,localAuthToken);return json({success:true,user:auth.user})}
   if(method==='POST'&&base==='/auth/logout'){let memberId:string|null=null;if(localAuthToken){try{memberId=(await customerSession(admin,station,localAuthToken,{touch:false})).member.local_id}catch{}if(memberId)await releaseStationLifecycle(admin,station,{...requestBody,event:requestBody?.event||'logout'},memberId);const hash=await sha256(localAuthToken);await admin.from('branch_customer_auth_sessions').update({revoked_at:new Date().toISOString()}).eq('token_hash',hash).eq('branch_id',station.branch_id).eq('station_device_id',station.id)}return json({success:true,revoked:true})}
   if(method==='POST'&&base==='/public/station/lifecycle'){const out=await releaseStationLifecycle(admin,station,requestBody,null);const revokedAt=new Date().toISOString();await admin.from('branch_customer_auth_sessions').update({revoked_at:revokedAt}).eq('branch_id',station.branch_id).eq('station_device_id',station.id).is('revoked_at',null);return json({...out,revoked:true})}
@@ -142,4 +143,4 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admi
   // Public remote-command ACKs are superseded by station-runtime ACK, but keep a harmless compatibility response.
   if((method==='POST'||method==='PATCH')&&/^\/public\/remote-commands\//.test(base))return json({success:true});
   throw Object.assign(new Error('This Customer Station action has not been converted to the Cloud transaction engine.'),{status:400,code:'CLOUD_ACTION_NOT_SUPPORTED'})
-}catch(e){return fail(e,'Unable to execute Customer Station cloud request.')}})
+}catch(e:any){if(admin)await reportCloudError(admin,'station-api',e,{path:'station-api'});return fail(e,'Unable to execute Customer Station cloud request.')}})

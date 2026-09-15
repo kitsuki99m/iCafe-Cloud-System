@@ -7,6 +7,7 @@ import{buildEdgeSnapshot}from'./snapshot.js'
 import{clearCloudIdentity,getCloudBranchConfig,getCloudIdentity,getCloudLicense,getSyncState,getSyncSummary,saveCloudBranchConfig,saveCloudIdentity,setCloudLicense,setSyncState,touchCloudSeen}from'./store.js'
 import{applyCloudConfig,applyCloudRuntime}from'./configApply.js'
 import{queueCloudCommand}from'./commands.js'
+import{pendingObservability,markObservabilitySynced,reportError}from'../utils/observability.js'
 
 let timer=null,running=null
 function installationId(){let r=db.prepare("SELECT value FROM sync_state WHERE key='installation_id'").get();if(r?.value)return r.value;const v=crypto.randomUUID();db.prepare("INSERT OR REPLACE INTO sync_state(key,value,updated_at) VALUES('installation_id',?,?)").run(v,nowIso());return v}
@@ -22,7 +23,7 @@ export async function syncCloudNow({reason='manual'}={}){
   if(!getCloudIdentity()?.edge_id)return{skipped:true,reason:'not_paired',status:cloudStatus()}
   if(running)return running
   running=(async()=>{
-    const pending=pendingCloudEvents(env.cloudSyncBatchSize),acks=pending.filter(e=>e.eventType==='cloud_command.ack'),events=pending.filter(e=>e.eventType!=='cloud_command.ack'),cfg=getCloudBranchConfig(),runtimeCursor=getSyncState('cloud_runtime_cursor')?.value||null
+    const pending=pendingCloudEvents(env.cloudSyncBatchSize),acks=pending.filter(e=>e.eventType==='cloud_command.ack'),events=pending.filter(e=>e.eventType!=='cloud_command.ack'),observabilityEvents=pendingObservability(50),cfg=getCloudBranchConfig(),runtimeCursor=getSyncState('cloud_runtime_cursor')?.value||null
     const lastFullRaw=getSyncState('cloud_last_full_sync_at')?.value||''
     const lastFullMs=Date.parse(lastFullRaw)
     const fullSyncDue=!Number.isFinite(lastFullMs)||Date.now()-lastFullMs>=5*60_000
@@ -34,13 +35,14 @@ export async function syncCloudNow({reason='manual'}={}){
       const snapshot=lightweight
         ? {syncReason:reason,outboxPending:pending.length,lightweight:true}
         : {...buildEdgeSnapshot(),syncReason:reason,outboxPending:pending.length,lightweight:false}
-      const r=await syncEdge({softwareVersion:env.edgeVersion,snapshot,configVersion:cfg.version,runtimeCursor:runtimeCursor||null,events,commandAcks:acks.map(commandAck),lightweight}),at=r.receivedAt||nowIso()
+      const r=await syncEdge({softwareVersion:env.edgeVersion,snapshot,configVersion:cfg.version,runtimeCursor:runtimeCursor||null,events,commandAcks:acks.map(commandAck),observabilityEvents,lightweight}),at=r.receivedAt||nowIso()
       // The server records every event exactly once. Conflicted Edge events are
       // intentionally considered processed: Cloud wins, and the runtime mirror
       // below repairs local SQLite to the Cloud-authoritative state.
       const processedIds=Array.isArray(r.processedEventIds)&&r.processedEventIds.length?r.processedEventIds:events.map(e=>e.eventId)
       const ackIds=acks.map(e=>e.eventId)
       markCloudEventsSynced([...new Set([...processedIds,...ackIds])],at)
+      if(observabilityEvents.length)markObservabilitySynced(observabilityEvents.map(x=>x.id),at)
       pruneCloudOutbox();touchCloudSeen(at);setSyncState('cloud_last_success_at',at);setSyncState('cloud_last_error','')
       if(Array.isArray(r.conflicts)&&r.conflicts.length)setSyncState('cloud_last_conflicts',JSON.stringify(r.conflicts.slice(0,50)));else setSyncState('cloud_last_conflicts','[]')
       if(r.license)setCloudLicense(r.license)
@@ -50,9 +52,9 @@ export async function syncCloudNow({reason='manual'}={}){
       for(const c of r.commands||[])queueCloudCommand(c)
       if((r.commands||[]).length)setTimeout(()=>syncCloudNow({reason:'command-ack'}).catch(()=>{}),100).unref?.()
       return{events:{sent:events.length,accepted:Number(r.accepted||0),conflicts:Array.isArray(r.conflicts)?r.conflicts.length:0,acks:acks.length},runtime:{cursor:r.runtime?.cursor||runtimeCursor},commands:{received:(r.commands||[]).length},status:cloudStatus()}
-    }catch(e){markCloudEventsFailed(pending.map(x=>x.eventId),e.message||e);setSyncState('cloud_last_error',e.message||String(e));throw e}
+    }catch(e){markCloudEventsFailed(pending.map(x=>x.eventId),e.message||e);setSyncState('cloud_last_error',e.message||String(e));reportError('cloud.sync',e,{reason});throw e}
   })()
   try{return await running}finally{running=null}
 }
-export function startCloudSyncWorker(){if(!env.cloudEnabled||timer)return;wake();const run=()=>syncCloudNow({reason:'interval'}).catch(e=>{if(env.nodeEnv==='development')console.warn(`[cloud] sync failed: ${e.message||e}`)});setTimeout(run,800).unref?.();timer=setInterval(run,env.cloudSyncIntervalSeconds*1000);timer.unref?.()}
+export function startCloudSyncWorker(){if(!env.cloudEnabled||timer)return;wake();const run=()=>syncCloudNow({reason:'interval'}).catch(e=>{reportError('cloud.worker',e,{reason:'interval'});if(env.nodeEnv==='development')console.warn(`[cloud] sync failed: ${e.message||e}`)});setTimeout(run,800).unref?.();timer=setInterval(run,env.cloudSyncIntervalSeconds*1000);timer.unref?.()}
 export function stopCloudSyncWorker(){if(timer)clearInterval(timer);timer=null;stopCloudWakeup()}

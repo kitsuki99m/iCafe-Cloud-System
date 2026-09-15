@@ -13,6 +13,7 @@ const required=[
   'apps/admin/package.json','apps/admin/.env.cloud.example','apps/admin/vercel.json','apps/admin/electron/main.cjs',
   'apps/customer/package.json','apps/customer/electron/main.cjs',
   'backend/package.json','backend/.env.example','backend/src/cloud/syncWorker.js',
+  'backend/src/services/databaseBackup.js','backend/src/utils/observability.js','backend/scripts/backup.mjs','backend/scripts/restore-backup.mjs',
   'supabase/config.toml','supabase/migrations/20260913000001_aezakmi_cloud_base.sql',
   'supabase/migrations/20260913000002_cloud_admin_idempotency.sql',
   'supabase/migrations/20260913000003_pairing_code_security.sql',
@@ -26,24 +27,38 @@ const required=[
   'supabase/migrations/20260914000022_earnings_receipts_not_wallet_activity.sql',
   'supabase/migrations/20260914000023_earnings_receipt_edge_dedupe_guard.sql',
   'supabase/migrations/20260914000024_member_starting_wallet_receipt_guard.sql',
+  'supabase/migrations/20260914000025_atomic_platform_pricing_catalog.sql',
+  'supabase/migrations/20260915000026_station_delete_tombstones.sql',
+  'supabase/migrations/20260915000027_station_runtime_heartbeat_rpc.sql',
+  'supabase/migrations/20260915000028_station_presence_heartbeat_grace.sql',
+  'supabase/migrations/20260915000029_public_abuse_controls.sql',
+  'supabase/migrations/20260915000030_observability_events.sql',
   'supabase/functions/admin-api/index.ts',
   'supabase/functions/edge-sync/index.ts',
   'supabase/functions/request-business-access/index.ts',
   'supabase/functions/developer-registrations/index.ts',
   'supabase/functions/activate-registration/index.ts',
-  'docs/DEPLOYMENT_SUPABASE_VERCEL.md','docs/DEVELOPER_APPROVAL_SETUP.md'
+  'docs/DEPLOYMENT_SUPABASE_VERCEL.md','docs/DEVELOPER_APPROVAL_SETUP.md','docs/BACKUP_RECOVERY_OBSERVABILITY_2026-09-15.md'
 ]
 for(const p of required)check(exists(p),`Missing required release file: ${p}`)
 check(!exists('apps/cloud'),'Legacy apps/cloud must be removed; apps/admin is the single Admin codebase.')
 check(!exists('render.yaml'),'Render configuration must not be present.')
 check(!exists('services/cloud-api'),'Legacy Render cloud API must not be present.')
-check(!exists('supabase/functions/_shared'),'Supabase functions must be single-file for Docker-free API deployment.')
+check(exists('supabase/functions/_shared/security.ts'),'Shared Supabase security helper is required.')
 for(const name of ['pair-edge','edge-sync','edge-unpair','create-pairing-code','issue-command','admin-action','admin-api','update-branch-config','create-branch','revoke-edge','request-business-access','developer-registrations','activate-registration','station-admin','pair-station','station-runtime','station-api']){
   const dir=`supabase/functions/${name}`
   const tsFiles=walk(dir).filter(p=>p.endsWith('.ts'))
   check(tsFiles.length===1&&tsFiles[0]===`${dir}/index.ts`,`${name} must contain only index.ts for API bundling.`)
-  if(exists(`${dir}/index.ts`))check(!/from\s*['"]\.\.?\//.test(read(`${dir}/index.ts`)),`${name} must not import local filesystem modules.`)
 }
+
+const hardeningSource=[read('supabase/functions/request-business-access/index.ts'),read('supabase/functions/pair-station/index.ts'),read('supabase/functions/pair-edge/index.ts'),read('supabase/functions/station-api/index.ts')].join('\n')
+check(/registration_captcha_challenges/.test(hardeningSource)&&/registration_submit_ip/.test(hardeningSource),'Public registration CAPTCHA/rate limiting is missing.')
+check(/station_pairing[^\n]+15,900/.test(hardeningSource)&&/edge_pairing[^\n]+15,900/.test(hardeningSource),'Pairing must retain the 15-attempt abuse limit.')
+check(/station_member_login/.test(hardeningSource),'Customer Cloud login rate limiting is missing.')
+check(/AEZAKMI_STATION_SETUP_MASTER_PIN \?\? '062321'/.test(read('backend/src/config/env.js')),'Requested Station Setup Master PIN default changed unexpectedly.')
+check(/TEMPORARY_CUSTOMER_PASSWORD = "1234"/.test(read('backend/src/routes/apiRoutes.js')),'Requested temporary member password changed unexpectedly.')
+check(/COMPACT_WIDTH = 96/.test(read('apps/customer/electron/main.cjs'))&&/COMPACT_HEIGHT = 28/.test(read('apps/customer/electron/main.cjs')),'Customer compact timer must remain tiny.')
+check(/system_observability_events/.test(read('supabase/migrations/20260915000030_observability_events.sql')),'Central observability migration is incomplete.')
 
 const secretPatterns=[/sb_secret_[A-Za-z0-9_-]+/g,/SUPABASE_SERVICE_ROLE_KEY\s*=\s*[^\s#]+/g,/SUPABASE_SECRET_KEY\s*=\s*[^\s#]+/g]
 const sourceRoots=['apps','backend','supabase','scripts','tools','docs']

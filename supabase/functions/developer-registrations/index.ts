@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { reportCloudError } from '../_shared/security.ts'
 
 const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST,OPTIONS'}
 function preflight(req:Request){if(req.method==='OPTIONS')return new Response('ok',{headers:corsHeaders});return null}
@@ -150,8 +151,9 @@ async function lifecycle(admin:SupabaseClient,organizationId:string){const{data,
 Deno.serve(async req=>{
   const o=preflight(req);if(o)return o
   if(req.method!=='POST')return json({success:false,error:'Method not allowed.'},405)
+  let admin:SupabaseClient|null=null
   try{
-    const user=await authenticatedUser(req),admin=adminClient();const developer=await requireDeveloper(admin,user.id)
+    const user=await authenticatedUser(req);admin=adminClient();const developer=await requireDeveloper(admin,user.id)
     const b=await req.json().catch(()=>({})),action=String(b.action||'list'),requestId=String(b.requestId||''),reviewNotes=note(b.reviewNotes)
 
     if(action==='list'){
@@ -169,9 +171,17 @@ Deno.serve(async req=>{
       }
       const orgMap=new Map(orgs.map((x:any)=>[x.id,x])),subMap=new Map(subs.map((x:any)=>[x.organization_id,x]))
       const merged=(requests||[]).map((r:any)=>{const org:any=r.organization_id?orgMap.get(r.organization_id):null,sub:any=r.organization_id?subMap.get(r.organization_id):null;return{...r,organization_status:org?.lifecycle_status||null,organization_reason:org?.lifecycle_reason||null,lifecycle_updated_at:org?.lifecycle_updated_at||null,suspended_at:org?.suspended_at||null,terminated_at:org?.terminated_at||null,subscription_plan:sub?.plan||null,subscription_status:sub?.status||null,subscription_max_stations:sub?.max_stations??null,subscription_max_branches:sub?.max_branches??null,grace_until:sub?.grace_until||null,current_period_end:sub?.current_period_end||null,purge_eligible_at:org?.terminated_at?addDays(org.terminated_at,30):null}})
-      const[packages,pricing]=await Promise.all([packageCatalog(admin),pricingSettings(admin)])
+      const since24h=new Date(Date.now()-24*60*60*1000).toISOString()
+      const[packages,pricing,observabilityResult]=await Promise.all([
+        packageCatalog(admin),
+        pricingSettings(admin),
+        admin.from('system_observability_events').select('source,severity,code,message,occurrence_count,last_seen_at').gte('last_seen_at',since24h).order('last_seen_at',{ascending:false}).limit(20),
+      ])
+      if(observabilityResult.error)throw observabilityResult.error
+      const recentObservability=observabilityResult.data||[]
+      const observability={last24Hours:recentObservability.reduce((sum:number,item:any)=>sum+Number(item.occurrence_count||0),0),bucketCount:recentObservability.length,recent:recentObservability.slice(0,10)}
       const emailCfg=(()=>{try{const cfg=brevoConfig();return{configured:true,provider:'brevo',from:`${cfg.senderName} <${cfg.senderEmail}>`,adminUrl:activationRedirect()}}catch(error:any){return{configured:false,provider:'brevo',error:error?.message||'Email not configured.',from:'Aezakmi Cafe Management <kyle.serina05@gmail.com>',adminUrl:activationRedirect()}}})()
-      return json({success:true,requests:merged,packageCatalog:packages,pricingSettings:pricing,emailDelivery:emailCfg})
+      return json({success:true,requests:merged,packageCatalog:packages,pricingSettings:pricing,emailDelivery:emailCfg,observability})
     }
 
     if(action==='update_pricing_catalog'){
@@ -396,5 +406,5 @@ Deno.serve(async req=>{
     }
 
     throw Object.assign(new Error('Unsupported developer action.'),{status:400,code:'INVALID_ACTION'})
-  }catch(error){console.error('developer-registrations',error);return fail(error,'Unable to process registration request.')}
+  }catch(error:any){if(admin)await reportCloudError(admin,'developer-registrations',error,{action:'developer'});console.error('developer-registrations',error);return fail(error,'Unable to process registration request.')}
 })

@@ -115,16 +115,19 @@ test('reduced heartbeat cadence has a matching 180-second presence grace everywh
 test('active Customer Electron uses a floating compact timer and never background-throttles session timers',()=>{
   const main=read('apps/customer/electron/main.cjs')
   const view=read('apps/customer/src/pages/CustomerSessionView.jsx')
-  assert.match(main,/const COMPACT_WIDTH = 332/)
-  assert.match(main,/const COMPACT_HEIGHT = 118/)
+  assert.match(main,/const COMPACT_WIDTH = 96/)
+  assert.match(main,/const COMPACT_HEIGHT = 28/)
   assert.match(main,/workArea\.x \+ COMPACT_MARGIN/)
   assert.match(main,/workArea\.y \+ COMPACT_MARGIN/)
   assert.match(main,/setAlwaysOnTop\(true, 'floating'\)/)
   assert.match(main,/showInactive\(\)/)
   assert.match(main,/backgroundThrottling:false/)
   assert.match(main,/function hideMiniDashboard\(\)[\s\S]*applyCompactSessionMode\(\)/)
+  assert.match(main,/mainWindow\.on\('minimize',[\s\S]*hideMiniDashboard\(\)/)
   assert.match(view,/data-session-widget="compact"/)
   assert.match(view,/showMiniDashboard/)
+  const compactBlock=view.slice(view.indexOf('if (compactView && hasActiveSession)'),view.indexOf('return (',view.indexOf('if (compactView && hasActiveSession)')+40))
+  assert.doesNotMatch(compactBlock,/<img|Guest|Member/)
 })
 
 test('session start transitions end in compact mode rather than hiding the paid-session UI',()=>{

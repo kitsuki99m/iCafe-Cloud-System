@@ -429,6 +429,9 @@ export async function cloudPublicInvoke(functionName, body = {}) {
 export async function cloudRequestBusinessAccess(payload) {
   return cloudPublicInvoke("request-business-access", payload);
 }
+export async function cloudRequestRegistrationCaptcha() {
+  return cloudPublicInvoke("request-business-access", { action: "captcha" });
+}
 export async function cloudDeveloperRegistrations(
   action = "list",
   payload = {},

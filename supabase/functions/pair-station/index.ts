@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { enforceRateLimit, reportCloudError, requestIp } from '../_shared/security.ts'
 
 const corsHeaders={
   'Access-Control-Allow-Origin':'*',
@@ -17,8 +18,9 @@ function adminClient(){return createClient(projectUrl(),secretKey(),{auth:{persi
 
 Deno.serve(async req=>{
   const pre=preflight(req);if(pre)return pre
+  let admin:any=null
   try{
-    const admin=adminClient()
+    admin=adminClient()
     const body=await req.json().catch(()=>({}))
     const pairingCode=String(body.pairingCode||'').trim().toUpperCase()
     const installationId=String(body.installationId||'').trim()
@@ -33,6 +35,12 @@ Deno.serve(async req=>{
     if(!/^[A-Fa-f0-9-]{36}$/.test(installationId)){
       return json({success:false,code:'INSTALLATION_ID_INVALID',error:'Station installation identity is invalid.'},400)
     }
+
+    // Generous kiosk pairing budget: fifteen retries per installation in a
+    // fifteen-minute window, plus a broad IP ceiling to stop scripted floods.
+    const ip=requestIp(req)
+    await enforceRateLimit(admin,'station_pairing',`${ip}:${installationId}`,15,900)
+    await enforceRateLimit(admin,'station_pairing_ip',ip,60,3600)
 
     const hash=await sha256(pairingCode)
     const now=new Date().toISOString()
@@ -134,7 +142,8 @@ Deno.serve(async req=>{
       ownerEmail:pairing.owner_email||null,
       pairedAt:now,
     },201)
-  }catch(e){
+  }catch(e:any){
+    if(admin)await reportCloudError(admin,'pair-station',e,{path:'/pair-station'})
     return fail(e,'Unable to pair Customer Station.')
   }
 })

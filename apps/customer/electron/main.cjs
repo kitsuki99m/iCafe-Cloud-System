@@ -107,9 +107,9 @@ function configureCustomerInstallStorage() {
 const customerDataRoot = configureCustomerInstallStorage()
 const ACTIVE_WIDTH = 960
 const ACTIVE_HEIGHT = 680
-const COMPACT_WIDTH = 332
-const COMPACT_HEIGHT = 118
-const COMPACT_MARGIN = 12
+const COMPACT_WIDTH = 96
+const COMPACT_HEIGHT = 28
+const COMPACT_MARGIN = 4
 const WINDOW_STATES = Object.freeze({ LOCKED:'locked', IDLE:'idle', ACTIVE:'active' })
 
 let mainWindow = null
@@ -727,6 +727,11 @@ function createWindow() {
     if (isActive()) hideMiniDashboard()
     else if (isIdleDashboard()) applyIdleDashboardMode()
     else applyLockedWindowMode()
+  })
+  mainWindow.on('minimize', event => {
+    if (!isActive()) return
+    event.preventDefault()
+    hideMiniDashboard()
   })
 
 

@@ -25,54 +25,37 @@ export default function EmergencyControlGuard() {
     if (!command || !pin || busy) return
     setBusy(true); setError('')
     try {
-      // Quit, Lock, and Unlock are developer/operator recovery controls. They
-      // always use the Station Setup Master PIN; an Admin account PIN is never
-      // accepted by this modal. Electron verifies locally before any station
-      // lifecycle request is sent to Café Edge.
+      // The Station Setup Master PIN is deliberately a local recovery authority.
+      // Once Electron verifies it, Café Edge/Cloud availability must never be able
+      // to block Quit, Lock, or Unlock. This mirrors the emergency Quit behavior.
       const verified = await window.aezakmiClient?.verifyStationSetupMasterPin?.(pin)
       if (!verified?.verified) throw Object.assign(new Error('Incorrect Station Setup Master PIN.'), { code:'STATION_SETUP_MASTER_PIN_INVALID' })
 
-      // Emergency QUIT is an absolute local recovery override. Once the local
-      // Station Setup Master PIN is verified, do not consult Café Edge, Cloud,
-      // station registration, pairing state, or session lifecycle APIs. This
-      // shortcut exists specifically so an unreachable/misconfigured server
-      // can never trap the operator inside the Customer kiosk.
       if (command === 'quit') {
         await executeLocally()
         return
       }
 
-      // A not-yet-paired station has no authoritative Café Edge station row to
-      // checkpoint. The local master PIN must still be able to recover/lock/
-      // unlock the kiosk so pairing or server problems cannot trap the PC.
-      if (stationPairingRequired) {
-        await executeLocally()
-        return
-      }
+      const requestedCommand = command
+      // Apply Lock/Unlock locally first so a dead/misconfigured Café Edge cannot
+      // trap the operator. The accounting checkpoint/ACK is best effort and is
+      // reconciled when authority is reachable again.
+      await executeLocally()
 
-      // Lock/Unlock keep the normal Café Edge authorization + ACK lifecycle.
-      // Quit intentionally bypasses this entire block above.
-      const authorization = await apiPost('/public/station-control', { command, pin })
-      const executed = await window.aezakmiClient?.executeEmergencyCommand?.(command)
-      await apiPatch(`/public/station-control/${authorization.controlId}/ack`, {
-        status: executed === false ? 'failed' : 'completed',
-        result: { executed: executed !== false, authorization:'station_setup_master_pin' },
-      })
-      if (executed === false) throw new Error(`${LABEL[command] || 'Station command'} could not be executed.`)
-      setCommand(null)
-    } catch (err) {
-      // If the station identity itself is what prevents Café Edge authorization,
-      // local master-PIN verification is already complete, so retain the
-      // recovery path for all three protected shortcuts.
-      if (['PC_NOT_REGISTERED','STATION_NOT_PAIRED'].includes(String(err?.code || ''))) {
-        try {
-          await executeLocally()
-          return
-        } catch (fallbackError) {
-          setError(fallbackError?.message || 'Unable to execute protected station control.')
-          return
-        }
+      if (!stationPairingRequired) {
+        void (async () => {
+          try {
+            const authorization = await apiPost('/public/station-control', { command:requestedCommand, pin })
+            await apiPatch(`/public/station-control/${authorization.controlId}/ack`, {
+              status:'completed',
+              result:{ executed:true, authorization:'station_setup_master_pin', localOverride:true },
+            })
+          } catch (edgeError) {
+            console.warn(`[station-control] ${requestedCommand} completed locally; Café Edge checkpoint unavailable:`, edgeError?.message || edgeError)
+          }
+        })()
       }
+    } catch (err) {
       setError(err?.message || 'Unable to verify Station Setup Master PIN.')
     } finally {
       setBusy(false)

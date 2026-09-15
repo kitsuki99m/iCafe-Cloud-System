@@ -1,9 +1,12 @@
+import { recordLocalError } from '../utils/observability.js'
+
 export function notFound(req, res) {
   res.status(404).json({ success: false, code: 'NOT_FOUND', error: 'Route not found.' })
 }
 
 export function errorHandler(err, req, res, next) {
   console.error(err)
+  recordLocalError('http', err, { method:req?.method, path:req?.originalUrl || req?.url })
   if (res.headersSent) return next(err)
 
   const sqliteConstraint = String(err?.code || '').startsWith('SQLITE_CONSTRAINT')

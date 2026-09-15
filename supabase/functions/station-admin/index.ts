@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { reportCloudError } from '../_shared/security.ts'
 
 const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST,OPTIONS'}
 const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -52,7 +53,7 @@ async function checkpointAdminInterruption(admin:SupabaseClient,branchId:string,
   return {success:true,skipped:true}
 }
 
-Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user=await authUser(req),admin=adminClient(),body=await req.json().catch(()=>({})),action=String(body.action||'');
+Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;let admin:SupabaseClient|null=null;try{const user=await authUser(req);admin=adminClient();const body=await req.json().catch(()=>({})),action=String(body.action||'');
   if(action==='create'){
     const branchId=String(body.branchId||'');const{branch}=await requireBranch(admin,user.id,branchId);const operationKey=String(body.operationKey||'').trim()||null,actorKey=`admin:${user.id}`;
     if(operationKey){const{data:receipt,error:receiptError}=await admin.from('cloud_operation_receipts').select('response').eq('branch_id',branchId).eq('actor_key',actorKey).eq('operation_key',operationKey).maybeSingle();if(receiptError)throw receiptError;if(receipt?.response)return json(receipt.response,200)}
@@ -233,7 +234,8 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const user
     return json({success:true,commandId:commandRow.id,status:commandRow.status||'queued',expiresAt:commandRow.expires_at,interruption},201)
   }
   return json({success:false,code:'INVALID_ACTION',error:'Unsupported station admin action.'},400)
-}catch(e){
-  console.error('[station-admin]',{code:(e as any)?.code||null,status:(e as any)?.status||500,message:(e as any)?.message||String(e),details:(e as any)?.details||null,hint:(e as any)?.hint||null})
+}catch(e:any){
+  if(admin)await reportCloudError(admin,'station-admin',e,{action:'station-admin'})
+  console.error('[station-admin]',{code:e?.code||null,status:e?.status||500,message:e?.message||String(e),details:e?.details||null,hint:e?.hint||null})
   return fail(e,'Unable to manage Customer Station.')
 }})

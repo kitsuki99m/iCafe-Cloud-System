@@ -433,6 +433,18 @@ export function migrate() {
     );
     CREATE INDEX IF NOT EXISTS idx_sync_outbox_pending
       ON sync_outbox(synced_at,next_attempt_at,occurred_at);
+    CREATE TABLE IF NOT EXISTS observability_events (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      code TEXT,
+      message TEXT NOT NULL,
+      fingerprint TEXT NOT NULL,
+      context_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      synced_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_observability_pending ON observability_events(synced_at,created_at);
     CREATE TABLE IF NOT EXISTS cloud_admin_actions (
       cloud_command_id TEXT PRIMARY KEY,
       action TEXT NOT NULL,

@@ -11,6 +11,11 @@ import { activeSessionPause, closeSessionAndSaveRemaining, isSessionHeartbeatSta
 import { normalizeIp, isValidIpv4 } from './middleware/clientIdentity.js'
 import { stationCredentialMatches } from './utils/stationAuth.js'
 import { startCloudSyncWorker, stopCloudSyncWorker } from './cloud/syncWorker.js'
+import { startDatabaseBackupScheduler, stopDatabaseBackupScheduler } from './services/databaseBackup.js'
+import { recordLocalError } from './utils/observability.js'
+
+process.on('unhandledRejection',(error)=>recordLocalError('process.unhandledRejection',error))
+process.on('uncaughtExceptionMonitor',(error)=>recordLocalError('process.uncaughtException',error))
 
 migrate()
 ensureMemberProfileColumns()
@@ -77,6 +82,7 @@ const server=app.listen(env.port,env.host,()=>{
   console.log(`iCafe8 diskless provider: ${env.disklessProvider}`)
 })
 startCloudSyncWorker()
+startDatabaseBackupScheduler()
 if (env.cloudEnabled) console.log(`Aezakmi Cloud sync enabled: ${env.supabaseUrl}`)
 const io=new SocketIOServer(server,{cors:{origin:env.corsOrigin==='*'?true:env.corsOrigin.split(',').map(x=>x.trim()).filter(Boolean)}})
 setRealtime(io)
@@ -278,5 +284,5 @@ io.on('connection', (socket) => {
   })
 })
 const cleanup=()=>{try{clearInterval(cleanupTimer);for(const timer of stationDisconnectTimers.values())clearTimeout(timer);stationDisconnectTimers.clear()
-  stopCloudSyncWorker();io.close();server.close(()=>{db.close();process.exit(0)})}catch{process.exit(0)}}
+  stopCloudSyncWorker();stopDatabaseBackupScheduler();io.close();server.close(()=>{db.close();process.exit(0)})}catch{process.exit(0)}}
 process.on('SIGINT',cleanup);process.on('SIGTERM',cleanup)

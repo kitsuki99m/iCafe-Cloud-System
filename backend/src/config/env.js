@@ -34,6 +34,12 @@ export const env = {
   // for protected local station controls. Keep this value identical on Café
   // Edge and Customer Station when overriding the built-in default.
   stationSetupMasterPin: String(process.env.AEZAKMI_STATION_SETUP_MASTER_PIN ?? '062321').trim(),
+  databaseBackupEnabled: bool(process.env.AEZAKMI_DATABASE_BACKUP_ENABLED, true),
+  databaseBackupDir: process.env.AEZAKMI_DATABASE_BACKUP_DIR ?? './data/backups',
+  databaseBackupIntervalHours: Number(process.env.AEZAKMI_DATABASE_BACKUP_INTERVAL_HOURS ?? 6),
+  databaseBackupRetention: Number(process.env.AEZAKMI_DATABASE_BACKUP_RETENTION ?? 28),
+  observabilityWebhookUrl: String(process.env.AEZAKMI_OBSERVABILITY_WEBHOOK_URL ?? '').trim(),
+  observabilityRetentionDays: Number(process.env.AEZAKMI_OBSERVABILITY_RETENTION_DAYS ?? 30),
 }
 
 if (!Number.isFinite(env.port) || env.port < 1 || env.port > 65535) {
@@ -51,12 +57,20 @@ if (!Number.isFinite(env.cloudSyncBatchSize) || env.cloudSyncBatchSize < 1 || en
 if (!Number.isFinite(env.cloudRequestTimeoutMs) || env.cloudRequestTimeoutMs < 1000) {
   throw new Error('AEZAKMI_CLOUD_REQUEST_TIMEOUT_MS must be at least 1000.')
 }
+if (!Number.isFinite(env.observabilityRetentionDays) || env.observabilityRetentionDays < 7 || env.observabilityRetentionDays > 365) {
+  throw new Error('AEZAKMI_OBSERVABILITY_RETENTION_DAYS must be between 7 and 365.')
+}
+if (env.observabilityWebhookUrl && !/^https:\/\//i.test(env.observabilityWebhookUrl)) {
+  throw new Error('AEZAKMI_OBSERVABILITY_WEBHOOK_URL must use HTTPS.')
+}
 if (env.cloudEnabled && !/^https:\/\/[^/]+\.supabase\.co$/i.test(env.supabaseUrl)) {
   throw new Error('AEZAKMI_SUPABASE_URL must be a Supabase project URL when cloud integration is enabled.')
 }
 if (env.cloudEnabled && !env.supabasePublishableKey.startsWith('sb_publishable_')) {
   throw new Error('AEZAKMI_SUPABASE_PUBLISHABLE_KEY must be a Supabase publishable key when cloud integration is enabled.')
 }
+if (!Number.isFinite(env.databaseBackupIntervalHours) || env.databaseBackupIntervalHours < 1) throw new Error('AEZAKMI_DATABASE_BACKUP_INTERVAL_HOURS must be at least 1.')
+if (!Number.isFinite(env.databaseBackupRetention) || env.databaseBackupRetention < 3) throw new Error('AEZAKMI_DATABASE_BACKUP_RETENTION must be at least 3.')
 if (!/^\d{4,8}$/.test(env.stationSetupMasterPin)) {
   throw new Error('AEZAKMI_STATION_SETUP_MASTER_PIN must contain 4 to 8 digits.')
 }

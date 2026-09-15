@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
+import { enforceRateLimit, reportCloudError, requestIp } from '../_shared/security.ts'
 
 const corsHeaders={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Access-Control-Allow-Methods':'POST,OPTIONS'}
 function preflight(req:Request){if(req.method==='OPTIONS')return new Response('ok',{headers:corsHeaders});return null}
@@ -14,8 +15,10 @@ async function authenticatedUser(req:Request){const authorization=req.headers.ge
 Deno.serve(async req=>{
   const o=preflight(req);if(o)return o
   if(req.method!=='POST')return json({success:false,error:'Method not allowed.'},405)
+  let admin:SupabaseClient|null=null
   try{
-    const user=await authenticatedUser(req),admin=adminClient(),now=new Date().toISOString()
+    const user=await authenticatedUser(req);admin=adminClient();const now=new Date().toISOString()
+    await enforceRateLimit(admin,'registration_activation',`${user.id}:${requestIp(req)}`,10,900)
     const{data:r,error}=await admin.from('registration_requests').select('id,status,organization_id,branch_id,activated_at').eq('auth_user_id',user.id).maybeSingle()
     if(error)throw error
     if(!r)throw Object.assign(new Error('No approved business invitation is linked to this account.'),{status:403,code:'APPROVAL_REQUIRED'})
@@ -26,5 +29,5 @@ Deno.serve(async req=>{
       await admin.from('registration_audit_logs').insert({registration_request_id:r.id,actor_user_id:user.id,action:'activated',details:{organizationId:r.organization_id,branchId:r.branch_id}})
     }
     return json({success:true,organizationId:r.organization_id,branchId:r.branch_id,activatedAt:r.activated_at||now})
-  }catch(error){return fail(error,'Unable to activate the approved business account.')}
+  }catch(error:any){if(admin)await reportCloudError(admin,'activate-registration',error,{path:'/activate-registration'});return fail(error,'Unable to activate the approved business account.')}
 })

@@ -29,6 +29,7 @@ import {
   getIO,
 } from "../realtime.js";
 import { env } from "../config/env.js";
+import { getDatabaseBackupStatus } from "../services/databaseBackup.js";
 import {
   activeSessionPause,
   checkpointMemberSession,
@@ -614,9 +615,10 @@ function manilaStart(daysBack = 0) {
   ).toISOString();
 }
 
-router.get("/health", (req, res) =>
-  res.json({ success: true, status: "ok", database: "connected" }),
-);
+router.get("/health", (req, res) => {
+  const backup = getDatabaseBackupStatus();
+  res.json({ success:true, status:"ok", database:"connected", backup:{ enabled:backup.enabled, lastBackupAt:backup.lastBackupAt, verified:backup.verified, lastError:backup.lastError } });
+});
 router.post("/public/station/enroll", (req, res) => {
   if (!req.pc)
     return res

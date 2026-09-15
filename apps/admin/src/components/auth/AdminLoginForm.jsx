@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -16,6 +16,7 @@ import { useBranding } from "../../hooks/useBranding.js";
 import { useBackendStatus } from "../../hooks/useBackendStatus.js";
 import {
   cloudRequestBusinessAccess,
+  cloudRequestRegistrationCaptcha,
   isCloudAdmin,
 } from "../../lib/cloudClient.js";
 
@@ -36,6 +37,9 @@ export default function AdminLoginForm() {
   const [message, setMessage] = useState("");
   const [cloudAuthMode, setCloudAuthMode] = useState("signin");
   const [requestStep, setRequestStep] = useState(1);
+  const [captcha, setCaptcha] = useState(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captchaLoading, setCaptchaLoading] = useState(false);
   const [request, setRequest] = useState({
     ownerName: "",
     businessName: "",
@@ -66,8 +70,26 @@ export default function AdminLoginForm() {
       ? !request.ownerName.trim() || !request.businessName.trim()
       : requestStep === 2
         ? !username.trim() || !Number.isInteger(expectedStations) || expectedStations < 1 || expectedStations > 10000
-        : missingCredentials
+        : missingCredentials || !captcha?.captchaChallengeId || !/^[0-9]{6}$/.test(captchaAnswer)
   );
+
+  async function refreshCaptcha() {
+    if (!cloud || captchaLoading) return;
+    setCaptchaLoading(true);
+    try {
+      const next = await cloudRequestRegistrationCaptcha();
+      setCaptcha(next);
+      setCaptchaAnswer("");
+    } catch (err) {
+      setError(err?.message || "Unable to create verification code.");
+    } finally {
+      setCaptchaLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (requesting && requestStep === 3 && !captcha?.captchaChallengeId && !captchaLoading) refreshCaptcha();
+  }, [requesting, requestStep, captcha?.captchaChallengeId]);
 
   function updateRequest(key, value) {
     setRequest((current) => ({ ...current, [key]: value }));
@@ -93,6 +115,8 @@ export default function AdminLoginForm() {
           email: username.trim(),
           ...request,
           expectedStationCount: Number(request.expectedStationCount) || 1,
+          captchaChallengeId: captcha?.captchaChallengeId,
+          captchaAnswer,
         });
         setMessage("Application submitted. We’ll email you after review.");
         setRequest({
@@ -105,6 +129,8 @@ export default function AdminLoginForm() {
           website: "",
         });
         setUsername("");
+        setCaptcha(null);
+        setCaptchaAnswer("");
         setRequestStep(1);
       } else {
         const result = cloud
@@ -120,6 +146,10 @@ export default function AdminLoginForm() {
       }
     } catch (err) {
       setError(err?.message || "Unable to continue.");
+      if (requesting && ["CAPTCHA_EXPIRED", "CAPTCHA_EXHAUSTED"].includes(String(err?.code || ""))) {
+        setCaptcha(null);
+        setCaptchaAnswer("");
+      }
     } finally {
       setBusy(false);
     }
@@ -352,7 +382,6 @@ export default function AdminLoginForm() {
                     <label className="block">
                       <span className="eyebrow mb-2 block">Notes <span className="normal-case tracking-normal text-slate-soft">(optional)</span></span>
                       <textarea
-                        autoFocus
                         rows={3}
                         value={request.note}
                         onChange={(e) => updateRequest("note", e.target.value)}
@@ -360,6 +389,34 @@ export default function AdminLoginForm() {
                         placeholder="Anything the developer should know?"
                       />
                     </label>
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-2">
+                      <div>
+                        <span className="eyebrow mb-2 block">Verification</span>
+                        <button
+                          type="button"
+                          onClick={refreshCaptcha}
+                          disabled={captchaLoading}
+                          className="min-h-11 min-w-[112px] rounded-xl border border-surface-line bg-surface-raised px-3 font-mono text-base font-bold tracking-[0.18em] text-ink-900"
+                          title="Generate a new code"
+                        >
+                          {captchaLoading ? "······" : (captcha?.captchaCode || "New code")}
+                        </button>
+                      </div>
+                      <label className="block">
+                        <span className="eyebrow mb-2 block">Enter code</span>
+                        <input
+                          autoFocus
+                          required
+                          inputMode="numeric"
+                          pattern="[0-9]{6}"
+                          maxLength={6}
+                          value={captchaAnswer}
+                          onChange={(e) => setCaptchaAnswer(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                          className={`${inputClass} font-mono tracking-[0.2em]`}
+                          placeholder="000000"
+                        />
+                      </label>
+                    </div>
                   </div>
                 )}
                 <input
@@ -482,6 +539,8 @@ export default function AdminLoginForm() {
                   value === "signin" ? "request" : "signin",
                 );
                 setRequestStep(1);
+                setCaptcha(null);
+                setCaptchaAnswer("");
                 setError("");
                 setMessage("");
                 setPassword("");
