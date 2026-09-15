@@ -148,7 +148,7 @@ function connectWakeSocket() {
   const wsUrl=SUPABASE_URL.replace(/^https:/,'wss:')+`/realtime/v1/websocket?apikey=${encodeURIComponent(PUBLISHABLE_KEY)}&vsn=1.0.0`
   const ws=new WebSocket(wsUrl);wakeSocket=ws;let ref=1;const topic=`realtime:station-wakeup:${credential.realtimeTopicKey}`
   ws.addEventListener('open',()=>{ws.send(JSON.stringify({topic,event:'phx_join',payload:{config:{broadcast:{self:false,ack:false},presence:{enabled:false},postgres_changes:[]}},ref:String(ref++)}));void pollCommands()})
-  ws.addEventListener('message',(event)=>{try{const msg=JSON.parse(String(event.data||''));if(msg?.event==='broadcast'||msg?.event==='station_wakeup'){window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-wakeup',{detail:msg?.payload||{}}));void pollCommands()}}catch{}})
+  ws.addEventListener('message',(event)=>{try{const msg=JSON.parse(String(event.data||''));if(msg?.event==='broadcast'||msg?.event==='station_wakeup'){const outer=msg?.payload&&typeof msg.payload==='object'?msg.payload:{};const detail=outer?.payload&&typeof outer.payload==='object'?outer.payload:outer;window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-wakeup',{detail}));void pollCommands()}}catch{}})
   ws.addEventListener('close',()=>{if(wakeSocket===ws){wakeSocket=null;reconnectTimer=setTimeout(connectWakeSocket,5000)}})
   ws.addEventListener('error',()=>{try{ws.close()}catch{}})
 }

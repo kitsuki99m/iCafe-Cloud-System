@@ -120,6 +120,14 @@ async function localApiFetch(path, options = {}) {
 }
 
 
+// Fast LAN-only probe used while the Customer login kiosk is waiting for an
+// Admin-started walk-in session. This deliberately avoids a Cloud request on
+// every one-second probe; Realtime remains the immediate Cloud wake-up path.
+export async function apiGetGuestSessionLocal() {
+  const data = await localApiFetch('/guest/session', { cache:'no-store' })
+  return { ...data, guestSessionAuthority:'edge', guestSessionAbsentConfirmed:!data?.session }
+}
+
 // Cloud-primary reads fall back to Café Edge over LAN until Cloud recovers.
 async function localAppDataBundle() {
   // `/app-data` is a Cloud bundling route. When Cloud is unavailable, build the

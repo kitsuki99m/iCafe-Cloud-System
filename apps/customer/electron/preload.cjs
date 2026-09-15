@@ -34,6 +34,13 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   executeEmergencyCommand:command => ipcRenderer.invoke('client:emergency-command', command),
   showMiniDashboard:() => ipcRenderer.invoke('client:show-dashboard'),
   hideMiniDashboard:() => ipcRenderer.invoke('client:hide-dashboard'),
+  getTimerPreferences:() => ipcRenderer.sendSync('client:get-timer-preferences'),
+  setTimerPreferences:patch => ipcRenderer.invoke('client:set-timer-preferences', patch),
+  onTimerPreferencesChanged:handler => {
+    const listener=(_event,prefs)=>handler(prefs)
+    ipcRenderer.on('client:timer-preferences-changed',listener)
+    return ()=>ipcRenderer.removeListener('client:timer-preferences-changed',listener)
+  },
   onWidgetAction:handler => {
     const listener=(_event,action)=>handler(action)
     ipcRenderer.on('widget:action',listener)

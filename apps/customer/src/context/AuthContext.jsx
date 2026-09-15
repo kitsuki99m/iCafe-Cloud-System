@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { apiGet, apiPost, setToken, getToken } from "../lib/api.js";
+import { apiGet, apiGetGuestSessionLocal, apiPost, setToken, getToken } from "../lib/api.js";
 import { cloudStationFeatureEnabled, cloudStationPaired, pairCloudStation, startCloudStationRuntime, unpairCloudStation } from "../lib/cloudStation.js";
 import { clearStationLifecycleMarker, hasActiveStationLifecycle, hasPendingStationLifecycle, recoverPendingStationLifecycle, releaseStationLifecycle } from "../lib/sessionLifecycle.js";
 
@@ -49,6 +49,25 @@ function guestUserFromResponse(data) {
     pcIp: pc?.ipAddress ?? null,
     guestSession: session,
   };
+}
+
+function compactGuestSessionImmediately(data, guestUser) {
+  const session=data?.session || guestUser?.guestSession || null;
+  const pc=data?.pc || null;
+  if (!session || !guestUser) return;
+  // Admin already started the paid Guest session. Do not unlock into the full
+  // idle dashboard first: transition Electron directly from Login Kiosk ->
+  // ACTIVE compact timer so the customer never has to press “Continue as Guest”.
+  void window.aezakmiClient?.activateSession?.({
+    sessionId:session?.id || null,
+    memberId:null,
+    role:"guest",
+    billing:session?.billing || null,
+    startedAt:session?.startedAt || null,
+    username:guestUser?.name || session?.customerName || "Guest",
+    balance:0,
+    pcLabel:pc?.label || "Customer Station",
+  });
 }
 
 export function AuthProvider({ children }) {
@@ -126,9 +145,11 @@ export function AuthProvider({ children }) {
         try {
           const d = await apiGet("/guest/session");
           if (!cancelled && d.session) {
-            window.aezakmiClient?.unlockClient?.();
             const guestUser=guestUserFromResponse(d);
-            if (guestUser) setUser(guestUser);
+            if (guestUser) {
+              setUser(guestUser);
+              compactGuestSessionImmediately(d, guestUser);
+            }
           }
         } catch {}
         finally { if (!cancelled) setLoading(false); }
@@ -296,32 +317,45 @@ export function AuthProvider({ children }) {
   }, [stationPairingRequired]);
 
   // Admin-started guest sessions must switch the Customer station immediately
-  // into Guest mode. The login screen polls only while nobody is signed in.
+  // into Guest mode and directly into the compact timer. Realtime is the fast
+  // Cloud path; a 1s LAN-only Edge probe covers missed/delayed broadcasts without
+  // generating Cloud API traffic every second. A slower Cloud reconciliation is
+  // kept as a final fallback when Edge is unavailable.
   useEffect(() => {
     if (authLoading || stationPairingRequired || user) return undefined;
     let cancelled=false, running=false;
-    const detect = async () => {
+    const detect = async ({ localOnly=false } = {}) => {
       if (running || hasPendingStationLifecycle() || readAdminSessionCloseFence()) return;
       running=true;
       try {
-        const d=await apiGet("/guest/session", { force:true });
+        let d=null;
+        try { d=await apiGetGuestSessionLocal(); } catch {}
+        if (!d?.session && !localOnly) d=await apiGet("/guest/session", { force:true });
         if (!cancelled && d?.session) {
           setToken(null);
           clearDeferredPasswordSetup();
-          window.aezakmiClient?.unlockClient?.();
           const guestUser=guestUserFromResponse(d);
-          if (guestUser) setUser(guestUser);
+          if (guestUser) {
+            setUser(guestUser);
+            compactGuestSessionImmediately(d, guestUser);
+          }
         }
       } catch {} finally { running=false; }
     };
     const onCloudWakeup=(event)=>{
       const reason=String(event?.detail?.reason||'').toLowerCase();
-      if(['session_started','session_restored'].includes(reason)) void detect();
+      if(['session_started','session_restored'].includes(reason)) void detect({ localOnly:false });
     };
-    detect();
+    void detect({ localOnly:false });
     window.addEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup);
-    const timer=setInterval(detect,60000);
-    return () => { cancelled=true; clearInterval(timer); window.removeEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup); };
+    const edgeTimer=setInterval(()=>void detect({ localOnly:true }),1000);
+    const cloudTimer=setInterval(()=>void detect({ localOnly:false }),5000);
+    return () => {
+      cancelled=true;
+      clearInterval(edgeTimer);
+      clearInterval(cloudTimer);
+      window.removeEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup);
+    };
   }, [authLoading, stationPairingRequired, user]);
 
   async function loginCustomerCredentials(username, password) {
@@ -378,10 +412,10 @@ export function AuthProvider({ children }) {
         };
       setToken(null);
       clearDeferredPasswordSetup();
-      window.aezakmiClient?.unlockClient?.();
       const guestUser=guestUserFromResponse(d);
       if (!guestUser) return { ok:false, error:"Guest session is still synchronizing. Please try again." };
       setUser(guestUser);
+      compactGuestSessionImmediately(d, guestUser);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };

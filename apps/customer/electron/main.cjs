@@ -53,6 +53,7 @@ function migrateLegacyCustomerStorage(target) {
     'station-credential.bin',
     'cloud-station-credential.bin',
     'station-installation-id.txt',
+    'timer-preferences.json',
     'IndexedDB',
     'Local Storage',
   ]
@@ -107,9 +108,10 @@ function configureCustomerInstallStorage() {
 const customerDataRoot = configureCustomerInstallStorage()
 const ACTIVE_WIDTH = 960
 const ACTIVE_HEIGHT = 680
-const COMPACT_WIDTH = 96
-const COMPACT_HEIGHT = 28
-const COMPACT_MARGIN = 4
+const COMPACT_WIDTH = 84
+const COMPACT_HEIGHT = 22
+const COMPACT_MARGIN = 6
+const DEFAULT_TIMER_PREFERENCES = Object.freeze({ visible:true, opacity:0.8 })
 const WINDOW_STATES = Object.freeze({ LOCKED:'locked', IDLE:'idle', ACTIVE:'active' })
 
 let mainWindow = null
@@ -128,12 +130,64 @@ let sessionStartTransitionPending = false
 // member out immediately after Start Session.
 const lifecycleRuntimeId = crypto.randomUUID()
 let remoteLockSnapshot = null
+let timerPreferences = null
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
 function serverConfigPath() {
   return path.join(app.getPath('userData'), 'server-config.json')
+}
+
+function timerPreferencesPath() {
+  return path.join(app.getPath('userData'), 'timer-preferences.json')
+}
+
+function normalizeTimerPreferences(value = {}) {
+  const rawOpacity = Number(value?.opacity)
+  const opacity = Number.isFinite(rawOpacity)
+    ? Math.min(1, Math.max(0.2, rawOpacity))
+    : DEFAULT_TIMER_PREFERENCES.opacity
+  return {
+    visible:value?.visible !== false,
+    opacity:Math.round(opacity * 100) / 100,
+  }
+}
+
+function readTimerPreferences() {
+  try {
+    return normalizeTimerPreferences(JSON.parse(fs.readFileSync(timerPreferencesPath(), 'utf8')))
+  } catch (error) {
+    if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
+      console.warn('Unable to read Customer timer preferences:', error?.message || error)
+    }
+    return { ...DEFAULT_TIMER_PREFERENCES }
+  }
+}
+
+function getTimerPreferences() {
+  if (!timerPreferences) timerPreferences = readTimerPreferences()
+  return { ...timerPreferences }
+}
+
+function writeTimerPreferences(value) {
+  const next = normalizeTimerPreferences(value)
+  fs.writeFileSync(timerPreferencesPath(), JSON.stringify(next, null, 2), { encoding:'utf8', mode:0o600 })
+  timerPreferences = next
+  return { ...next }
+}
+
+function applyWindowOpacity(value) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  try { mainWindow.setOpacity(Math.min(1, Math.max(0.2, Number(value) || 1))) } catch {}
+}
+
+function setTimerPreferences(patch = {}) {
+  const next = writeTimerPreferences({ ...getTimerPreferences(), ...(patch || {}) })
+  if (isActive() && activeDashboardMode === 'compact') applyCompactSessionMode()
+  updateTrayMenu()
+  try { mainWindow?.webContents.send('client:timer-preferences-changed', next) } catch {}
+  return next
 }
 
 function normalizeServerConfig(value) {
@@ -343,10 +397,27 @@ function loadTrayIcon() {
 
 function updateTrayMenu() {
   if (!tray || tray.isDestroyed()) return
+  const timerPrefs = getTimerPreferences()
+  const opacityPercent = Math.round(timerPrefs.opacity * 100)
   const template = isActive()
     ? [
         { label:'Open Full Dashboard', click:showMiniDashboard },
         { label:'Compact Session Timer', enabled:activeDashboardMode !== 'compact', click:hideMiniDashboard },
+        {
+          label:'Show Compact Timer',
+          type:'checkbox',
+          checked:timerPrefs.visible,
+          click:item => setTimerPreferences({ visible:Boolean(item.checked) }),
+        },
+        {
+          label:`Timer Opacity (${opacityPercent}%)`,
+          submenu:[40, 60, 80, 100].map(percent => ({
+            label:`${percent}%`,
+            type:'radio',
+            checked:opacityPercent === percent,
+            click:() => setTimerPreferences({ opacity:percent / 100 }),
+          })),
+        },
         { type:'separator' },
         { label:'Lock / Log Out', click:() => mainWindow?.webContents.send('tray:logout') },
       ]
@@ -370,6 +441,7 @@ function createTray() {
 
 function applyLockedWindowMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  applyWindowOpacity(1)
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
   mainWindow.setSkipTaskbar(true)
@@ -386,30 +458,40 @@ function positionCompactSessionWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const currentBounds=mainWindow.getBounds()
   const display=screen.getDisplayMatching(currentBounds) || screen.getPrimaryDisplay()
-  const workArea=display?.workArea || { x:0, y:0 }
-  mainWindow.setPosition(Math.round(workArea.x + COMPACT_MARGIN), Math.round(workArea.y + COMPACT_MARGIN), false)
+  const workArea=display?.workArea || { x:0, y:0, width:COMPACT_WIDTH + COMPACT_MARGIN, height:COMPACT_HEIGHT + COMPACT_MARGIN }
+  const x = workArea.x + workArea.width - COMPACT_WIDTH - COMPACT_MARGIN
+  mainWindow.setPosition(Math.round(x), Math.round(workArea.y + COMPACT_MARGIN), false)
 }
 
 function applyCompactSessionMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  const timerPrefs = getTimerPreferences()
   mainWindow.setKiosk(false)
   mainWindow.setFullScreen(false)
   mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
   mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
   mainWindow.setResizable(false)
   mainWindow.setSkipTaskbar(true)
-  // Keep only the small timer visible above normal applications. The full
-  // session dashboard remains a normal window when explicitly expanded.
-  mainWindow.setAlwaysOnTop(true, 'floating')
+  // The compact timer belongs to the desktop background layer, not above apps.
+  // It remains visible on the desktop, but any normal application can cover it.
+  mainWindow.setAlwaysOnTop(false)
   mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
   positionCompactSessionWindow()
-  mainWindow.showInactive()
+  applyWindowOpacity(timerPrefs.opacity)
   activeDashboardMode = 'compact'
-  dashboardVisible = true
+  if (timerPrefs.visible) {
+    mainWindow.showInactive()
+    mainWindow.blur()
+    dashboardVisible = true
+  } else {
+    mainWindow.hide()
+    dashboardVisible = false
+  }
 }
 
 function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  applyWindowOpacity(1)
   activeDashboardMode = 'expanded'
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
@@ -431,6 +513,7 @@ function applyActiveWindowMode({ show = false } = {}) {
 
 function applyIdleDashboardMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  applyWindowOpacity(1)
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(0, 0)
   // The signed-in/no-session station is the customer-facing shell. Keep it
@@ -500,6 +583,7 @@ function enterActiveState() {
 
 function beginSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
+  applyWindowOpacity(1)
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
   createTray()
@@ -787,6 +871,11 @@ app.whenReady().then(async () => {
   handleTrusted('client:cancel-session-start', () => showIdleDashboard())
   handleTrusted('client:hide-dashboard', () => hideMiniDashboard())
   handleTrusted('client:show-dashboard', () => showMiniDashboard())
+  ipcMain.on('client:get-timer-preferences', event => {
+    if (!isTrustedRenderer(event)) { event.returnValue = { ...DEFAULT_TIMER_PREFERENCES }; return }
+    event.returnValue = getTimerPreferences()
+  })
+  handleTrusted('client:set-timer-preferences', (_event, patch) => setTimerPreferences(patch))
   handleTrusted('client:update-widget', (_event, data) => touchSessionLifecycle(data || {}))
   handleTrusted('client:lock', () => lockClientWindow())
   handleTrusted('client:deactivate-session', () => lockClientWindow())

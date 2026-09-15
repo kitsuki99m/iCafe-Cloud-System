@@ -52,15 +52,18 @@ test('hidden Customer Lock and Unlock execute locally before optional Cafe Edge 
   assert.match(guard,/completed locally; Café Edge checkpoint unavailable/)
 })
 
-test('active Customer minimization becomes a tiny FPS-style time-only overlay',()=>{
+test('active Customer minimization becomes an extra-small background timer with a dashboard button',()=>{
   const electron=read('apps/customer/electron/main.cjs')
   const view=read('apps/customer/src/pages/CustomerSessionView.jsx')
-  assert.match(electron,/const COMPACT_WIDTH = 96/)
-  assert.match(electron,/const COMPACT_HEIGHT = 28/)
+  assert.match(electron,/const COMPACT_WIDTH = 84/)
+  assert.match(electron,/const COMPACT_HEIGHT = 22/)
+  assert.match(electron,/DEFAULT_TIMER_PREFERENCES = Object\.freeze\(\{ visible:true, opacity:0\.8 \}\)/)
+  assert.match(electron,/function applyCompactSessionMode\(\)[\s\S]*setAlwaysOnTop\(false\)/)
   assert.match(electron,/mainWindow\.on\('minimize',[\s\S]*hideMiniDashboard\(\)/)
   const compact=view.match(/if \(compactView && hasActiveSession\) \{[\s\S]*?\n  \}\n\n  return \(/)?.[0]||''
   assert.match(compact,/compactTimer/)
-  assert.match(compact,/text-\[14px\]/)
+  assert.match(compact,/text-\[11px\]/)
+  assert.match(compact,/aria-label="Open dashboard"/)
   assert.doesNotMatch(compact,/<img|progress|PC|left|Expand|Maximize/)
 })
 
