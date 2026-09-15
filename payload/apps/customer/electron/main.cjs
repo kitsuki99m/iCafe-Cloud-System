@@ -106,8 +106,8 @@ function configureCustomerInstallStorage() {
 }
 
 const customerDataRoot = configureCustomerInstallStorage()
-const ACTIVE_WIDTH = 640
-const ACTIVE_HEIGHT = 480
+const ACTIVE_WIDTH = 960
+const ACTIVE_HEIGHT = 680
 const COMPACT_WIDTH = 84
 const COMPACT_HEIGHT = 22
 const COMPACT_MARGIN = 6
@@ -525,7 +525,7 @@ function applyCompactSessionMode() {
   const timerPrefs = getTimerPreferences()
   // Remove the previous mode's size locks before leaving fullscreen/maximized
   // state. This makes the transition deterministic when coming from kiosk mode
-  // or from the fixed 640x480 active dashboard.
+  // or from the fixed 960x680 active dashboard.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
   mainWindow.setKiosk(false)
@@ -561,17 +561,17 @@ function applyActiveWindowMode({ show = false } = {}) {
   activeDashboardMode = 'expanded'
   // Compact mode is fixed at 84x22, so clear both constraints before growing
   // back to the active dashboard. Otherwise Windows/Electron can preserve the
-  // old maximum and refuse the 640x480 resize.
+  // old maximum and refuse the 960x680 resize.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
   mainWindow.setKiosk(false)
   mainWindow.setFullScreen(false)
   // A signed-in/no-session dashboard is fullscreen and topmost. Clear any
-  // maximized restore state before applying the active-session 640x480 bounds.
+  // maximized restore state before applying the active-session 960x680 bounds.
   if (mainWindow.isMaximized()) mainWindow.unmaximize()
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
-  // ACTIVE sessions (member or Guest) use a normal 640x480 desktop window.
+  // ACTIVE sessions (member or Guest) use a normal 960x680 desktop window.
   // Never force the dashboard above the customer's other applications.
   mainWindow.setAlwaysOnTop(false)
   mainWindow.setSkipTaskbar(true)

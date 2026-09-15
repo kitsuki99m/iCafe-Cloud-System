@@ -235,6 +235,7 @@ export function AppDataProvider({ children }) {
     const onPcPresence = (payload) => {
       if (!payload?.pcId) return
       setState((current) => ({ ...current, pcs: current.pcs.map((pc) => String(pc.id) === String(payload.pcId) ? { ...pc, status:payload.online ? (pc.session ? 'occupied' : 'available') : 'offline' } : pc) }))
+      queueRefresh()
     }
 
     // Top-ups are inserted immediately so the pending queue updates without

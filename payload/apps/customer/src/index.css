@@ -378,3 +378,7 @@
   .customer-login-actions { width: 100%; justify-content: stretch; }
   .customer-login-actions > button:not(:last-child) { flex: 1; }
 }
+
+/* contrast patch */
+.loading-screen,.loading-container{color:#0f172a!important}.loading-subtitle,.loading-status,.loading-version{color:#475569!important}
+.topup-wallet,.topup-wallet *{color:#0f172a!important}
