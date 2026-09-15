@@ -541,15 +541,6 @@ function applyAfterLeavingFullScreen(applyBounds) {
   mainWindow.once('leave-full-screen', finish)
 }
 
-function positionCompactSessionWindow() {
-  if (!mainWindow || mainWindow.isDestroyed()) return
-  const currentBounds=mainWindow.getBounds()
-  const display=screen.getDisplayMatching(currentBounds) || screen.getPrimaryDisplay()
-  const workArea=display?.workArea || { x:0, y:0, width:COMPACT_WIDTH + COMPACT_MARGIN, height:COMPACT_HEIGHT + COMPACT_MARGIN }
-  const x = workArea.x + workArea.width - COMPACT_WIDTH - COMPACT_MARGIN
-  mainWindow.setPosition(Math.round(x), Math.round(workArea.y + COMPACT_MARGIN), false)
-}
-
 function applyCompactSessionMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const timerPrefs = getTimerPreferences()
@@ -577,8 +568,13 @@ function applyCompactSessionMode() {
     // The compact timer belongs to the desktop background layer, not above apps.
     // It remains visible on the desktop, but any normal application can cover it.
     mainWindow.setAlwaysOnTop(false)
-    mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
-    positionCompactSessionWindow()
+    // Resize and move atomically. Separate setSize/setPosition calls briefly
+    // expose the compact timer at the expanded window's old X coordinate.
+    const display=screen.getDisplayMatching(mainWindow.getBounds()) || screen.getPrimaryDisplay()
+    const workArea=display?.workArea || { x:0, y:0, width:COMPACT_WIDTH + COMPACT_MARGIN, height:COMPACT_HEIGHT + COMPACT_MARGIN }
+    const x = Math.round(workArea.x + workArea.width - COMPACT_WIDTH - COMPACT_MARGIN)
+    const y = Math.round(workArea.y + COMPACT_MARGIN)
+    mainWindow.setBounds({ x, y, width:COMPACT_WIDTH, height:COMPACT_HEIGHT }, false)
     keepWindowContentOpaque()
     if (timerPrefs.visible) {
       mainWindow.showInactive()
