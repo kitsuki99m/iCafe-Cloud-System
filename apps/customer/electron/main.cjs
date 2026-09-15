@@ -609,8 +609,13 @@ function applyActiveWindowMode({ show = false } = {}) {
     mainWindow.setAlwaysOnTop(false)
     mainWindow.setSkipTaskbar(true)
     mainWindow.setResizable(false)
-    mainWindow.setSize(ACTIVE_WIDTH, ACTIVE_HEIGHT, false)
-    mainWindow.center()
+    // Resize and center atomically. Separate setSize/center calls briefly
+    // expose the dashboard at the compact timer's old right-edge position.
+    const display=screen.getDisplayMatching(mainWindow.getBounds()) || screen.getPrimaryDisplay()
+    const workArea=display?.workArea || { x:0, y:0, width:ACTIVE_WIDTH, height:ACTIVE_HEIGHT }
+    const x = Math.round(workArea.x + (workArea.width - ACTIVE_WIDTH) / 2)
+    const y = Math.round(workArea.y + (workArea.height - ACTIVE_HEIGHT) / 2)
+    mainWindow.setBounds({ x, y, width:ACTIVE_WIDTH, height:ACTIVE_HEIGHT }, false)
     if (show) {
       mainWindow.show()
       mainWindow.focus()
