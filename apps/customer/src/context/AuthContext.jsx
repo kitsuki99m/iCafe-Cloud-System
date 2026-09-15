@@ -51,13 +51,13 @@ function guestUserFromResponse(data) {
   };
 }
 
-function compactGuestSessionImmediately(data, guestUser) {
+function activateGuestSessionImmediately(data, guestUser) {
   const session=data?.session || guestUser?.guestSession || null;
   const pc=data?.pc || null;
   if (!session || !guestUser) return;
-  // Admin already started the paid Guest session. Do not unlock into the full
-  // idle dashboard first: transition Electron directly from Login Kiosk ->
-  // ACTIVE compact timer so the customer never has to press “Continue as Guest”.
+  // Admin already started the paid Guest session. Do not require the Guest
+  // button first: transition Electron directly from Login Kiosk into the same
+  // 640x480 ACTIVE dashboard used by a signed-in member session.
   void window.aezakmiClient?.activateSession?.({
     sessionId:session?.id || null,
     memberId:null,
@@ -148,7 +148,7 @@ export function AuthProvider({ children }) {
             const guestUser=guestUserFromResponse(d);
             if (guestUser) {
               setUser(guestUser);
-              compactGuestSessionImmediately(d, guestUser);
+              activateGuestSessionImmediately(d, guestUser);
             }
           }
         } catch {}
@@ -317,7 +317,7 @@ export function AuthProvider({ children }) {
   }, [stationPairingRequired]);
 
   // Admin-started guest sessions must switch the Customer station immediately
-  // into Guest mode and directly into the compact timer. Realtime is the fast
+  // into Guest mode and directly into the active 640x480 dashboard. Realtime is the fast
   // Cloud path; a 1s LAN-only Edge probe covers missed/delayed broadcasts without
   // generating Cloud API traffic every second. A slower Cloud reconciliation is
   // kept as a final fallback when Edge is unavailable.
@@ -337,7 +337,7 @@ export function AuthProvider({ children }) {
           const guestUser=guestUserFromResponse(d);
           if (guestUser) {
             setUser(guestUser);
-            compactGuestSessionImmediately(d, guestUser);
+            activateGuestSessionImmediately(d, guestUser);
           }
         }
       } catch {} finally { running=false; }
@@ -415,7 +415,7 @@ export function AuthProvider({ children }) {
       const guestUser=guestUserFromResponse(d);
       if (!guestUser) return { ok:false, error:"Guest session is still synchronizing. Please try again." };
       setUser(guestUser);
-      compactGuestSessionImmediately(d, guestUser);
+      activateGuestSessionImmediately(d, guestUser);
       return { ok: true };
     } catch (e) {
       return { ok: false, error: e.message };

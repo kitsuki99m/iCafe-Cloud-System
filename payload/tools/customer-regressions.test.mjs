@@ -296,11 +296,15 @@ test('customer Aktura fallback logo matches Midnight Express branding while warn
   assert.match(toasts, /warning:[\s\S]*border-amber-[0-9]+[\s\S]*text-amber-[0-9]+/)
 })
 
-test('customer ACTIVE dashboard is 960x680 while keeping normal desktop behavior', () => {
+test('customer idle dashboard is fullscreen/topmost while ACTIVE dashboard is 640x480 and normal desktop behavior', () => {
   const source = read('apps/customer/electron/main.cjs')
-  assert.match(source, /const ACTIVE_WIDTH = 960/)
-  assert.match(source, /const ACTIVE_HEIGHT = 680/)
-  assert.match(source, /function applyActiveWindowMode[\s\S]*?setAlwaysOnTop\(false\)/)
+  assert.match(source, /const ACTIVE_WIDTH = 640/)
+  assert.match(source, /const ACTIVE_HEIGHT = 480/)
+  assert.match(source, /function applyIdleDashboardMode[\s\S]*?setKiosk\(true\)[\s\S]*?setFullScreen\(true\)[\s\S]*?setAlwaysOnTop\(true, 'screen-saver'\)/)
+  assert.doesNotMatch(source, /function applyIdleDashboardMode[\s\S]*?mainWindow\.maximize\(\)/)
+  assert.match(source, /function applyActiveWindowMode[\s\S]*?setFullScreen\(false\)[\s\S]*?isMaximized\(\)[\s\S]*?unmaximize\(\)[\s\S]*?setAlwaysOnTop\(false\)[\s\S]*?setSize\(ACTIVE_WIDTH, ACTIVE_HEIGHT, false\)/)
+  assert.match(source, /function enterActiveState[\s\S]*?applyActiveWindowMode\(\{ show:true \}\)/)
+  assert.match(source, /function completeSessionStartTransition[\s\S]*?applyActiveWindowMode\(\{ show:true \}\)/)
   assert.match(source, /setSkipTaskbar\(true\)/)
 })
 

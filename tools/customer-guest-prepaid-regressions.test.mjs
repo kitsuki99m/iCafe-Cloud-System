@@ -40,7 +40,7 @@ test('Guest sessions automatically leave Member Login even when Cloud sync trail
   assert.match(auth,/apiGetGuestSessionLocal/)
   assert.match(auth,/setInterval\(\(\)=>void detect\(\{ localOnly:true \}\),1000\)/)
   assert.match(auth,/setInterval\(\(\)=>void detect\(\{ localOnly:false \}\),5000\)/)
-  assert.match(auth,/const guestUser=guestUserFromResponse\(d\);[\s\S]*setUser\(guestUser\);[\s\S]*compactGuestSessionImmediately\(d, guestUser\)/)
+  assert.match(auth,/const guestUser=guestUserFromResponse\(d\);[\s\S]*setUser\(guestUser\);[\s\S]*activateGuestSessionImmediately\(d, guestUser\)/)
 })
 
 test('Local Café Edge requests use the Edge enrollment token before any Cloud station token',()=>{
@@ -89,10 +89,10 @@ test('Active Guest UI survives transient null reconciliation and only ends after
 })
 
 
-test('Admin-started Guest session bypasses the idle dashboard and compacts immediately',()=>{
+test('Admin-started Guest session bypasses the idle dashboard and opens the ACTIVE dashboard immediately',()=>{
   const auth=read('apps/customer/src/context/AuthContext.jsx')
   const cloud=read('apps/customer/src/lib/cloudStation.js')
-  assert.match(auth,/function compactGuestSessionImmediately\(data, guestUser\)/)
+  assert.match(auth,/function activateGuestSessionImmediately\(data, guestUser\)/)
   assert.match(auth,/activateSession\?\.\(\{[\s\S]*memberId:null,[\s\S]*role:"guest"/)
   assert.doesNotMatch(auth,/d\?\.session\)[\s\S]{0,220}unlockClient\?\.\(\)/)
   assert.match(cloud,/const detail=outer\?\.payload&&typeof outer\.payload==='object'\?outer\.payload:outer/)

@@ -46,7 +46,7 @@ test('Customer startup recovers an interrupted session before auth and auto-dete
   assert.match(src,/apiGet\("\/guest\/session"\)/)
   assert.match(src,/apiGetGuestSessionLocal/)
   assert.match(src,/const edgeTimer=setInterval\(\(\)=>void detect\(\{ localOnly:true \}\),1000\)/)
-  assert.match(src,/compactGuestSessionImmediately\(d, guestUser\)/)
+  assert.match(src,/activateGuestSessionImmediately\(d, guestUser\)/)
   assert.match(src,/role:"guest"/)
 })
 

@@ -106,8 +106,8 @@ function configureCustomerInstallStorage() {
 }
 
 const customerDataRoot = configureCustomerInstallStorage()
-const ACTIVE_WIDTH = 960
-const ACTIVE_HEIGHT = 680
+const ACTIVE_WIDTH = 640
+const ACTIVE_HEIGHT = 480
 const COMPACT_WIDTH = 84
 const COMPACT_HEIGHT = 22
 const COMPACT_MARGIN = 6
@@ -523,8 +523,17 @@ function positionCompactSessionWindow() {
 function applyCompactSessionMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const timerPrefs = getTimerPreferences()
+  // Remove the previous mode's size locks before leaving fullscreen/maximized
+  // state. This makes the transition deterministic when coming from kiosk mode
+  // or from the fixed 640x480 active dashboard.
+  mainWindow.setMinimumSize(0, 0)
+  mainWindow.setMaximumSize(0, 0)
   mainWindow.setKiosk(false)
   mainWindow.setFullScreen(false)
+  // Fullscreen idle/login mode can leave a maximized restore state behind on
+  // Windows. Explicitly clear it before applying compact bounds, otherwise
+  // setSize() can be ignored and the timer/dashboard appears maximized.
+  if (mainWindow.isMaximized()) mainWindow.unmaximize()
   mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
   mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
   mainWindow.setResizable(false)
@@ -550,12 +559,20 @@ function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   keepWindowContentOpaque()
   activeDashboardMode = 'expanded'
-  mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
-  mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
+  // Compact mode is fixed at 84x22, so clear both constraints before growing
+  // back to the active dashboard. Otherwise Windows/Electron can preserve the
+  // old maximum and refuse the 640x480 resize.
+  mainWindow.setMinimumSize(0, 0)
+  mainWindow.setMaximumSize(0, 0)
   mainWindow.setKiosk(false)
   mainWindow.setFullScreen(false)
-  // ACTIVE paid sessions use a normal desktop window. Never force the mini
-  // dashboard above the customer's other applications.
+  // A signed-in/no-session dashboard is fullscreen and topmost. Clear any
+  // maximized restore state before applying the active-session 640x480 bounds.
+  if (mainWindow.isMaximized()) mainWindow.unmaximize()
+  mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
+  mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
+  // ACTIVE sessions (member or Guest) use a normal 640x480 desktop window.
+  // Never force the dashboard above the customer's other applications.
   mainWindow.setAlwaysOnTop(false)
   mainWindow.setSkipTaskbar(true)
   mainWindow.setResizable(false)
@@ -575,13 +592,15 @@ function applyIdleDashboardMode() {
   mainWindow.setMaximumSize(0, 0)
   // The signed-in/no-session station is the customer-facing shell. Keep it
   // in true kiosk fullscreen so the Windows taskbar and desktop cannot show
-  // around the maximized dashboard.
+  // around the fullscreen dashboard.
   mainWindow.setKiosk(true)
   mainWindow.setFullScreen(true)
   mainWindow.setAlwaysOnTop(true, 'screen-saver')
   mainWindow.setSkipTaskbar(true)
   mainWindow.setResizable(false)
-  mainWindow.maximize()
+  // setFullScreen(true) is the F11-style fullscreen state we want here. Avoid
+  // maximize() as well; retaining a maximized restore state can make the next
+  // active-session resize look full-screen even after fullscreen is disabled.
   mainWindow.show()
   mainWindow.focus()
   dashboardVisible = true
@@ -632,7 +651,7 @@ function enterActiveState() {
 
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
-  applyCompactSessionMode()
+  applyActiveWindowMode({ show:true })
   createTray()
   updateTrayMenu()
   return true
@@ -662,7 +681,7 @@ function completeSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
   sessionStartTransitionPending = false
   if (!isActive()) return false
-  applyCompactSessionMode()
+  applyActiveWindowMode({ show:true })
   updateTrayMenu()
   return true
 }
