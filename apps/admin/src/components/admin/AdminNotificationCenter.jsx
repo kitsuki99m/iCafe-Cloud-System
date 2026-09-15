@@ -267,7 +267,7 @@ export default function AdminNotificationCenter() {
             </div>
             <p className="text-[11px] font-semibold text-ink-900">{r.customerName}</p>
             <p className="mb-2 mt-1 text-[11px] text-slate-soft">{r.message}</p>
-            <button type="button" disabled={actionBusyIds.has(`support:${r.id}`)} onClick={() => runRequestAction(`support:${r.id}`, () => resolveSupport(r.id))} className="w-full rounded-md bg-teal px-2 py-1.5 text-xs font-semibold text-ink-900 disabled:opacity-40">Staff Notified</button>
+            <button type="button" disabled={actionBusyIds.has(String(r.id))} onClick={() => runRequestAction(r.id, () => resolveSupport(r.id))} className="w-full rounded-md bg-teal px-2 py-1.5 text-xs font-semibold text-ink-900 disabled:opacity-40">Staff Notified</button>
           </div>
         ) : (
           <div key={r.id} className="panel pointer-events-auto border-gold/40 p-3 shadow-glow">

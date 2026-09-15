@@ -55,7 +55,7 @@ export function useOptimisticAction(setState, refresh, options = {}) {
       // Drop stale resolutions if a newer call superseded this one.
       if (token.cancelled) return undefined
 
-      options.onSuccess?.(result)
+      options.onSuccess?.(result, ...args)
 
       // Authoritative reconciliation: overwrites the optimistic state with the
       // server-confirmed snapshot.  We do NOT await this so the success
@@ -70,7 +70,7 @@ export function useOptimisticAction(setState, refresh, options = {}) {
       // This replaces the optimistic state with authoritative truth.
       refresh().catch(() => {})
 
-      options.onError?.(error)
+      options.onError?.(error, ...args)
 
       // Re-throw so the caller (e.g. a modal) can handle the error locally.
       throw error

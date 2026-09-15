@@ -46,6 +46,7 @@ function normalizePc(pc) {
       id:pc.session.id != null ? String(pc.session.id) : pc.session.id,
       customerId:pc.session.customerId != null ? String(pc.session.customerId) : null,
       ratePlanId:pc.session.ratePlanId != null ? String(pc.session.ratePlanId) : null,
+      observedAt:pc.session.observedAt != null ? pc.session.observedAt : Date.now(),
     } : null,
   }
 }
@@ -354,7 +355,10 @@ export function AppDataProvider({ children }) {
         const patchSession = (session) => {
           if (!session) return session
           const patch = {}
-          if (payload.remainingSeconds != null) patch.remainingSeconds = Number(payload.remainingSeconds)
+          if (payload.remainingSeconds != null) {
+            patch.remainingSeconds = Number(payload.remainingSeconds)
+            patch.observedAt = Date.now()
+          }
           if (payload.amount != null) patch.amount = Number(payload.amount)
           if (payload.locked != null) { patch.isLocked = Boolean(payload.locked); patch.isPaused = Boolean(payload.locked) }
           return { ...session, ...patch }
@@ -613,6 +617,7 @@ export function AppDataProvider({ children }) {
           const updatedSession = {
             ...s,
             remainingSeconds: nextRemaining,
+            observedAt: Date.now(),
             expiresAt: nextExpiresAt,
             amountPaid: typeof detail.amount === 'number' ? detail.amount : s.amountPaid,
           }
