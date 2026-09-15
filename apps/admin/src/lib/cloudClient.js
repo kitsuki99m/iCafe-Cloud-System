@@ -198,6 +198,94 @@ export async function cloudAuthHeaders() {
     "Content-Type": "application/json",
   });
 }
+
+const CLOUD_REALTIME_TABLES = [
+  "branch_stations",
+  "branch_sessions",
+  "branch_members",
+  "branch_top_ups",
+  "branch_support_requests",
+  "branch_session_extensions",
+  "branch_feedback",
+  "branch_announcements",
+  "branch_configs",
+];
+
+export function startCloudRealtime({ branchId, onChange, onStatus } = {}) {
+  let socket = null;
+  let reconnectTimer = null;
+  let heartbeatTimer = null;
+  let stopped = false;
+  let ref = 1;
+
+  const clearTimers = () => {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    reconnectTimer = null;
+    heartbeatTimer = null;
+  };
+  const stop = () => {
+    stopped = true;
+    clearTimers();
+    try { socket?.close(); } catch {}
+    socket = null;
+  };
+  const connect = async () => {
+    if (stopped || !branchId || !cloudConfigReady()) return;
+    const session = await cloudSession();
+    if (stopped || !session?.access_token) return;
+    const wsUrl = `${SUPABASE_URL.replace(/^https:/, "wss:")}/realtime/v1/websocket?apikey=${encodeURIComponent(PUBLISHABLE_KEY)}&vsn=1.0.0`;
+    const current = new WebSocket(wsUrl);
+    socket = current;
+    const topic = `realtime:admin-branch:${branchId}`;
+    const nextRef = () => String(ref++);
+    current.addEventListener("open", () => {
+      current.send(JSON.stringify({
+        topic,
+        event: "phx_join",
+        payload: {
+          access_token: session.access_token,
+          config: {
+            broadcast: { self: false, ack: false },
+            presence: { enabled: false },
+            postgres_changes: CLOUD_REALTIME_TABLES.map((table) => ({
+              event: "*",
+              schema: "public",
+              table,
+              filter: `branch_id=eq.${branchId}`,
+            })),
+          },
+        },
+        ref: nextRef(),
+      }));
+      heartbeatTimer = setInterval(() => {
+        if (current.readyState === WebSocket.OPEN) {
+          current.send(JSON.stringify({ topic: "phoenix", event: "heartbeat", payload: {}, ref: nextRef() }));
+        }
+      }, 30_000);
+      onStatus?.(true);
+    });
+    current.addEventListener("message", (event) => {
+      try {
+        const message = JSON.parse(String(event.data || ""));
+        if (message?.event === "postgres_changes") onChange?.(message.payload);
+      } catch {}
+    });
+    const reconnect = () => {
+      if (socket !== current || stopped) return;
+      clearTimers();
+      socket = null;
+      onStatus?.(false);
+      reconnectTimer = setTimeout(connect, 5_000);
+    };
+    current.addEventListener("close", reconnect);
+    current.addEventListener("error", () => {
+      try { current.close(); } catch {}
+    });
+  };
+  void connect();
+  return stop;
+}
 export async function cloudGetUser({ force = false } = {}) {
   const session=await cloudSession();
   if (!session?.access_token) throw Object.assign(new Error("Sign in first."), { status:401, code:"AUTH_REQUIRED" });

@@ -103,6 +103,19 @@ function sameId(left,right) {
   return left != null && right != null && String(left) === String(right)
 }
 
+function preserveActiveSession(current, snapshot) {
+  const currentPc = current?.currentClientPc
+  const nextPc = snapshot?.currentClientPc
+  const currentSession = currentPc?.session
+  if (!currentSession || !nextPc || nextPc.session || !sameId(currentPc.id, nextPc.id)) return snapshot
+  const preservedPc = { ...nextPc, session: currentSession }
+  return {
+    ...snapshot,
+    pcs: snapshot.pcs?.map((pc) => sameId(pc.id, preservedPc.id) ? preservedPc : pc) ?? snapshot.pcs,
+    currentClientPc: preservedPc,
+  }
+}
+
 export function createPublicState(overrides = {}) {
   return {
     pcs:[],
@@ -159,7 +172,7 @@ export function AppDataProvider({ children }) {
           ratePlans:(ratePlansData.ratePlans ?? []).map(normalizeRatePlan),
         })
         if (generation !== refreshGenerationRef.current) return
-        setState(snapshot)
+        setState((current) => preserveActiveSession(current, snapshot))
         if (cacheKey) writeSnapshot(cacheKey,snapshot)
         return
       }
@@ -203,7 +216,7 @@ export function AppDataProvider({ children }) {
           currentClientPc:currentPc,
         })
         if (generation !== refreshGenerationRef.current) return
-        setState(snapshot)
+        setState((current) => preserveActiveSession(current, snapshot))
         if (cacheKey) writeSnapshot(cacheKey,snapshot)
         return
       }

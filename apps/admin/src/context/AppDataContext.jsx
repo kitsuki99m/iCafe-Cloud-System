@@ -5,7 +5,7 @@ import { connectSocket, disconnectSocket } from '../lib/socket.js'
 import { showToast } from '../lib/toast.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { scopedPageCacheKey } from '../lib/pageCache.js'
-import { isCloudAdmin, cloudBranchId } from '../lib/cloudClient.js'
+import { isCloudAdmin, cloudBranchId, startCloudRealtime } from '../lib/cloudClient.js'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../lib/sessionTime.js'
 import { playAdminSound } from '../lib/sound.js'
 import { effectivePcStatus } from '../lib/pcStatus.js'
@@ -266,6 +266,7 @@ export function AppDataProvider({ children }) {
     if (!user) return undefined
     if (isCloudAdmin()) {
       let timer=null
+      let stopRealtime=null
       const cloudRefresh=async()=>{
         if (document.visibilityState === 'hidden') return
         try{
@@ -290,12 +291,15 @@ export function AppDataProvider({ children }) {
       window.addEventListener('focus',onVisible)
       window.addEventListener('aezakmi:cloud-branch-changed',onBranch)
       document.addEventListener('visibilitychange',onVisible)
-      // 60s was long enough that pairing/availability changes made on another
-      // device (e.g. the Customer Station finishing pairing) looked stuck until
-      // a manual page refresh. 10s keeps the Floor Matrix close to live without
-      // hammering the branch snapshot endpoint.
-      timer=setInterval(cloudRefresh,10000)
-      return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);window.removeEventListener('online',onOnline);window.removeEventListener('focus',onVisible);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible)}
+      stopRealtime=startCloudRealtime({
+        branchId:cloudBranchId(),
+        onChange:()=>cloudRefresh(),
+        onStatus:(connected)=>{if(active)setState(current=>({...current,realtimeConnected:connected}))},
+      })
+      // Realtime is the fast path; this only heals missed events or a
+      // temporarily unavailable subscription.
+      timer=setInterval(cloudRefresh,30_000)
+      return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);stopRealtime?.();window.removeEventListener('online',onOnline);window.removeEventListener('focus',onVisible);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible)}
     }
     const socket = connectSocket()
     let refreshTimer = null
