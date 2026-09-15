@@ -2,27 +2,18 @@ let io = null
 let pendingDataChange = null
 let dataChangeQueued = false
 
-// Per-session monotonic sequence counter.  Clients compare the `seq` field on
-// incoming `session:updated` events to detect and discard stale out-of-order
-// deliveries without waiting for a full data reconciliation refresh.
-// The map is process-scoped and reset on restart, which is safe: the first
-// event after a restart carries seq=1, and clients treat any seq >= their
-// last-seen value as authoritative.  Map entries are pruned when a terminal
-// session reason is broadcast so the map does not grow without bound across
-// long-running deployments with many session turnovers.
-const sessionSeqMap = new Map()
-
-function nextSessionSeq(sessionId) {
-  const next = (sessionSeqMap.get(sessionId) ?? 0) + 1
-  sessionSeqMap.set(sessionId, next)
-  return next
+// Per-room monotonic sequence counter. Socket.io does not guarantee delivery
+// order across a reconnect (buffered/replayed emits can interleave with
+// fresh ones), and kiosk hardware often has no reliable clock sync, so wall
+// clock `at` is not safe for ordering. `seq` is: clients drop any event
+// whose seq is <= the last seq they've applied for that room. See
+// bindSessionSocket()/seqGuard on the client side.
+const roomSeq = new Map()
+function nextSeq(room) {
+  const n = (roomSeq.get(room) || 0) + 1
+  roomSeq.set(room, n)
+  return n
 }
-
-const TERMINAL_SESSION_REASONS = new Set([
-  'session_ended', 'session_expired', 'session_forfeited',
-  'session_refunded', 'session_saved', 'session_settled',
-  'station_session_released',
-])
 
 export function setRealtime(serverIo) {
   io = serverIo
@@ -46,38 +37,40 @@ export function emitDataChanged(payload = {}) {
 // Rate plans are shared configuration: a change made in the admin console
 // must be visible to every customer station without a page reload.
 export function emitRatePlansUpdated(payload = {}) {
-  io?.to('customer-stations').emit('rate-plans:updated', { ...payload, at: Date.now() })
+  io?.to('customer-stations').emit('rate-plans:updated', { ...payload, at: Date.now(), seq: nextSeq('customer-stations') })
   emitToStaff('rate-plans:updated', payload)
 }
 
 export function emitAnnouncementsUpdated(payload = {}) {
-  io?.to('customer-stations').emit('announcements:updated', { ...payload, at: Date.now() })
+  io?.to('customer-stations').emit('announcements:updated', { ...payload, at: Date.now(), seq: nextSeq('customer-stations') })
   emitToStaff('announcements:updated', payload)
 }
 
 export function emitPcPresence(pcId, online, payload = {}) {
   if (!io || !pcId) return
-  const event = { pcId, online:Boolean(online), ...payload, at:Date.now() }
+  const event = { pcId, online:Boolean(online), ...payload, at:Date.now(), seq: nextSeq('admin') }
   io.to('admin').emit('pc:presence', event)
   }
 
 export function emitToRoom(room, event, payload = {}) {
-  io?.to(room).emit(event, { ...payload, at: Date.now() })
+  io?.to(room).emit(event, { ...payload, at: Date.now(), seq: nextSeq(room) })
 }
 
 export function emitToStaff(event, payload = {}) {
   if (!io) return
-  io.to('admin').emit(event, { ...payload, at: Date.now() })
+  io.to('admin').emit(event, { ...payload, at: Date.now(), seq: nextSeq('admin') })
   }
 
 export function emitToCustomer(memberId, event, payload = {}) {
   if (!memberId) return
-  io?.to(`customer:${memberId}`).emit(event, { memberId, ...payload, at: Date.now() })
+  const room = `customer:${memberId}`
+  io?.to(room).emit(event, { memberId, ...payload, at: Date.now(), seq: nextSeq(room) })
 }
 
 export function emitToPc(pcId, event, payload = {}) {
   if (!pcId) return
-  io?.to(`pc:${pcId}`).emit(event, { pcId, ...payload, at: Date.now() })
+  const room = `pc:${pcId}`
+  io?.to(room).emit(event, { pcId, ...payload, at: Date.now(), seq: nextSeq(room) })
 }
 
 export function getIO() {
@@ -101,19 +94,15 @@ export function emitWalletUpdated(memberId, payload = {}) {
 export function emitSessionUpdated(sessionId, payload = {}) {
   const memberId = payload.memberId ?? null
   const pcId = payload.pcId ?? null
-  // Stamp a monotonic sequence number so clients can detect and discard stale
-  // out-of-order events without waiting for a full data reconciliation.
-  const seq = nextSessionSeq(sessionId)
-  const event = { sessionId, ...payload, seq, at: Date.now() }
-  if (memberId) io?.to(`customer:${memberId}`).emit('session:updated', event)
-  if (pcId) io?.to(`pc:${pcId}`).emit('session:updated', event)
+  const at = Date.now()
+  // Each room gets its own seq (rooms can fall behind independently — an
+  // admin dashboard receives far more events than a single kiosk), but the
+  // shared fields must be identical so every audience converges on the same
+  // absolute values regardless of arrival order.
+  if (memberId) io?.to(`customer:${memberId}`).emit('session:updated', { sessionId, ...payload, at, seq: nextSeq(`customer:${memberId}`) })
+  if (pcId) io?.to(`pc:${pcId}`).emit('session:updated', { sessionId, ...payload, at, seq: nextSeq(`pc:${pcId}`) })
   if (io) {
-    io.to('admin').emit('session:updated', event)
-  }
-  // Prune map entries for fully-closed sessions so the map does not grow
-  // without bound across many session turnovers in long-running deployments.
-  if (TERMINAL_SESSION_REASONS.has(String(payload.reason || ''))) {
-    sessionSeqMap.delete(sessionId)
+    io.to('admin').emit('session:updated', { sessionId, ...payload, at, seq: nextSeq('admin') })
   }
 }
 

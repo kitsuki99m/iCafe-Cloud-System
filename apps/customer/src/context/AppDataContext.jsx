@@ -7,13 +7,10 @@ import { playBroadcastChime } from '../lib/sound.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { acknowledgeCloudStationCommand, cloudStationFeatureEnabled, cloudStationPaired, cloudStationTransport } from '../lib/cloudStation.js'
 import { clearStationLifecycleMarker, hasActiveStationLifecycle, releaseStationLifecycle } from '../lib/sessionLifecycle.js'
+import { createSeqGuard } from '../lib/seqGuard.js'
 
 const AppDataContext = createContext(null)
 const handledRemoteCommands = new Set()
-// Per-session monotonic sequence tracker (mirrors the server-side sessionSeqMap).
-// Stale out-of-order `session:updated` events are silently dropped so the
-// kiosk timer never briefly shows a wrong remaining-seconds value.
-const sessionLastSeq = new Map()
 
 function cachedCustomerBranding() {
   try {
@@ -144,6 +141,8 @@ export function AppDataProvider({ children }) {
   // can otherwise flash back in and race the newly-started guest session.
   const cacheKey=user?.role === 'guest' ? null : (user ? `customer:${user.id}:${user.role}` : 'customer:public')
   const refreshGenerationRef=useRef(0)
+  const seqGuardRef=useRef(null)
+  if (!seqGuardRef.current) seqGuardRef.current = createSeqGuard()
   const guestAbsentConfirmationsRef=useRef(0)
 
   const refresh = useCallback(async () => {
@@ -343,24 +342,29 @@ export function AppDataProvider({ children }) {
       setState((current) => ({ ...current, members:current.members.map((member) => sameId(member.id,payload.memberId) ? { ...member, wallet:Number(payload.balance ?? member.wallet ?? 0), walletBalance:Number(payload.balance ?? member.walletBalance ?? 0) } : member) }))
     }
     const onSessionChanged = (payload = {}) => {
-      // ── Sequence guard ──────────────────────────────────────────────────────
-      // Drop stale out-of-order events. Servers without seq support fall through
-      // because payload.seq will be undefined (falsy check below).
-      if (payload?.sessionId != null && payload?.seq != null) {
-        const lastSeq = sessionLastSeq.get(String(payload.sessionId)) ?? 0
-        if (payload.seq <= lastSeq) return   // stale — discard silently
-        sessionLastSeq.set(String(payload.sessionId), payload.seq)
-        // Prune terminal sessions from the map.
-        const terminalReasons = new Set([
-          'session_ended','session_expired','session_forfeited',
-          'session_refunded','session_saved','session_settled',
-          'station_session_released',
-        ])
-        if (terminalReasons.has(String(payload.reason || '').toLowerCase())) {
-          sessionLastSeq.delete(String(payload.sessionId))
+      if (!seqGuardRef.current(payload, 'session')) return
+      // Instant local patch: the countdown on screen free-runs client-side
+      // between events (see sessionTime.js), anchored to `remainingSeconds`.
+      // Patching that anchor the moment the event arrives — instead of
+      // waiting on the invalidateAndRefresh() refetch below — is what makes
+      // "+1 Hour" / lock / unlock appear on the kiosk with no visible delay.
+      // invalidateAndRefresh() still runs afterward as the reconciliation
+      // pass for everything this hand-patch doesn't cover.
+      if (payload.pcId && (payload.remainingSeconds != null || payload.amount != null || payload.locked != null)) {
+        const patchSession = (session) => {
+          if (!session) return session
+          const patch = {}
+          if (payload.remainingSeconds != null) patch.remainingSeconds = Number(payload.remainingSeconds)
+          if (payload.amount != null) patch.amount = Number(payload.amount)
+          if (payload.locked != null) { patch.isLocked = Boolean(payload.locked); patch.isPaused = Boolean(payload.locked) }
+          return { ...session, ...patch }
         }
+        setState((current) => ({
+          ...current,
+          pcs: current.pcs.map((item) => sameId(item.id, payload.pcId) ? { ...item, session: patchSession(item.session) } : item),
+          currentClientPc: sameId(current.currentClientPc?.id, payload.pcId) ? { ...current.currentClientPc, session: patchSession(current.currentClientPc.session) } : current.currentClientPc,
+        }))
       }
-      // ───────────────────────────────────────────────────────────────────────
       const reason=String(payload?.reason || '').toLowerCase()
       const belongsToPc=!payload?.pcId || sameId(payload.pcId,user?.pcId)
       const belongsToMember=!payload?.memberId || sameId(payload.memberId,user?.memberId)
@@ -386,48 +390,6 @@ export function AppDataProvider({ children }) {
         if (user?.role === 'customer') window.aezakmiClient?.showIdleDashboard?.().catch?.(() => {})
       }
       if (user?.role === 'customer' && payload?.memberId && !belongsToMember) return
-
-      // Instant local state update: mutate remaining seconds and session properties inline
-      // without relying on HTTP REST re-fetch delays.
-      if (payload?.sessionId || payload?.remainingSeconds != null) {
-        setState((current) => {
-          if (!current.currentClientPc?.session) return current
-          const s = current.currentClientPc.session
-          if (payload.sessionId && !sameId(s.id, payload.sessionId)) return current
-
-          let nextRemaining = s.remainingSeconds
-          let nextExpiresAt = s.expiresAt
-
-          if (typeof payload.remainingSeconds === 'number') {
-            nextRemaining = payload.remainingSeconds
-            if (payload.remainingSeconds > 0) {
-              const anchor = s.isPaused && s.pausedAt ? new Date(s.pausedAt).getTime() : Date.now()
-              nextExpiresAt = new Date(anchor + payload.remainingSeconds * 1000).toISOString()
-            }
-          }
-
-          const updatedSession = {
-            ...s,
-            remainingSeconds: nextRemaining,
-            expiresAt: nextExpiresAt,
-            amountPaid: typeof payload.amount === 'number' ? payload.amount : s.amountPaid,
-            isPaused: payload.reason === 'session_paused' ? true : (payload.reason === 'session_resumed' ? false : s.isPaused),
-            isLocked: payload.locked != null ? Boolean(payload.locked) : s.isLocked,
-          }
-
-          const updatedPc = {
-            ...current.currentClientPc,
-            session: updatedSession
-          }
-
-          return {
-            ...current,
-            currentClientPc: updatedPc,
-            pcs: current.pcs.map((pc) => sameId(pc.id, updatedPc.id) ? updatedPc : pc)
-          }
-        })
-      }
-
       invalidateAndRefresh()
     }
     const onTopUpUpdated = (payload) => {
