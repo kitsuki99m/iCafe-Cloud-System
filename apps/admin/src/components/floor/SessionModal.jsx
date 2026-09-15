@@ -8,7 +8,7 @@ import { minutesForAmount, amountForMinutes, minAmountFor, rateForId } from '../
 import { getStationSessionActionMode } from '../../lib/stationActions.js'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../../lib/sessionTime.js'
 
-const QUICK_AMOUNTS = [5, 10, 15]
+const QUICK_AMOUNTS = [5, 10, 15, 20]
 const TIER_RANK = { Regular: 0, Gold: 1, VIP: 2 }
 const planTierRank = (plan) => TIER_RANK[String(plan?.customerTier ?? 'Regular')] ?? 0
 

@@ -213,15 +213,6 @@ export default function ExtendSessionModal({
               {error}
             </p>
           )}
-          {visiblePlans.some(
-            (plan) =>
-              String(plan.customerTier || plan.customer_tier || "Regular") !==
-              "Regular",
-          ) && (
-            <p className="rounded-lg border border-teal/25 bg-teal/10 px-3 py-2 text-xs text-teal-dim">
-              {tier} member rates are available. Only rates you can use are shown below.
-            </p>
-          )}
           {visiblePlans.length > 0 && (
             <div>
               <label className="eyebrow mb-1.5 block">
@@ -253,15 +244,6 @@ export default function ExtendSessionModal({
               </div>
             </div>
           )}
-          <div className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-2.5">
-            <p className="text-xs font-semibold text-ink-900">
-              Pay at Counter is selected by default.
-            </p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-slate-soft">
-              Cash and GCash requests stay pending until staff confirms payment.
-              Wallet payment is available to signed-in members.
-            </p>
-          </div>
 
           <div>
             <label className="eyebrow mb-1.5 block">Payment Method</label>

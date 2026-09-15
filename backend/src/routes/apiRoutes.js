@@ -254,7 +254,51 @@ function localLogoMeta() {
   return asset ? { ...asset, source: "database" } : null
 }
 
+const FINANCIAL_LOG_ACTIONS = new Set([
+  'topup.approve',
+  'topup.reject',
+  'topup.request',
+  'topup.clear',
+  'wallet.adjust',
+  'wallet.balance_edit',
+  'wallet.topup',
+  'wallet.transfer',
+  'member.session_topup',
+  'session.start',
+  'session.end',
+  'session.extend',
+  'session.extend.confirm',
+  'session.extend.reject',
+  'session.time_adjust',
+  'session.time_reduction',
+  'session.settle_interrupted',
+  'session.restore_interrupted_guest',
+  'session.forfeit_interrupted_guest',
+  'session.refund',
+  'pos.sale',
+  'expense.create',
+  'expense.void',
+]);
+
+function isFinancialOrAmountAction(action) {
+  if (!action) return false;
+  if (FINANCIAL_LOG_ACTIONS.has(action)) return true;
+  const lower = String(action).toLowerCase();
+  return (
+    lower.includes('topup') ||
+    lower.includes('top_up') ||
+    lower.includes('wallet') ||
+    lower.includes('extend') ||
+    lower.includes('time_adjust') ||
+    lower.includes('time_reduction') ||
+    lower.includes('refund') ||
+    lower.includes('expense') ||
+    lower.includes('settle')
+  );
+}
+
 function log(userId, action, type, entityId, pcId, details) {
+  if (!isFinancialOrAmountAction(action)) return;
   db.prepare(
     `INSERT INTO logs (id,user_id,action,entity_type,entity_id,pc_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)`,
   ).run(
@@ -1178,18 +1222,6 @@ router.post("/support", auth, supportLimiter, (req, res, next) => {
     db.prepare(
       `INSERT INTO support_messages (id,member_id,pc_id,sender_role,message,status,created_at) VALUES (?,?,?,?,?,'open',?)`,
     ).run(supportId, req.auth.memberId, pc.id, "customer", clean, nowIso());
-    db.prepare(
-      `INSERT INTO logs (id,user_id,action,entity_type,entity_id,pc_id,details,created_at) VALUES (?,?,?,?,?,?,?,?)`,
-    ).run(
-      id(),
-      req.auth.userId,
-      "support.request",
-      "support_message",
-      supportId,
-      pc.id,
-      JSON.stringify({ message: clean }),
-      nowIso(),
-    );
     emitSupportRequest({
       id: supportId,
       memberId: req.auth.memberId,
@@ -6148,17 +6180,29 @@ router.get("/logs", auth, requireRole("admin"), (req, res) => {
     .all();
   res.json({
     success: true,
-    logs: rows.map((r) => ({
-      id: r.id,
-      userId: r.user_id,
-      action: r.action,
-      entityType: r.entity_type,
-      entityId: r.entity_id,
-      pcId: r.pc_id,
-      details: parseJson(r.details, r.details),
-      createdAt: r.created_at,
-    })),
+    logs: rows
+      .filter((r) => isFinancialOrAmountAction(r.action))
+      .map((r) => ({
+        id: r.id,
+        userId: r.user_id,
+        action: r.action,
+        entityType: r.entity_type,
+        entityId: r.entity_id,
+        pcId: r.pc_id,
+        details: parseJson(r.details, r.details),
+        createdAt: r.created_at,
+      })),
   });
+});
+
+router.delete("/logs", auth, requireRole("admin"), (req, res) => {
+  db.prepare("DELETE FROM logs").run();
+  res.json({ success: true, message: "All operational logs cleared." });
+});
+
+router.post("/logs/clear", auth, requireRole("admin"), (req, res) => {
+  db.prepare("DELETE FROM logs").run();
+  res.json({ success: true, message: "All operational logs cleared." });
 });
 
 router.get(

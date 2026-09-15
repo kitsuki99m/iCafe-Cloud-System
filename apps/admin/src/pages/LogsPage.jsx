@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CircleDollarSign, Clock3, RefreshCw, RotateCcw, ScrollText, Search, SlidersHorizontal } from 'lucide-react'
-import { apiGet, apiPost } from '../lib/api.js'
+import { AlertTriangle, CircleDollarSign, Clock3, RefreshCw, RotateCcw, ScrollText, Search, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { apiGet, apiPost, apiDelete } from '../lib/api.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { scopedPageCacheKey } from '../lib/pageCache.js'
@@ -42,6 +42,8 @@ export default function LogsPage() {
   const [recoverableGuestSessions, setRecoverableGuestSessions] = useState([])
   const [processingId, setProcessingId] = useState('')
   const [loading, setLoading] = useState(true)
+  const [clearing, setClearing] = useState(false)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [actionFilter, setActionFilter] = useState('all')
@@ -99,6 +101,22 @@ export default function LogsPage() {
 
   useEffect(()=>{let active=true;if(cacheKey)void readSnapshot(cacheKey).then(snapshot=>{if(active&&snapshot){applySnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void loadLogs()});else void loadLogs();const timer=setInterval(()=>{if(document.visibilityState==='visible')void loadLogs()},120000);const onOnline=()=>void loadLogs();const onVisible=()=>{if(document.visibilityState==='visible')void loadLogs()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible);loadSequenceRef.current+=1}},[applySnapshot,cacheKey,loadLogs])
   useEffect(()=>{setPage(1)},[query,actionFilter])
+
+  async function clearAllLogs() {
+    setClearing(true)
+    setError('')
+    try {
+      await apiDelete('/logs')
+      const snapshot = { logs: [], pendingSettlements, recoverableGuestSessions }
+      applySnapshot(snapshot)
+      if (cacheKey) void writeSnapshot(cacheKey, snapshot)
+      setClearConfirmOpen(false)
+    } catch (err) {
+      setError(err?.message || 'Unable to clear operational logs.')
+    } finally {
+      setClearing(false)
+    }
+  }
 
   function requestInterruptedSettlement(item, paymentMethod) {
     if (!item?.id || processingId) return
@@ -187,6 +205,7 @@ export default function LogsPage() {
       <div className="admin-search-field min-w-[240px] flex-1 sm:max-w-md"><Search size={15} className="text-slate-soft"/><input value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search logs" className="w-full bg-transparent text-xs text-ink-900 outline-none placeholder:text-slate-soft"/></div>
       <label className="admin-search-field text-xs"><SlidersHorizontal size={14}/><select value={actionFilter} onChange={(event)=>setActionFilter(event.target.value)} className="bg-transparent text-xs font-medium text-ink-900 outline-none"><option value="all">All actions</option>{actionOptions.filter((item)=>item!=='all').map((action)=><option key={action} value={action}>{labelForAction(action)}</option>)}</select></label>
       <button type="button" onClick={loadLogs} disabled={loading} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-surface-line bg-surface px-3 text-xs font-semibold text-ink-900 hover:bg-surface-raised disabled:opacity-50"><RefreshCw size={14} className={loading?'animate-spin':''}/>Refresh</button>
+      <button type="button" onClick={() => setClearConfirmOpen(true)} disabled={loading || clearing || logs.length === 0} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-ember/30 bg-ember/10 px-3 text-xs font-semibold text-ember-dim hover:bg-ember/20 disabled:opacity-40"><Trash2 size={14}/>{clearing ? 'Resetting…' : 'Reset Logs'}</button>
     </div>
 
     {error && <div className="mb-4 rounded-xl border border-ember/30 bg-ember/5 px-4 py-3 text-sm text-ember-dim">{error}</div>}
@@ -210,6 +229,17 @@ export default function LogsPage() {
 
     {!loading && !error && filteredLogs.length === 0 ? <div className="overview-card flex flex-col items-center gap-2 py-16 text-center"><ScrollText size={22} className="text-slate-soft"/><p className="text-sm font-medium text-ink-900">No logs match this view.</p></div> : <div className="admin-table-shell overflow-hidden"><div className="max-h-[calc(100vh-300px)] overflow-auto"><table className="w-full min-w-[780px] text-[11px]"><thead className="sticky top-0 z-10 bg-surface"><tr className="text-left text-[10px] uppercase tracking-[0.12em] text-slate-soft"><th className="px-4 py-3 font-medium">Action</th><th className="px-4 py-3 font-medium">Entity</th><th className="px-4 py-3 font-medium">PC</th><th className="px-4 py-3 font-medium">Duration</th><th className="px-4 py-3 font-medium">Amount</th><th className="px-4 py-3 font-medium">Time</th></tr></thead><tbody>{loading?<tr><td colSpan="6" className="px-4 py-12 text-center text-sm text-slate-soft">Loading logs…</td></tr>:visibleLogs.map((log)=>{const details=log.details||{};const amount=Number(details.amount??details.amountPaid??0);const badge=BADGE[log.action]||'text-slate-soft bg-surface-raised';return <tr key={log.id} onClick={()=>setSelectedLog(log)} className="cursor-pointer border-b border-surface-line/50 last:border-0 hover:bg-surface-raised/45"><td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badge}`}>{labelForAction(log.action)}</span></td><td className="px-4 py-2.5 text-slate-soft">{log.entityType||log.entity_type||'—'}</td><td className="px-4 py-2.5 font-medium text-ink-900">{log.pcId||'—'}</td><td className="stat-figure px-4 py-2.5 text-slate-soft">{durationFromDetails(details)}</td><td className="stat-figure px-4 py-2.5 text-ink-900">{amount>0?`₱${amount.toFixed(2)}`:'—'}</td><td className="px-4 py-2.5 text-slate-soft">{formatTime(log.createdAt)}</td></tr>})}</tbody></table></div><div className="flex items-center justify-between gap-2 border-t border-surface-line bg-surface px-4 py-2.5 text-[10px] text-slate-soft"><span>{filteredLogs.length} record{filteredLogs.length===1?'':'s'} · Page {page} of {pages}</span><div className="flex gap-2"><button disabled={page<=1} onClick={()=>setPage(v=>v-1)} className="rounded-lg border border-surface-line px-2.5 py-1.5 disabled:opacity-40">Previous</button><button disabled={page>=pages} onClick={()=>setPage(v=>v+1)} className="rounded-lg border border-surface-line px-2.5 py-1.5 disabled:opacity-40">Next</button></div></div></div>}
 
+    <ConfirmModal
+      open={clearConfirmOpen}
+      eyebrow="Reset operational logs"
+      title="Delete all log entries?"
+      message="This permanently clears all stored log entries from the database. This action cannot be undone."
+      confirmLabel="Delete all logs"
+      variant="danger"
+      busy={clearing}
+      onClose={() => !clearing && setClearConfirmOpen(false)}
+      onConfirm={clearAllLogs}
+    />
 
     <ConfirmModal
       open={Boolean(settlementTarget)}

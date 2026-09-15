@@ -263,10 +263,6 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         expires.toISOString(),
       )
 
-      db.prepare(`
-        INSERT INTO logs (id,user_id,action,entity_type,entity_id,pc_id,details,created_at)
-        VALUES (?,?,?,?,?,?,?,?)
-      `).run(id(),user.id,'login','auth_session',sessionId,pc?.id ?? null,JSON.stringify({ip}),nowString)
 
       return pc
     })
@@ -325,10 +321,7 @@ router.post('/complete-customer-password-setup', authenticate, async (req,res,ne
       }
       db.prepare("UPDATE auth_sessions SET revoked_at=?,ended_at=?,end_reason='password_changed' WHERE user_id=? AND id<>? AND revoked_at IS NULL")
         .run(changedAt,changedAt,current.id,req.auth.sessionId)
-      db.prepare(`
-        INSERT INTO logs (id,user_id,action,entity_type,entity_id,pc_id,details,created_at)
-        VALUES (?,?,?,?,?,?,?,?)
-      `).run(id(),current.id,'customer.password_setup','user',current.id,req.auth.pcId ?? null,JSON.stringify({temporaryPasswordReplaced:true}),changedAt)
+
     })
     if(cloudCredential)enqueueCloudEvent('member_credential.upsert',{...cloudCredential,_authority:'edge'},{entityType:'member_credential',entityId:current.member_id,occurredAt:changedAt})
 
@@ -414,19 +407,7 @@ router.post('/update-credentials', authenticate, adminCredentialLimiter, async (
         .run(nextPasswordHash,nextPinHash,authMethod,changedAt,current.id)
       db.prepare("UPDATE auth_sessions SET revoked_at=?,ended_at=?,end_reason='credentials_changed' WHERE user_id=? AND id<>? AND revoked_at IS NULL")
         .run(changedAt,changedAt,current.id,req.auth.sessionId)
-      db.prepare(`
-        INSERT INTO logs (id,user_id,action,entity_type,entity_id,pc_id,details,created_at)
-        VALUES (?,?,?,?,?,?,?,?)
-      `).run(
-        id(),
-        current.id,
-        'admin.credentials.updated',
-        'user',
-        current.id,
-        req.auth.pcId ?? null,
-        JSON.stringify({ authMethod, pinChanged:Boolean(newPin), passwordChanged:Boolean(newPassword) }),
-        changedAt,
-      )
+
     })
 
     const fresh = db.prepare('SELECT * FROM users WHERE id=?').get(current.id)

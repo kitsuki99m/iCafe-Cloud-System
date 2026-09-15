@@ -108,7 +108,6 @@ export default function TopUpModal({ open, onClose, pc, customerId, customerName
       ) : (
         <div className="space-y-4">
           {error && <div className="rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-xs text-ember-dim">{error}</div>}
-          {ratePlans.some((plan) => String(plan.customerTier) === String(tier) && tier !== 'Regular') && <div className="rounded-lg border border-teal/25 bg-teal/10 px-3 py-2 text-xs text-teal-dim">{tier} member promos are available after your wallet is credited.</div>}
           <div>
             <label className="eyebrow mb-1.5 block">How will you pay?</label>
             <div className="grid grid-cols-2 gap-2">

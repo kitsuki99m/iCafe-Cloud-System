@@ -157,7 +157,26 @@ function WalletTopUpModal({ member, onClose, onConfirm }) {
   return <Modal open={!!member} onClose={onClose} busy={busy} eyebrow={member?.name} title="Top Up Wallet" footer={<><Button variant="ghost" disabled={busy} onClick={onClose}>Cancel</Button><Button icon={Wallet} variant="primary" disabled={!valid || busy} onClick={()=>run(()=>onConfirm(numeric,{ operationKey:operationKeyRef.current || createOperationKey() }),'Unable to top up wallet.')}>{busy?'Processing…':`Top Up ₱${valid?numeric.toFixed(2):'0.00'}`}</Button></>}>
     <div className="space-y-4">
       <div className="rounded-lg bg-surface-raised px-3 py-2 text-sm flex justify-between"><span className="text-slate-soft">Current balance</span><span className="stat-figure font-semibold text-ink-900">₱{Number(member?.wallet ?? member?.walletBalance ?? 0).toFixed(2)}</span></div>
-      <div><label className="eyebrow mb-1.5 block">Top-up amount (₱)</label><NumericInput autoFocus min="0.01" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" className={inputClass}/></div>
+      <div>
+        <label className="eyebrow mb-1.5 block">Top-up amount (₱)</label>
+        <div className="mb-2 grid grid-cols-4 gap-1.5">
+          {[5, 10, 15, 20].map((p) => (
+            <button
+              type="button"
+              key={p}
+              onClick={() => setAmount(String(p))}
+              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+                Number(amount) === p
+                  ? 'border-gold/50 bg-gold/10 text-gold-dim'
+                  : 'border-surface-line text-slate-soft hover:text-ink-900'
+              }`}
+            >
+              ₱{p}
+            </button>
+          ))}
+        </div>
+        <NumericInput autoFocus min="0.01" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00" className={inputClass}/>
+      </div>
       <p className="text-xs text-slate-soft">Adds new wallet funds and records a top-up transaction in the member wallet ledger.</p>
       {error && <p className="rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-xs text-ember-dim">{error}</p>}
     </div>
@@ -181,7 +200,28 @@ function SessionTopUpModal({ member, ratePlans, onClose, onConfirm }) {
     <div className="space-y-4">
       <div className="rounded-lg border border-surface-line bg-surface-raised px-3 py-2 text-sm"><div className="text-slate-soft">Remaining session</div><div className="stat-figure mt-1 text-lg font-semibold">{formatRemainingSession(member?.activeSession)}</div>{member?.activeSession?.pcLabel&&<div className="text-xs text-slate-soft">{member.activeSession.pcLabel}</div>}</div>
       <div><label className="eyebrow mb-1.5 block">Rate plan</label><div className="grid gap-2 sm:grid-cols-2">{activePlans.map(p=><button key={p.id} disabled={busy} onClick={()=>{setPlanId(p.id);if(p.mode==='linear')setAmount(String(p.minAmount||''))}} className={`rounded-lg border px-3 py-2 text-left text-xs ${planId===p.id?'border-gold/50 bg-gold/10 text-gold-dim':'border-surface-line text-slate-soft'}`}><div className="font-semibold">{p.name}</div><div>{p.mode==='package'?`₱${Number(p.amount||0).toFixed(2)} · ${p.minutes} min`:`₱${Number(p.pesoUnit||0).toFixed(2)} / ${p.minutesPerUnit} min · min ₱${Number(p.minAmount||0).toFixed(2)}`}</div></button>)}</div></div>
-      {plan?.mode==='linear'&&<div><label className="eyebrow mb-1.5 block">Cash amount</label><NumericInput min={plan.minAmount} step="0.001" value={amount} onChange={e=>setAmount(e.target.value)} className={inputClass}/></div>}
+      {plan?.mode==='linear' && (
+        <div>
+          <label className="eyebrow mb-1.5 block">Cash amount</label>
+          <div className="mb-2 grid grid-cols-4 gap-1.5">
+            {[5, 10, 15, 20].map((p) => (
+              <button
+                type="button"
+                key={p}
+                onClick={() => setAmount(String(p))}
+                className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+                  Number(amount) === p
+                    ? 'border-gold/50 bg-gold/10 text-gold-dim'
+                    : 'border-surface-line text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                ₱{p}
+              </button>
+            ))}
+          </div>
+          <NumericInput min={plan.minAmount} step="0.001" value={amount} onChange={e=>setAmount(e.target.value)} className={inputClass}/>
+        </div>
+      )}
       <p className="text-xs text-slate-soft">Uses an active rate plan allowed by this member's tier. Payment is recorded as cash at the counter.</p>
       {error && <p className="rounded-lg border border-ember/30 bg-ember/5 px-3 py-2 text-xs text-ember-dim">{error}</p>}
     </div>

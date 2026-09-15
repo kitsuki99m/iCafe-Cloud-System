@@ -230,7 +230,7 @@ export function AppDataProvider({ children }) {
       if(cloudPrimary){
         // One authenticated station-api invocation replaces six Cloud function
         // calls and authenticates the station/member only once per refresh.
-        const bundled=await apiGet('/app-data')
+        const bundled=await apiGet('/app-data', { force:true })
         pcData={pc:bundled.pc};plansData={ratePlans:bundled.ratePlans||[]};clientContext=bundled.clientContext||{};memberData={member:bundled.member};settingsData={settings:bundled.settings||{}};announcementData={announcements:bundled.announcements||[]}
       }else{
         ;[pcData, plansData, clientContext, memberData, settingsData, announcementData] = await Promise.all([
@@ -397,6 +397,17 @@ export function AppDataProvider({ children }) {
       invalidateAndRefresh()
     }
     const onTopUpUpdated = (payload) => {
+      if (user?.role === 'customer' && sameId(payload?.memberId, user?.memberId) && payload?.status === 'approved') {
+        const amount = Number(payload.amount ?? 0)
+        setState((current) => ({
+          ...current,
+          members: current.members.map((member) =>
+            sameId(member.id, payload.memberId)
+              ? { ...member, wallet: Number(member.wallet || 0) + amount, walletBalance: Number(member.walletBalance || 0) + amount }
+              : member
+          ),
+        }))
+      }
       invalidateAndRefresh()
       if (user?.role === 'customer' && String(payload?.memberId) === String(user.memberId) && payload?.status === 'approved') {
         const amount = Number(payload.amount ?? 0)
@@ -407,6 +418,18 @@ export function AppDataProvider({ children }) {
       const belongsToMember = user?.role === 'customer' && sameId(payload?.memberId,user.memberId)
       const belongsToPc = (user?.role === 'guest' || user?.role === 'customer') && sameId(payload?.pcId,user?.pcId)
       if (!belongsToMember && !belongsToPc) return
+      if (payload?.status === 'approved') {
+        const secondsAdded = Math.max(0, Number(payload.minutesAdded || 0)) * 60
+        if (secondsAdded > 0) {
+          setState((current) => {
+            if (!current.currentClientPc?.session) return current
+            const s = current.currentClientPc.session
+            const updatedSession = { ...s, remainingSeconds: Number(s.remainingSeconds || 0) + secondsAdded, observedAt: Date.now() }
+            const updatedPc = { ...current.currentClientPc, session: updatedSession }
+            return { ...current, currentClientPc: updatedPc, pcs: current.pcs.map((pc) => sameId(pc.id, updatedPc.id) ? updatedPc : pc) }
+          })
+        }
+      }
       invalidateAndRefresh()
       if (payload?.status === 'approved' && payload?.paymentMethod !== 'wallet') showToast({ title:'Time added', message:`${Math.max(0,Number(payload.minutesAdded||0))} minute(s) were added to your session.`, tone:'success' })
       if (payload?.status === 'rejected') showToast({ title:'Extension request rejected', message:'Staff rejected the pending session extension.', tone:'warning' })
