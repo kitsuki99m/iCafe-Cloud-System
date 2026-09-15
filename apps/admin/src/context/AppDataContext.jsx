@@ -344,10 +344,31 @@ export function AppDataProvider({ children }) {
           'session_refunded','session_saved','session_settled',
           'station_session_released',
         ])
-        if (terminalReasons.has(String(payload.reason || ''))) {
-          sessionLastSeq.delete(String(payload.sessionId))
-        }
+      // Instant inline state update for Admin UI on incoming session updates
+      if (payload?.pcId && payload?.remainingSeconds != null) {
+        setState((current) => ({
+          ...current,
+          pcs: current.pcs.map((pc) => {
+            if (String(pc.id) !== String(payload.pcId) || !pc.session) return pc
+            const s = pc.session
+            const nextRemaining = payload.remainingSeconds
+            const anchor = s.isPaused && s.pausedAt ? new Date(s.pausedAt).getTime() : Date.now()
+            const nextExpiresAt = nextRemaining > 0 ? new Date(anchor + nextRemaining * 1000).toISOString() : s.expiresAt
+            return {
+              ...pc,
+              session: {
+                ...s,
+                remainingSeconds: nextRemaining,
+                expiresAt: nextExpiresAt,
+                amountPaid: typeof payload.amount === 'number' ? payload.amount : s.amountPaid,
+                isPaused: payload.reason === 'session_paused' ? true : (payload.reason === 'session_resumed' ? false : s.isPaused),
+                isLocked: payload.locked != null ? Boolean(payload.locked) : s.isLocked,
+              }
+            }
+          })
+        }))
       }
+
       invalidateAndRefresh()
     }
     const onTopUpUpdated = invalidateAndRefresh

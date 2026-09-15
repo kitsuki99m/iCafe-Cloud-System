@@ -386,6 +386,48 @@ export function AppDataProvider({ children }) {
         if (user?.role === 'customer') window.aezakmiClient?.showIdleDashboard?.().catch?.(() => {})
       }
       if (user?.role === 'customer' && payload?.memberId && !belongsToMember) return
+
+      // Instant local state update: mutate remaining seconds and session properties inline
+      // without relying on HTTP REST re-fetch delays.
+      if (payload?.sessionId || payload?.remainingSeconds != null) {
+        setState((current) => {
+          if (!current.currentClientPc?.session) return current
+          const s = current.currentClientPc.session
+          if (payload.sessionId && !sameId(s.id, payload.sessionId)) return current
+
+          let nextRemaining = s.remainingSeconds
+          let nextExpiresAt = s.expiresAt
+
+          if (typeof payload.remainingSeconds === 'number') {
+            nextRemaining = payload.remainingSeconds
+            if (payload.remainingSeconds > 0) {
+              const anchor = s.isPaused && s.pausedAt ? new Date(s.pausedAt).getTime() : Date.now()
+              nextExpiresAt = new Date(anchor + payload.remainingSeconds * 1000).toISOString()
+            }
+          }
+
+          const updatedSession = {
+            ...s,
+            remainingSeconds: nextRemaining,
+            expiresAt: nextExpiresAt,
+            amountPaid: typeof payload.amount === 'number' ? payload.amount : s.amountPaid,
+            isPaused: payload.reason === 'session_paused' ? true : (payload.reason === 'session_resumed' ? false : s.isPaused),
+            isLocked: payload.locked != null ? Boolean(payload.locked) : s.isLocked,
+          }
+
+          const updatedPc = {
+            ...current.currentClientPc,
+            session: updatedSession
+          }
+
+          return {
+            ...current,
+            currentClientPc: updatedPc,
+            pcs: current.pcs.map((pc) => sameId(pc.id, updatedPc.id) ? updatedPc : pc)
+          }
+        })
+      }
+
       invalidateAndRefresh()
     }
     const onTopUpUpdated = (payload) => {
