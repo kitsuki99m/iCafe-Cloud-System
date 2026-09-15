@@ -8,12 +8,13 @@ import EmergencyControlGuard from './components/common/EmergencyControlGuard.jsx
 import PowerCommandWarning from './components/common/PowerCommandWarning.jsx'
 import StationLockedOverlay from './components/common/StationLockedOverlay.jsx'
 import StationCloudPairing from './components/auth/StationCloudPairing.jsx'
+import CustomerSplashScreen from './components/common/CustomerSplashScreen.jsx'
 
 export default function App() {
   const { user, authLoading, stationPairingRequired } = useAuth()
 
   if (authLoading) {
-    return <div className="flex min-h-screen items-center justify-center bg-ink text-ink-900"><div className="panel px-6 py-5">Checking this PC…</div></div>
+    return <CustomerSplashScreen />
   }
 
   if (stationPairingRequired) {

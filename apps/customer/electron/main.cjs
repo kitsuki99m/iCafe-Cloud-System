@@ -553,6 +553,12 @@ function positionCompactSessionWindow() {
 function applyCompactSessionMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const timerPrefs = getTimerPreferences()
+  const wasVisible = mainWindow.isVisible()
+  // Hide before leaving kiosk/fullscreen so Windows cannot paint the outgoing
+  // dashboard while its native transition is still settling.
+  if (wasVisible) mainWindow.hide()
+  activeDashboardMode = 'compact'
+  notifyDashboardMode()
   // Remove the previous mode's size locks before leaving fullscreen/maximized
   // state. This makes the transition deterministic when coming from kiosk mode
   // or from the fixed 960x680 active dashboard.
@@ -574,8 +580,6 @@ function applyCompactSessionMode() {
     mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
     positionCompactSessionWindow()
     keepWindowContentOpaque()
-    activeDashboardMode = 'compact'
-    notifyDashboardMode()
     if (timerPrefs.visible) {
       mainWindow.showInactive()
       mainWindow.blur()

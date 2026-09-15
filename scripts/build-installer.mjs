@@ -64,6 +64,15 @@ try {
 
   // Never package whatever happens to be in dist/. Produce a fresh renderer build.
   runNpm(['run', 'build'])
+  const builtAssets = fs.readdirSync(path.join(appDir, 'dist', 'assets'))
+  const builtJavascript = builtAssets
+    .filter((name) => /\.(?:js|css)$/.test(name))
+    .map((name) => fs.readFileSync(path.join(appDir, 'dist', 'assets', name), 'utf8'))
+    .join('\n')
+  if (appName === 'customer' && (!builtJavascript.includes('Checking PC') || !builtJavascript.includes('customer-dashboard-windowed'))) {
+    throw new Error('Customer renderer build is missing the current kiosk/loading changes; refusing to package stale assets.')
+  }
+  if (builtAssets.length === 0) throw new Error(`Fresh ${appName} renderer output was not generated in ${appDir}.`)
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
   runNpm(['exec', '--yes=false', '--', 'electron-builder', '--win', 'nsis', '--config', configPath])
 } finally {

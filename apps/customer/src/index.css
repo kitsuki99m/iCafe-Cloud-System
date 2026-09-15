@@ -174,9 +174,13 @@
 
   .customer-dashboard-shell {
     @apply flex h-screen min-h-0 flex-col items-center justify-center overflow-hidden bg-ink text-ink-900;
-    border-radius: 22px;
+    border-radius: 0;
     gap: 12px;
     padding: clamp(10px, 1.2vw, 18px);
+  }
+
+  .customer-dashboard-shell.customer-dashboard-windowed {
+    border-radius: 9px;
   }
 
   .customer-topbar {
@@ -213,7 +217,7 @@
 
   .customer-login-shell {
     @apply flex h-screen min-h-0 flex-col justify-center overflow-hidden bg-ink px-4 py-4 text-ink-900 sm:px-6;
-    border-radius: 22px;
+    border-radius: 0;
     gap: 12px;
   }
 
@@ -227,7 +231,79 @@
 
   .customer-pairing-shell {
     @apply flex h-screen min-h-0 items-center justify-center overflow-hidden bg-ink px-4 py-4 text-ink-900 sm:px-6;
-    border-radius: 22px;
+    border-radius: 0;
+  }
+
+  .splash-screen {
+      @apply fixed inset-0 z-[999] flex items-center justify-center bg-ink text-ink-900;
+      background-image:
+        radial-gradient(ellipse 55% 40% at 50% 34%, rgba(201, 168, 93, 0.16), transparent 70%),
+        radial-gradient(circle, var(--app-dot) 1px, transparent 1px);
+      background-size: auto, 22px 22px;
+      background-position: center, center;
+  }
+
+  .splash-content {
+      @apply flex flex-col items-center gap-6;
+      animation: splash-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .splash-ring {
+      @apply relative flex h-24 w-24 items-center justify-center;
+  }
+
+  .splash-ring::before {
+      content: "";
+      @apply absolute inset-0 rounded-full;
+      background: conic-gradient(from 0deg, var(--color-teal), var(--color-gold), var(--color-ember), var(--color-teal));
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+      mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+      animation: splash-spin 1.4s linear infinite;
+  }
+
+  .splash-logo {
+      @apply relative h-16 w-16 rounded-[18px];
+      box-shadow: var(--shadow-glow);
+      animation: splash-breathe 2.4s ease-in-out infinite;
+  }
+
+  .splash-text {
+      @apply flex flex-col items-center gap-1.5;
+  }
+
+  .splash-brand {
+      @apply m-0 font-display text-[15px] font-semibold tracking-tight;
+  }
+
+  .splash-label {
+      @apply m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-soft;
+  }
+
+  .splash-dots {
+      @apply flex items-center justify-center gap-1.5;
+  }
+
+  .splash-dots span {
+      @apply h-1.5 w-1.5 rounded-full bg-slate;
+      animation: splash-dot 1.2s ease-in-out infinite;
+  }
+
+  .splash-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .splash-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes splash-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes splash-spin { to { transform: rotate(360deg); } }
+  @keyframes splash-breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+  @keyframes splash-dot {
+    0%, 100% { opacity: 0.35; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-2px); }
   }
 
   .customer-pairing-container {

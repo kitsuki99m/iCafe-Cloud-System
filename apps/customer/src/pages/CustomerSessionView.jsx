@@ -580,7 +580,7 @@ export default function CustomerSessionView() {
   }
 
   return (
-    <div className="customer-dashboard-shell">
+    <div className={`customer-dashboard-shell${hasActiveSession ? " customer-dashboard-windowed" : ""}`}>
       <header className="customer-topbar">
         <div className="flex min-w-0 items-center gap-3">
           <img
