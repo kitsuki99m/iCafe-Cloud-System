@@ -86,6 +86,27 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
     const pc=db.prepare('SELECT id,status FROM pcs WHERE id=?').get(pcId)
     if(!pc) return res.status(404).json({success:false,code:'PC_NOT_FOUND',error:'PC not found.'})
     if(pc.status==='offline') return res.status(409).json({success:false,code:'PC_OFFLINE',error:'The station is offline and cannot receive commands.'})
+
+    // ── Idempotency guard ────────────────────────────────────────────────────
+    // api.js sends a unique Idempotency-Key on every non-GET request. If a
+    // second POST arrives with the same key (rapid double-click, network retry)
+    // and the original command is still valid, return the original response
+    // immediately without creating a duplicate DB row or re-delivering the WS
+    // event to the kiosk.
+    const idempotencyKey = String(req.headers['idempotency-key'] || '').trim().slice(0, 128)
+    if (idempotencyKey) {
+      const existing = db.prepare(
+        "SELECT id,status,expires_at FROM remote_commands WHERE idempotency_key=? AND pc_id=? LIMIT 1"
+      ).get(idempotencyKey, pcId)
+      if (existing) {
+        // Return the original queued response. The kiosk already received the
+        // WS event; the admin UI already tagged the optimistic state with the
+        // commandId. A replay cannot cause a second delivery.
+        return res.status(201).json({success:true,commandId:existing.id,status:existing.status,expiresAt:existing.expires_at,idempotent:true})
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const active=db.prepare("SELECT id,member_id FROM computer_sessions WHERE pc_id=? AND status='active' LIMIT 1").get(pcId)
     const pause=active ? activeSessionPause(active.id) : null
     if(command==='lock' && !active) return res.status(409).json({success:false,code:'SESSION_REQUIRED',error:'Lock Session requires an active session.'})
@@ -109,7 +130,7 @@ router.post('/remote-commands',auth,requireRole('admin'),(req,res,next)=>{
     const expiresAt = new Date(Date.now() + Math.max(REMOTE_COMMAND_TIMEOUT_MS, warningSeconds * 1000 + 10000)).toISOString()
     const queuedCommand={id:commandId,pc_id:pcId,command,payload,requested_by:req.auth.userId}
     const interruption=transaction(() => {
-      db.prepare('INSERT INTO remote_commands(id,pc_id,command,payload,status,requested_by,requested_at,warning_started_at,warning_expires_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(commandId,pcId,command,JSON.stringify(payload),'queued',req.auth.userId,requestedAt,warningSeconds ? requestedAt : null,warningExpiresAt,expiresAt)
+      db.prepare('INSERT INTO remote_commands(id,pc_id,command,payload,status,requested_by,requested_at,warning_started_at,warning_expires_at,expires_at,idempotency_key) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(commandId,pcId,command,JSON.stringify(payload),'queued',req.auth.userId,requestedAt,warningSeconds ? requestedAt : null,warningExpiresAt,expiresAt,idempotencyKey||null)
       return interruptForQueuedCommand(queuedCommand,requestedAt)
     })
     if (interruption?.session) {

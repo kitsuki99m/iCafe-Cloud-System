@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { useOptimisticAction } from '../hooks/useOptimisticAction.js'
 import { useAuth } from './AuthContext.jsx'
 import { apiGet, apiPost, apiPatch, apiDelete, invalidateApiCache } from '../lib/api.js'
 import { connectSocket, disconnectSocket } from '../lib/socket.js'
@@ -12,6 +13,11 @@ import { effectivePcStatus } from '../lib/pcStatus.js'
 
 const AppDataContext = createContext(null)
 const suppressedCommandToastIds = new Set()
+// Tracks the highest sequence number seen per session so stale out-of-order
+// `session:updated` events are silently dropped on the admin side.
+// This is module-level (not per-component) because there is exactly one admin
+// AppDataProvider mounted at a time and the socket connection is also singleton.
+const sessionLastSeq = new Map()
 
 const EMPTY_SETTINGS = {
   displayName:'',
@@ -323,7 +329,27 @@ export function AppDataProvider({ children }) {
     const onChanged = invalidateAndRefresh
     const onRatePlansUpdated = invalidateAndRefresh
     const onAnnouncementsUpdated = invalidateAndRefresh
-    const onSessionUpdated = invalidateAndRefresh
+    const onSessionUpdated = (payload) => {
+      // Drop stale out-of-order events by comparing the server-stamped
+      // monotonic sequence number to the highest we've already processed
+      // for this session. A missing seq (legacy server) falls through.
+      if (payload?.sessionId != null && payload?.seq != null) {
+        const lastSeq = sessionLastSeq.get(String(payload.sessionId)) ?? 0
+        if (payload.seq <= lastSeq) return  // stale — discard silently
+        sessionLastSeq.set(String(payload.sessionId), payload.seq)
+        // Prune the map when the session reaches a terminal state so it does
+        // not grow without bound across many session turnovers.
+        const terminalReasons = new Set([
+          'session_ended','session_expired','session_forfeited',
+          'session_refunded','session_saved','session_settled',
+          'station_session_released',
+        ])
+        if (terminalReasons.has(String(payload.reason || ''))) {
+          sessionLastSeq.delete(String(payload.sessionId))
+        }
+      }
+      invalidateAndRefresh()
+    }
     const onTopUpUpdated = invalidateAndRefresh
     const onCommandStatus = (payload) => {
       invalidateAndRefresh()
@@ -770,15 +796,34 @@ export function AppDataProvider({ children }) {
     })
   }
 
-  function approveTopUp(id) {
-    optimisticState((current)=>({...current,topUpRequests:current.topUpRequests.map((r)=>String(r.id)===String(id)?{...r,status:'approved',pending:true}:r)}))
-    return apiPatch(`/top-ups/${id}/approve`).then((result) => { playAdminSound('success', { dedupeKey:`topup-approved:${id}` }); showToast({ title:'Top up approved', message:'Wallet balance was updated.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
-  }
+  // useOptimisticAction wires: optimistic mutation → silent server call →
+  // onSuccess toast/sound → refresh() for authoritative reconciliation.
+  // On network error it calls refresh() to revert and re-throws so the caller
+  // (modal) can surface its own error UI.
+  const approveTopUp = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      topUpRequests: current.topUpRequests.map((r) =>
+        String(r.id) === String(id) ? { ...r, status:'approved', pending:true } : r
+      ),
+    }),
+    action: (id) => apiPatch(`/top-ups/${id}/approve`),
+    onSuccess: (_, id) => {
+      playAdminSound('success', { dedupeKey:`topup-approved:${id}` })
+      showToast({ title:'Top up approved', message:'Wallet balance was updated.' })
+    },
+  })
 
-  function rejectTopUp(id) {
-    optimisticState((current)=>({...current,topUpRequests:current.topUpRequests.map((r)=>String(r.id)===String(id)?{...r,status:'rejected',pending:true}:r)}))
-    return apiPatch(`/top-ups/${id}/reject`).then((result) => { showToast({ title:'Top up rejected', tone:'warning' }); refresh(); return result }).catch((error)=>{refresh();throw error})
-  }
+  const rejectTopUp = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      topUpRequests: current.topUpRequests.map((r) =>
+        String(r.id) === String(id) ? { ...r, status:'rejected', pending:true } : r
+      ),
+    }),
+    action: (id) => apiPatch(`/top-ups/${id}/reject`),
+    onSuccess: () => showToast({ title:'Top up rejected', tone:'warning' }),
+  })
 
   function confirmSessionExtension(id) {
     return refreshAfter(apiPost(`/session-extensions/${id}/confirm`, {})).then((result) => {
@@ -842,34 +887,71 @@ export function AppDataProvider({ children }) {
     return refreshAfter(apiPatch(`/support/${id}/resolve`))
   }
 
-  function addMember(member) {
-    const optimistic=normalizeMember({...member,id:member.id||`pending:${Date.now()}`,wallet:Number(member.wallet||0),status:'active',pending:true})
-    optimisticState((current)=>({...current,members:[optimistic,...current.members]}))
-    return apiPost('/members', member).then((result) => { showToast({ title:'Member added', message:`${member.name} can now sign in.` }); refresh(); return result }).catch((error)=>{refresh();throw error})
-  }
+  const addMember = useOptimisticAction(setState, refresh, {
+    optimistic: (current, member) => {
+      const optimistic = normalizeMember({
+        ...member,
+        id: member.id || `pending:${Date.now()}`,
+        wallet: Number(member.wallet || 0),
+        status: 'active',
+        pending: true,
+      })
+      return { ...current, members: [optimistic, ...current.members] }
+    },
+    action: (member) => apiPost('/members', member),
+    onSuccess: (_, member) => showToast({ title:'Member added', message:`${member.name} can now sign in.` }),
+  })
 
-  function updateMember(id, patch) {
-    optimisticState((current)=>({...current,members:current.members.map((m)=>String(m.id)===String(id)?normalizeMember({...m,...patch,pending:true}):m)}))
-    return apiPatch(`/members/${id}`, patch).then((result) => { showToast({ title:'Member updated', message:'Account details saved.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
-  }
+  const updateMember = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id, patch) => ({
+      ...current,
+      members: current.members.map((m) =>
+        String(m.id) === String(id) ? normalizeMember({ ...m, ...patch, pending:true }) : m
+      ),
+    }),
+    action: (id, patch) => apiPatch(`/members/${id}`, patch),
+    onSuccess: () => showToast({ title:'Member updated', message:'Account details saved.' }),
+  })
 
-  function deleteMember(id) {
-    optimisticState((current)=>({...current,members:current.members.filter((m)=>String(m.id)!==String(id))}))
-    return apiDelete(`/members/${id}`).then((result) => { showToast({ title:'Member deleted', tone:'warning' }); refresh(); return result }).catch((error)=>{refresh();throw error})
-  }
+  const deleteMember = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      members: current.members.filter((m) => String(m.id) !== String(id)),
+    }),
+    action: (id) => apiDelete(`/members/${id}`),
+    onSuccess: () => showToast({ title:'Member deleted', tone:'warning' }),
+  })
 
   function adminTopUp(memberId, amount, options = {}) {
     if (!(amount > 0)) return Promise.resolve()
-    optimisticState((current)=>({...current,members:current.members.map((m)=>String(m.id)===String(memberId)?{...m,wallet:Number(m.wallet||0)+Number(amount),walletBalance:Number(m.wallet||0)+Number(amount),pendingWallet:true}:m)}))
-    const { refresh:shouldRefresh=true, ...apiOptions }=options
-    const promise=apiPost('/wallet/adjustments', { memberId, amount, type:'top_up' }, apiOptions).catch((error)=>{refresh();throw error})
-    return shouldRefresh ? promise.finally(()=>refresh()) : promise
+    // Immediate optimistic wallet increment (memory-only; IndexedDB untouched).
+    setState((current) => ({
+      ...current,
+      members: current.members.map((m) =>
+        String(m.id) === String(memberId)
+          ? { ...m, wallet:Number(m.wallet||0)+Number(amount), walletBalance:Number(m.wallet||0)+Number(amount), pendingWallet:true }
+          : m
+      ),
+    }))
+    const { refresh:shouldRefresh=true, ...apiOptions } = options
+    const promise = apiPost('/wallet/adjustments', { memberId, amount, type:'top_up' }, apiOptions)
+      .catch((error) => { refresh(); throw error })
+    return shouldRefresh ? promise.finally(() => refresh()) : promise
   }
 
   function adminRefund(memberId, amount) {
     if (!(amount > 0)) return Promise.resolve()
-    optimisticState((current)=>({...current,members:current.members.map((m)=>String(m.id)===String(memberId)?{...m,wallet:Math.max(0,Number(m.wallet||0)-Number(amount)),walletBalance:Math.max(0,Number(m.wallet||0)-Number(amount)),pendingWallet:true}:m)}))
-    return apiPost('/wallet/adjustments', { memberId, amount:-amount, type:'refund' }).finally(()=>refresh())
+    // Immediate optimistic wallet decrement.
+    setState((current) => ({
+      ...current,
+      members: current.members.map((m) =>
+        String(m.id) === String(memberId)
+          ? { ...m, wallet:Math.max(0,Number(m.wallet||0)-Number(amount)), walletBalance:Math.max(0,Number(m.wallet||0)-Number(amount)), pendingWallet:true }
+          : m
+      ),
+    }))
+    return apiPost('/wallet/adjustments', { memberId, amount:-amount, type:'refund' })
+      .finally(() => refresh())
   }
 
   function setMemberWallet(memberId, balance, options = {}) {

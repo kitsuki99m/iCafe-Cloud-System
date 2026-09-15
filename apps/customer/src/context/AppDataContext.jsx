@@ -10,6 +10,10 @@ import { clearStationLifecycleMarker, hasActiveStationLifecycle, releaseStationL
 
 const AppDataContext = createContext(null)
 const handledRemoteCommands = new Set()
+// Per-session monotonic sequence tracker (mirrors the server-side sessionSeqMap).
+// Stale out-of-order `session:updated` events are silently dropped so the
+// kiosk timer never briefly shows a wrong remaining-seconds value.
+const sessionLastSeq = new Map()
 
 function cachedCustomerBranding() {
   try {
@@ -339,6 +343,24 @@ export function AppDataProvider({ children }) {
       setState((current) => ({ ...current, members:current.members.map((member) => sameId(member.id,payload.memberId) ? { ...member, wallet:Number(payload.balance ?? member.wallet ?? 0), walletBalance:Number(payload.balance ?? member.walletBalance ?? 0) } : member) }))
     }
     const onSessionChanged = (payload = {}) => {
+      // ── Sequence guard ──────────────────────────────────────────────────────
+      // Drop stale out-of-order events. Servers without seq support fall through
+      // because payload.seq will be undefined (falsy check below).
+      if (payload?.sessionId != null && payload?.seq != null) {
+        const lastSeq = sessionLastSeq.get(String(payload.sessionId)) ?? 0
+        if (payload.seq <= lastSeq) return   // stale — discard silently
+        sessionLastSeq.set(String(payload.sessionId), payload.seq)
+        // Prune terminal sessions from the map.
+        const terminalReasons = new Set([
+          'session_ended','session_expired','session_forfeited',
+          'session_refunded','session_saved','session_settled',
+          'station_session_released',
+        ])
+        if (terminalReasons.has(String(payload.reason || '').toLowerCase())) {
+          sessionLastSeq.delete(String(payload.sessionId))
+        }
+      }
+      // ───────────────────────────────────────────────────────────────────────
       const reason=String(payload?.reason || '').toLowerCase()
       const belongsToPc=!payload?.pcId || sameId(payload.pcId,user?.pcId)
       const belongsToMember=!payload?.memberId || sameId(payload.memberId,user?.memberId)

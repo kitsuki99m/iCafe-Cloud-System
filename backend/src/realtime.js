@@ -2,6 +2,28 @@ let io = null
 let pendingDataChange = null
 let dataChangeQueued = false
 
+// Per-session monotonic sequence counter.  Clients compare the `seq` field on
+// incoming `session:updated` events to detect and discard stale out-of-order
+// deliveries without waiting for a full data reconciliation refresh.
+// The map is process-scoped and reset on restart, which is safe: the first
+// event after a restart carries seq=1, and clients treat any seq >= their
+// last-seen value as authoritative.  Map entries are pruned when a terminal
+// session reason is broadcast so the map does not grow without bound across
+// long-running deployments with many session turnovers.
+const sessionSeqMap = new Map()
+
+function nextSessionSeq(sessionId) {
+  const next = (sessionSeqMap.get(sessionId) ?? 0) + 1
+  sessionSeqMap.set(sessionId, next)
+  return next
+}
+
+const TERMINAL_SESSION_REASONS = new Set([
+  'session_ended', 'session_expired', 'session_forfeited',
+  'session_refunded', 'session_saved', 'session_settled',
+  'station_session_released',
+])
+
 export function setRealtime(serverIo) {
   io = serverIo
 }
@@ -79,11 +101,19 @@ export function emitWalletUpdated(memberId, payload = {}) {
 export function emitSessionUpdated(sessionId, payload = {}) {
   const memberId = payload.memberId ?? null
   const pcId = payload.pcId ?? null
-  const event = { sessionId, ...payload, at: Date.now() }
+  // Stamp a monotonic sequence number so clients can detect and discard stale
+  // out-of-order events without waiting for a full data reconciliation.
+  const seq = nextSessionSeq(sessionId)
+  const event = { sessionId, ...payload, seq, at: Date.now() }
   if (memberId) io?.to(`customer:${memberId}`).emit('session:updated', event)
   if (pcId) io?.to(`pc:${pcId}`).emit('session:updated', event)
   if (io) {
     io.to('admin').emit('session:updated', event)
+  }
+  // Prune map entries for fully-closed sessions so the map does not grow
+  // without bound across many session turnovers in long-running deployments.
+  if (TERMINAL_SESSION_REASONS.has(String(payload.reason || ''))) {
+    sessionSeqMap.delete(sessionId)
   }
 }
 

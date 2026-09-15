@@ -540,7 +540,14 @@ export function migrate() {
   if (!remoteCols.includes('warning_expires_at')) db.exec('ALTER TABLE remote_commands ADD COLUMN warning_expires_at TEXT')
   if (!remoteCols.includes('expires_at')) db.exec('ALTER TABLE remote_commands ADD COLUMN expires_at TEXT')
   if (!remoteCols.includes('cloud_command_id')) db.exec('ALTER TABLE remote_commands ADD COLUMN cloud_command_id TEXT')
+  // Idempotency key: prevents duplicate command rows on rapid double-clicks or
+  // network retries. api.js sends `Idempotency-Key` on every non-GET request;
+  // the route stores it here and returns the original response on replay.
+  if (!remoteCols.includes('idempotency_key')) db.exec('ALTER TABLE remote_commands ADD COLUMN idempotency_key TEXT')
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_remote_commands_cloud_id ON remote_commands(cloud_command_id) WHERE cloud_command_id IS NOT NULL')
+  // A key+pc pair must be unique so a mis-delivered duplicate to a different
+  // PC cannot collide with a legitimate command on the intended station.
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_remote_commands_idempotency ON remote_commands(idempotency_key,pc_id) WHERE idempotency_key IS NOT NULL')
   db.exec("UPDATE remote_commands SET expires_at=strftime('%Y-%m-%dT%H:%M:%fZ', requested_at, '+15 seconds') WHERE expires_at IS NULL AND status IN ('queued','running')")
   const announcementCols = db.prepare('PRAGMA table_info(announcements)').all().map(c => c.name)
   if (!announcementCols.includes('starts_at')) db.exec('ALTER TABLE announcements ADD COLUMN starts_at TEXT')
