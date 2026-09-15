@@ -179,12 +179,34 @@ function writeTimerPreferences(value) {
 
 function applyWindowOpacity(value) {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  try { mainWindow.setOpacity(Math.min(1, Math.max(0.2, Number(value) || 1))) } catch {}
+  const opacity = Math.min(1, Math.max(0.2, Number(value) || 1))
+  try {
+    mainWindow.setOpacity(opacity)
+  } catch (error) {
+    console.warn('Unable to apply compact timer opacity:', error?.message || error)
+  }
 }
 
 function setTimerPreferences(patch = {}) {
   const next = writeTimerPreferences({ ...getTimerPreferences(), ...(patch || {}) })
-  if (isActive() && activeDashboardMode === 'compact') applyCompactSessionMode()
+
+  // Timer preference changes must not re-run compact window sizing. Doing that
+  // while an opacity control is changing causes the 84x22 renderer to resize /
+  // repaint repeatedly and makes the UI appear to jump. Apply the two compact
+  // properties directly instead. This also makes BrowserWindow opacity update
+  // immediately on Windows instead of waiting for the next compact transition.
+  if (isActive() && activeDashboardMode === 'compact' && mainWindow && !mainWindow.isDestroyed()) {
+    applyWindowOpacity(next.opacity)
+    if (next.visible) {
+      if (!mainWindow.isVisible()) mainWindow.showInactive()
+      mainWindow.blur()
+      dashboardVisible = true
+    } else {
+      mainWindow.hide()
+      dashboardVisible = false
+    }
+  }
+
   updateTrayMenu()
   try { mainWindow?.webContents.send('client:timer-preferences-changed', next) } catch {}
   return next
@@ -395,6 +417,45 @@ function loadTrayIcon() {
   )
 }
 
+const TIMER_OPACITY_STEPS = Object.freeze([20, 30, 40, 50, 60, 70, 80, 90, 100])
+
+function timerOpacityMenuItems(opacityPercent) {
+  return TIMER_OPACITY_STEPS.map(percent => ({
+    label:`${percent}%`,
+    type:'radio',
+    checked:opacityPercent === percent,
+    click:() => setTimerPreferences({ opacity:percent / 100 }),
+  }))
+}
+
+function showCompactTimerContextMenu() {
+  if (!isActive() || activeDashboardMode !== 'compact' || !mainWindow || mainWindow.isDestroyed()) return false
+  const timerPrefs = getTimerPreferences()
+  const opacityPercent = Math.round(timerPrefs.opacity * 100)
+  const menu = Menu.buildFromTemplate([
+    { label:'Open Dashboard', click:showMiniDashboard },
+    { type:'separator' },
+    {
+      label:'Show Timer',
+      type:'checkbox',
+      checked:timerPrefs.visible,
+      click:item => setTimerPreferences({ visible:Boolean(item.checked) }),
+    },
+    {
+      label:`Opacity (${opacityPercent}%)`,
+      submenu:timerOpacityMenuItems(opacityPercent),
+    },
+  ])
+  menu.once('menu-will-close', () => {
+    setImmediate(() => {
+      if (!mainWindow || mainWindow.isDestroyed() || !isActive() || activeDashboardMode !== 'compact') return
+      try { mainWindow.blur() } catch {}
+    })
+  })
+  menu.popup({ window:mainWindow })
+  return true
+}
+
 function updateTrayMenu() {
   if (!tray || tray.isDestroyed()) return
   const timerPrefs = getTimerPreferences()
@@ -411,12 +472,7 @@ function updateTrayMenu() {
         },
         {
           label:`Timer Opacity (${opacityPercent}%)`,
-          submenu:[40, 60, 80, 100].map(percent => ({
-            label:`${percent}%`,
-            type:'radio',
-            checked:opacityPercent === percent,
-            click:() => setTimerPreferences({ opacity:percent / 100 }),
-          })),
+          submenu:timerOpacityMenuItems(opacityPercent),
         },
         { type:'separator' },
         { label:'Lock / Log Out', click:() => mainWindow?.webContents.send('tray:logout') },
@@ -801,7 +857,13 @@ function createWindow() {
     ) event.preventDefault()
   })
 
-  mainWindow.webContents.on('context-menu', event => event.preventDefault())
+  mainWindow.webContents.on('context-menu', event => {
+    event.preventDefault()
+    // Compact timer settings live on right-click so the full dashboard header
+    // never shifts to make room for a settings panel. Electron's native menu
+    // also dismisses itself automatically when the customer clicks elsewhere.
+    if (isActive() && activeDashboardMode === 'compact') showCompactTimerContextMenu()
+  })
   mainWindow.webContents.on('will-navigate', event => event.preventDefault())
   mainWindow.webContents.setWindowOpenHandler(() => ({ action:'deny' }))
 

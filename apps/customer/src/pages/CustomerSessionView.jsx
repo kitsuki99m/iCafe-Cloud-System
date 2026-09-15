@@ -16,9 +16,6 @@ import {
   Sun,
   MessageSquareText,
   Power,
-  Eye,
-  EyeOff,
-  SlidersHorizontal,
   LayoutDashboard,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -46,29 +43,6 @@ function formatClock(totalSeconds) {
 }
 function peso(n) {
   return `₱${Math.floor(Number(n || 0))}`;
-}
-
-const DEFAULT_TIMER_PREFERENCES = Object.freeze({ visible: true, opacity: 0.8 });
-const TIMER_PREFERENCES_STORAGE_KEY = "aezakmi.customer.timer-preferences";
-
-function normalizeTimerPreferences(value = {}) {
-  const rawOpacity = Number(value?.opacity);
-  return {
-    visible: value?.visible !== false,
-    opacity: Number.isFinite(rawOpacity) ? Math.min(1, Math.max(0.2, rawOpacity)) : DEFAULT_TIMER_PREFERENCES.opacity,
-  };
-}
-
-function initialTimerPreferences() {
-  try {
-    const electronPreferences = window.aezakmiClient?.getTimerPreferences?.();
-    if (electronPreferences) return normalizeTimerPreferences(electronPreferences);
-  } catch {}
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(TIMER_PREFERENCES_STORAGE_KEY) || "null");
-    if (saved) return normalizeTimerPreferences(saved);
-  } catch {}
-  return { ...DEFAULT_TIMER_PREFERENCES };
 }
 
 const TIER_STYLE = {
@@ -154,8 +128,6 @@ export default function CustomerSessionView() {
   const branding = useBranding();
   const [now, setNow] = useState(Date.now());
   const [compactView, setCompactView] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 420 && window.innerHeight <= 180);
-  const [timerPreferences, setTimerPreferences] = useState(initialTimerPreferences);
-  const [timerSettingsOpen, setTimerSettingsOpen] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [extendOpen, setExtendOpen] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
@@ -242,24 +214,6 @@ export default function CustomerSessionView() {
     return () => window.removeEventListener('resize', syncCompactView);
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = window.aezakmiClient?.onTimerPreferencesChanged?.((preferences) => {
-      const normalized = normalizeTimerPreferences(preferences);
-      setTimerPreferences(normalized);
-      try { window.localStorage.setItem(TIMER_PREFERENCES_STORAGE_KEY, JSON.stringify(normalized)); } catch {}
-    });
-    return typeof unsubscribe === 'function' ? unsubscribe : undefined;
-  }, []);
-
-  async function updateTimerPreferences(patch) {
-    const next = normalizeTimerPreferences({ ...timerPreferences, ...(patch || {}) });
-    setTimerPreferences(next);
-    try { window.localStorage.setItem(TIMER_PREFERENCES_STORAGE_KEY, JSON.stringify(next)); } catch {}
-    try {
-      const saved = await window.aezakmiClient?.setTimerPreferences?.(next);
-      if (saved) setTimerPreferences(normalizeTimerPreferences(saved));
-    } catch {}
-  }
 
   let remainingSeconds = null;
   let elapsedSeconds = null;
@@ -553,7 +507,7 @@ export default function CustomerSessionView() {
       <div
         data-session-widget="compact"
         className="flex h-screen w-screen select-none items-center justify-center gap-0.5 overflow-hidden rounded-[5px] border border-white/10 bg-midnight px-1 text-soft-white shadow-sm"
-        title="Session timer"
+        title="Session timer · Right-click for settings"
       >
         <span className={`stat-figure min-w-0 flex-1 truncate text-center tabular-nums text-[11px] font-bold leading-none tracking-[-0.04em] ${lowTime ? 'text-ember-dim' : 'text-soft-white'}`}>{compactTimer}</span>
         <button
@@ -619,58 +573,6 @@ export default function CustomerSessionView() {
           >
             {isDark ? <Sun size={15} /> : <Moon size={15} />}
           </button>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setTimerSettingsOpen((open) => !open)}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
-              title="Compact timer settings"
-              aria-expanded={timerSettingsOpen}
-            >
-              <SlidersHorizontal size={14} /> Timer
-            </button>
-            {timerSettingsOpen && (
-              <div className="absolute right-0 top-[calc(100%+8px)] z-[220] w-64 rounded-2xl border border-surface-line bg-surface p-3 text-left shadow-xl">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[12px] font-semibold text-ink-900">Kiosk timer</p>
-                    <p className="mt-0.5 text-[10px] leading-4 text-slate-soft">Extra-small desktop timer in the upper-right corner. Other apps can cover it.</p>
-                  </div>
-                  <span className="rounded-full bg-midnight/8 px-2 py-1 text-[9px] font-semibold text-ink-900">{Math.round(timerPreferences.opacity * 100)}%</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => updateTimerPreferences({ visible: !timerPreferences.visible })}
-                  className="mt-3 flex w-full items-center justify-between rounded-xl border border-surface-line bg-surface-raised/50 px-3 py-2.5 text-[11px] font-semibold text-ink-900"
-                >
-                  <span className="inline-flex items-center gap-2">
-                    {timerPreferences.visible ? <Eye size={14} /> : <EyeOff size={14} />}
-                    Show timer
-                  </span>
-                  <span className={`relative h-5 w-9 rounded-full transition-colors ${timerPreferences.visible ? 'bg-teal' : 'bg-surface-line'}`}>
-                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${timerPreferences.visible ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                  </span>
-                </button>
-                <label className="mt-3 block">
-                  <span className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-soft">
-                    <span>Opacity</span>
-                    <span>{Math.round(timerPreferences.opacity * 100)}%</span>
-                  </span>
-                  <input
-                    type="range"
-                    min="20"
-                    max="100"
-                    step="5"
-                    value={Math.round(timerPreferences.opacity * 100)}
-                    onChange={(event) => updateTimerPreferences({ opacity: Number(event.target.value) / 100 })}
-                    className="mt-2 w-full accent-teal"
-                    aria-label="Compact timer opacity"
-                  />
-                </label>
-                <p className="mt-2 text-[10px] leading-4 text-slate-soft">Default is 80%. If hidden, use the tray icon to open the dashboard and show it again.</p>
-              </div>
-            )}
-          </div>
           <button
             type="button"
             onClick={() => window.aezakmiClient?.hideMiniDashboard?.()}

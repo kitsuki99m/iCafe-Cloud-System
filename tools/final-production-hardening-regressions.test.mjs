@@ -64,6 +64,8 @@ test('active Customer minimization becomes an extra-small background timer with 
   assert.match(compact,/compactTimer/)
   assert.match(compact,/text-\[11px\]/)
   assert.match(compact,/aria-label="Open dashboard"/)
+  assert.match(compact,/Right-click for settings/)
+  assert.match(electron,/function showCompactTimerContextMenu\(\)[\s\S]*Show Timer[\s\S]*Opacity/)
   assert.doesNotMatch(compact,/<img|progress|PC|left|Expand|Maximize/)
 })
 
