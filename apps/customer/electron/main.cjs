@@ -589,6 +589,10 @@ function applyCompactSessionMode() {
 
 function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  const wasVisible = mainWindow.isVisible()
+  // Do not expose the compact window while its native bounds and renderer
+  // layout transition to the centered dashboard.
+  if (show && wasVisible) mainWindow.hide()
   keepWindowContentOpaque()
   activeDashboardMode = 'expanded'
   notifyDashboardMode()
