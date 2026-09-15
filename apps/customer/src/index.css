@@ -297,6 +297,8 @@
     background: transparent !important;
     background-color: transparent !important;
     background-image: none !important;
+    border-radius: 9px !important;
+    overflow: hidden !important;
   }
 }
 
