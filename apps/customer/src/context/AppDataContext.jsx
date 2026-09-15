@@ -660,7 +660,10 @@ export function AppDataProvider({ children }) {
         connectFallbackSocket()
         if (!socket?.connected) scheduleStationDisconnect('initial_cloud_fallback')
       }
-      cloudRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')queueRefresh()},60000)
+      // The session clock itself is continuous and runs locally from its
+      // authoritative expiry anchor. This is only a reconciliation fallback
+      // when a Cloud wakeup is missed, not a timer snapshot mechanism.
+      cloudRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')queueRefresh()},15000)
       window.addEventListener('aezakmi:station-transport',onTransport)
       window.addEventListener('aezakmi:cloud-station-command',onCloudCommand)
       window.addEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup)

@@ -1,6 +1,22 @@
 let io = null
 let pendingDataChange = null
 let dataChangeQueued = false
+let cloudSyncQueued = false
+
+function syncCloudAfterLocalMutation() {
+  // A Customer Station can temporarily use Café Edge while Cloud is healthy.
+  // Do not make a newly committed request wait for the background sync
+  // interval: publish the outbox immediately. Dynamic loading avoids a module
+  // cycle because the sync worker also owns the Edge realtime wake socket.
+  if (cloudSyncQueued) return
+  cloudSyncQueued = true
+  queueMicrotask(() => {
+    cloudSyncQueued = false
+    void import('./cloud/syncWorker.js')
+      .then(({ syncCloudNow }) => syncCloudNow({ reason:'local-mutation' }))
+      .catch(() => {})
+  })
+}
 
 // Per-room monotonic sequence counter. Socket.io does not guarantee delivery
 // order across a reconnect (buffered/replayed emits can interleave with
@@ -31,6 +47,7 @@ export function emitDataChanged(payload = {}) {
     pendingDataChange = null
     dataChangeQueued = false
     io?.emit('data:changed', { ...event, at: Date.now() })
+    syncCloudAfterLocalMutation()
   })
 }
 

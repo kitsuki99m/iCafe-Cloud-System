@@ -200,7 +200,10 @@ function connectWakeSocket() {
 }
 export function startCloudStationRuntime() {
   if (!cloudStationFeatureEnabled() || !cloudStationPaired()) return
-  if (!pollTimer) pollTimer=setInterval(()=>void pollCommands(),300000)
+  // Realtime wakeups deliver commands immediately. This is only the recovery
+  // path for a missed wakeup, kept short enough that a station command never
+  // sits queued for minutes after a transient WebSocket reconnect.
+  if (!pollTimer) pollTimer=setInterval(()=>void pollCommands(),15000)
   if (!heartbeatTimer) heartbeatTimer=setInterval(()=>void heartbeat(),60000)
   connectWakeSocket();void heartbeat();void pollCommands()
 }
