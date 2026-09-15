@@ -13,7 +13,7 @@ export default function App() {
   const { user, authLoading, stationPairingRequired } = useAuth()
 
   if (authLoading) {
-    return <div className="flex min-h-screen items-center justify-center"><div className="panel px-6 py-5">Checking this PC…</div></div>
+    return <div className="flex min-h-screen items-center justify-center bg-ink text-ink-900"><div className="panel px-6 py-5">Checking this PC…</div></div>
   }
 
   if (stationPairingRequired) {

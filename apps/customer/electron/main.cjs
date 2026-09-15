@@ -511,6 +511,36 @@ function applyLockedWindowMode() {
   dashboardVisible = false
 }
 
+// setFullScreen(false)/setKiosk(false) are asynchronous on Windows — the OS
+// runs its own exit-fullscreen animation and any setSize()/setPosition() we
+// issue before that finishes gets dropped or queued behind it. Calling this
+// again (e.g. clicking "Compact" right after opening the dashboard) stacks a
+// second exit request on top of the first, which is what produced the
+// "flash of fullscreen before collapsing to compact" bug. This guard applies
+// the next mode's bounds only after the real transition has completed.
+function applyAfterLeavingFullScreen(applyBounds) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const wasTransitioning = mainWindow.isFullScreen() || mainWindow.isKiosk()
+  mainWindow.setKiosk(false)
+  mainWindow.setFullScreen(false)
+  if (!wasTransitioning) {
+    applyBounds()
+    return
+  }
+  let settled = false
+  const finish = () => {
+    if (settled || !mainWindow || mainWindow.isDestroyed()) return
+    settled = true
+    mainWindow.removeListener('leave-full-screen', finish)
+    clearTimeout(fallback)
+    applyBounds()
+  }
+  // Fallback in case 'leave-full-screen' never fires (e.g. it was already
+  // mid-transition when we called setFullScreen(false) again above).
+  const fallback = setTimeout(finish, 250)
+  mainWindow.once('leave-full-screen', finish)
+}
+
 function positionCompactSessionWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const currentBounds=mainWindow.getBounds()
@@ -528,31 +558,32 @@ function applyCompactSessionMode() {
   // or from the fixed 960x680 active dashboard.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
-  mainWindow.setKiosk(false)
-  mainWindow.setFullScreen(false)
-  // Fullscreen idle/login mode can leave a maximized restore state behind on
-  // Windows. Explicitly clear it before applying compact bounds, otherwise
-  // setSize() can be ignored and the timer/dashboard appears maximized.
-  if (mainWindow.isMaximized()) mainWindow.unmaximize()
-  mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
-  mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
-  mainWindow.setResizable(false)
-  mainWindow.setSkipTaskbar(true)
-  // The compact timer belongs to the desktop background layer, not above apps.
-  // It remains visible on the desktop, but any normal application can cover it.
-  mainWindow.setAlwaysOnTop(false)
-  mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
-  positionCompactSessionWindow()
-  keepWindowContentOpaque()
-  activeDashboardMode = 'compact'
-  if (timerPrefs.visible) {
-    mainWindow.showInactive()
-    mainWindow.blur()
-    dashboardVisible = true
-  } else {
-    mainWindow.hide()
-    dashboardVisible = false
-  }
+  applyAfterLeavingFullScreen(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    // Fullscreen idle/login mode can leave a maximized restore state behind on
+    // Windows. Explicitly clear it before applying compact bounds, otherwise
+    // setSize() can be ignored and the timer/dashboard appears maximized.
+    if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
+    mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
+    mainWindow.setResizable(false)
+    mainWindow.setSkipTaskbar(true)
+    // The compact timer belongs to the desktop background layer, not above apps.
+    // It remains visible on the desktop, but any normal application can cover it.
+    mainWindow.setAlwaysOnTop(false)
+    mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
+    positionCompactSessionWindow()
+    keepWindowContentOpaque()
+    activeDashboardMode = 'compact'
+    if (timerPrefs.visible) {
+      mainWindow.showInactive()
+      mainWindow.blur()
+      dashboardVisible = true
+    } else {
+      mainWindow.hide()
+      dashboardVisible = false
+    }
+  })
 }
 
 function applyActiveWindowMode({ show = false } = {}) {
@@ -564,25 +595,26 @@ function applyActiveWindowMode({ show = false } = {}) {
   // old maximum and refuse the 960x680 resize.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
-  mainWindow.setKiosk(false)
-  mainWindow.setFullScreen(false)
-  // A signed-in/no-session dashboard is fullscreen and topmost. Clear any
-  // maximized restore state before applying the active-session 960x680 bounds.
-  if (mainWindow.isMaximized()) mainWindow.unmaximize()
-  mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
-  mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
-  // ACTIVE sessions (member or Guest) use a normal 960x680 desktop window.
-  // Never force the dashboard above the customer's other applications.
-  mainWindow.setAlwaysOnTop(false)
-  mainWindow.setSkipTaskbar(true)
-  mainWindow.setResizable(false)
-  mainWindow.setSize(ACTIVE_WIDTH, ACTIVE_HEIGHT, false)
-  mainWindow.center()
-  if (show) {
-    mainWindow.show()
-    mainWindow.focus()
-    dashboardVisible = true
-  }
+  applyAfterLeavingFullScreen(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    // A signed-in/no-session dashboard is fullscreen and topmost. Clear any
+    // maximized restore state before applying the active-session 960x680 bounds.
+    if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
+    mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
+    // ACTIVE sessions (member or Guest) use a normal 960x680 desktop window.
+    // Never force the dashboard above the customer's other applications.
+    mainWindow.setAlwaysOnTop(false)
+    mainWindow.setSkipTaskbar(true)
+    mainWindow.setResizable(false)
+    mainWindow.setSize(ACTIVE_WIDTH, ACTIVE_HEIGHT, false)
+    mainWindow.center()
+    if (show) {
+      mainWindow.show()
+      mainWindow.focus()
+      dashboardVisible = true
+    }
+  })
 }
 
 function applyIdleDashboardMode() {

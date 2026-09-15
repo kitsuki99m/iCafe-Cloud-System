@@ -83,13 +83,13 @@
     --color-slate: #64748B;
     --color-slate-soft: #94A3B8;
   }
-  html[data-theme="dark"] body {
-    background-color: #202937;
+  html,
+  body,
+  #root {
+    background: transparent;
   }
   body {
-    @apply bg-ink text-ink-900 font-body antialiased;
-    background-image: radial-gradient(circle, var(--app-dot) 0.8px, transparent 0.9px);
-    background-size: 28px 28px;
+    @apply text-ink-900 font-body antialiased;
   }
   ::selection {
     background-color: var(--color-gold);
@@ -165,6 +165,13 @@
     @apply rounded-[14px] border border-surface-line bg-surface shadow-card;
   }
 
+  .customer-dashboard-shell,
+  .customer-login-shell,
+  .customer-pairing-shell {
+    background-image: radial-gradient(circle, var(--app-dot) 0.8px, transparent 0.9px);
+    background-size: 28px 28px;
+  }
+
   .customer-dashboard-shell {
     @apply flex h-screen min-h-0 flex-col items-center justify-center overflow-hidden bg-ink text-ink-900;
     border-radius: 22px;
@@ -220,6 +227,7 @@
 
   .customer-pairing-shell {
     @apply flex h-screen min-h-0 items-center justify-center overflow-hidden bg-ink px-4 py-4 text-ink-900 sm:px-6;
+    border-radius: 22px;
   }
 
   .customer-pairing-container {
