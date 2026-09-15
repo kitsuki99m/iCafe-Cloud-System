@@ -261,18 +261,45 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   const walletTransferMatch=route.match(/^\/members\/([^/]+)\/wallet-transfers$/);
   if(walletTransferMatch&&method==='POST')return cloudExecute(admin,branchId,'wallet.transfer',{...body,memberId:decodeURIComponent(walletTransferMatch[1])},user.id,operationKey);
   const memberTopupMatch=route.match(/^\/members\/([^/]+)\/session-topup$/);
-  if(memberTopupMatch&&method==='POST')return cloudExecute(admin,branchId,'session.topup',{...body,memberId:decodeURIComponent(memberTopupMatch[1])},user.id,operationKey);
+  if(memberTopupMatch&&method==='POST'){
+    const memberId=decodeURIComponent(memberTopupMatch[1]);
+    const{data:activeSess}=await admin.from('branch_sessions').select('pc_id,local_id').eq('branch_id',branchId).eq('member_id',memberId).eq('status','active').maybeSingle();
+    const response=await cloudExecute(admin,branchId,'session.topup',{...body,memberId},user.id,operationKey);
+    const resData=response?.data||response||{};
+    if(activeSess?.pc_id)await broadcastStationWakeup(admin,branchId,String(activeSess.pc_id),{kind:'session_changed',reason:'session_extended',sessionId:activeSess.local_id,memberId,remainingSeconds:resData.remainingSeconds??null,amount:resData.amount??null});
+    return response;
+  }
   const timeAdjustMatch=route.match(/^\/sessions\/([^/]+)\/time-adjustments$/);
-  if(timeAdjustMatch&&method==='POST')return cloudExecute(admin,branchId,'session.time_adjust',{...body,sessionId:decodeURIComponent(timeAdjustMatch[1])},user.id,operationKey);
+  if(timeAdjustMatch&&method==='POST'){
+    const sessionId=decodeURIComponent(timeAdjustMatch[1]);
+    const{data:targetSession}=await admin.from('branch_sessions').select('pc_id,member_id').eq('branch_id',branchId).eq('local_id',sessionId).maybeSingle();
+    const response=await cloudExecute(admin,branchId,'session.time_adjust',{...body,sessionId},user.id,operationKey);
+    const resData=response?.data||response||{};
+    if(targetSession?.pc_id)await broadcastStationWakeup(admin,branchId,String(targetSession.pc_id),{kind:'session_changed',reason:`session_time_${String(body?.kind||'add').toLowerCase()}`,sessionId,memberId:targetSession.member_id||null,remainingSeconds:resData.remainingSeconds??null,amount:resData.amount??null});
+    return response;
+  }
   const timeTransferMatch=route.match(/^\/members\/([^/]+)\/session-time-transfers$/);
   if(timeTransferMatch&&method==='POST')return cloudExecute(admin,branchId,'session.time_transfer',{...body,memberId:decodeURIComponent(timeTransferMatch[1])},user.id,operationKey);
   if(route==='/top-ups'&&method==='POST')return cloudExecute(admin,branchId,'topup.request',body,user.id,operationKey);
   const topupDecisionMatch=route.match(/^\/top-ups\/([^/]+)\/(approve|reject)$/);
-  if(topupDecisionMatch&&method==='PATCH')return cloudExecute(admin,branchId,`topup.${topupDecisionMatch[2]}`,{id:decodeURIComponent(topupDecisionMatch[1])},user.id,operationKey);
+  if(topupDecisionMatch&&method==='PATCH'){
+    const topupId=decodeURIComponent(topupDecisionMatch[1]),action=topupDecisionMatch[2];
+    const{data:topup}=await admin.from('branch_top_up_requests').select('pc_id,member_id,amount').eq('branch_id',branchId).eq('local_id',topupId).maybeSingle();
+    const response=await cloudExecute(admin,branchId,`topup.${action}`,{id:topupId},user.id,operationKey);
+    if(topup?.pc_id)await broadcastStationWakeup(admin,branchId,String(topup.pc_id),{kind:'topup_updated',status:action==='approve'?'approved':'rejected',memberId:topup.member_id,amount:topup.amount});
+    return response;
+  }
   if(route==='/top-ups/resolved'&&method==='DELETE')return cloudExecute(admin,branchId,'topup.clear_resolved',{},user.id,operationKey);
   if(route==='/session-extensions'&&method==='POST')return cloudExecute(admin,branchId,'extension.request',body,user.id,operationKey);
   const extensionDecisionMatch=route.match(/^\/session-extensions\/([^/]+)\/(confirm|reject)$/);
-  if(extensionDecisionMatch&&method==='POST')return cloudExecute(admin,branchId,extensionDecisionMatch[2]==='confirm'?'extension.confirm':'extension.reject',{id:decodeURIComponent(extensionDecisionMatch[1])},user.id,operationKey);
+  if(extensionDecisionMatch&&method==='POST'){
+    const extId=decodeURIComponent(extensionDecisionMatch[1]),action=extensionDecisionMatch[2];
+    const{data:ext}=await admin.from('branch_session_extensions').select('pc_id,member_id,computer_session_id').eq('branch_id',branchId).eq('local_id',extId).maybeSingle();
+    const response=await cloudExecute(admin,branchId,action==='confirm'?'extension.confirm':'extension.reject',{id:extId},user.id,operationKey);
+    const resData=response?.data||response||{};
+    if(ext?.pc_id)await broadcastStationWakeup(admin,branchId,String(ext.pc_id),{kind:'session_changed',reason:action==='confirm'?'extension_confirmed':'extension_rejected',sessionId:ext.computer_session_id,memberId:ext.member_id,remainingSeconds:resData.remainingSeconds??null});
+    return response;
+  }
 
   const walletMatch=route.match(/^\/members\/([^/]+)\/wallet$/);
   if(walletMatch&&method==='PATCH'){

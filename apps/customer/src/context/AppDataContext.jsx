@@ -592,6 +592,39 @@ export function AppDataProvider({ children }) {
         }
         if (user?.role === 'customer') window.aezakmiClient?.showIdleDashboard?.().catch?.(() => {})
       }
+      const detail = event?.detail || {}
+      if (detail.sessionId || detail.remainingSeconds != null) {
+        setState((current) => {
+          if (!current.currentClientPc?.session) return current
+          const s = current.currentClientPc.session
+          if (detail.sessionId && !sameId(s.id, detail.sessionId)) return current
+
+          let nextRemaining = s.remainingSeconds
+          let nextExpiresAt = s.expiresAt
+
+          if (typeof detail.remainingSeconds === 'number') {
+            nextRemaining = detail.remainingSeconds
+            if (detail.remainingSeconds > 0) {
+              const anchor = s.isPaused && s.pausedAt ? new Date(s.pausedAt).getTime() : Date.now()
+              nextExpiresAt = new Date(anchor + detail.remainingSeconds * 1000).toISOString()
+            }
+          }
+
+          const updatedSession = {
+            ...s,
+            remainingSeconds: nextRemaining,
+            expiresAt: nextExpiresAt,
+            amountPaid: typeof detail.amount === 'number' ? detail.amount : s.amountPaid,
+          }
+
+          const updatedPc = { ...current.currentClientPc, session: updatedSession }
+          return {
+            ...current,
+            currentClientPc: updatedPc,
+            pcs: current.pcs.map((pc) => sameId(pc.id, updatedPc.id) ? updatedPc : pc)
+          }
+        })
+      }
       invalidateAndRefresh()
     }
     if (cloudPrimary) {
