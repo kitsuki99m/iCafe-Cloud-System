@@ -9,7 +9,8 @@ import { isCloudAdmin, cloudBranchId, startCloudRealtime } from '../lib/cloudCli
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../lib/sessionTime.js'
 import { playAdminSound } from '../lib/sound.js'
 import { effectivePcStatus } from '../lib/pcStatus.js'
-import { useOptimisticAction } from '../lib/useOptimisticAction.js'
+import { useOptimisticAction as useQueuedOptimisticAction } from '../lib/useOptimisticAction.js'
+import { useOptimisticAction } from '../hooks/useOptimisticAction.js'
 import { createSeqGuard } from '../lib/seqGuard.js'
 
 const AppDataContext = createContext(null)
@@ -150,7 +151,7 @@ export function AppDataProvider({ children }) {
   })
   const cacheKey=scopedPageCacheKey('app-data',user)
   const refreshGenerationRef=useRef(0)
-  const runOptimistic = useOptimisticAction(setState)
+  const runOptimistic = useQueuedOptimisticAction(setState)
   const seqGuardRef = useRef(null)
   if (!seqGuardRef.current) seqGuardRef.current = createSeqGuard()
 
