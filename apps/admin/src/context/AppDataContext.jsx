@@ -687,12 +687,22 @@ export function AppDataProvider({ children }) {
     }
   }
 
-  function setMaintenance(pc, toMaintenance = true) {
-    // Ending maintenance does not prove the station is reachable. It remains
-    // offline until the paired Customer Station reconnects and reports
-    // presence through Socket.IO.
-    return refreshAfter(apiPatch(`/pcs/${pc.id}`, { status:toMaintenance ? 'maintenance' : 'offline' })).then((result) => { showToast({ title:toMaintenance ? 'Maintenance enabled' : 'PC restored', message:toMaintenance ? pc.label : `${pc.label} is waiting for station connection.` }); return result })
-  }
+  const setMaintenance = useOptimisticAction(setState, refresh, {
+    optimistic: (current, pc, toMaintenance = true) => ({
+      ...current,
+      pcs: current.pcs.map((item) =>
+        String(item.id) === String(pc.id)
+          ? { ...item, status: toMaintenance ? 'maintenance' : 'offline', pending: true }
+          : item
+      ),
+    }),
+    action: (pc, toMaintenance = true) => apiPatch(`/pcs/${pc.id}`, { status: toMaintenance ? 'maintenance' : 'offline' }),
+    onSuccess: (_, pc, toMaintenance = true) =>
+      showToast({
+        title: toMaintenance ? 'Maintenance enabled' : 'PC restored',
+        message: toMaintenance ? pc.label : `${pc.label} is waiting for station connection.`,
+      }),
+  })
 
   function powerCommand(pc, command, options = {}) {
     const normalizedCommand = command === 'restart' ? 'reboot' : command
@@ -766,19 +776,31 @@ export function AppDataProvider({ children }) {
   }
 
   function addPc(pc, options = {}) {
-    // Creation is intentionally confirmation-first. Adding a temporary PC to
-    // shared state makes the Add PC modal detect its own optimistic row as a
-    // duplicate and can leave a ghost PC in the offline cache after failure.
-    // The modal keeps one operation key across network retries so a response
-    // timeout cannot turn a successful create into a false "already exists".
-    return apiPost('/pcs', pc, { operationKey:options.operationKey }).then(async (result) => {
+    const optimistic = normalizePc({
+      ...pc,
+      id: pc.id || `pending:${Date.now()}`,
+      status: pc.status || 'offline',
+      pending: true,
+    })
+    optimisticState((current) => ({
+      ...current,
+      pcs: [...current.pcs, optimistic]
+    }))
+    return apiPost('/pcs', pc, { operationKey: options.operationKey }).then((result) => {
       showToast({
-        title:result?.duplicate ? 'PC already registered' : 'PC added',
-        message:result?.duplicate ? `${pc.label} was already saved and has been restored to the floor.` : `${pc.label} is now registered.`,
+        title: result?.duplicate ? 'PC already registered' : 'PC added',
+        message: result?.duplicate ? `${pc.label} was already saved and has been restored to the floor.` : `${pc.label} is now registered.`,
       })
-      await refresh()
+      refresh().catch(() => {})
       return result
-    }).catch(async (error)=>{await refresh();throw error})
+    }).catch((error) => {
+      setState((current) => ({
+        ...current,
+        pcs: current.pcs.filter((item) => item.id !== optimistic.id)
+      }))
+      refresh().catch(() => {})
+      throw error
+    })
   }
 
   function updatePcMeta(id, patch) {
@@ -787,15 +809,22 @@ export function AppDataProvider({ children }) {
   }
 
   function removePc(id, options = {}) {
-    // Deletion is confirmation-first as well. Optimistically removing the row
-    // unmounted the edit modal while DELETE was still in flight; if Cloud/Edge
-    // reconciliation returned the station for a moment, React reopened the same
-    // Edit PC modal. Keep the confirmed row visible until the server commits.
-    return apiDelete(`/pcs/${id}`).then(async (result) => {
-      if (!options.silent) showToast({ title:'PC removed', message:'The station was removed from the floor.' })
-      await refresh()
+    const previousPc = state.pcs.find((pc) => String(pc.id) === String(id))
+    optimisticState((current) => ({
+      ...current,
+      pcs: current.pcs.filter((pc) => String(pc.id) !== String(id))
+    }))
+    return apiDelete(`/pcs/${id}`).then((result) => {
+      if (!options.silent) showToast({ title: 'PC removed', message: 'The station was removed from the floor.' })
+      refresh().catch(() => {})
       return result
-    }).catch(async (error)=>{await refresh();throw error})
+    }).catch((error) => {
+      if (previousPc) {
+        setState((current) => ({ ...current, pcs: [...current.pcs, previousPc] }))
+      }
+      refresh().catch(() => {})
+      throw error
+    })
   }
 
   function getMemberWallet(memberId) {
@@ -814,33 +843,60 @@ export function AppDataProvider({ children }) {
     })
   }
 
-  function approveTopUp(id) {
-    optimisticState((current)=>({...current,topUpRequests:current.topUpRequests.map((r)=>String(r.id)===String(id)?{...r,status:'approved',pending:true}:r)}))
-    return apiPatch(`/top-ups/${id}/approve`).then((result) => { playAdminSound('success', { dedupeKey:`topup-approved:${id}` }); showToast({ title:'Top up approved', message:'Wallet balance was updated.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
-  }
+  const approveTopUp = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      topUpRequests: current.topUpRequests.map((r) =>
+        String(r.id) === String(id) ? { ...r, status:'approved', pending:true } : r
+      ),
+    }),
+    action: (id) => apiPatch(`/top-ups/${id}/approve`),
+    onSuccess: (_, id) => {
+      playAdminSound('success', { dedupeKey:`topup-approved:${id}` })
+      showToast({ title:'Top up approved', message:'Wallet balance was updated.' })
+    },
+  })
 
-  function rejectTopUp(id) {
-    optimisticState((current)=>({...current,topUpRequests:current.topUpRequests.map((r)=>String(r.id)===String(id)?{...r,status:'rejected',pending:true}:r)}))
-    return apiPatch(`/top-ups/${id}/reject`).then((result) => { showToast({ title:'Top up rejected', tone:'warning' }); refresh(); return result }).catch((error)=>{refresh();throw error})
-  }
+  const rejectTopUp = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      topUpRequests: current.topUpRequests.map((r) =>
+        String(r.id) === String(id) ? { ...r, status:'rejected', pending:true } : r
+      ),
+    }),
+    action: (id) => apiPatch(`/top-ups/${id}/reject`),
+    onSuccess: () => showToast({ title:'Top up rejected', tone:'warning' }),
+  })
 
-  function confirmSessionExtension(id) {
-    return refreshAfter(apiPost(`/session-extensions/${id}/confirm`, {})).then((result) => {
-      showToast({ title:'Time extension approved', message:'The purchased time was added to the active session.' })
-      return result
-    })
-  }
+  const confirmSessionExtension = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      sessionExtensions: current.sessionExtensions.map((e) =>
+        String(e.id) === String(id) ? { ...e, status:'approved', pending:true } : e
+      ),
+    }),
+    action: (id) => apiPost(`/session-extensions/${id}/confirm`, {}),
+    onSuccess: () => showToast({ title:'Time extension approved', message:'The purchased time was added to the active session.' }),
+  })
 
-  function rejectSessionExtension(id) {
-    return refreshAfter(apiPost(`/session-extensions/${id}/reject`, {})).then((result) => {
-      showToast({ title:'Time extension rejected', tone:'warning' })
-      return result
-    })
-  }
+  const rejectSessionExtension = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      sessionExtensions: current.sessionExtensions.map((e) =>
+        String(e.id) === String(id) ? { ...e, status:'rejected', pending:true } : e
+      ),
+    }),
+    action: (id) => apiPost(`/session-extensions/${id}/reject`, {}),
+    onSuccess: () => showToast({ title:'Time extension rejected', tone:'warning' }),
+  })
 
-  function clearResolvedTopUps() {
-    return refreshAfter(apiDelete('/top-ups/resolved'))
-  }
+  const clearResolvedTopUps = useOptimisticAction(setState, refresh, {
+    optimistic: (current) => ({
+      ...current,
+      topUpRequests: current.topUpRequests.filter((r) => r.status === 'pending'),
+    }),
+    action: () => apiDelete('/top-ups/resolved'),
+  })
 
   function startSelfServiceSession(pcId, memberId, ratePlanId, amount) {
     return apiPost('/sessions/start', {
@@ -882,9 +938,16 @@ export function AppDataProvider({ children }) {
     }).catch((error) => ({ ok:false, error:error.message }))
   }
 
-  function resolveSupport(id) {
-    return refreshAfter(apiPatch(`/support/${id}/resolve`))
-  }
+  const resolveSupport = useOptimisticAction(setState, refresh, {
+    optimistic: (current, id) => ({
+      ...current,
+      supportRequests: current.supportRequests.map((s) =>
+        String(s.id) === String(id) ? { ...s, status:'resolved', pending:true } : s
+      ),
+    }),
+    action: (id) => apiPatch(`/support/${id}/resolve`),
+    onSuccess: () => showToast({ title:'Support request resolved' }),
+  })
 
   function addMember(member) {
     const optimistic=normalizeMember({...member,id:member.id||`pending:${Date.now()}`,wallet:Number(member.wallet||0),status:'active',pending:true})
