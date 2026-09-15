@@ -52,6 +52,14 @@
 
   --animate-led: pulseLed 2s ease-in-out infinite;
   --animate-rise: riseIn 0.25s ease-out;
+
+  /* Splash / loading screen */
+  --animate-splash-spin: splashSpin 1.4s linear infinite;
+  --animate-splash-breathe: splashBreathe 2.4s ease-in-out infinite;
+  --animate-splash-dot1: splashDot 1.1s ease-in-out infinite;
+  --animate-splash-dot2: splashDot 1.1s ease-in-out 0.15s infinite;
+  --animate-splash-dot3: splashDot 1.1s ease-in-out 0.3s infinite;
+  --animate-splash-in: splashIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes pulseLed {
@@ -62,6 +70,25 @@
 @keyframes riseIn {
   0% { opacity: 0; transform: translateY(6px); }
   100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes splashSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes splashBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+@keyframes splashDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-5px); opacity: 1; }
+}
+
+@keyframes splashIn {
+  0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @layer base {
@@ -148,6 +175,48 @@
   }
 
   .animate-rise { animation: riseIn 0.18s ease-out both; }
+
+  /* Branded loading / splash screen. Also duplicated (as plain CSS, no
+     Tailwind) inline in index.html so the very first paint — before the JS
+     bundle and this stylesheet exist — already shows the real splash
+     instead of an unstyled/blank box. Keep both in sync if this changes. */
+  .splash-screen {
+    @apply fixed inset-0 z-[999] flex flex-col items-center justify-center gap-6 bg-surface;
+    background-image:
+      radial-gradient(ellipse 55% 40% at 50% 34%, rgba(217, 119, 6, 0.12), transparent 70%),
+      radial-gradient(circle, var(--app-dot) 1px, transparent 1px);
+    background-size: auto, 22px 22px;
+    background-position: center, center;
+  }
+
+  .splash-ring {
+    @apply relative flex h-24 w-24 shrink-0 items-center justify-center;
+  }
+
+  .splash-ring::before {
+    content: "";
+    @apply absolute inset-0 rounded-full animate-splash-spin;
+    background: conic-gradient(from 0deg, var(--color-teal), var(--color-orange), var(--color-ember), var(--color-teal));
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  }
+
+  .splash-logo {
+    @apply relative h-16 w-16 rounded-[18px] animate-splash-breathe;
+    box-shadow: var(--shadow-glow);
+  }
+
+  .splash-dots {
+    @apply flex items-center justify-center gap-1.5;
+  }
+
+  .splash-dots span {
+    @apply h-1.5 w-1.5 rounded-full bg-slate;
+  }
+
+  .splash-dots span:nth-child(1) { animation: var(--animate-splash-dot1); }
+  .splash-dots span:nth-child(2) { animation: var(--animate-splash-dot2); }
+  .splash-dots span:nth-child(3) { animation: var(--animate-splash-dot3); }
 }
 
 .table-viewport { max-height: calc(100vh - 340px); min-height: 0; }

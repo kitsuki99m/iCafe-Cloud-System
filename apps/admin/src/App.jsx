@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
+import AdminSplashScreen from './components/common/AdminSplashScreen.jsx'
 import AdminLoginForm from './components/auth/AdminLoginForm.jsx'
 import AdminCredentialSetup from './components/auth/AdminCredentialSetup.jsx'
 import MainLayout from './components/layout/MainLayout.jsx'
@@ -18,7 +19,7 @@ import CloudAccessPending from './components/cloud/CloudAccessPending.jsx'
 
 export default function App() {
   const { user, authLoading, mustChange } = useAuth()
-  if (authLoading) return <div className="flex min-h-screen items-center justify-center"><div className="panel px-6 py-5">Checking admin session…</div></div>
+  if (authLoading) return <AdminSplashScreen label="Checking admin session…" />
   if (!user) return <><AdminLoginForm /><ToastContainer /></>
   if (user.cloud && user.cloudInviteSetup) return <><CloudInviteSetup /><ToastContainer /></>
   if (user.cloud && user.cloudBusinessSuspended) return <><CloudAccessPending suspended /><ToastContainer /></>

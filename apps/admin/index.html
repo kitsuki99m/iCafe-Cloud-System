@@ -17,9 +17,152 @@
       href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
+    <!--
+      Critical, framework-free CSS for the very first paint. The compiled
+      Tailwind bundle only arrives with the JS module below, so without this
+      the pre-hydration state used to render as an unstyled/blank box (the
+      "loading" screenshot this was reported against). This mirrors
+      .splash-screen/.splash-ring/.splash-logo/.splash-dots in src/index.css
+      — keep both in sync if the design changes.
+    -->
+    <style>
+      .splash-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        background-color: #F5F5F5;
+        background-image:
+          radial-gradient(ellipse 55% 40% at 50% 34%, rgba(217, 119, 6, 0.12), transparent 70%),
+          radial-gradient(circle, rgba(118, 102, 100, 0.11) 1px, transparent 1px);
+        background-size: auto, 22px 22px;
+        background-position: center, center;
+      }
+      @media (prefers-color-scheme: dark) {
+        .splash-boot {
+          background-color: #202937;
+          background-image:
+            radial-gradient(ellipse 55% 40% at 50% 34%, rgba(217, 119, 6, 0.16), transparent 70%),
+            radial-gradient(circle, rgba(245, 245, 245, 0.055) 1px, transparent 1px);
+        }
+        .splash-boot__brand { color: #F5F5F5 !important; }
+        .splash-boot__label { color: #A99898 !important; }
+        .splash-boot__dots span { background: #A99898 !important; }
+      }
+      .splash-boot__inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+        animation: splashBootIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      .splash-boot__ring {
+        position: relative;
+        display: flex;
+        height: 96px;
+        width: 96px;
+        align-items: center;
+        justify-content: center;
+      }
+      .splash-boot__ring::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: conic-gradient(from 0deg, #2E9E6B, #D97706, #DD5353, #2E9E6B);
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+        animation: splashBootSpin 1.4s linear infinite;
+      }
+      .splash-boot__logo {
+        position: relative;
+        height: 64px;
+        width: 64px;
+        border-radius: 18px;
+        box-shadow: 0 0 0 1px rgba(32, 41, 55, 0.18), 0 0 24px -6px rgba(32, 41, 55, 0.28);
+        animation: splashBootBreathe 2.4s ease-in-out infinite;
+      }
+      .splash-boot__text {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+      .splash-boot__brand {
+        margin: 0;
+        font-family: "Chakra Petch", "Inter", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: #202937;
+      }
+      .splash-boot__label {
+        margin: 0;
+        font-family: "Inter", sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #766664;
+      }
+      .splash-boot__dots {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+      .splash-boot__dots span {
+        height: 6px;
+        width: 6px;
+        border-radius: 999px;
+        background: #766664;
+        animation: splashBootDot 1.1s ease-in-out infinite;
+      }
+      .splash-boot__dots span:nth-child(2) { animation-delay: 0.15s; }
+      .splash-boot__dots span:nth-child(3) { animation-delay: 0.3s; }
+      @keyframes splashBootSpin { to { transform: rotate(360deg); } }
+      @keyframes splashBootBreathe {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.06); }
+      }
+      @keyframes splashBootDot {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+        30% { transform: translateY(-5px); opacity: 1; }
+      }
+      @keyframes splashBootIn {
+        0% { opacity: 0; transform: translateY(10px) scale(0.98); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+    </style>
   </head>
   <body class="bg-ink text-slate-100">
-    <div id="root"></div>
+    <!--
+      Static markup so the branded splash is on-screen the instant HTML
+      parses — before React, before the Tailwind bundle. React's
+      createRoot(...).render() replaces this the moment it mounts, so the
+      hand-off is seamless (the React <AdminSplashScreen /> in the
+      authLoading state looks identical), not a swap between two designs.
+    -->
+    <div id="root">
+      <div class="splash-boot" role="status" aria-live="polite">
+        <div class="splash-boot__inner">
+          <div class="splash-boot__ring">
+            <img class="splash-boot__logo" src="/aezakmi-logo.png" alt="Aezakmi Cafe" width="64" height="64" />
+          </div>
+          <div class="splash-boot__text">
+            <p class="splash-boot__brand">Aezakmi Cafe</p>
+            <p class="splash-boot__label">Getting your floor ready…</p>
+          </div>
+          <div class="splash-boot__dots" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
