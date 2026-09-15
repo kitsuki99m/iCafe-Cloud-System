@@ -177,26 +177,27 @@ function writeTimerPreferences(value) {
   return { ...next }
 }
 
-function applyWindowOpacity(value) {
+function keepWindowContentOpaque() {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  const opacity = Math.min(1, Math.max(0.2, Number(value) || 1))
   try {
-    mainWindow.setOpacity(opacity)
+    // The opacity preference controls only the compact timer's dark background.
+    // Keep the BrowserWindow/text/icons fully opaque; the renderer paints the
+    // timer background with an RGBA alpha on the transparent window surface.
+    mainWindow.setOpacity(1)
   } catch (error) {
-    console.warn('Unable to apply compact timer opacity:', error?.message || error)
+    console.warn('Unable to restore Customer window opacity:', error?.message || error)
   }
 }
 
 function setTimerPreferences(patch = {}) {
   const next = writeTimerPreferences({ ...getTimerPreferences(), ...(patch || {}) })
 
-  // Timer preference changes must not re-run compact window sizing. Doing that
-  // while an opacity control is changing causes the 84x22 renderer to resize /
-  // repaint repeatedly and makes the UI appear to jump. Apply the two compact
-  // properties directly instead. This also makes BrowserWindow opacity update
-  // immediately on Windows instead of waiting for the next compact transition.
+  // Timer preference changes must not re-run compact window sizing. Opacity is
+  // renderer-owned so only the compact timer BACKGROUND becomes transparent;
+  // the digits/dashboard icon stay at full opacity. The preference-change IPC
+  // below repaints the RGBA background immediately without moving the window.
   if (isActive() && activeDashboardMode === 'compact' && mainWindow && !mainWindow.isDestroyed()) {
-    applyWindowOpacity(next.opacity)
+    keepWindowContentOpaque()
     if (next.visible) {
       if (!mainWindow.isVisible()) mainWindow.showInactive()
       mainWindow.blur()
@@ -442,7 +443,7 @@ function showCompactTimerContextMenu() {
       click:item => setTimerPreferences({ visible:Boolean(item.checked) }),
     },
     {
-      label:`Opacity (${opacityPercent}%)`,
+      label:`Background opacity (${opacityPercent}%)`,
       submenu:timerOpacityMenuItems(opacityPercent),
     },
   ])
@@ -471,7 +472,7 @@ function updateTrayMenu() {
           click:item => setTimerPreferences({ visible:Boolean(item.checked) }),
         },
         {
-          label:`Timer Opacity (${opacityPercent}%)`,
+          label:`Timer background opacity (${opacityPercent}%)`,
           submenu:timerOpacityMenuItems(opacityPercent),
         },
         { type:'separator' },
@@ -497,7 +498,7 @@ function createTray() {
 
 function applyLockedWindowMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  applyWindowOpacity(1)
+  keepWindowContentOpaque()
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
   mainWindow.setSkipTaskbar(true)
@@ -533,7 +534,7 @@ function applyCompactSessionMode() {
   mainWindow.setAlwaysOnTop(false)
   mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
   positionCompactSessionWindow()
-  applyWindowOpacity(timerPrefs.opacity)
+  keepWindowContentOpaque()
   activeDashboardMode = 'compact'
   if (timerPrefs.visible) {
     mainWindow.showInactive()
@@ -547,7 +548,7 @@ function applyCompactSessionMode() {
 
 function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  applyWindowOpacity(1)
+  keepWindowContentOpaque()
   activeDashboardMode = 'expanded'
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
@@ -569,7 +570,7 @@ function applyActiveWindowMode({ show = false } = {}) {
 
 function applyIdleDashboardMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  applyWindowOpacity(1)
+  keepWindowContentOpaque()
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(0, 0)
   // The signed-in/no-session station is the customer-facing shell. Keep it
@@ -639,7 +640,7 @@ function enterActiveState() {
 
 function beginSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
-  applyWindowOpacity(1)
+  keepWindowContentOpaque()
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
   createTray()
@@ -827,6 +828,10 @@ function createWindow() {
     fullscreen:true,
     alwaysOnTop:true,
     skipTaskbar:true,
+    // Required so compact mode can make only its dark timer background
+    // translucent while keeping the time text/dashboard icon fully opaque.
+    transparent:true,
+    backgroundColor:'#00000000',
     autoHideMenuBar:true,
     closable:true,
     webPreferences:{

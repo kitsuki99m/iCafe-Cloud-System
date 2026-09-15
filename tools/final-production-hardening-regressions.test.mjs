@@ -59,6 +59,10 @@ test('active Customer minimization becomes an extra-small background timer with 
   assert.match(electron,/const COMPACT_HEIGHT = 22/)
   assert.match(electron,/DEFAULT_TIMER_PREFERENCES = Object\.freeze\(\{ visible:true, opacity:0\.8 \}\)/)
   assert.match(electron,/function applyCompactSessionMode\(\)[\s\S]*setAlwaysOnTop\(false\)/)
+  assert.match(electron,/transparent:true/)
+  assert.match(electron,/backgroundColor:'#00000000'/)
+  assert.match(view,/backgroundColor: `rgba\(32, 41, 55, \${timerPreferences\.opacity}\)`/)
+  assert.match(view,/onTimerPreferencesChanged/)
   assert.match(electron,/mainWindow\.on\('minimize',[\s\S]*hideMiniDashboard\(\)/)
   const compact=view.match(/if \(compactView && hasActiveSession\) \{[\s\S]*?\n  \}\n\n  return \(/)?.[0]||''
   assert.match(compact,/compactTimer/)

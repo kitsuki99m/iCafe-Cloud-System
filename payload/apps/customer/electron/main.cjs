@@ -1,14 +1,117 @@
-const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, session, safeStorage } = require('electron')
+const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, session, safeStorage, screen } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
 const os = require('node:os')
 const crypto = require('node:crypto')
+const { Readable } = require('node:stream')
+const { pipeline } = require('node:stream/promises')
 
 const isDev = !app.isPackaged
 const DEV_URL = process.env.AEZAKMI_CUSTOMER_DEV_URL || 'http://localhost:5173'
+const CUSTOMER_LOCAL_DATA_DIR = '.aezakmi-customer'
+const STATION_SETUP_MASTER_PIN = String(process.env.AEZAKMI_STATION_SETUP_MASTER_PIN || '062321')
+
+// Customer-local fallback state must stay with the Customer Station install.
+// This is intentionally configured before the single-instance lock, BrowserWindow,
+// or defaultSession are created so Chromium IndexedDB/localStorage follows the
+// installation drive instead of silently landing under C:\Users\...\AppData.
+const legacyUserDataPath = app.getPath('userData')
+const legacySessionDataPath = app.getPath('sessionData')
+
+function customerInstallRoot() {
+  if (isDev) return path.resolve(__dirname, '..')
+  return path.dirname(process.execPath)
+}
+
+function customerLocalDataPath() {
+  return path.join(customerInstallRoot(), CUSTOMER_LOCAL_DATA_DIR)
+}
+
+function copyLegacyEntry(sourceRoot, targetRoot, name) {
+  const source = path.join(sourceRoot, name)
+  const target = path.join(targetRoot, name)
+  if (!fs.existsSync(source)) return false
+  if (fs.existsSync(target)) return true
+  try {
+    fs.cpSync(source, target, { recursive:true, errorOnExist:false, force:false })
+    return true
+  } catch (error) {
+    console.warn(`Unable to migrate legacy Customer data ${name}:`, error?.message || error)
+    return false
+  }
+}
+
+function migrateLegacyCustomerStorage(target) {
+  const marker = path.join(target, '.install-storage-v1')
+  if (fs.existsSync(marker)) return
+
+  // Preserve identity and the cached public/fallback snapshot used by the
+  // renderer. We deliberately skip Chromium caches; they can be rebuilt.
+  const entries = [
+    'server-config.json',
+    'station-credential.bin',
+    'cloud-station-credential.bin',
+    'station-installation-id.txt',
+    'timer-preferences.json',
+    'IndexedDB',
+    'Local Storage',
+  ]
+  const roots = [...new Set([legacyUserDataPath, legacySessionDataPath].filter(Boolean))]
+  const migrated = []
+  for (const root of roots) {
+    if (!root || path.resolve(root) === path.resolve(target)) continue
+    for (const name of entries) {
+      if (copyLegacyEntry(root, target, name)) migrated.push({ root, name })
+    }
+  }
+
+  // Remove the old copies after the install-relative copy exists. This includes
+  // IndexedDB/Local Storage so the fallback database is not left authoritative
+  // on C: after a station is migrated to an install on another drive.
+  for (const { root, name } of migrated) {
+    const source = path.join(root, name)
+    const targetFile = path.join(target, name)
+    try {
+      if (fs.existsSync(targetFile)) fs.rmSync(source, { recursive:true, force:true })
+    } catch (error) {
+      console.warn(`Unable to remove migrated legacy Customer data ${name}:`, error?.message || error)
+    }
+  }
+
+  try { fs.writeFileSync(marker, new Date().toISOString(), { encoding:'utf8', mode:0o600 }) } catch {}
+}
+
+function configureCustomerInstallStorage() {
+  const target = customerLocalDataPath()
+  try {
+    fs.mkdirSync(target, { recursive:true })
+    migrateLegacyCustomerStorage(target)
+    app.setPath('userData', target)
+    app.setPath('sessionData', target)
+    if (process.platform === 'win32') {
+      try { execFileSync('attrib.exe', ['+H', target], { windowsHide:true, stdio:'ignore' }) } catch (error) {
+        console.warn('Unable to mark Customer local-data folder hidden:', error?.message || error)
+      }
+    }
+    return target
+  } catch (error) {
+    // Never silently fall back to C:\Users\...\AppData. If the chosen install
+    // directory is not writable, fail clearly so the station is not split over
+    // two drives and does not lose its fallback identity after disk imaging.
+    const wrapped = new Error(`Customer Station cannot initialize local data beside the installed app: ${target}. Choose a writable installation folder. ${error?.message || error}`)
+    wrapped.code = 'CUSTOMER_INSTALL_STORAGE_UNAVAILABLE'
+    throw wrapped
+  }
+}
+
+const customerDataRoot = configureCustomerInstallStorage()
 const ACTIVE_WIDTH = 960
 const ACTIVE_HEIGHT = 680
+const COMPACT_WIDTH = 84
+const COMPACT_HEIGHT = 22
+const COMPACT_MARGIN = 6
+const DEFAULT_TIMER_PREFERENCES = Object.freeze({ visible:true, opacity:0.8 })
 const WINDOW_STATES = Object.freeze({ LOCKED:'locked', IDLE:'idle', ACTIVE:'active' })
 
 let mainWindow = null
@@ -16,16 +119,98 @@ let tray = null
 let windowsKeyHook = null
 let windowState = WINDOW_STATES.LOCKED
 let dashboardVisible = false
+let activeDashboardMode = 'compact'
 let appIsQuitting = false
 let hookRestartTimer = null
 let sessionStartTransitionPending = false
+// A healthy active-session marker belongs to this Electron process. Only a
+// marker from an older process (crash/restart) or one with an explicit exit
+// request is recovery work. Without this ownership id, the renderer's recovery
+// timer mistakes every newly-started session for a crashed session and logs the
+// member out immediately after Start Session.
+const lifecycleRuntimeId = crypto.randomUUID()
 let remoteLockSnapshot = null
+let timerPreferences = null
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (!hasSingleInstanceLock) app.quit()
 
 function serverConfigPath() {
   return path.join(app.getPath('userData'), 'server-config.json')
+}
+
+function timerPreferencesPath() {
+  return path.join(app.getPath('userData'), 'timer-preferences.json')
+}
+
+function normalizeTimerPreferences(value = {}) {
+  const rawOpacity = Number(value?.opacity)
+  const opacity = Number.isFinite(rawOpacity)
+    ? Math.min(1, Math.max(0.2, rawOpacity))
+    : DEFAULT_TIMER_PREFERENCES.opacity
+  return {
+    visible:value?.visible !== false,
+    opacity:Math.round(opacity * 100) / 100,
+  }
+}
+
+function readTimerPreferences() {
+  try {
+    return normalizeTimerPreferences(JSON.parse(fs.readFileSync(timerPreferencesPath(), 'utf8')))
+  } catch (error) {
+    if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
+      console.warn('Unable to read Customer timer preferences:', error?.message || error)
+    }
+    return { ...DEFAULT_TIMER_PREFERENCES }
+  }
+}
+
+function getTimerPreferences() {
+  if (!timerPreferences) timerPreferences = readTimerPreferences()
+  return { ...timerPreferences }
+}
+
+function writeTimerPreferences(value) {
+  const next = normalizeTimerPreferences(value)
+  fs.writeFileSync(timerPreferencesPath(), JSON.stringify(next, null, 2), { encoding:'utf8', mode:0o600 })
+  timerPreferences = next
+  return { ...next }
+}
+
+function keepWindowContentOpaque() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  try {
+    // The opacity preference controls only the compact timer's dark background.
+    // Keep the BrowserWindow/text/icons fully opaque; the renderer paints the
+    // timer background with an RGBA alpha on the transparent window surface.
+    mainWindow.setOpacity(1)
+  } catch (error) {
+    console.warn('Unable to restore Customer window opacity:', error?.message || error)
+  }
+}
+
+function setTimerPreferences(patch = {}) {
+  const next = writeTimerPreferences({ ...getTimerPreferences(), ...(patch || {}) })
+
+  // Timer preference changes must not re-run compact window sizing. Opacity is
+  // renderer-owned so only the compact timer BACKGROUND becomes transparent;
+  // the digits/dashboard icon stay at full opacity. The preference-change IPC
+  // below repaints the RGBA background immediately without moving the window.
+  if (isActive() && activeDashboardMode === 'compact' && mainWindow && !mainWindow.isDestroyed()) {
+    keepWindowContentOpaque()
+    if (next.visible) {
+      if (!mainWindow.isVisible()) mainWindow.showInactive()
+      mainWindow.blur()
+      dashboardVisible = true
+    } else {
+      mainWindow.hide()
+      dashboardVisible = false
+    }
+  }
+
+  updateTrayMenu()
+  try { mainWindow?.webContents.send('client:timer-preferences-changed', next) } catch {}
+  return next
 }
 
 function normalizeServerConfig(value) {
@@ -41,6 +226,11 @@ function normalizeServerConfig(value) {
     error.code = 'INVALID_SERVER_PORT'
     throw error
   }
+  if (!isDev && isLoopbackHost(host)) {
+    const error = new Error('Customer Station cannot use this PC as Café Edge. Enter the cashier/Admin PC LAN address instead.')
+    error.code = 'LOCAL_CUSTOMER_EDGE_DISABLED'
+    throw error
+  }
   const origin = `http://${host}:${port}`
   return { host, port, origin, apiBase: `${origin}/api`, configured: true, source: 'saved' }
 }
@@ -54,7 +244,18 @@ function readServerConfig() {
       console.warn('Unable to read server config:', error?.message || error)
     }
   }
-  return { host: '', port: 3000, origin: '', apiBase: '', configured: false, source: 'not-configured' }
+  // A packaged Customer Station is not a Café Edge server. Without an
+  // explicitly saved LAN server, local fallback is unavailable and the
+  // renderer must keep its last-known cache rather than querying a fresh
+  // per-PC database on 127.0.0.1.
+  return {
+    host: '',
+    port: 3000,
+    origin: null,
+    apiBase: null,
+    configured: false,
+    source: 'not-configured',
+  }
 }
 
 function writeServerConfig(value) {
@@ -65,6 +266,18 @@ function writeServerConfig(value) {
   fs.writeFileSync(temp, JSON.stringify({ host: normalized.host, port: normalized.port }, null, 2), { mode: 0o600 })
   fs.renameSync(temp, file)
   return normalized
+}
+
+function isLoopbackHost(host) {
+  const value = String(host || '').trim().toLowerCase()
+  return value === '127.0.0.1' || value === 'localhost' || value === '::1'
+}
+
+function verifyStationSetupMasterPin(value) {
+  const supplied = Buffer.from(String(value || '').trim())
+  const expected = Buffer.from(STATION_SETUP_MASTER_PIN)
+  if (supplied.length !== expected.length) return false
+  return crypto.timingSafeEqual(supplied, expected)
 }
 
 function isTrustedRenderer(event) {
@@ -113,6 +326,27 @@ function readCloudStationCredential() { try { const data=fs.readFileSync(cloudSt
 function writeCloudStationCredential(value) { const text=String(value||'');if(!text){try{fs.unlinkSync(cloudStationCredentialPath())}catch{};return true}const data=safeStorage.isEncryptionAvailable()?safeStorage.encryptString(text):Buffer.from(text);fs.writeFileSync(cloudStationCredentialPath(),data,{mode:0o600});return true }
 function installationIdPath(){return path.join(app.getPath('userData'),'station-installation-id.txt')}
 function readInstallationId(){try{const value=fs.readFileSync(installationIdPath(),'utf8').trim();if(value)return value}catch{}const value=crypto.randomUUID();fs.writeFileSync(installationIdPath(),value,{encoding:'utf8',mode:0o600});return value}
+
+function sessionLifecyclePath(){return path.join(app.getPath('userData'),'session-lifecycle.json')}
+function readSessionLifecycleMarker(){try{const value=JSON.parse(fs.readFileSync(sessionLifecyclePath(),'utf8'));return value&&typeof value==='object'?value:null}catch{return null}}
+function lifecycleMarkerForRenderer(){
+  const marker=readSessionLifecycleMarker()
+  if(!marker)return null
+  const owner=String(marker.runtimeInstanceId||'')
+  // Legacy markers without an owner are conservatively treated as leftovers
+  // from an older process. A current-process active marker is healthy unless
+  // an exit has explicitly been requested.
+  const recoveryRequired=Boolean(marker.active && (marker.exitRequestedAt || !owner || owner!==lifecycleRuntimeId))
+  return {...marker,recoveryRequired}
+}
+function writeSessionLifecycleMarker(value){const file=sessionLifecyclePath();const temp=`${file}.tmp`;fs.writeFileSync(temp,JSON.stringify(value,null,2),{encoding:'utf8',mode:0o600});fs.renameSync(temp,file);return value}
+function markActiveSession(data={}){const stamp=new Date().toISOString();return writeSessionLifecycleMarker({active:true,runtimeInstanceId:lifecycleRuntimeId,sessionId:data?.sessionId||data?.id||null,memberId:data?.memberId||null,role:data?.role||null,billing:data?.billing||null,startedAt:data?.startedAt||null,username:data?.username||null,balance:Number.isFinite(Number(data?.balance))?Number(data.balance):null,pcLabel:data?.pcLabel||null,remainingSeconds:Number.isFinite(Number(data?.remainingSeconds))?Math.max(0,Math.floor(Number(data.remainingSeconds))):null,markedAt:stamp,lastSeenAt:stamp,checkpointedAt:stamp,exitReason:null,exitRequestedAt:null})}
+let lifecycleTouchAt=0
+function touchSessionLifecycle(data={}){const nowMs=Date.now();if(nowMs-lifecycleTouchAt<3000)return true;const current=readSessionLifecycleMarker();if(!current?.active)return true;lifecycleTouchAt=nowMs;const next={...current,lastSeenAt:new Date(nowMs).toISOString(),checkpointedAt:new Date(nowMs).toISOString()};if(data?.username!=null)next.username=String(data.username);if(data?.pcLabel!=null)next.pcLabel=String(data.pcLabel);if(Number.isFinite(Number(data?.balance)))next.balance=Number(data.balance);if(Number.isFinite(Number(data?.remainingSeconds)))next.remainingSeconds=Math.max(0,Math.floor(Number(data.remainingSeconds)));writeSessionLifecycleMarker(next);return true}
+function markSessionExit(data={}){const current=readSessionLifecycleMarker()||{};const existingAt=current.exitRequestedAt||null;return writeSessionLifecycleMarker({...current,active:true,runtimeInstanceId:current.runtimeInstanceId||lifecycleRuntimeId,exitReason:String(data?.reason||current.exitReason||'station_exit'),exitRequestedAt:existingAt||String(data?.interruptedAt||new Date().toISOString())})}
+function clearSessionLifecycleMarker(){try{fs.unlinkSync(sessionLifecyclePath())}catch{}return true}
+
+function publicSoftwareInfo(){return{currentVersion:app.getVersion()}}
 
 function isLocked() { return windowState === WINDOW_STATES.LOCKED }
 function isActive() { return windowState === WINDOW_STATES.ACTIVE }
@@ -184,13 +418,63 @@ function loadTrayIcon() {
   )
 }
 
+const TIMER_OPACITY_STEPS = Object.freeze([20, 30, 40, 50, 60, 70, 80, 90, 100])
+
+function timerOpacityMenuItems(opacityPercent) {
+  return TIMER_OPACITY_STEPS.map(percent => ({
+    label:`${percent}%`,
+    type:'radio',
+    checked:opacityPercent === percent,
+    click:() => setTimerPreferences({ opacity:percent / 100 }),
+  }))
+}
+
+function showCompactTimerContextMenu() {
+  if (!isActive() || activeDashboardMode !== 'compact' || !mainWindow || mainWindow.isDestroyed()) return false
+  const timerPrefs = getTimerPreferences()
+  const opacityPercent = Math.round(timerPrefs.opacity * 100)
+  const menu = Menu.buildFromTemplate([
+    { label:'Open Dashboard', click:showMiniDashboard },
+    { type:'separator' },
+    {
+      label:'Show Timer',
+      type:'checkbox',
+      checked:timerPrefs.visible,
+      click:item => setTimerPreferences({ visible:Boolean(item.checked) }),
+    },
+    {
+      label:`Background opacity (${opacityPercent}%)`,
+      submenu:timerOpacityMenuItems(opacityPercent),
+    },
+  ])
+  menu.once('menu-will-close', () => {
+    setImmediate(() => {
+      if (!mainWindow || mainWindow.isDestroyed() || !isActive() || activeDashboardMode !== 'compact') return
+      try { mainWindow.blur() } catch {}
+    })
+  })
+  menu.popup({ window:mainWindow })
+  return true
+}
+
 function updateTrayMenu() {
   if (!tray || tray.isDestroyed()) return
+  const timerPrefs = getTimerPreferences()
+  const opacityPercent = Math.round(timerPrefs.opacity * 100)
   const template = isActive()
     ? [
-        { label:'Check Session Time', click:showMiniDashboard },
-        { label:'Open Mini Dashboard', click:showMiniDashboard },
-        { label:'Hide Mini Dashboard', enabled:dashboardVisible, click:hideMiniDashboard },
+        { label:'Open Full Dashboard', click:showMiniDashboard },
+        { label:'Compact Session Timer', enabled:activeDashboardMode !== 'compact', click:hideMiniDashboard },
+        {
+          label:'Show Compact Timer',
+          type:'checkbox',
+          checked:timerPrefs.visible,
+          click:item => setTimerPreferences({ visible:Boolean(item.checked) }),
+        },
+        {
+          label:`Timer background opacity (${opacityPercent}%)`,
+          submenu:timerOpacityMenuItems(opacityPercent),
+        },
         { type:'separator' },
         { label:'Lock / Log Out', click:() => mainWindow?.webContents.send('tray:logout') },
       ]
@@ -214,6 +498,7 @@ function createTray() {
 
 function applyLockedWindowMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  keepWindowContentOpaque()
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
   mainWindow.setSkipTaskbar(true)
@@ -226,8 +511,45 @@ function applyLockedWindowMode() {
   dashboardVisible = false
 }
 
+function positionCompactSessionWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const currentBounds=mainWindow.getBounds()
+  const display=screen.getDisplayMatching(currentBounds) || screen.getPrimaryDisplay()
+  const workArea=display?.workArea || { x:0, y:0, width:COMPACT_WIDTH + COMPACT_MARGIN, height:COMPACT_HEIGHT + COMPACT_MARGIN }
+  const x = workArea.x + workArea.width - COMPACT_WIDTH - COMPACT_MARGIN
+  mainWindow.setPosition(Math.round(x), Math.round(workArea.y + COMPACT_MARGIN), false)
+}
+
+function applyCompactSessionMode() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const timerPrefs = getTimerPreferences()
+  mainWindow.setKiosk(false)
+  mainWindow.setFullScreen(false)
+  mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
+  mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
+  mainWindow.setResizable(false)
+  mainWindow.setSkipTaskbar(true)
+  // The compact timer belongs to the desktop background layer, not above apps.
+  // It remains visible on the desktop, but any normal application can cover it.
+  mainWindow.setAlwaysOnTop(false)
+  mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
+  positionCompactSessionWindow()
+  keepWindowContentOpaque()
+  activeDashboardMode = 'compact'
+  if (timerPrefs.visible) {
+    mainWindow.showInactive()
+    mainWindow.blur()
+    dashboardVisible = true
+  } else {
+    mainWindow.hide()
+    dashboardVisible = false
+  }
+}
+
 function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  keepWindowContentOpaque()
+  activeDashboardMode = 'expanded'
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setKiosk(false)
@@ -248,6 +570,7 @@ function applyActiveWindowMode({ show = false } = {}) {
 
 function applyIdleDashboardMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  keepWindowContentOpaque()
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(0, 0)
   // The signed-in/no-session station is the customer-facing shell. Keep it
@@ -274,7 +597,9 @@ function showIdleDashboard() {
   }
   windowState = WINDOW_STATES.IDLE
   sessionStartTransitionPending = false
+  const hadRemoteLock = Boolean(remoteLockSnapshot)
   remoteLockSnapshot = null
+  if (hadRemoteLock) notifyStationLocked(false)
   // Keep the shell key hook active while the station is signed in. This
   // prevents Win+Tab/virtual-desktop switching from bypassing the station.
   setWindowsKeyLocked(true)
@@ -307,9 +632,7 @@ function enterActiveState() {
 
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
-  applyActiveWindowMode({ show:false })
-  mainWindow.hide()
-  dashboardVisible = false
+  applyCompactSessionMode()
   createTray()
   updateTrayMenu()
   return true
@@ -317,6 +640,7 @@ function enterActiveState() {
 
 function beginSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
+  keepWindowContentOpaque()
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
   createTray()
@@ -338,9 +662,7 @@ function completeSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
   sessionStartTransitionPending = false
   if (!isActive()) return false
-  applyActiveWindowMode({ show:false })
-  mainWindow.hide()
-  dashboardVisible = false
+  applyCompactSessionMode()
   updateTrayMenu()
   return true
 }
@@ -354,8 +676,7 @@ function showMiniDashboard() {
 
 function hideMiniDashboard() {
   if (!isActive() || !mainWindow || mainWindow.isDestroyed()) return false
-  mainWindow.hide()
-  dashboardVisible = false
+  applyCompactSessionMode()
   updateTrayMenu()
   return true
 }
@@ -365,14 +686,35 @@ function notifyStationLocked(locked) {
   mainWindow.webContents.send('client:station-locked', locked)
 }
 
+function showLoginKiosk() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  // A terminal logout/session-close is NOT a staff "Lock Session" state.
+  // Destroy any prepared-close snapshot and explicitly dismiss the renderer
+  // lock overlay before showing the normal login kiosk. Without this signal,
+  // AuthContext can already be logged out while SessionLockedOverlay remains
+  // above the login screen, making Pause & Save / Forfeit look like a lock.
+  remoteLockSnapshot = null
+  notifyStationLocked(false)
+  windowState = WINDOW_STATES.LOCKED
+  sessionStartTransitionPending = false
+  dashboardVisible = false
+  setWindowsKeyLocked(true)
+  applyLockedWindowMode()
+  updateTrayMenu()
+  return true
+}
+
 function lockClientWindow({ preserveState = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return false
+  // Normal/final client lock means "logged out at the kiosk". Only an explicit
+  // preserveState lock is a reversible staff station/session lock.
+  if (!preserveState) return showLoginKiosk()
+
   // Only a lock that interrupts a live/idle session (i.e. triggered remotely
   // by staff or the emergency shortcut) should surface the in-app "session is
-  // locked" overlay. A lock that happens while already locked (e.g. the
-  // normal boot/login state) has no session to interrupt.
-  const isRemoteInterrupt = preserveState && !remoteLockSnapshot && windowState !== WINDOW_STATES.LOCKED
-  if (preserveState && !remoteLockSnapshot) remoteLockSnapshot = { windowState, dashboardVisible }
+  // locked" overlay.
+  const isRemoteInterrupt = !remoteLockSnapshot && windowState !== WINDOW_STATES.LOCKED
+  if (!remoteLockSnapshot) remoteLockSnapshot = { windowState, dashboardVisible, activeDashboardMode }
   windowState = WINDOW_STATES.LOCKED
   sessionStartTransitionPending = false
   dashboardVisible = false
@@ -392,8 +734,8 @@ function unlockClientWindow() {
   if (snapshot?.windowState === WINDOW_STATES.ACTIVE) {
     windowState=WINDOW_STATES.ACTIVE
     setWindowsKeyLocked(false)
-    applyActiveWindowMode({show:Boolean(snapshot.dashboardVisible)})
-    if (!snapshot.dashboardVisible) mainWindow.hide()
+    if (snapshot.activeDashboardMode === 'expanded') applyActiveWindowMode({show:true})
+    else applyCompactSessionMode()
     updateTrayMenu()
     return true
   }
@@ -425,6 +767,12 @@ async function executeRemoteCommand(command) {
   if (action === 'unlock' || action === 'wake') return unlockClientWindow()
   if (action === 'reboot' || action === 'shutdown') {
     if (process.platform !== 'win32') return false
+    const interruptionReason = action === 'reboot' ? 'restart' : 'shutdown'
+    // Persist the interruption before the Windows power command starts. This is
+    // the last-resort checkpoint for Start-menu shutdowns, renderer crashes, or
+    // a network loss that prevents the lifecycle HTTP request from completing.
+    markSessionExit({reason:interruptionReason})
+    mainWindow?.webContents.send('station:app-exit-requested',{reason:interruptionReason,powerCommand:true})
     try {
       const warningExpiresAt = parsedDeadline(descriptor.warningExpiresAt)
       if (warningExpiresAt !== null && Date.now() >= warningExpiresAt) throw remoteCommandExpiredError()
@@ -456,8 +804,14 @@ async function executeRemoteCommand(command) {
 
 async function executeEmergencyCommand(command) {
   if (String(command || '').toLowerCase() === 'quit') {
+    // Alt+Shift+W is the last-resort local operator escape hatch. Persist only
+    // the local lifecycle marker for recovery, then quit without waiting for
+    // the renderer, Café Edge, Cloud, heartbeat, session validation, or ACKs.
+    // On the next launch the marker can be reconciled normally when authority
+    // is reachable again.
+    markSessionExit({reason:'app_exit'})
     appIsQuitting = true
-    setTimeout(()=>app.quit(),3000)
+    setImmediate(() => app.quit())
     return true
   }
   return executeRemoteCommand(command)
@@ -474,6 +828,10 @@ function createWindow() {
     fullscreen:true,
     alwaysOnTop:true,
     skipTaskbar:true,
+    // Required so compact mode can make only its dark timer background
+    // translucent while keeping the time text/dashboard icon fully opaque.
+    transparent:true,
+    backgroundColor:'#00000000',
     autoHideMenuBar:true,
     closable:true,
     webPreferences:{
@@ -481,8 +839,14 @@ function createWindow() {
       contextIsolation:true,
       nodeIntegration:false,
       sandbox:true,
+      backgroundThrottling:false,
     },
   })
+  mainWindow.on('query-session-end', () => {
+    markSessionExit({reason:'shutdown'})
+    mainWindow?.webContents.send('station:app-exit-requested',{reason:'shutdown'})
+  })
+  mainWindow.on('session-end', () => { markSessionExit({reason:'shutdown'}) })
 
   mainWindow.webContents.on('before-input-event', (event,input) => {
     if (isActive()) return
@@ -498,7 +862,13 @@ function createWindow() {
     ) event.preventDefault()
   })
 
-  mainWindow.webContents.on('context-menu', event => event.preventDefault())
+  mainWindow.webContents.on('context-menu', event => {
+    event.preventDefault()
+    // Compact timer settings live on right-click so the full dashboard header
+    // never shifts to make room for a settings panel. Electron's native menu
+    // also dismisses itself automatically when the customer clicks elsewhere.
+    if (isActive() && activeDashboardMode === 'compact') showCompactTimerContextMenu()
+  })
   mainWindow.webContents.on('will-navigate', event => event.preventDefault())
   mainWindow.webContents.setWindowOpenHandler(() => ({ action:'deny' }))
 
@@ -509,21 +879,12 @@ function createWindow() {
     else if (isIdleDashboard()) applyIdleDashboardMode()
     else applyLockedWindowMode()
   })
-
-  // Customer Station is a kiosk surface. If Windows or another desktop
-  // briefly takes focus, reclaim it while the station is visible. Hidden
-  // active-session mode intentionally remains available through the tray.
-  mainWindow.on('blur', () => {
-    if (isActive()) return
-    if (appIsQuitting || !mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return
-    if (!isLocked() && !isIdleDashboard() && !dashboardVisible) return
-    setTimeout(() => {
-      if (appIsQuitting || !mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return
-      mainWindow.show()
-      mainWindow.focus()
-      if (isLocked() || isIdleDashboard()) mainWindow.setAlwaysOnTop(true, 'screen-saver')
-    }, 0)
+  mainWindow.on('minimize', event => {
+    if (!isActive()) return
+    event.preventDefault()
+    hideMiniDashboard()
   })
+
 
   mainWindow.on('closed', () => { mainWindow=null })
 
@@ -531,7 +892,8 @@ function createWindow() {
     if (isLocked()) applyLockedWindowMode()
     else if (sessionStartTransitionPending) beginSessionStartTransition()
     else if (isIdleDashboard()) applyIdleDashboardMode()
-    else applyActiveWindowMode({show:dashboardVisible})
+    else if (activeDashboardMode === 'expanded') applyActiveWindowMode({show:true})
+    else applyCompactSessionMode()
     // The renderer just (re)mounted — replay the current remote-lock state
     // so a page reload while locked still shows the "session is locked"
     // overlay instead of silently losing it.
@@ -560,7 +922,7 @@ app.on('second-instance', () => {
   else applyLockedWindowMode()
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) return
   if (!isDev) app.setLoginItemSettings({openAtLogin:true,openAsHidden:false})
   app.setAppUserModelId('com.icafe.customer')
@@ -568,25 +930,44 @@ app.whenReady().then(() => {
 
   handleTrusted('client:unlock', () => applyAuthenticatedWindowMode())
   handleTrusted('client:show-idle-dashboard', () => showIdleDashboard())
+  handleTrusted('client:show-login-kiosk', () => showLoginKiosk())
   handleTrusted('client:unlock-only', () => { setWindowsKeyLocked(false); return true })
-  handleTrusted('client:activate-session', () => enterActiveState())
+  handleTrusted('client:activate-session', (_event, data) => { markActiveSession(data || {}); return enterActiveState() })
   handleTrusted('client:begin-session-start', () => beginSessionStartTransition())
   handleTrusted('client:complete-session-start', () => completeSessionStartTransition())
   handleTrusted('client:cancel-session-start', () => showIdleDashboard())
   handleTrusted('client:hide-dashboard', () => hideMiniDashboard())
   handleTrusted('client:show-dashboard', () => showMiniDashboard())
-  handleTrusted('client:update-widget', () => true)
+  ipcMain.on('client:get-timer-preferences', event => {
+    if (!isTrustedRenderer(event)) { event.returnValue = { ...DEFAULT_TIMER_PREFERENCES }; return }
+    event.returnValue = getTimerPreferences()
+  })
+  handleTrusted('client:set-timer-preferences', (_event, patch) => setTimerPreferences(patch))
+  handleTrusted('client:update-widget', (_event, data) => touchSessionLifecycle(data || {}))
   handleTrusted('client:lock', () => lockClientWindow())
   handleTrusted('client:deactivate-session', () => lockClientWindow())
+  ipcMain.on('client:get-session-lifecycle-marker', event => { if (!isTrustedRenderer(event)) { event.returnValue=null; return } event.returnValue=lifecycleMarkerForRenderer() })
+  handleTrusted('client:mark-session-exit', (_event, data) => markSessionExit(data || {}))
+  handleTrusted('client:clear-session-lifecycle-marker', () => clearSessionLifecycleMarker())
   handleTrusted('client:remote-command', (_event, command) => executeRemoteCommand(command))
   handleTrusted('client:shutdown', () => executeRemoteCommand('shutdown'))
   handleTrusted('client:restart', () => executeRemoteCommand('reboot'))
+  handleTrusted('client:restart-app', () => {
+    // Pairing changes the station identity used by every Cloud/Edge request. A
+    // clean Electron relaunch reinitializes that identity atomically without
+    // rebooting Windows or leaving an in-place renderer reload half-bootstrapped.
+    appIsQuitting = true
+    app.relaunch()
+    app.quit()
+    return true
+  })
   handleTrusted('client:emergency-command', (_event, command) => executeEmergencyCommand(command))
   ipcMain.on('client:server-config:get', event => {
     if (!isTrustedRenderer(event)) { event.returnValue = null; return }
     event.returnValue = readServerConfig()
   })
-  handleTrusted('client:server-config:set', (_event, value) => writeServerConfig(value))
+  handleTrusted('client:server-config:set', async (_event, value) => writeServerConfig(value))
+  handleTrusted('client:verify-setup-master-pin', (_event, value) => ({ verified:verifyStationSetupMasterPin(value) }))
   ipcMain.on('client:get-local-ipv4', event => {
     if (!isTrustedRenderer(event)) { event.returnValue=null; return }
     event.returnValue=getLocalIPv4()
@@ -603,6 +984,14 @@ app.whenReady().then(() => {
   ipcMain.on('client:get-installation-id', event => {
     if (!isTrustedRenderer(event)) { event.returnValue=''; return }
     event.returnValue=readInstallationId()
+  })
+  ipcMain.on('client:get-local-data-path', event => {
+    if (!isTrustedRenderer(event)) { event.returnValue=''; return }
+    event.returnValue=customerDataRoot
+  })
+  ipcMain.on('client:get-software-info', event => {
+    if (!isTrustedRenderer(event)) { event.returnValue=null; return }
+    event.returnValue=publicSoftwareInfo()
   })
   handleTrusted('client:set-cloud-station-credential', (_event, value) => writeCloudStationCredential(String(value || '').slice(0, 16384)))
   handleTrusted('client:clear-cloud-station-credential', () => writeCloudStationCredential(''))
@@ -621,9 +1010,18 @@ app.whenReady().then(() => {
   })
 })
 
+// Backward-compatible no-op for older packaged cleanup callbacks. Continuous
+// force-focus enforcement no longer exists, but stale closures must never crash.
+const stopFocusEnforcement = () => true
+const stopForceFocusEnforcement = stopFocusEnforcement
+const stopForcedFocusEnforcement = stopFocusEnforcement
+
 app.on('will-quit', () => {
   appIsQuitting=true
   if (hookRestartTimer) clearTimeout(hookRestartTimer)
+  // Continuous focus enforcement was removed. Do not call the legacy
+  // focus-cleanup hook here; it no longer exists and caused
+  // a ReferenceError whenever Customer Station quit or relaunched after pairing.
   try {
     if (windowsKeyHook?.stdin && !windowsKeyHook.stdin.destroyed && !windowsKeyHook.stdin.writableEnded) windowsKeyHook.stdin.write('stop\n')
   } catch {}
