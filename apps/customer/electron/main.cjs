@@ -575,6 +575,7 @@ function applyCompactSessionMode() {
     positionCompactSessionWindow()
     keepWindowContentOpaque()
     activeDashboardMode = 'compact'
+    notifyDashboardMode()
     if (timerPrefs.visible) {
       mainWindow.showInactive()
       mainWindow.blur()
@@ -590,6 +591,7 @@ function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   keepWindowContentOpaque()
   activeDashboardMode = 'expanded'
+  notifyDashboardMode()
   // Compact mode is fixed at 84x22, so clear both constraints before growing
   // back to the active dashboard. Otherwise Windows/Electron can preserve the
   // old maximum and refuse the 960x680 resize.
@@ -743,6 +745,19 @@ function hideMiniDashboard() {
 function notifyStationLocked(locked) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   mainWindow.webContents.send('client:station-locked', locked)
+}
+
+// The renderer previously learned compact-vs-expanded purely from the DOM
+// 'resize' event, which only fires after the BrowserWindow has actually
+// changed size. Since the resize itself is instant (no animation) but the
+// event is a frame (or more) late, the outgoing layout stayed mounted and
+// got visibly squeezed into the new window bounds for a moment before React
+// caught up — the "flash before it's compact" bug. Pushing the mode over
+// IPC lets the renderer swap layouts pre-emptively, before/alongside the
+// resize, for every path that changes it (button, tray, keyboard, minimize).
+function notifyDashboardMode() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('client:dashboard-mode-changed', activeDashboardMode)
 }
 
 function showLoginKiosk() {

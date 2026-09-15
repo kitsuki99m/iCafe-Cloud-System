@@ -216,10 +216,24 @@ export default function CustomerSessionView() {
 
 
   useEffect(() => {
+    // 'resize' only fires after Electron has already resized the
+    // BrowserWindow, so relying on it alone means the outgoing layout stays
+    // mounted — squeezed into the new bounds — for a frame before this
+    // catches up. That's the flicker on Compact/Open dashboard. The main
+    // process now pushes the mode explicitly the moment it decides to
+    // switch, so the layout can swap immediately. 'resize' stays as a
+    // fallback for the very first paint and for any host that doesn't
+    // support the client bridge (e.g. a plain browser preview).
     const syncCompactView = () => setCompactView(window.innerWidth <= 420 && window.innerHeight <= 180);
     syncCompactView();
     window.addEventListener('resize', syncCompactView);
-    return () => window.removeEventListener('resize', syncCompactView);
+    const unsubscribe = window.aezakmiClient?.onDashboardModeChanged?.(
+      (mode) => setCompactView(mode === 'compact')
+    );
+    return () => {
+      window.removeEventListener('resize', syncCompactView);
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -543,7 +557,18 @@ export default function CustomerSessionView() {
         <span className={`stat-figure min-w-0 flex-1 truncate text-center tabular-nums text-[11px] font-bold leading-none tracking-[-0.04em] ${lowTime ? 'text-ember-dim' : 'text-soft-white'}`}>{compactTimer}</span>
         <button
           type="button"
-          onClick={() => window.aezakmiClient?.showMiniDashboard?.()}
+          onClick={() => {
+            // Flip the layout state before asking Electron to resize. The
+            // BrowserWindow resize is native/instant, but React only learns
+            // about it from a 'resize' DOM event that arrives a frame (or
+            // more) later. Waiting for that event means the expanded
+            // dashboard is still mounted the instant the window grows,
+            // producing a visible flash of squeezed content. Setting state
+            // synchronously on click means the correct layout is already
+            // rendered before the window ever changes size.
+            setCompactView(false);
+            window.aezakmiClient?.showMiniDashboard?.();
+          }}
           className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-soft-white/70 transition-colors hover:bg-white/10 hover:text-soft-white"
           title="Open dashboard"
           aria-label="Open dashboard"
@@ -606,7 +631,15 @@ export default function CustomerSessionView() {
           </button>
           <button
             type="button"
-            onClick={() => window.aezakmiClient?.hideMiniDashboard?.()}
+            onClick={() => {
+              // See the matching comment on the "Open dashboard" button: set
+              // the layout synchronously on click instead of waiting for the
+              // post-resize 'resize' event, or the full 960x680 dashboard
+              // stays mounted (squeezed into the 84x22 frame) for a frame or
+              // two before React catches up — that's the flicker.
+              setCompactView(true);
+              window.aezakmiClient?.hideMiniDashboard?.();
+            }}
             className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
             title="Compact to the session timer"
           >

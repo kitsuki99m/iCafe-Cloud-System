@@ -41,6 +41,11 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
     ipcRenderer.on('client:timer-preferences-changed',listener)
     return ()=>ipcRenderer.removeListener('client:timer-preferences-changed',listener)
   },
+  onDashboardModeChanged:handler => {
+    const listener=(_event,mode)=>handler(mode)
+    ipcRenderer.on('client:dashboard-mode-changed',listener)
+    return ()=>ipcRenderer.removeListener('client:dashboard-mode-changed',listener)
+  },
   onWidgetAction:handler => {
     const listener=(_event,action)=>handler(action)
     ipcRenderer.on('widget:action',listener)
