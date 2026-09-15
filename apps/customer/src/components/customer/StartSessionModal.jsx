@@ -100,7 +100,7 @@ export default function StartSessionModal({ open, onClose, pc, memberId, wallet,
     // Do not minimize while the start modal is merely open or validation is in
     // progress. Once the backend confirms a real session has started (new
     // prepaid session or saved-time resume), complete the Electron transition
-    // and switch the station from fullscreen idle mode to the 640x480 active dashboard.
+    // and switch the station from fullscreen idle mode to the 960x680 active dashboard.
     if (outcome.ok) {
       window.aezakmiClient?.completeSessionStart?.()
       onClose()

@@ -57,7 +57,7 @@ function activateGuestSessionImmediately(data, guestUser) {
   if (!session || !guestUser) return;
   // Admin already started the paid Guest session. Do not require the Guest
   // button first: transition Electron directly from Login Kiosk into the same
-  // 640x480 ACTIVE dashboard used by a signed-in member session.
+  // 960x680 ACTIVE dashboard used by a signed-in member session.
   void window.aezakmiClient?.activateSession?.({
     sessionId:session?.id || null,
     memberId:null,
@@ -317,7 +317,7 @@ export function AuthProvider({ children }) {
   }, [stationPairingRequired]);
 
   // Admin-started guest sessions must switch the Customer station immediately
-  // into Guest mode and directly into the active 640x480 dashboard. Realtime is the fast
+  // into Guest mode and directly into the active 960x680 dashboard. Realtime is the fast
   // Cloud path; a 1s LAN-only Edge probe covers missed/delayed broadcasts without
   // generating Cloud API traffic every second. A slower Cloud reconciliation is
   // kept as a final fallback when Edge is unavailable.
