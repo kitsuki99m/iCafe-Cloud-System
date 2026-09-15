@@ -290,11 +290,9 @@ export function AppDataProvider({ children }) {
       window.addEventListener('focus',onVisible)
       window.addEventListener('aezakmi:cloud-branch-changed',onBranch)
       document.addEventListener('visibilitychange',onVisible)
-      // 60s was long enough that pairing/availability changes made on another
-      // device (e.g. the Customer Station finishing pairing) looked stuck until
-      // a manual page refresh. 10s keeps the Floor Matrix close to live without
-      // hammering the branch snapshot endpoint.
-      timer=setInterval(cloudRefresh,10000)
+      // Cloud Admin has no local Socket.IO room, so keep the authoritative
+      // branch snapshot close to live for customer requests and station state.
+      timer=setInterval(cloudRefresh,1000)
       return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);window.removeEventListener('online',onOnline);window.removeEventListener('focus',onVisible);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible)}
     }
     const socket = connectSocket()
