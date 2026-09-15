@@ -209,10 +209,9 @@ export default function CustomerSessionView() {
   const canExtend = hasActiveSession && session.billing === "prepaid";
 
   useEffect(() => {
-    if (!hasActiveSession) return undefined;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [hasActiveSession]);
+  }, []);
 
 
   useEffect(() => {
