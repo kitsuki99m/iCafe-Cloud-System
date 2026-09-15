@@ -547,6 +547,7 @@ function applyCompactSessionMode() {
   const wasVisible = mainWindow.isVisible()
   // Hide before leaving kiosk/fullscreen so Windows cannot paint the outgoing
   // dashboard while its native transition is still settling.
+  mainWindow.setOpacity(0)
   if (wasVisible) mainWindow.hide()
   activeDashboardMode = 'compact'
   notifyDashboardMode()
@@ -575,12 +576,13 @@ function applyCompactSessionMode() {
     const x = Math.round(workArea.x + workArea.width - COMPACT_WIDTH - COMPACT_MARGIN)
     const y = Math.round(workArea.y + COMPACT_MARGIN)
     mainWindow.setBounds({ x, y, width:COMPACT_WIDTH, height:COMPACT_HEIGHT }, false)
-    keepWindowContentOpaque()
     if (timerPrefs.visible) {
       mainWindow.showInactive()
       mainWindow.blur()
+      keepWindowContentOpaque()
       dashboardVisible = true
     } else {
+      keepWindowContentOpaque()
       mainWindow.hide()
       dashboardVisible = false
     }
