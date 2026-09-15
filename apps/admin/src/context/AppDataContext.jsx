@@ -273,8 +273,8 @@ export function AppDataProvider({ children }) {
     if (isCloudAdmin()) {
       let timer=null
       let stopRealtime=null
-      const cloudRefresh=async()=>{
-        if (document.visibilityState === 'hidden') return
+      const cloudRefresh=async({ allowHidden=false }={})=>{
+        if (!allowHidden && document.visibilityState === 'hidden') return
         try{
           await refresh()
           if(active)setState(current=>({...current,realtimeConnected:navigator.onLine}))
@@ -299,7 +299,12 @@ export function AppDataProvider({ children }) {
       document.addEventListener('visibilitychange',onVisible)
       stopRealtime=startCloudRealtime({
         branchId:cloudBranchId(),
-        onChange:()=>cloudRefresh(),
+        // A realtime change means the cached app-data snapshot is stale.
+        // Without invalidating it first, apiGet('/app-data') can return its
+        // 20-second cached value and defer customer requests until the cache
+        // expires. Realtime events must also update a minimized Admin window
+        // so the pending queue is ready the moment staff returns to it.
+        onChange:()=>{invalidateApiCache();void cloudRefresh({allowHidden:true})},
         onStatus:(connected)=>{if(active)setState(current=>({...current,realtimeConnected:connected}))},
       })
       // Realtime is the fast path; this only heals missed events or a
