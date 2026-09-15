@@ -58,6 +58,7 @@ export default function FloorMatrix() {
     adminTopUp,
     topUpMemberSession,
     adjustSessionTime,
+    refresh,
   } = useAppData()
   const [selectedId, setSelectedId] = useState(null)
   const [pcFormOpen, setPcFormOpen] = useState(false)
@@ -104,6 +105,16 @@ export default function FloorMatrix() {
     if (requestedStatusFilter !== filter) setFilter(requestedStatusFilter)
   }, [requestedStatusFilter, filter])
   useEffect(() => { pcs.forEach(pc=>{const session=pc.session;if(effectivePcStatus(pc)!=='occupied'||session?.billing!=='prepaid')return;const remaining=remainingSessionSeconds(session,now);const key=`${pc.id}:${session.id}`;if(remaining>0&&remaining<=Number(settings.lowTimeWarningMinutes||5)*60&&!alerted.current.has(key)){alerted.current.add(key);playLowTimeAlert(key)}}) }, [now,pcs,settings.lowTimeWarningMinutes])
+
+  // While a pairing code is on screen, staff are actively watching this modal
+  // for the Customer Station to finish pairing. Poll a lot faster than the
+  // background refresh so "paired"/"available" reflects without a manual
+  // page refresh, and stop the moment the code stops being shown.
+  useEffect(() => {
+    if (!stationPairingOpen || !stationPairingResult?.pairingCode) return undefined
+    const timer = setInterval(() => { void refresh() }, 3000)
+    return () => clearInterval(timer)
+  }, [stationPairingOpen, stationPairingResult?.pairingCode, refresh])
 
   const stats = useMemo(() => ({
     available:pcs.filter(p=>effectivePcStatus(p)==='available').length,

@@ -531,7 +531,7 @@ export default function CustomerSessionView() {
     return (
       <div
         data-session-widget="compact"
-        className="flex h-screen w-screen select-none items-center justify-center gap-0.5 overflow-hidden rounded-[5px] border px-1 text-soft-white shadow-sm"
+        className="flex h-screen w-screen select-none items-center justify-center gap-0.5 overflow-hidden rounded-[9px] border px-1 text-soft-white shadow-sm"
         style={{
           // Opacity means the dark compact TIMER BACKGROUND only. Do not fade
           // the time digits or dashboard button with BrowserWindow opacity.

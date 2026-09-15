@@ -651,7 +651,14 @@ function enterActiveState() {
 
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
-  applyActiveWindowMode({ show:true })
+  // Ship request: any session start — Guest or signed-in member, self-service
+  // or staff/counter-initiated — should collapse straight to the compact
+  // timer instead of surfacing the full dashboard first. The self-service
+  // Start Session flow already does this via begin/completeSessionStart; this
+  // covers every other path that lands here directly (e.g. a Guest session
+  // the counter already started, or a member session activated outside the
+  // Start Session modal).
+  applyCompactSessionMode()
   createTray()
   updateTrayMenu()
   return true
@@ -681,7 +688,8 @@ function completeSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
   sessionStartTransitionPending = false
   if (!isActive()) return false
-  applyActiveWindowMode({ show:true })
+  // Ship request: once a session starts, immediately collapse to the compact timer.
+  applyCompactSessionMode()
   updateTrayMenu()
   return true
 }

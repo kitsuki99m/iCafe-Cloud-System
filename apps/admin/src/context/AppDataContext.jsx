@@ -281,11 +281,21 @@ export function AppDataProvider({ children }) {
         else void cloudRefresh()
       }
       const onVisible=()=>{if(document.visibilityState==='visible')void cloudRefresh()}
+      // Station pairing/availability is staff-facing and time-sensitive (an admin
+      // is often staring at the Floor Matrix waiting to see a PC go from
+      // "unpaired"/occupied to available). Re-focusing the window is a much more
+      // common gesture than a full tab hide/show, so it needs its own listener
+      // rather than relying on visibilitychange alone.
       window.addEventListener('online',onOnline)
+      window.addEventListener('focus',onVisible)
       window.addEventListener('aezakmi:cloud-branch-changed',onBranch)
       document.addEventListener('visibilitychange',onVisible)
-      timer=setInterval(cloudRefresh,60000)
-      return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);window.removeEventListener('online',onOnline);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible)}
+      // 60s was long enough that pairing/availability changes made on another
+      // device (e.g. the Customer Station finishing pairing) looked stuck until
+      // a manual page refresh. 10s keeps the Floor Matrix close to live without
+      // hammering the branch snapshot endpoint.
+      timer=setInterval(cloudRefresh,10000)
+      return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);window.removeEventListener('online',onOnline);window.removeEventListener('focus',onVisible);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible)}
     }
     const socket = connectSocket()
     let refreshTimer = null
