@@ -141,16 +141,62 @@ async function heartbeat() {
     if(transport!=='cloud') { markCloudStationOnline(); connectWakeSocket(); void pollCommands() }
   } catch(error){ markCloudStationFallback(error?.message||'Cloud unavailable') }
 }
-function closeWakeSocket() { try { wakeSocket?.close() } catch {};wakeSocket=null;if(reconnectTimer)clearTimeout(reconnectTimer);reconnectTimer=null }
+let pingTimer = null
+
+function closeWakeSocket() {
+  try { wakeSocket?.close() } catch {}
+  wakeSocket = null
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+  if (pingTimer) clearInterval(pingTimer)
+  reconnectTimer = null
+  pingTimer = null
+}
+
 function connectWakeSocket() {
   closeWakeSocket()
-  const credential=getCloudStationCredential();if(!cloudStationFeatureEnabled()||!credential?.realtimeTopicKey||transport==='fallback')return
-  const wsUrl=SUPABASE_URL.replace(/^https:/,'wss:')+`/realtime/v1/websocket?apikey=${encodeURIComponent(PUBLISHABLE_KEY)}&vsn=1.0.0`
-  const ws=new WebSocket(wsUrl);wakeSocket=ws;let ref=1;const topic=`realtime:station-wakeup:${credential.realtimeTopicKey}`
-  ws.addEventListener('open',()=>{ws.send(JSON.stringify({topic,event:'phx_join',payload:{config:{broadcast:{self:false,ack:false},presence:{enabled:false},postgres_changes:[]}},ref:String(ref++)}));void pollCommands()})
-  ws.addEventListener('message',(event)=>{try{const msg=JSON.parse(String(event.data||''));if(msg?.event==='broadcast'||msg?.event==='station_wakeup'){const outer=msg?.payload&&typeof msg.payload==='object'?msg.payload:{};const detail=outer?.payload&&typeof outer.payload==='object'?outer.payload:outer;window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-wakeup',{detail}));void pollCommands()}}catch{}})
-  ws.addEventListener('close',()=>{if(wakeSocket===ws){wakeSocket=null;reconnectTimer=setTimeout(connectWakeSocket,5000)}})
-  ws.addEventListener('error',()=>{try{ws.close()}catch{}})
+  const credential = getCloudStationCredential()
+  if (!cloudStationFeatureEnabled() || !credential?.realtimeTopicKey || transport === 'fallback') return
+  const wsUrl = SUPABASE_URL.replace(/^https:/, 'wss:') + `/realtime/v1/websocket?apikey=${encodeURIComponent(PUBLISHABLE_KEY)}&vsn=1.0.0`
+  const ws = new WebSocket(wsUrl)
+  wakeSocket = ws
+  let ref = 1
+  const topic = `realtime:station-wakeup:${credential.realtimeTopicKey}`
+
+  ws.addEventListener('open', () => {
+    ws.send(JSON.stringify({ topic, event: 'phx_join', payload: { config: { broadcast: { self: false, ack: false }, presence: { enabled: false }, postgres_changes: [] } }, ref: String(ref++) }))
+    void pollCommands()
+    if (pingTimer) clearInterval(pingTimer)
+    pingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try { ws.send(JSON.stringify({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(ref++) })) } catch {}
+      }
+    }, 25000)
+  })
+
+  ws.addEventListener('message', (event) => {
+    try {
+      const msg = JSON.parse(String(event.data || ''))
+      if (msg?.event === 'broadcast' || msg?.event === 'station_wakeup' || msg?.event === 'sync' || msg?.event === 'phx_reply') {
+        const outer = msg?.payload && typeof msg.payload === 'object' ? msg.payload : {}
+        const detail = outer?.payload && typeof outer.payload === 'object' ? outer.payload : outer
+        window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-wakeup', { detail }))
+        void pollCommands()
+      }
+    } catch {}
+  })
+
+  ws.addEventListener('close', () => {
+    if (wakeSocket === ws) {
+      wakeSocket = null
+      if (pingTimer) clearInterval(pingTimer)
+      pingTimer = null
+      reconnectTimer = setTimeout(connectWakeSocket, 3000)
+    }
+  })
+
+  ws.addEventListener('error', () => {
+    try { ws.close() } catch {}
+  })
 }
 export function startCloudStationRuntime() {
   if (!cloudStationFeatureEnabled() || !cloudStationPaired()) return

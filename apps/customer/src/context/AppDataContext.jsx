@@ -156,7 +156,7 @@ export function AppDataProvider({ children }) {
           // Public/login content is almost static. One bundled station RPC cached for
           // five minutes replaces four independent Cloud function calls; realtime
           // invalidation still refreshes it immediately when the branch changes.
-          const bundled=await apiGet('/app-data',{ttlMs:5*60*1000})
+          const bundled=await apiGet('/app-data',{ force:true })
           publicSettings={settings:bundled.settings||{}}
           clientContext=bundled.clientContext||{pc:bundled.pc}
           announcementData={announcements:bundled.announcements||[]}
@@ -182,7 +182,7 @@ export function AppDataProvider({ children }) {
       }
 
       if (user.role === 'guest') {
-        const bundled=await apiGet('/app-data')
+        const bundled=await apiGet('/app-data',{ force:true })
         const guestData={
           pc:bundled?.pc ?? null,
           session:bundled?.pc?.session ?? null,
