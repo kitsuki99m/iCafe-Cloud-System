@@ -14,7 +14,7 @@ test('Overview status cards use live PC state, including offline and reserved st
   assert.match(source, /\['Maintenance',statusCounts\.maintenance,Wrench,[^\]]*'maintenance'\]/)
   assert.match(source, /\['Offline',statusCounts\.offline,MonitorCog,[^\]]*'offline'\]/)
   assert.match(source, /\['Reserved',statusCounts\.reserved,Clock3,[^\]]*'reserved'\]/)
-  assert.match(source, /STATUS_META\[pc\.status\]\|\|STATUS_META\.offline/)
+  assert.match(source, /STATUS_META\[effectivePcStatus\(pc\)\]\|\|STATUS_META\.offline/)
   assert.doesNotMatch(source, /STATUS_META\[pc\.status\]\|\|STATUS_META\.available/)
 })
 
@@ -860,7 +860,7 @@ test('Floor Matrix PC status icon uses green when available, orange when in use,
   assert.match(card, /available:\{[^\n]*color:'text-teal-dim'[^\n]*iconBg:'bg-teal\/10'/)
   assert.match(card, /occupied:\{[^\n]*color:'text-orange-dim'[^\n]*iconBg:'bg-orange\/15'/)
   assert.match(card, /offline:\{[^\n]*color:'text-slate-soft'[^\n]*iconBg:'bg-surface-raised'/)
-  assert.match(card, /session \|\| \['occupied','in-use','busy'\]\.includes\(rawStatus\)/)
+  assert.match(card, /const statusKey=effectivePcStatus\(pc\)/)
   assert.match(css, /--color-orange:\s*#D97706/i)
   assert.match(css, /--color-orange-dim:\s*#B45309/i)
 })

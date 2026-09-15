@@ -1,0 +1,135 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const root=process.cwd()
+const read=(file)=>readFileSync(resolve(root,file),'utf8')
+
+test('Admin and Customer GET layers cache reads, deduplicate in-flight calls, and invalidate after mutations',()=>{
+  const admin=read('apps/admin/src/lib/api.js')
+  const customer=read('apps/customer/src/lib/api.js')
+  for(const source of [admin,customer]){
+    assert.match(source,/const readCache = new Map\(\)/)
+    assert.match(source,/const readInFlight = new Map\(\)/)
+    assert.match(source,/let readCacheEpoch = 0/)
+    assert.match(source,/if\(readInFlight\.has\(key\)\) return readInFlight\.get\(key\)/)
+    assert.match(source,/if\(epoch===readCacheEpoch\)readCache\.set/)
+    assert.match(source,/invalidateApiCache/)
+  }
+  assert.match(admin,/base==='\/settings'[\s\S]*5 \* 60_000/)
+  assert.match(customer,/base==='\/settings'[\s\S]*5 \* 60_000/)
+  assert.match(customer,/base==='\/auth\/heartbeat'[\s\S]*return false/)
+})
+
+test('Cloud Admin main workspace is bundled into one authenticated app-data RPC',()=>{
+  const client=read('apps/admin/src/lib/cloudClient.js')
+  const context=read('apps/admin/src/context/AppDataContext.jsx')
+  const migration=read('supabase/migrations/20260915000027_station_runtime_heartbeat_rpc.sql')
+  assert.match(client,/rpcRead\('aezakmi_admin_app_data'/)
+  assert.match(context,/apiGet\('\/app-data'/)
+  assert.match(migration,/create or replace function public\.aezakmi_admin_app_data/)
+  assert.match(migration,/'stations'/)
+  assert.match(migration,/'sessions'/)
+  assert.match(migration,/'members'/)
+  assert.match(migration,/'ratePlans'/)
+})
+
+test('Customer app snapshot and station heartbeat use one-request database RPCs',()=>{
+  const stationApi=read('supabase/functions/station-api/index.ts')
+  const runtime=read('supabase/functions/station-runtime/index.ts')
+  const migration=read('supabase/migrations/20260915000027_station_runtime_heartbeat_rpc.sql')
+  assert.match(stationApi,/aezakmi_station_app_data/)
+  assert.match(runtime,/aezakmi_station_runtime_heartbeat/)
+  assert.match(migration,/create or replace function public\.aezakmi_station_app_data/)
+  assert.match(migration,/create or replace function public\.aezakmi_station_runtime_heartbeat/)
+})
+
+test('Cloud polling is a low-frequency safety net while realtime remains the wake-up path',()=>{
+  const admin=read('apps/admin/src/context/AppDataContext.jsx')
+  const customer=read('apps/customer/src/context/AppDataContext.jsx')
+  const station=read('apps/customer/src/lib/cloudStation.js')
+  assert.match(admin,/setInterval\(cloudRefresh,60000\)/)
+  assert.match(customer,/setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'\)queueRefresh\(\)\},60000\)/)
+  assert.match(station,/heartbeatTimer=setInterval\(\(\)=>void heartbeat\(\),60000\)/)
+  assert.match(station,/pollTimer=setInterval\(\(\)=>void pollCommands\(\),300000\)/)
+  assert.match(station,/WebSocket/)
+})
+
+test('Café Edge interval sync stays lightweight and full snapshots are periodic/event driven',()=>{
+  const sync=read('backend/src/cloud/syncWorker.js')
+  const edge=read('supabase/functions/edge-sync/index.ts')
+  assert.match(sync,/const lightweight=\(reason==='interval'\|\|reason==='command-ack'\)&&events\.length===0&&!fullSyncDue/)
+  assert.match(sync,/lightweight\n\s*\? \{syncReason:reason,outboxPending:pending\.length,lightweight:true\}/)
+  assert.match(sync,/\{\.\.\.buildEdgeSnapshot\(\),syncReason:reason/)
+  assert.match(sync,/cloud_last_full_sync_at/)
+  assert.match(edge,/if\(!lightweight\)/)
+})
+
+test('active sessions are never relabeled Offline just because station connectivity is stale',()=>{
+  const mapper=read('apps/admin/src/lib/cloudClient.js')
+  const context=read('apps/admin/src/context/AppDataContext.jsx')
+  const status=read('apps/admin/src/lib/pcStatus.js')
+  const localApi=read('backend/src/routes/apiRoutes.js')
+  assert.match(mapper,/maintenance \? "maintenance" : session \? "occupied"/)
+  assert.match(context,/status: effectivePcStatus\(\{ \.\.\.pc, status:rawStatus, session \}\)/)
+  assert.match(status,/if \(pc\.session \|\| \['occupied', 'in-use', 'busy'\]\.includes\(raw\)\) return 'occupied'/)
+  assert.match(status,/raw === 'reserved' && !pc\.session\?\.billing/)
+  assert.match(localApi,/displayStatus=session && persistedStatus !== 'maintenance' \? 'occupied' : persistedStatus/)
+  assert.match(localApi,/stationOnline,/)
+})
+
+test('Floor Matrix and Overview use effective business status instead of raw connectivity status',()=>{
+  const floor=read('apps/admin/src/pages/FloorMatrix.jsx')
+  const overview=read('apps/admin/src/pages/OverviewPage.jsx')
+  const card=read('apps/admin/src/components/floor/PcCard.jsx')
+  assert.match(floor,/effectivePcStatus/)
+  assert.match(floor,/occupied:pcs\.filter\(p=>effectivePcStatus\(p\)==='occupied'\)/)
+  assert.match(floor,/effectivePcStatus\(pc\)===filter/)
+  assert.match(overview,/const status=effectivePcStatus\(pc\)/)
+  assert.match(overview,/STATUS_META\[effectivePcStatus\(pc\)\]/)
+  assert.match(card,/const statusKey=effectivePcStatus\(pc\)/)
+  assert.match(card,/Station connection lost · session still active/)
+})
+
+test('station action availability separates reachability from occupied business state',()=>{
+  const status=read('apps/admin/src/lib/pcStatus.js')
+  const actions=read('apps/admin/src/lib/stationActions.js')
+  assert.match(status,/pc\.stationOnline === false/)
+  assert.match(status,/pc\.cloudOnline === false/)
+  assert.match(actions,/return isPcStationOnline\(pc\)/)
+  assert.match(actions,/if \(!reachable && prepaid\) actions\.push\('forfeit-time'\)/)
+})
+
+test('reduced heartbeat cadence has a matching 180-second presence grace everywhere it matters',()=>{
+  const adminMapper=read('apps/admin/src/lib/cloudClient.js')
+  const adminApi=read('supabase/functions/admin-api/index.ts')
+  const stationAdmin=read('supabase/functions/station-admin/index.ts')
+  const restore=read('supabase/migrations/20260915000028_station_presence_heartbeat_grace.sql')
+  assert.match(adminMapper,/< 180_000/)
+  assert.match(adminApi,/>=180_000/)
+  assert.match(stationAdmin,/STATION_OFFLINE_AFTER_MS=180_000/)
+  assert.match(restore,/interval '180 seconds'/)
+})
+
+test('active Customer Electron uses a floating compact timer and never background-throttles session timers',()=>{
+  const main=read('apps/customer/electron/main.cjs')
+  const view=read('apps/customer/src/pages/CustomerSessionView.jsx')
+  assert.match(main,/const COMPACT_WIDTH = 332/)
+  assert.match(main,/const COMPACT_HEIGHT = 118/)
+  assert.match(main,/workArea\.x \+ COMPACT_MARGIN/)
+  assert.match(main,/workArea\.y \+ COMPACT_MARGIN/)
+  assert.match(main,/setAlwaysOnTop\(true, 'floating'\)/)
+  assert.match(main,/showInactive\(\)/)
+  assert.match(main,/backgroundThrottling:false/)
+  assert.match(main,/function hideMiniDashboard\(\)[\s\S]*applyCompactSessionMode\(\)/)
+  assert.match(view,/data-session-widget="compact"/)
+  assert.match(view,/showMiniDashboard/)
+})
+
+test('session start transitions end in compact mode rather than hiding the paid-session UI',()=>{
+  const main=read('apps/customer/electron/main.cjs')
+  assert.match(main,/function enterActiveState\(\)[\s\S]*applyCompactSessionMode\(\)/)
+  assert.match(main,/function completeSessionStartTransition\(\)[\s\S]*applyCompactSessionMode\(\)/)
+  assert.doesNotMatch(main,/function hideMiniDashboard\(\)[\s\S]{0,300}mainWindow\.hide\(\)/)
+})

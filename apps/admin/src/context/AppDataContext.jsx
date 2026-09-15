@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext.jsx'
-import { apiGet, apiPost, apiPatch, apiDelete } from '../lib/api.js'
+import { apiGet, apiPost, apiPatch, apiDelete, invalidateApiCache } from '../lib/api.js'
 import { connectSocket, disconnectSocket } from '../lib/socket.js'
 import { showToast } from '../lib/toast.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
@@ -8,6 +8,7 @@ import { scopedPageCacheKey } from '../lib/pageCache.js'
 import { isCloudAdmin, cloudBranchId } from '../lib/cloudClient.js'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../lib/sessionTime.js'
 import { playAdminSound } from '../lib/sound.js'
+import { effectivePcStatus } from '../lib/pcStatus.js'
 
 const AppDataContext = createContext(null)
 const suppressedCommandToastIds = new Set()
@@ -28,22 +29,28 @@ const EMPTY_SETTINGS = {
 
 function normalizePc(pc) {
   if (!pc) return pc
+  const session = pc.session ? {
+    ...pc.session,
+    id: pc.session.id != null ? String(pc.session.id) : pc.session.id,
+    customerId: pc.session.customerId ?? pc.session.customer_id ?? null,
+    ratePlanId: pc.session.ratePlanId ?? pc.session.rate_plan_id ?? null,
+    amount: finiteOr(pc.session.amount ?? pc.session.amount_paid, 0),
+    prepaidSeconds: finiteOrNull(pc.session.prepaidSeconds ?? pc.session.prepaid_seconds),
+    pausedRemainingSeconds: finiteOrNull(pc.session.pausedRemainingSeconds ?? pc.session.paused_remaining_seconds),
+    remainingSeconds: finiteOrNull(pc.session.remainingSeconds ?? pc.session.remaining_seconds),
+    accruedAmount: finiteOrNull(pc.session.accruedAmount ?? pc.session.accrued_amount),
+    postpaidRatePerMinute: finiteOrNull(pc.session.postpaidRatePerMinute ?? pc.session.postpaid_rate_per_minute),
+  } : null
+  const rawStatus=String(pc.status || '').toLowerCase()
   return {
     ...pc,
     id: pc.id != null ? String(pc.id) : pc.id,
     ipAddress: pc.ipAddress ?? pc.ip_address ?? '',
-    session: pc.session ? {
-      ...pc.session,
-      id: pc.session.id != null ? String(pc.session.id) : pc.session.id,
-      customerId: pc.session.customerId ?? pc.session.customer_id ?? null,
-      ratePlanId: pc.session.ratePlanId ?? pc.session.rate_plan_id ?? null,
-      amount: finiteOr(pc.session.amount ?? pc.session.amount_paid, 0),
-      prepaidSeconds: finiteOrNull(pc.session.prepaidSeconds ?? pc.session.prepaid_seconds),
-      pausedRemainingSeconds: finiteOrNull(pc.session.pausedRemainingSeconds ?? pc.session.paused_remaining_seconds),
-      remainingSeconds: finiteOrNull(pc.session.remainingSeconds ?? pc.session.remaining_seconds),
-      accruedAmount: finiteOrNull(pc.session.accruedAmount ?? pc.session.accrued_amount),
-      postpaidRatePerMinute: finiteOrNull(pc.session.postpaidRatePerMinute ?? pc.session.postpaid_rate_per_minute),
-    } : null,
+    // An active session is authoritative for the desk state. Presence is kept
+    // in stationOnline/cloudOnline so a dropped heartbeat cannot relabel an
+    // occupied PC as Offline.
+    status: effectivePcStatus({ ...pc, status:rawStatus, session }),
+    session,
   }
 }
 
@@ -170,56 +177,77 @@ export function AppDataProvider({ children }) {
         return
       }
 
-      const [pcsData, plansData, clientContextData] = await Promise.all([
-        apiGet('/pcs'),
-        apiGet('/rate-plans'),
-        apiGet('/client/context'),
-      ])
-      let members = []
-      let topUpRequests = []
-      let supportRequests = []
-      let sessionExtensions = []
-      let announcements = []
-      let settings = EMPTY_SETTINGS
-
-      if (user.role === 'admin') {
-        const [membersData, topUpsData, supportData, extensionsData, settingsData, announcementsData] = await Promise.all([
-          apiGet('/members'),
-          apiGet('/top-ups'),
-          apiGet('/support'),
-          apiGet('/session-extensions'),
-          apiGet('/settings'),
-          apiGet('/announcements'),
-        ])
-        members = (membersData.members ?? []).map(normalizeMember)
-        topUpRequests = topUpsData.topUpRequests ?? []
-        supportRequests = (supportData.supportRequests ?? []).map((request) => ({ ...request }))
-        sessionExtensions = (extensionsData.extensions ?? []).map(normalizeSessionExtension)
-        announcements = announcementsData.announcements ?? []
-        settings = normalizeSettings(settingsData.settings ?? {})
+      let snapshot
+      if (isCloudAdmin() && user.role === 'admin') {
+        // Cloud Admin receives one branch snapshot instead of fanning a single
+        // refresh into many duplicate PostgREST reads. The Cloud client still
+        // queries the authoritative tables, but shared lookups happen once.
+        const data=await apiGet('/app-data')
+        snapshot={
+          pcs:(data.pcs ?? []).map(normalizePc),
+          members:(data.members ?? []).map(normalizeMember),
+          ratePlans:(data.ratePlans ?? []).map(normalizeRatePlan),
+          topUpRequests:data.topUpRequests ?? [],
+          supportRequests:(data.supportRequests ?? []).map((request)=>({...request})),
+          sessionExtensions:(data.extensions ?? []).map(normalizeSessionExtension),
+          announcements:data.announcements ?? [],
+          settings:normalizeSettings(data.settings ?? {}),
+          loading:false,
+          serverError:'',
+          clientContext:data.clientContext ?? { cloud:true, branchId:cloudBranchId(), transport:'supabase' },
+        }
       } else {
-        const [memberData, settingsData, announcementsData] = await Promise.all([
-          apiGet('/members/me'),
-          apiGet('/settings'),
-          apiGet('/announcements'),
+        const [pcsData, plansData, clientContextData] = await Promise.all([
+          apiGet('/pcs'),
+          apiGet('/rate-plans'),
+          apiGet('/client/context'),
         ])
-        members = memberData.member ? [normalizeMember(memberData.member)] : []
-        settings = normalizeSettings(settingsData.settings ?? {})
-        announcements = announcementsData.announcements ?? []
-      }
+        let members = []
+        let topUpRequests = []
+        let supportRequests = []
+        let sessionExtensions = []
+        let announcements = []
+        let settings = EMPTY_SETTINGS
 
-      const snapshot={
-        pcs:(pcsData.pcs ?? []).map(normalizePc),
-        members,
-        ratePlans:(plansData.ratePlans ?? []).map(normalizeRatePlan),
-        topUpRequests,
-        supportRequests,
-        sessionExtensions,
-        announcements,
-        settings,
-        loading:false,
-        serverError:'',
-        clientContext:clientContextData ?? null,
+        if (user.role === 'admin') {
+          const [membersData, topUpsData, supportData, extensionsData, settingsData, announcementsData] = await Promise.all([
+            apiGet('/members'),
+            apiGet('/top-ups'),
+            apiGet('/support'),
+            apiGet('/session-extensions'),
+            apiGet('/settings'),
+            apiGet('/announcements'),
+          ])
+          members = (membersData.members ?? []).map(normalizeMember)
+          topUpRequests = topUpsData.topUpRequests ?? []
+          supportRequests = (supportData.supportRequests ?? []).map((request) => ({ ...request }))
+          sessionExtensions = (extensionsData.extensions ?? []).map(normalizeSessionExtension)
+          announcements = announcementsData.announcements ?? []
+          settings = normalizeSettings(settingsData.settings ?? {})
+        } else {
+          const [memberData, settingsData, announcementsData] = await Promise.all([
+            apiGet('/members/me'),
+            apiGet('/settings'),
+            apiGet('/announcements'),
+          ])
+          members = memberData.member ? [normalizeMember(memberData.member)] : []
+          settings = normalizeSettings(settingsData.settings ?? {})
+          announcements = announcementsData.announcements ?? []
+        }
+
+        snapshot={
+          pcs:(pcsData.pcs ?? []).map(normalizePc),
+          members,
+          ratePlans:(plansData.ratePlans ?? []).map(normalizeRatePlan),
+          topUpRequests,
+          supportRequests,
+          sessionExtensions,
+          announcements,
+          settings,
+          loading:false,
+          serverError:'',
+          clientContext:clientContextData ?? null,
+        }
       }
       if (generation !== refreshGenerationRef.current || requestCacheKey !== scopedPageCacheKey('app-data',user)) return
       setState((current) => ({ ...current, ...snapshot }))
@@ -239,6 +267,7 @@ export function AppDataProvider({ children }) {
     if (isCloudAdmin()) {
       let timer=null
       const cloudRefresh=async()=>{
+        if (document.visibilityState === 'hidden') return
         try{
           await refresh()
           if(active)setState(current=>({...current,realtimeConnected:navigator.onLine}))
@@ -251,10 +280,12 @@ export function AppDataProvider({ children }) {
         if(nextKey) void readSnapshot(nextKey).then(snapshot=>{if(active&&snapshot){const confirmed=sanitizeCachedSnapshot(snapshot);setState(current=>({...current,...confirmed,loading:false,serverError:''}));void writeSnapshot(nextKey,confirmed)}}).finally(()=>{if(active)void cloudRefresh()})
         else void cloudRefresh()
       }
+      const onVisible=()=>{if(document.visibilityState==='visible')void cloudRefresh()}
       window.addEventListener('online',onOnline)
       window.addEventListener('aezakmi:cloud-branch-changed',onBranch)
-      timer=setInterval(cloudRefresh,5000)
-      return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);window.removeEventListener('online',onOnline);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch)}
+      document.addEventListener('visibilitychange',onVisible)
+      timer=setInterval(cloudRefresh,60000)
+      return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);window.removeEventListener('online',onOnline);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible)}
     }
     const socket = connectSocket()
     let refreshTimer = null
@@ -267,20 +298,21 @@ export function AppDataProvider({ children }) {
       finally { refreshRunning = false }
     }
     const queueRefresh = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(runRefresh, 75) }
-    const onSocketConnect = () => { setState((current) => ({ ...current, realtimeConnected:true })); queueRefresh() }
+    const invalidateAndRefresh = () => { invalidateApiCache(); queueRefresh() }
+    const onSocketConnect = () => { setState((current) => ({ ...current, realtimeConnected:true })); invalidateAndRefresh() }
     const onSocketDisconnect = () => { setState((current) => ({ ...current, realtimeConnected:false })) }
     const onSocketError = () => { setState((current) => ({ ...current, realtimeConnected:false })) }
     const onAuthRevoked = (payload) => window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:payload}))
 
     // data:changed is the authoritative invalidation event. It performs an
     // in-app data refresh; it never reloads the browser/Electron window.
-    const onChanged = queueRefresh
-    const onRatePlansUpdated = queueRefresh
-    const onAnnouncementsUpdated = queueRefresh
-    const onSessionUpdated = queueRefresh
-    const onTopUpUpdated = queueRefresh
+    const onChanged = invalidateAndRefresh
+    const onRatePlansUpdated = invalidateAndRefresh
+    const onAnnouncementsUpdated = invalidateAndRefresh
+    const onSessionUpdated = invalidateAndRefresh
+    const onTopUpUpdated = invalidateAndRefresh
     const onCommandStatus = (payload) => {
-      queueRefresh()
+      invalidateAndRefresh()
       if (payload?.id && suppressedCommandToastIds.has(payload.id)) {
         if (payload.status === 'completed' || payload.status === 'failed') suppressedCommandToastIds.delete(payload.id)
         return
@@ -298,11 +330,20 @@ export function AppDataProvider({ children }) {
       if (!payload?.pcId) return
       setState((current) => {
         const previous=current.pcs.find((pc)=>String(pc.id)===String(payload.pcId))
-        const nextStatus=payload.online ? (previous?.session ? 'occupied' : 'available') : 'offline'
-        if (!payload.online && previous && previous.status !== 'offline') {
+        const hasSession=Boolean(previous?.session)
+        const nextStatus=hasSession ? 'occupied' : payload.online ? 'available' : 'offline'
+        if (!payload.online && previous && previous.stationOnline !== false && previous.cloudOnline !== false) {
           playAdminSound('station-warning', { dedupeKey:`offline:${payload.pcId}`, dedupeMs:10000 })
         }
-        return { ...current, pcs: current.pcs.map((pc) => String(pc.id) === String(payload.pcId) ? { ...pc, status:nextStatus } : pc) }
+        return { ...current, pcs: current.pcs.map((pc) => String(pc.id) === String(payload.pcId) ? {
+          ...pc,
+          status:nextStatus,
+          stationOnline:Boolean(payload.online),
+          isOnline:Boolean(payload.online),
+          cloudOnline:Boolean(payload.online),
+          cloudConnectionStatus:payload.online ? 'online' : 'offline',
+          stationLastSeenAt:payload.online ? (payload.at || new Date().toISOString()) : pc.stationLastSeenAt,
+        } : pc) }
       })
     }
 
@@ -349,7 +390,7 @@ export function AppDataProvider({ children }) {
           String(item.id) === String(payload.id) ? normalizeSessionExtension({ ...item, ...payload }) : item
         ),
       }))
-      queueRefresh()
+      invalidateAndRefresh()
     }
 
     const onWalletChanged = (payload) => {
@@ -448,9 +489,12 @@ export function AppDataProvider({ children }) {
   async function waitForStationCommand(commandId, timeoutMs = 22000) {
     const deadline=Date.now()+timeoutMs
     let lastStatus='queued'
+    // Realtime normally wakes the station immediately, so status polling is only
+    // a completion fallback. Back off instead of hammering station-admin 4x/sec.
+    let pollDelayMs=500
     while (Date.now() < deadline) {
       try {
-        const response=await apiGet(`/remote-commands/${encodeURIComponent(commandId)}`)
+        const response=await apiGet(`/remote-commands/${encodeURIComponent(commandId)}`, { force:true })
         const command=response?.command || response
         lastStatus=String(command?.status || lastStatus).toLowerCase()
         if (lastStatus === 'completed') return command
@@ -463,7 +507,10 @@ export function AppDataProvider({ children }) {
       } catch (error) {
         if (error?.code !== 'COMMAND_NOT_FOUND' && error?.status !== 404) throw error
       }
-      await new Promise((resolve)=>setTimeout(resolve,250))
+      const remaining=Math.max(0,deadline-Date.now())
+      if (!remaining) break
+      await new Promise((resolve)=>setTimeout(resolve,Math.min(pollDelayMs,remaining)))
+      pollDelayMs=Math.min(2000,Math.round(pollDelayMs*1.5))
     }
     const error=new Error(`Customer Station did not confirm the session exit (last status: ${lastStatus}). No Pause & Save, forfeit, or refund was committed.`)
     error.code='STATION_EXIT_TIMEOUT'

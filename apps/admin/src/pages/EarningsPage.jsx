@@ -63,7 +63,7 @@ export default function EarningsPage(){
   useEffect(()=>{let active=true;if(cacheKey)void readSnapshot(cacheKey).then(snapshot=>{if(active&&snapshot){setData(snapshot);setLoading(false)}}).finally(()=>{if(active)void load()});else void load();return()=>{active=false;loadSequenceRef.current += 1}},[load,cacheKey])
   useEffect(()=>{
     if (isCloudAdmin()) {
-      const timer=setInterval(()=>void load(),15000)
+      const timer=setInterval(()=>{if(document.visibilityState==='visible')void load()},60000)
       return()=>clearInterval(timer)
     }
     const socket=connectSocket();let timer=null

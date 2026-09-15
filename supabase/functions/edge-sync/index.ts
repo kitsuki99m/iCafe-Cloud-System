@@ -36,19 +36,26 @@ async function runtimeSnapshot(admin:SupabaseClient,branchId:string,cursorRaw:an
 }
 
 Deno.serve(async req=>{const o=preflight(req);if(o)return o;try{
-  const admin=adminClient(),edge=await requireEdge(req,admin),b=await req.json().catch(()=>({})),now=new Date().toISOString(),events=Array.isArray(b.events)?b.events.slice(0,200):[],acks=Array.isArray(b.commandAcks)?b.commandAcks.slice(0,100):[]
+  const admin=adminClient(),edge=await requireEdge(req,admin),b=await req.json().catch(()=>({})),now=new Date().toISOString(),events=Array.isArray(b.events)?b.events.slice(0,200):[],acks=Array.isArray(b.commandAcks)?b.commandAcks.slice(0,100):[],lightweight=b.lightweight===true&&events.length===0
   let ingest:any={accepted:0,processedEventIds:[],conflicts:[]}
   if(events.length){const{data,error}=await admin.rpc('aezakmi_ingest_edge_events',{p_edge_id:edge.id,p_events:events});if(error)throw error;if(data&&typeof data==='object')ingest=data;else ingest={accepted:Number(data||0),processedEventIds:events.map((e:any)=>e.eventId).filter(Boolean),conflicts:[]}}
   for(const ack of acks){const status=['running','completed','failed'].includes(String(ack?.status))?String(ack.status):null;if(!ack?.id||!status)continue;const patch:any={status,result:ack.result&&typeof ack.result==='object'?ack.result:{}};if(status==='completed'||status==='failed')patch.completed_at=now;await admin.from('cloud_commands').update(patch).eq('id',String(ack.id)).eq('edge_id',edge.id)}
   await admin.from('edge_servers').update({last_seen_at:now,last_sync_at:now,software_version:String(b.softwareVersion||'').slice(0,60)||null,status_snapshot:b.snapshot&&typeof b.snapshot==='object'?b.snapshot:{},updated_at:now}).eq('id',edge.id)
-  await admin.from('cloud_commands').update({status:'expired',completed_at:now,result:{error:'Command expired before the Edge could execute it.',code:'COMMAND_EXPIRED'}}).eq('edge_id',edge.id).eq('status','queued').lte('expires_at',now)
-  const[{data:cfg},{data:sub},{data:commands,error:cmdError},runtime]=await Promise.all([
+  if(!lightweight)await admin.from('cloud_commands').update({status:'expired',completed_at:now,result:{error:'Command expired before the Edge could execute it.',code:'COMMAND_EXPIRED'}}).eq('edge_id',edge.id).eq('status','queued').lte('expires_at',now)
+  const baseReads=[
     admin.from('branch_configs').select('version,config,updated_at').eq('branch_id',edge.branch_id).maybeSingle(),
-    admin.from('subscriptions').select('plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').eq('organization_id',edge.organization_id).maybeSingle(),
     admin.from('cloud_commands').select('id,station_id,command,payload,requested_at,expires_at').eq('edge_id',edge.id).eq('status','queued').gt('expires_at',now).order('requested_at').limit(50),
-    runtimeSnapshot(admin,edge.branch_id,b.runtimeCursor,now),
-  ])
+  ] as const
+  const[{data:cfg},{data:commands,error:cmdError}]=await Promise.all(baseReads)
   if(cmdError)throw cmdError
+  let sub:any=null,runtime:any=null
+  if(!lightweight){
+    const[{data:subscription},runtimeData]=await Promise.all([
+      admin.from('subscriptions').select('plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end').eq('organization_id',edge.organization_id).maybeSingle(),
+      runtimeSnapshot(admin,edge.branch_id,b.runtimeCursor,now),
+    ])
+    sub=subscription;runtime=runtimeData
+  }
   const since=Number(b.configVersion||0),version=Number(cfg?.version||0)
-  return json({success:true,accepted:Number(ingest?.accepted||0),processedEventIds:Array.isArray(ingest?.processedEventIds)?ingest.processedEventIds:[],conflicts:Array.isArray(ingest?.conflicts)?ingest.conflicts:[],receivedAt:now,license:sub?{plan:sub.plan,status:sub.status,maxBranches:Number(sub.max_branches||0),maxStations:Number(sub.max_stations||0),trialEndsAt:sub.trial_ends_at||null,graceUntil:sub.grace_until||null,currentPeriodEnd:sub.current_period_end||null,advisoryOnly:true}:{status:'unknown',advisoryOnly:true},config:{changed:version>since,version,config:version>since?(cfg?.config||{}):undefined,updatedAt:cfg?.updated_at||null},runtime,commands:commands||[]})
+  return json({success:true,accepted:Number(ingest?.accepted||0),processedEventIds:Array.isArray(ingest?.processedEventIds)?ingest.processedEventIds:[],conflicts:Array.isArray(ingest?.conflicts)?ingest.conflicts:[],receivedAt:now,...(!lightweight?{license:sub?{plan:sub.plan,status:sub.status,maxBranches:Number(sub.max_branches||0),maxStations:Number(sub.max_stations||0),trialEndsAt:sub.trial_ends_at||null,graceUntil:sub.grace_until||null,currentPeriodEnd:sub.current_period_end||null,advisoryOnly:true}:{status:'unknown',advisoryOnly:true}}:{}),config:{changed:version>since,version,config:version>since?(cfg?.config||{}):undefined,updatedAt:cfg?.updated_at||null},runtime,commands:commands||[],lightweight})
 }catch(e){return fail(e,'Cloud synchronization failed.')}})

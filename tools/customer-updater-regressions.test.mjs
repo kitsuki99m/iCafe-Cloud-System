@@ -38,8 +38,9 @@ test('Customer preload and cloud heartbeat expose version diagnostics only',()=>
 })
 
 test('Cloud runtime persists installed Customer version but Admin PC cards expose no updater state',()=>{
-  assert.match(runtime,/software_version/)
-  assert.match(runtime,/customer_version/)
+  const heartbeatSql=read('supabase/migrations/20260915000027_station_runtime_heartbeat_rpc.sql')
+  assert.match(runtime,/softwareVersion/)
+  assert.match(heartbeatSql,/customer_version=coalesce\(version_text,customer_version\)/)
   assert.doesNotMatch(runtime,/customer_update_state|customer_update_progress|customer_update_install_when_idle/)
   assert.match(pcCard,/customerVersion/)
   assert.doesNotMatch(pcCard,/Update ready|Update available|updateInstallWhenIdle|customerUpdateState/)

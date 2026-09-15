@@ -14,6 +14,23 @@ const BRANCH_KEY = "aezakmi.cloud.branch_id";
 const ORG_KEY = "aezakmi.cloud.organization_id";
 const INVITE_SETUP_KEY = "aezakmi.cloud.invite_setup.v1";
 let refreshInFlight = null;
+const restReadCache = new Map();
+const restReadInFlight = new Map();
+const subscriptionReadCache = new Map();
+let developerListCache = null;
+let developerListInFlight = null;
+let userReadCache = null;
+let userReadInFlight = null;
+
+export function cloudInvalidateReadCache() {
+  restReadCache.clear();
+  restReadInFlight.clear();
+  subscriptionReadCache.clear();
+  developerListCache = null;
+  developerListInFlight = null;
+  userReadCache = null;
+  userReadInFlight = null;
+}
 
 export function isCloudAdmin() {
   return CLOUD_MODE;
@@ -40,6 +57,7 @@ function loadSession() {
   }
 }
 function saveSession(value) {
+  cloudInvalidateReadCache();
   if (value) localStorage.setItem(SESSION_KEY, JSON.stringify(value));
   else localStorage.removeItem(SESSION_KEY);
 }
@@ -180,14 +198,19 @@ export async function cloudAuthHeaders() {
     "Content-Type": "application/json",
   });
 }
-export async function cloudGetUser() {
-  const h = await cloudAuthHeaders();
-  return parse(
-    await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: h,
-      cache: "no-store",
-    }),
-  );
+export async function cloudGetUser({ force = false } = {}) {
+  const session=await cloudSession();
+  if (!session?.access_token) throw Object.assign(new Error("Sign in first."), { status:401, code:"AUTH_REQUIRED" });
+  const tokenKey=String(session.access_token);
+  if (!force && userReadCache?.tokenKey===tokenKey && userReadCache.expiresAt>Date.now()) return userReadCache.value;
+  if (!force && userReadInFlight?.tokenKey===tokenKey) return userReadInFlight.promise;
+  const promise=(async()=>{
+    const value=await parse(await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers:headers({Authorization:`Bearer ${session.access_token}`,"Content-Type":"application/json"}), cache:"no-store" }));
+    userReadCache={tokenKey,value,expiresAt:Date.now()+5*60_000};
+    return value;
+  })().finally(()=>{if(userReadInFlight?.tokenKey===tokenKey)userReadInFlight=null});
+  userReadInFlight={tokenKey,promise};
+  return promise;
 }
 export async function cloudSignOut() {
   try {
@@ -218,15 +241,58 @@ export async function cloudVerifyPassword(email, password) {
   return true;
 }
 
-async function rest(path, { method = "GET", body } = {}) {
-  const h = await cloudAuthHeaders();
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method,
-    headers: { ...h, Prefer: "return=representation" },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
-  return parse(response);
+function restReadTtl(path) {
+  if (/platform_subscription_packages|platform_pricing_settings/.test(path)) return 5 * 60_000;
+  if (/branch_configs|branch_rate_plans|branch_announcements/.test(path)) return 5 * 60_000;
+  if (/cloud_audit_logs|branch_revenue_events/.test(path)) return 60_000;
+  if (/branch_stations|branch_sessions|branch_members|branch_top_ups|branch_support_requests|branch_session_extensions|branch_feedback/.test(path)) return 20_000;
+  return 30_000;
 }
+async function rest(path, { method = "GET", body, force = false, cacheTtlMs = null } = {}) {
+  const normalizedMethod=String(method||"GET").toUpperCase();
+  const ttlMs=cacheTtlMs == null ? restReadTtl(path) : Math.max(0,Number(cacheTtlMs)||0);
+  const cacheKey=`${normalizedMethod}:${path}`;
+  if (normalizedMethod === "GET" && !force && ttlMs > 0) {
+    const cached=restReadCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (restReadInFlight.has(cacheKey)) return restReadInFlight.get(cacheKey);
+  }
+  const request=(async()=>{
+    const h = await cloudAuthHeaders();
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      method:normalizedMethod,
+      headers: { ...h, Prefer: "return=representation" },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    });
+    const value=await parse(response);
+    if (normalizedMethod === "GET" && !force && ttlMs > 0) restReadCache.set(cacheKey,{value,expiresAt:Date.now()+ttlMs});
+    else if (normalizedMethod !== "GET") cloudInvalidateReadCache();
+    return value;
+  })();
+  if (normalizedMethod === "GET" && !force && ttlMs > 0) {
+    restReadInFlight.set(cacheKey,request);
+    request.finally(()=>restReadInFlight.delete(cacheKey));
+  }
+  return request;
+}
+async function rpcRead(functionName, body = {}, { force = false, ttlMs = 20_000 } = {}) {
+  const cacheKey=`RPC:${functionName}:${JSON.stringify(body||{})}`;
+  if (!force && ttlMs>0) {
+    const cached=restReadCache.get(cacheKey);
+    if (cached && cached.expiresAt>Date.now()) return cached.value;
+    if (restReadInFlight.has(cacheKey)) return restReadInFlight.get(cacheKey);
+  }
+  const request=(async()=>{
+    const h=await cloudAuthHeaders();
+    const response=await fetch(`${SUPABASE_URL}/rest/v1/rpc/${encodeURIComponent(functionName)}`,{method:'POST',headers:h,body:JSON.stringify(body||{})});
+    const value=await parse(response);
+    if (!force && ttlMs>0) restReadCache.set(cacheKey,{value,expiresAt:Date.now()+ttlMs});
+    return value;
+  })();
+  if (!force && ttlMs>0) { restReadInFlight.set(cacheKey,request); request.finally(()=>restReadInFlight.delete(cacheKey)); }
+  return request;
+}
+
 async function restCount(path) {
   const h = await cloudAuthHeaders();
   const response = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -304,33 +370,29 @@ export function cloudOrganizationId() {
 }
 export async function cloudGetSubscriptionOverview(organizationId = cloudOrganizationId()) {
   if (!organizationId) return null;
-  const [rows, packageRows, pricingRows] = await Promise.all([
-    rest(`subscriptions?select=organization_id,plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end&organization_id=eq.${encodeURIComponent(organizationId)}&limit=1`),
-    rest(`platform_subscription_packages?select=id,label,display_order,max_stations,monthly_price,price_suffix,description,is_active&is_active=eq.true&order=display_order.asc`).catch(() => []),
-    rest(`platform_pricing_settings?select=currency,deployment_fee_min,deployment_fee_max,quote_valid_days&singleton=eq.true&limit=1`).catch(() => []),
-  ]);
-  const subscription = rows?.[0] || null;
-  if (!subscription) return null;
-  const branches = await rest(`branches?select=id&organization_id=eq.${encodeURIComponent(organizationId)}&is_active=eq.true`);
-  const ids = (branches || []).map((branch) => branch.id).filter(Boolean);
-  const stationCount = ids.length ? await restCount(`branch_stations?select=local_id&branch_id=in.(${ids.map(encodeURIComponent).join(",")})`) : 0;
-  return {
-    organizationId,
-    plan: subscription.plan || "bronze",
-    status: subscription.status || "trial",
-    maxBranches: Number(subscription.max_branches || 0),
-    maxStations: Number(subscription.max_stations || 0),
-    stationCount: Number(stationCount || 0),
-    branchCount: Array.isArray(branches) ? branches.length : 0,
-    trialEndsAt: subscription.trial_ends_at || null,
-    graceUntil: subscription.grace_until || null,
-    currentPeriodEnd: subscription.current_period_end || null,
-    packageCatalog: Array.isArray(packageRows) ? packageRows : [],
-    pricingSettings: pricingRows?.[0] || null,
-  };
+  const cached=subscriptionReadCache.get(organizationId);
+  if(cached?.value && cached.expiresAt>Date.now()) return cached.value;
+  if(cached?.promise) return cached.promise;
+  const promise=(async()=>{
+    const [rows, packageRows, pricingRows] = await Promise.all([
+      rest(`subscriptions?select=organization_id,plan,status,max_branches,max_stations,trial_ends_at,grace_until,current_period_end&organization_id=eq.${encodeURIComponent(organizationId)}&limit=1`),
+      rest(`platform_subscription_packages?select=id,label,display_order,max_stations,monthly_price,price_suffix,description,is_active&is_active=eq.true&order=display_order.asc`).catch(() => []),
+      rest(`platform_pricing_settings?select=currency,deployment_fee_min,deployment_fee_max,quote_valid_days&singleton=eq.true&limit=1`).catch(() => []),
+    ]);
+    const subscription = rows?.[0] || null;
+    if (!subscription) return null;
+    const branches = await rest(`branches?select=id&organization_id=eq.${encodeURIComponent(organizationId)}&is_active=eq.true`);
+    const ids = (branches || []).map((branch) => branch.id).filter(Boolean);
+    const stationCount = ids.length ? await restCount(`branch_stations?select=local_id&branch_id=in.(${ids.map(encodeURIComponent).join(",")})`) : 0;
+    return {organizationId,plan:subscription.plan||"bronze",status:subscription.status||"trial",maxBranches:Number(subscription.max_branches||0),maxStations:Number(subscription.max_stations||0),stationCount:Number(stationCount||0),branchCount:Array.isArray(branches)?branches.length:0,trialEndsAt:subscription.trial_ends_at||null,graceUntil:subscription.grace_until||null,currentPeriodEnd:subscription.current_period_end||null,packageCatalog:Array.isArray(packageRows)?packageRows:[],pricingSettings:pricingRows?.[0]||null};
+  })();
+  subscriptionReadCache.set(organizationId,{promise,expiresAt:0});
+  try{const value=await promise;subscriptionReadCache.set(organizationId,{value,expiresAt:Date.now()+60_000});return value}
+  catch(error){subscriptionReadCache.delete(organizationId);throw error}
 }
 export function cloudSelectBranch(branch) {
   if (!branch?.id) return;
+  cloudInvalidateReadCache();
   localStorage.setItem(BRANCH_KEY, branch.id);
   localStorage.setItem(ORG_KEY, branch.organization_id || "");
   window.dispatchEvent(
@@ -371,7 +433,18 @@ export async function cloudDeveloperRegistrations(
   action = "list",
   payload = {},
 ) {
-  return cloudInvoke("developer-registrations", { action, ...payload });
+  const normalized=String(action||"list").toLowerCase();
+  if(normalized==="list"){
+    if(developerListCache?.expiresAt>Date.now())return developerListCache.value;
+    if(developerListInFlight)return developerListInFlight;
+    developerListInFlight=cloudInvoke("developer-registrations",{action,...payload})
+      .then((value)=>{developerListCache={value,expiresAt:Date.now()+60_000};return value})
+      .finally(()=>{developerListInFlight=null});
+    return developerListInFlight;
+  }
+  const value=await cloudInvoke("developer-registrations", { action, ...payload });
+  cloudInvalidateReadCache();
+  return value;
 }
 export async function cloudActivateRegistration() {
   return cloudInvoke("activate-registration", {});
@@ -453,12 +526,7 @@ function cloudSessionView(row) {
     observedAt: now,
   };
 }
-async function cloudPcs(branchId) {
-  const encoded = encodeURIComponent(branchId);
-  const [stations, sessions] = await Promise.all([
-    rest(`branch_stations?select=*&branch_id=eq.${encoded}&order=pc_number.asc,label.asc`),
-    rest(`branch_sessions?select=*&branch_id=eq.${encoded}&status=eq.active&order=started_at.desc`),
-  ]);
+function cloudPcsFromRows(stations = [], sessions = []) {
   const sessionsByPc = new Map();
   for (const session of sessions || []) {
     if (!sessionsByPc.has(String(session.pc_id))) sessionsByPc.set(String(session.pc_id), session);
@@ -466,37 +534,32 @@ async function cloudPcs(branchId) {
   return (stations || []).map((row) => {
     const session = sessionsByPc.get(String(row.local_id));
     const cloudHeartbeatAgeMs = row.cloud_last_seen_at ? Date.now() - new Date(row.cloud_last_seen_at).getTime() : Number.POSITIVE_INFINITY;
-    const cloudOnline = Number.isFinite(cloudHeartbeatAgeMs) && cloudHeartbeatAgeMs < 10_000;
-    const cloudDegraded = cloudOnline && cloudHeartbeatAgeMs >= 3_000;
+    const cloudOnline = Number.isFinite(cloudHeartbeatAgeMs) && cloudHeartbeatAgeMs < 180_000;
+    const cloudDegraded = cloudOnline && cloudHeartbeatAgeMs >= 90_000;
     const persistedStatus = String(row.status || "offline").toLowerCase();
     const maintenance = persistedStatus === "maintenance";
-    // Power/lifecycle commands intentionally persist Offline before the OS
-    // exits. Do not reinterpret that as Available merely because the last
-    // heartbeat is still inside the ten-second confirmed-offline window.
-    // Between 3s and 10s we keep the last usable station state and expose a
-    // reconnecting/degraded transport marker instead of flickering Offline.
-    const status = maintenance ? "maintenance" : !cloudOnline && row.station_device_id ? "offline" : session ? "occupied" : persistedStatus === "offline" ? "offline" : persistedStatus === "reserved" ? "reserved" : cloudOnline ? "available" : (row.status || "offline");
+    // Session/business state and station connectivity are separate concerns. A
+    // minimized/throttled Customer renderer can miss a heartbeat without ending
+    // the paid session. Keep the desk In use and expose connectivity separately.
+    const status = maintenance ? "maintenance" : session ? "occupied" : persistedStatus === "reserved" ? "reserved" : !cloudOnline && row.station_device_id ? "offline" : persistedStatus === "offline" ? "offline" : cloudOnline ? "available" : (row.status || "offline");
     return {
-      id: String(row.local_id),
-      pcNumber: row.pc_number ?? row.local_id,
-      label: row.label || row.pc_number || row.local_id,
-      ipAddress: row.ip_address || "",
-      macAddress: row.mac_address || null,
-      spec: row.spec || "",
-      status,
-      session: cloudSessionView(session),
-      stationDeviceId: row.station_device_id || null,
-      cloudLastSeenAt: row.cloud_last_seen_at || null,
+      id: String(row.local_id), pcNumber: row.pc_number ?? row.local_id, label: row.label || row.pc_number || row.local_id,
+      ipAddress: row.ip_address || "", macAddress: row.mac_address || null, spec: row.spec || "", status,
+      session: cloudSessionView(session), stationDeviceId: row.station_device_id || null, cloudLastSeenAt: row.cloud_last_seen_at || null,
       cloudConnectionStatus: !row.station_device_id ? "unpaired" : cloudDegraded ? "reconnecting" : cloudOnline ? "online" : "offline",
-      cloudOnline,
-      cloudDegraded,
-      customerVersion: row.customer_version || null,
-      edgeId: row.edge_id || null,
-      createdAt: row.created_at || null,
-      updatedAt: row.updated_at || null,
+      cloudOnline, cloudDegraded, customerVersion: row.customer_version || null, edgeId: row.edge_id || null, createdAt: row.created_at || null, updatedAt: row.updated_at || null,
     };
   });
 }
+async function cloudPcs(branchId) {
+  const encoded = encodeURIComponent(branchId);
+  const [stations, sessions] = await Promise.all([
+    rest(`branch_stations?select=*&branch_id=eq.${encoded}&order=pc_number.asc,label.asc`),
+    rest(`branch_sessions?select=*&branch_id=eq.${encoded}&status=eq.active&order=started_at.desc`),
+  ]);
+  return cloudPcsFromRows(stations,sessions);
+}
+
 function cloudRatePlan(row) {
   const data = camelizeObject(row?.data || {});
   const optionalNumber = (value) => {
@@ -536,49 +599,49 @@ function cloudMember(row) {
     updatedAt: row.updated_at || null,
   };
 }
+async function cloudAppData(branchId) {
+  const bundle=await rpcRead('aezakmi_admin_app_data',{p_branch_id:branchId},{ttlMs:20_000});
+  const pcs=cloudPcsFromRows(bundle?.stations||[],bundle?.sessions||[]);
+  const memberRows=bundle?.members||[],rateRows=bundle?.ratePlans||[],topUpRows=bundle?.topUps||[],supportRows=bundle?.support||[],extensionRows=bundle?.extensions||[],announcementRows=bundle?.announcements||[];
+  const members=memberRows.map(cloudMember);
+  const memberMap=new Map(members.map((member)=>[String(member.id),member]));
+  const pcMap=new Map(pcs.map((pc)=>[String(pc.id),pc]));
+  const sessionMap=new Map(pcs.filter((pc)=>pc.session?.id).map((pc)=>[String(pc.session.id),pc.id]));
+  const topUpRequests=topUpRows.filter((row)=>!Boolean(row.data?.archived || row.data?.archivedAt)).map((row)=>{
+    const data=camelizeObject(row.data||{}),pc=pcMap.get(String(data.pcId||row.data?.pc_id||"")),member=memberMap.get(String(data.memberId||""));
+    return {id:row.local_id,status:data.status||"pending",createdAt:epoch(row.requested_at||data.requestedAt),customerId:data.memberId||null,customerName:member?.name||"Member",pcId:data.pcId||null,pcLabel:pc?.label||"Unknown PC",pcIp:pc?.ipAddress||null,amount:Number(data.amount||0),method:data.paymentMethod||"cash",gcashNumber:data.gcashNumber||data.refNo||null};
+  });
+  const supportRequests=supportRows.map((row)=>{const member=memberMap.get(String(row.member_id||"")),pc=pcMap.get(String(row.pc_id||""));return{id:row.local_id,memberId:row.member_id||null,pcId:row.pc_id||null,pcLabel:pc?.label||"Unknown PC",pcIp:pc?.ipAddress||null,customerName:row.customer_name||member?.name||member?.username||"Guest",message:row.message||"Customer needs assistance.",status:row.status||"open",createdAt:epoch(row.created_at),readAt:row.read_at?epoch(row.read_at):null,resolvedBy:row.resolved_by||null}});
+  const extensions=extensionRows.map((row)=>{const data=camelizeObject(row.data||{}),sessionId=String(data.computerSessionId||data.sessionId||""),pcId=sessionMap.get(sessionId)||null,pc=pcMap.get(String(pcId||"")),member=memberMap.get(String(data.memberId||""));return{...data,id:row.local_id,sessionId:data.computerSessionId||data.sessionId||null,memberId:data.memberId||null,pcId,pcLabel:pc?.label||"Unknown PC",pcIp:pc?.ipAddress||null,customerName:member?.name||"Customer",requestedAt:row.requested_at||data.requestedAt}});
+  const config=bundle?.config&&typeof bundle.config==='object'?bundle.config:{};
+  return {success:true,pcs,members,ratePlans:rateRows.map(cloudRatePlan),topUpRequests,supportRequests,extensions,announcements:announcementRows.map((row)=>({id:row.local_id,...camelizeObject(row.data||{})})),settings:config.settings||config||{},clientContext:{success:true,cloud:true,branchId,transport:"supabase"},_rawSessions:bundle?.sessions||[]};
+}
+
 async function cloudOverview(branchId) {
   const encoded = encodeURIComponent(branchId);
   const since = new Date(Date.now() - 8 * 86400_000).toISOString();
-  const [pcs, sessions, revenue, feedbackRows, announcementRows, memberRows] = await Promise.all([
-    cloudPcs(branchId),
-    rest(`branch_sessions?select=*&branch_id=eq.${encoded}&status=eq.active&order=started_at.asc`),
+  const [appData, revenue, feedbackRows] = await Promise.all([
+    cloudAppData(branchId),
     rest(`branch_revenue_events?select=*&branch_id=eq.${encoded}&occurred_at=gte.${encodeURIComponent(since)}&order=occurred_at.asc`),
     rest(`branch_feedback?select=*&branch_id=eq.${encoded}&order=created_at.desc&limit=3`),
-    rest(`branch_announcements?select=*&branch_id=eq.${encoded}&order=updated_at.desc&limit=3`),
-    rest(`branch_members?select=local_id,username,name,birthdate,wallet_balance&branch_id=eq.${encoded}`),
   ]);
+  const pcs=appData.pcs||[],memberRows=appData.members||[],sessions=appData._rawSessions||[];
   const stationById = new Map(pcs.map((pc) => [String(pc.id), pc]));
   const todayManila = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const grossRevenue = (revenue || []).filter((item) => String(item.event_type || "") !== "session_refund" && Number(item.amount_centavos || 0) > 0);
   const incomeToday = grossRevenue.filter((item) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.occurred_at)) === todayManila).reduce((sum, item) => sum + Number(item.amount_centavos || 0) / 100, 0);
   const daily = new Map();
-  for (const item of grossRevenue) {
-    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.occurred_at));
-    daily.set(day, (daily.get(day) || 0) + Number(item.amount_centavos || 0) / 100);
-  }
+  for (const item of grossRevenue) { const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.occurred_at)); daily.set(day, (daily.get(day) || 0) + Number(item.amount_centavos || 0) / 100); }
   return {
-    success: true,
-    summary: {
-      available: pcs.filter((pc) => pc.status === "available").length,
-      inUse: pcs.filter((pc) => pc.status === "occupied").length,
-      maintenance: pcs.filter((pc) => pc.status === "maintenance").length,
-      offline: pcs.filter((pc) => pc.status === "offline").length,
-      reserved: pcs.filter((pc) => pc.status === "reserved").length,
-      incomeToday,
-    },
-    active: (sessions || []).map((row) => ({
-      ...row,
-      id: row.local_id,
-      pc_label: stationById.get(String(row.pc_id))?.label || row.pc_id,
-      username: memberRows.find((m) => String(m.local_id) === String(row.member_id))?.username || null,
-    })),
-    analytics: [...daily.entries()].map(([day, value]) => ({ day, revenue: value })),
-    feedback: (feedbackRows || []).map((row) => ({ id: row.local_id, ...camelizeObject(row.data || {}), created_at: row.created_at })),
-    announcements: (announcementRows || []).map((row) => ({ id: row.local_id, ...camelizeObject(row.data || {}) })),
-    topCustomers: [],
-    birthdays: (memberRows || []).filter((row) => row.birthdate).map((row) => ({ id: row.local_id, username: row.username, name: row.name, birthdate: row.birthdate })),
+    success:true,
+    summary:{available:pcs.filter((pc)=>pc.status==="available").length,inUse:pcs.filter((pc)=>pc.status==="occupied").length,maintenance:pcs.filter((pc)=>pc.status==="maintenance").length,offline:pcs.filter((pc)=>pc.status==="offline").length,reserved:pcs.filter((pc)=>pc.status==="reserved").length,incomeToday},
+    active:sessions.map((row)=>({...row,id:row.local_id,pc_label:stationById.get(String(row.pc_id))?.label||row.pc_id,username:memberRows.find((m)=>String(m.id)===String(row.member_id))?.username||null})),
+    analytics:[...daily.entries()].map(([day,value])=>({day,revenue:value})),
+    feedback:(feedbackRows||[]).map((row)=>({id:row.local_id,...camelizeObject(row.data||{}),created_at:row.created_at})),
+    announcements:(appData.announcements||[]).slice(0,3),topCustomers:[],birthdays:memberRows.filter((row)=>row.birthdate).map((row)=>({id:row.id,username:row.username,name:row.name,birthdate:row.birthdate})),
   };
 }
+
 async function cloudDirectRead(path, branchId) {
   const url = new URL(path, "https://aezakmi.local");
   const route = url.pathname;
@@ -587,6 +650,7 @@ async function cloudDirectRead(path, branchId) {
   if (commandStatusMatch) return cloudStationAdmin("command_status", { branchId, commandId:decodeURIComponent(commandStatusMatch[1]) });
   const settlementPreviewMatch = route.match(/^\/sessions\/([^/]+)\/settlement-preview$/);
   if (settlementPreviewMatch) return cloudStationAdmin("session_preview", { branchId, sessionId:decodeURIComponent(settlementPreviewMatch[1]) });
+  if (route === "/app-data") return cloudAppData(branchId);
   if (route === "/pcs") return { success: true, pcs: await cloudPcs(branchId) };
   if (route === "/members") {
     const rows = await rest(`branch_members?select=*&branch_id=eq.${encoded}&order=name.asc`);

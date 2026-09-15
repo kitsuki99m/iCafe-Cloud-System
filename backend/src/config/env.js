@@ -26,7 +26,7 @@ export const env = {
   cloudEnabled: bool(process.env.AEZAKMI_CLOUD_ENABLED),
   supabaseUrl: String(process.env.AEZAKMI_SUPABASE_URL ?? '').trim().replace(/\/+$/, ''),
   supabasePublishableKey: String(process.env.AEZAKMI_SUPABASE_PUBLISHABLE_KEY ?? '').trim(),
-  cloudSyncIntervalSeconds: Number(process.env.AEZAKMI_CLOUD_SYNC_INTERVAL_SECONDS ?? 5),
+  cloudSyncIntervalSeconds: Number(process.env.AEZAKMI_CLOUD_SYNC_INTERVAL_SECONDS ?? 60),
   cloudSyncBatchSize: Number(process.env.AEZAKMI_CLOUD_SYNC_BATCH_SIZE ?? 100),
   cloudRequestTimeoutMs: Number(process.env.AEZAKMI_CLOUD_REQUEST_TIMEOUT_MS ?? 8000),
   edgeVersion: process.env.AEZAKMI_EDGE_VERSION ?? '1.0.0',

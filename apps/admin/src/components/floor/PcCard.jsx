@@ -1,5 +1,6 @@
 import { CalendarClock, MonitorCheck, MonitorOff, MonitorPlay, Settings2, TriangleAlert, Wrench, Zap } from 'lucide-react'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../../lib/sessionTime.js'
+import { effectivePcStatus } from '../../lib/pcStatus.js'
 
 const STATUS = {
   available:{ label:'Available', icon:MonitorCheck, color:'text-teal-dim', iconBg:'bg-teal/10', border:'hover:border-teal/50' },
@@ -14,23 +15,14 @@ function formatClock(total) { const seconds=Math.max(0,Math.floor(total)); const
 export default function PcCard({ pc, now=Date.now(), lowTimeWarningMinutes=5, onSelect, onControls }) {
   const session=pc.session
   const rawStatus=String(pc.status||'').trim().toLowerCase().replaceAll('_','-')
-  const statusKey=rawStatus==='offline'
-    ? 'offline'
-    : rawStatus==='maintenance'
-      ? 'maintenance'
-      : rawStatus==='reserved'
-        ? 'reserved'
-        : session || ['occupied','in-use','busy'].includes(rawStatus)
-          ? 'occupied'
-          : rawStatus==='available'
-            ? 'available'
-            : 'offline'
+  const statusKey=effectivePcStatus(pc)
   const state=STATUS[statusKey]
   const Icon=state.icon
   const elapsed=session ? elapsedSessionSeconds(session,now) : 0
   const remaining=session?.billing==='prepaid' ? remainingSessionSeconds(session,now) : null
   const lowTime=remaining != null && remaining>0 && remaining<=Number(lowTimeWarningMinutes||5)*60
-  const disconnected=pc.status==='offline' && Boolean(session)
+  const explicitConnectionLost = pc.stationOnline === false || pc.isOnline === false || pc.cloudOnline === false || pc.cloudConnectionStatus === 'offline'
+  const disconnected=Boolean(session) && (explicitConnectionLost || rawStatus === 'offline')
   const guestOfflinePause=disconnected && session?.pauseReason==='station_offline'
   const timer=session ? formatClock(session.billing==='prepaid'?remaining:elapsed) : null
 
@@ -49,6 +41,6 @@ export default function PcCard({ pc, now=Date.now(), lowTimeWarningMinutes=5, on
       {timer && <span className={`stat-figure shrink-0 text-sm font-semibold ${lowTime?'text-ember-dim':'text-ink-900'}`}>{timer}</span>}
     </div>
     {lowTime && <span className="pointer-events-none absolute right-3 top-14 flex items-center gap-1 rounded-full bg-ember/10 px-2 py-1 text-[10px] font-semibold text-ember-dim"><TriangleAlert size={11}/> Low time</span>}
-    {disconnected && <div className={`pointer-events-none relative mt-2 flex items-center gap-1 rounded-md px-2 py-1.5 text-[10px] font-semibold ${guestOfflinePause?'bg-trillium/25 text-grape':'bg-ember/10 text-ember-dim'}`}><TriangleAlert size={11}/><span className="truncate">{guestOfflinePause?'Time saved until this station reconnects or staff forfeits it':'Session still active'}</span></div>}
+    {disconnected && <div className={`pointer-events-none relative mt-2 flex items-center gap-1 rounded-md px-2 py-1.5 text-[10px] font-semibold ${guestOfflinePause?'bg-trillium/25 text-grape':'bg-ember/10 text-ember-dim'}`}><TriangleAlert size={11}/><span className="truncate">{guestOfflinePause?'Time saved until this station reconnects or staff forfeits it':'Station connection lost · session still active'}</span></div>}
   </article>
 }

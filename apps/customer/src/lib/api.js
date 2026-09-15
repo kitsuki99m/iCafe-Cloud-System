@@ -8,7 +8,48 @@ import {
   getCloudStationCredential,
 } from './cloudStation.js'
 
+const readCache = new Map()
+const readInFlight = new Map()
+let readCacheEpoch = 0
+
 export function createOperationKey() { return crypto.randomUUID() }
+
+function readScope() {
+  const station=getCloudStationCredential()
+  return `${station?.stationId || 'local'}:${getToken() || 'anonymous'}:${cloudStationTransport()}`
+}
+
+function readTtl(path) {
+  const base=String(path||'').split('?')[0]
+  if (base==='/auth/me') return 0
+  if (base==='/guest/session') return 2_500
+  if (base==='/app-data') return 20_000
+  if (base==='/pcs/current' || base==='/members/me' || base==='/wallet') return 8_000
+  if (base==='/client/context') return 5 * 60_000
+  if (base==='/settings' || base==='/public/settings' || base==='/rate-plans' || base==='/public/rate-plans' || base==='/announcements' || base==='/public/announcements') return 5 * 60_000
+  if (base==='/feedback/me' || base==='/public/feedback/me') return 60_000
+  return 10_000
+}
+
+function mutationInvalidatesReads(path, method) {
+  if (String(method||'GET').toUpperCase()==='GET') return false
+  const base=String(path||'').split('?')[0]
+  // Heartbeats only renew presence/auth TTL; they do not change view data.
+  if (base==='/auth/heartbeat' || /^\/public\/remote-commands\//.test(base)) return false
+  return true
+}
+
+export function invalidateApiCache(predicate = null) {
+  readCacheEpoch += 1
+  if (!predicate) {
+    readCache.clear()
+    readInFlight.clear()
+    return
+  }
+  const match=typeof predicate==='function' ? predicate : (key)=>String(key).includes(String(predicate))
+  for(const key of readCache.keys()) if(match(key)) readCache.delete(key)
+  for(const key of readInFlight.keys()) if(match(key)) readInFlight.delete(key)
+}
 
 export function getToken() {
   // This token is the local Café Edge member/guest auth token. Cloud device
@@ -18,10 +59,11 @@ export function getToken() {
 }
 export function setToken(token) {
   localStorage.removeItem('aezakmi.auth.token')
+  const previous=sessionStorage.getItem('aezakmi.auth.token')
   if (token) sessionStorage.setItem('aezakmi.auth.token', token)
   else sessionStorage.removeItem('aezakmi.auth.token')
+  if(String(previous||'')!==String(token||'')) invalidateApiCache()
 }
-
 
 function isLocalOnlyStationPath(path) {
   const base=String(path||'').split('?')[0]
@@ -45,10 +87,6 @@ async function localApiFetch(path, options = {}) {
   try {
     const stationIp = window.aezakmiClient?.getLocalIPv4?.() || import.meta.env.VITE_CLIENT_IP || ''
     if (stationIp) headers.set('X-Aezakmi-Client-IP', stationIp)
-    // Café Edge and Aezakmi Cloud use different station credentials. Local
-    // requests must prefer the Edge enrollment token; a Cloud device token is
-    // only a last-resort compatibility fallback and normally belongs only on
-    // Supabase Function requests.
     const edgeToken = window.aezakmiClient?.getStationCredential?.() || localStorage.getItem('aezakmi.dev.station-token') || ''
     const cloudToken = getCloudStationCredential()?.stationToken || ''
     const stationToken = edgeToken || cloudToken
@@ -72,11 +110,6 @@ async function localApiFetch(path, options = {}) {
   }
   let data = null
   try { data = await response.json() } catch {}
-  // A 401 can mean either member-auth expiry or station-device auth failure.
-  // Guests intentionally have no member auth token, so a station credential
-  // problem on /guest/session must never kick an active walk-in session back
-  // to Member Login. Only invalidate customer auth when a customer token was
-  // actually presented.
   if (response.status === 401 && getToken()) window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid', { detail: data }))
   if (!response.ok) {
     const error = new Error(data?.error || `Request failed (${response.status})`)
@@ -86,63 +119,118 @@ async function localApiFetch(path, options = {}) {
   return data
 }
 
+
+// Cloud-primary reads fall back to Café Edge over LAN until Cloud recovers.
+async function localAppDataBundle() {
+  // `/app-data` is a Cloud bundling route. When Cloud is unavailable, build the
+  // same shape from Café Edge over LAN so callers do not need six separate
+  // fallback code paths or a nonexistent local `/app-data` route.
+  if (getToken()) {
+    const [pcData, plansData, clientContext, memberData, settingsData, announcementData] = await Promise.all([
+      localApiFetch('/pcs/current', { cache:'no-store' }),
+      localApiFetch('/rate-plans', { cache:'no-store' }),
+      localApiFetch('/client/context', { cache:'no-store' }),
+      localApiFetch('/members/me', { cache:'no-store' }),
+      localApiFetch('/settings', { cache:'no-store' }),
+      localApiFetch('/announcements', { cache:'no-store' }),
+    ])
+    return {
+      pc:pcData?.pc ?? clientContext?.pc ?? null,
+      member:memberData?.member ?? null,
+      ratePlans:plansData?.ratePlans ?? [],
+      settings:settingsData?.settings ?? {},
+      announcements:announcementData?.announcements ?? [],
+      clientContext:clientContext ?? null,
+      transport:'edge',
+    }
+  }
+  const [guestData, settingsData, clientContext, announcementData, plansData] = await Promise.all([
+    localApiFetch('/guest/session', { cache:'no-store' }),
+    localApiFetch('/public/settings', { cache:'no-store' }),
+    localApiFetch('/client/context', { cache:'no-store' }),
+    localApiFetch('/public/announcements', { cache:'no-store' }),
+    localApiFetch('/public/rate-plans', { cache:'no-store' }),
+  ])
+  const pc=guestData?.pc ?? clientContext?.pc ?? null
+  return {
+    pc:pc ? { ...pc, ...(guestData?.session ? { session:guestData.session, status:'occupied' } : {}) } : null,
+    member:null,
+    ratePlans:plansData?.ratePlans ?? [],
+    settings:settingsData?.settings ?? {},
+    announcements:announcementData?.announcements ?? [],
+    clientContext:clientContext ?? null,
+    guestSessionAuthority:'edge',
+    guestSessionAbsentConfirmed:!guestData?.session,
+    transport:'edge',
+  }
+}
+
 export async function apiFetch(path, options = {}) {
   const { operationKey, ...fetchOptions } = options
   const method=String(fetchOptions.method||'GET').toUpperCase()
   let body={}
   if(fetchOptions.body!=null){try{body=typeof fetchOptions.body==='string'?JSON.parse(fetchOptions.body):fetchOptions.body}catch{body={}}}
 
-  // Emergency hidden-shortcut authorization deliberately remains local: the Admin
-  // management PIN is never uploaded to Supabase. Everything else uses Cloud first.
   if (cloudStationFeatureEnabled() && cloudStationPaired() && !isLocalOnlyStationPath(path)) {
     try {
       const data=await cloudStationApiFetch(path,{method,body,operationKey:operationKey || (method!=='GET'?createOperationKey():null),localAuthToken:getToken()||''})
       setFallbackTransportActive(false)
-
-      // Guest sessions are started by Admin and may exist on the LAN Edge a
-      // moment before Cloud sync reflects them. A Cloud `session:null` is not
-      // authoritative proof that this physical PC has no guest session. Probe
-      // the paired Café Edge immediately and prefer its active guest session.
-      // This makes guest walk-ins leave the member-login kiosk as
-      // soon as staff starts the session, while Cloud remains primary whenever
-      // it already has the active session or Edge is unavailable.
       const basePath=String(path||'').split('?')[0]
       if (method==='GET' && basePath==='/guest/session' && !data?.session) {
         try {
           const localGuest=await localApiFetch(path, options)
           if (localGuest?.session) return { ...localGuest, guestSessionAuthority:'edge', guestSessionAbsentConfirmed:false }
-          // Both Cloud and the paired LAN Edge agree that no guest session is
-          // active. Consumers may use this as a confirmed absence rather than
-          // treating a single Cloud-sync miss as a logout boundary.
           return { ...data, guestSessionAuthority:'cloud+edge', guestSessionAbsentConfirmed:true }
         } catch {
-          // Cloud currently has no guest row but Edge could not be consulted.
-          // Preserve an already-rendered guest until transport reconciliation
-          // succeeds; otherwise a brief Edge credential/network problem causes
-          // Guest UI -> Member Login flapping.
           return { ...data, guestSessionAuthority:'cloud', guestSessionAbsentConfirmed:false, guestSessionReconcilePending:true }
         }
       }
       if (method==='GET' && basePath==='/guest/session' && data?.session) return { ...data, guestSessionAuthority:'cloud', guestSessionAbsentConfirmed:false }
+      if (method==='GET' && basePath==='/app-data' && !getToken() && !data?.pc?.session) {
+        try {
+          const edgeBundle=await localAppDataBundle()
+          if (edgeBundle?.pc?.session) return edgeBundle
+          return { ...data, guestSessionAuthority:'cloud+edge', guestSessionAbsentConfirmed:true }
+        } catch {
+          return { ...data, guestSessionAuthority:'cloud', guestSessionAbsentConfirmed:false, guestSessionReconcilePending:true }
+        }
+      }
+      if(mutationInvalidatesReads(path,method)) invalidateApiCache()
       return data
     } catch (error) {
       if (!shouldFallback(error)) {
         if (error?.status === 401 && getToken()) window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:error.data}))
         throw error
       }
-      // Cloud transport is unavailable (or intentionally suspended). The station
-      // now talks straight to Café Edge over LAN until Cloud recovers.
       setFallbackTransportActive(true,error?.message||'Cloud unavailable')
+      invalidateApiCache()
     }
   }
 
-  const localData=await localApiFetch(path, options)
   const localBase=String(path||'').split('?')[0]
+  const localData=method==='GET' && localBase==='/app-data'
+    ? await localAppDataBundle()
+    : await localApiFetch(path, options)
+  if(mutationInvalidatesReads(path,method)) invalidateApiCache()
   if (method==='GET' && localBase==='/guest/session') return { ...localData, guestSessionAuthority:'edge', guestSessionAbsentConfirmed:!localData?.session }
   return localData
 }
 
-export function apiGet(path) { return apiFetch(path, { cache:'no-store' }) }
+export async function apiGet(path, options = {}) {
+  const force=Boolean(options?.force)
+  const ttlMs=Number.isFinite(Number(options?.ttlMs)) ? Math.max(0,Number(options.ttlMs)) : readTtl(path)
+  if(force || ttlMs<=0) return apiFetch(path, { cache:'no-store' })
+  const key=`${readScope()}:GET:${path}`
+  const cached=readCache.get(key)
+  if(cached && cached.expiresAt>Date.now()) return cached.value
+  if(readInFlight.has(key)) return readInFlight.get(key)
+  const epoch=readCacheEpoch
+  const request=apiFetch(path, { cache:'no-store' })
+    .then((value)=>{if(epoch===readCacheEpoch)readCache.set(key,{value,expiresAt:Date.now()+ttlMs});return value})
+    .finally(()=>readInFlight.delete(key))
+  readInFlight.set(key,request)
+  return request
+}
 export function apiPost(path, body, options = {}) { return apiFetch(path, { ...options, method:'POST', body: JSON.stringify(body ?? {}) }) }
 export function apiPatch(path, body, options = {}) { return apiFetch(path, { ...options, method:'PATCH', body: JSON.stringify(body ?? {}) }) }
 export function apiDelete(path, options = {}) { return apiFetch(path, { ...options, method:'DELETE' }) }

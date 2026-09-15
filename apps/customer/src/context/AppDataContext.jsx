@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
 import { useAuth } from './AuthContext.jsx'
-import { apiGet, apiPost, apiPatch } from '../lib/api.js'
+import { apiGet, apiPost, apiPatch, invalidateApiCache } from '../lib/api.js'
 import { connectSocket, disconnectSocket } from '../lib/socket.js'
 import { showToast } from '../lib/toast.js'
 import { playBroadcastChime } from '../lib/sound.js'
@@ -133,12 +133,25 @@ export function AppDataProvider({ children }) {
     const generation=refreshGenerationRef.current
     try {
       if (!user) {
-        const [publicSettings, clientContext, announcementData, ratePlansData] = await Promise.all([
-          apiGet('/public/settings'),
-          apiGet('/client/context'),
-          apiGet('/public/announcements'),
-          apiGet('/public/rate-plans'),
-        ])
+        const cloudPublic=cloudStationFeatureEnabled()&&cloudStationPaired()&&cloudStationTransport()==='cloud'
+        let publicSettings,clientContext,announcementData,ratePlansData
+        if(cloudPublic){
+          // Public/login content is almost static. One bundled station RPC cached for
+          // five minutes replaces four independent Cloud function calls; realtime
+          // invalidation still refreshes it immediately when the branch changes.
+          const bundled=await apiGet('/app-data',{ttlMs:5*60*1000})
+          publicSettings={settings:bundled.settings||{}}
+          clientContext=bundled.clientContext||{pc:bundled.pc}
+          announcementData={announcements:bundled.announcements||[]}
+          ratePlansData={ratePlans:bundled.ratePlans||[]}
+        }else{
+          ;[publicSettings, clientContext, announcementData, ratePlansData] = await Promise.all([
+            apiGet('/public/settings'),
+            apiGet('/client/context'),
+            apiGet('/public/announcements'),
+            apiGet('/public/rate-plans'),
+          ])
+        }
         const snapshot=createPublicState({
           settings:{...EMPTY_SETTINGS,...(publicSettings.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
           currentClientPc:normalizePc(clientContext.pc),
@@ -152,12 +165,17 @@ export function AppDataProvider({ children }) {
       }
 
       if (user.role === 'guest') {
-        const [guestData, publicSettings, announcementData, ratePlansData] = await Promise.all([
-          apiGet('/guest/session'),
-          apiGet('/public/settings'),
-          apiGet('/public/announcements'),
-          apiGet('/public/rate-plans'),
-        ])
+        const bundled=await apiGet('/app-data')
+        const guestData={
+          pc:bundled?.pc ?? null,
+          session:bundled?.pc?.session ?? null,
+          guestSessionAuthority:bundled?.guestSessionAuthority,
+          guestSessionAbsentConfirmed:bundled?.guestSessionAbsentConfirmed,
+          guestSessionReconcilePending:bundled?.guestSessionReconcilePending,
+        }
+        const publicSettings={settings:bundled?.settings ?? {}}
+        const announcementData={announcements:bundled?.announcements ?? []}
+        const ratePlansData={ratePlans:bundled?.ratePlans ?? []}
         if (!guestData.session) {
           // Never tear down Guest UI on one Cloud-sync miss. A Guest has no
           // member token, and Cloud can briefly report null while the LAN Edge
@@ -190,19 +208,22 @@ export function AppDataProvider({ children }) {
         return
       }
 
-      const [pcData, plansData, clientContext, memberData, walletData, settingsData, announcementData] = await Promise.all([
-        apiGet('/pcs/current'),
-        apiGet('/rate-plans'),
-        apiGet('/client/context'),
-        apiGet('/members/me'),
-        apiGet('/wallet'),
-        apiGet('/settings'),
-        apiGet('/announcements'),
-      ])
+      const cloudPrimary=cloudStationFeatureEnabled()&&cloudStationPaired()&&cloudStationTransport()==='cloud'
+      let pcData,plansData,clientContext,memberData,settingsData,announcementData
+      if(cloudPrimary){
+        // One authenticated station-api invocation replaces six Cloud function
+        // calls and authenticates the station/member only once per refresh.
+        const bundled=await apiGet('/app-data')
+        pcData={pc:bundled.pc};plansData={ratePlans:bundled.ratePlans||[]};clientContext=bundled.clientContext||{};memberData={member:bundled.member};settingsData={settings:bundled.settings||{}};announcementData={announcements:bundled.announcements||[]}
+      }else{
+        ;[pcData, plansData, clientContext, memberData, settingsData, announcementData] = await Promise.all([
+          apiGet('/pcs/current'),apiGet('/rate-plans'),apiGet('/client/context'),apiGet('/members/me'),apiGet('/settings'),apiGet('/announcements'),
+        ])
+      }
       const member=memberData.member ? normalizeMember({
         ...memberData.member,
-        wallet:Number(walletData.balance ?? memberData.member.wallet ?? memberData.member.walletBalance ?? 0),
-        walletBalance:Number(walletData.balance ?? memberData.member.wallet ?? memberData.member.walletBalance ?? 0),
+        wallet:Number(memberData.member.wallet ?? memberData.member.walletBalance ?? 0),
+        walletBalance:Number(memberData.member.wallet ?? memberData.member.walletBalance ?? 0),
       }) : null
       const currentPc=normalizePc(pcData.pc ?? clientContext.pc ?? null)
       const snapshot=createPublicState({
@@ -251,6 +272,7 @@ export function AppDataProvider({ children }) {
       finally { refreshRunning = false }
     }
     const queueRefresh = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(runRefresh, 75) }
+    const invalidateAndRefresh = () => { invalidateApiCache(); queueRefresh() }
     const clearStationDisconnectWatch = () => {
       clearTimeout(stationDisconnectTimer)
       stationDisconnectTimer = null
@@ -282,7 +304,7 @@ export function AppDataProvider({ children }) {
     }
     const onSocketConnect = () => {
       clearStationDisconnectWatch()
-      queueRefresh()
+      invalidateAndRefresh()
     }
     const onSocketDisconnect = (socketReason) => {
       if (cloudPrimary && cloudStationTransport() === 'cloud') return
@@ -295,10 +317,10 @@ export function AppDataProvider({ children }) {
     const onAuthRevoked = (payload) => window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:payload}))
     const onChanged = (payload) => {
       if (payload?.path === '/branding/logo' || payload?.path === '/settings') window.dispatchEvent(new CustomEvent('aezakmi:branding-updated', { detail:payload }))
-      queueRefresh()
+      invalidateAndRefresh()
     }
-    const onRatePlansUpdated = () => { queueRefresh(); if (user?.role === 'customer' || user?.role === 'guest') { showToast({ title:'New rates available', message:'The counter updated the available session plans.', tone:'info' });playBroadcastChime() } }
-    const onAnnouncementsUpdated = () => { queueRefresh(); if (user?.role === 'customer' || user?.role === 'guest') { showToast({ title:'New announcement', message:'The cafe posted an update for this station.', tone:'info' });playBroadcastChime() } }
+    const onRatePlansUpdated = () => { invalidateAndRefresh(); if (user?.role === 'customer' || user?.role === 'guest') { showToast({ title:'New rates available', message:'The counter updated the available session plans.', tone:'info' });playBroadcastChime() } }
+    const onAnnouncementsUpdated = () => { invalidateAndRefresh(); if (user?.role === 'customer' || user?.role === 'guest') { showToast({ title:'New announcement', message:'The cafe posted an update for this station.', tone:'info' });playBroadcastChime() } }
     const onWalletChanged = (payload) => {
       if(!payload?.memberId) return
       setState((current) => ({ ...current, members:current.members.map((member) => sameId(member.id,payload.memberId) ? { ...member, wallet:Number(payload.balance ?? member.wallet ?? 0), walletBalance:Number(payload.balance ?? member.walletBalance ?? 0) } : member) }))
@@ -329,10 +351,10 @@ export function AppDataProvider({ children }) {
         if (user?.role === 'customer') window.aezakmiClient?.showIdleDashboard?.().catch?.(() => {})
       }
       if (user?.role === 'customer' && payload?.memberId && !belongsToMember) return
-      queueRefresh()
+      invalidateAndRefresh()
     }
     const onTopUpUpdated = (payload) => {
-      queueRefresh()
+      invalidateAndRefresh()
       if (user?.role === 'customer' && String(payload?.memberId) === String(user.memberId) && payload?.status === 'approved') {
         const amount = Number(payload.amount ?? 0)
         showToast({ title:'Top up successful', message:amount > 0 ? `₱${Math.floor(amount)} has been added to your wallet.` : 'Your wallet has been updated successfully.', tone:'success' })
@@ -342,7 +364,7 @@ export function AppDataProvider({ children }) {
       const belongsToMember = user?.role === 'customer' && sameId(payload?.memberId,user.memberId)
       const belongsToPc = (user?.role === 'guest' || user?.role === 'customer') && sameId(payload?.pcId,user?.pcId)
       if (!belongsToMember && !belongsToPc) return
-      queueRefresh()
+      invalidateAndRefresh()
       if (payload?.status === 'approved' && payload?.paymentMethod !== 'wallet') showToast({ title:'Time added', message:`${Math.max(0,Number(payload.minutesAdded||0))} minute(s) were added to your session.`, tone:'success' })
       if (payload?.status === 'rejected') showToast({ title:'Extension request rejected', message:'Staff rejected the pending session extension.', tone:'warning' })
     }
@@ -385,7 +407,7 @@ export function AppDataProvider({ children }) {
             else window.dispatchEvent(new CustomEvent('aezakmi:admin-session-logout',{detail}))
             await ack('completed',{executed:loginKiosk !== false,sessionCloseCommitted:true,forcedLogout:true,sessionId:detail.sessionId,disposition})
           }
-          queueRefresh()
+          invalidateAndRefresh()
           return
         }
         if (sessionCloseRelease) {
@@ -447,7 +469,7 @@ export function AppDataProvider({ children }) {
         const bridge = window.aezakmiClient?.executeRemoteCommand
         const executed = bridge ? await bridge({ command:payload.command, warningSeconds, warningExpiresAt, expiresAt }) : false
         await ack(executed === false ? 'failed' : 'completed',{ executed:executed !== false, developmentSimulation:!bridge })
-        queueRefresh()
+        invalidateAndRefresh()
       } catch (error) {
         if (error?.status === 409) return
         try { await ack('failed',{ error:error?.message || 'Command failed', code:error?.code || null }) } catch {}
@@ -503,7 +525,7 @@ export function AppDataProvider({ children }) {
       }
       else {
         clearStationDisconnectWatch()
-        disconnectFallbackSocket();queueRefresh()
+        disconnectFallbackSocket();invalidateAndRefresh()
       }
     }
     const onCloudCommand = (event) => onRemoteCommand(event?.detail || {})
@@ -531,25 +553,28 @@ export function AppDataProvider({ children }) {
         }
         if (user?.role === 'customer') window.aezakmiClient?.showIdleDashboard?.().catch?.(() => {})
       }
-      queueRefresh()
+      invalidateAndRefresh()
     }
     if (cloudPrimary) {
       if (cloudStationTransport()==='fallback') {
         connectFallbackSocket()
         if (!socket?.connected) scheduleStationDisconnect('initial_cloud_fallback')
       }
-      cloudRefreshInterval=setInterval(queueRefresh,user?.role === 'customer' ? 1000 : 5000)
+      cloudRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')queueRefresh()},60000)
       window.addEventListener('aezakmi:station-transport',onTransport)
       window.addEventListener('aezakmi:cloud-station-command',onCloudCommand)
       window.addEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup)
     } else connectFallbackSocket()
 
     const onStationEnrolled=()=>{ if(!cloudPrimary || cloudStationTransport()==='fallback'){disconnectFallbackSocket();connectFallbackSocket()} }
+    const onVisible=()=>{if(cloudPrimary && document.visibilityState==='visible')invalidateAndRefresh()}
     window.addEventListener('aezakmi:station-enrolled',onStationEnrolled)
+    document.addEventListener('visibilitychange',onVisible)
 
     return () => {
       disconnectFallbackSocket()
       window.removeEventListener('aezakmi:station-enrolled',onStationEnrolled)
+      document.removeEventListener('visibilitychange',onVisible)
       window.removeEventListener('aezakmi:station-transport',onTransport)
       window.removeEventListener('aezakmi:cloud-station-command',onCloudCommand)
       window.removeEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup)

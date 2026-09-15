@@ -11,6 +11,7 @@ import {
   PlusCircle,
   UserRound,
   Minimize2,
+  Maximize2,
   Megaphone,
   Moon,
   Sun,
@@ -126,6 +127,7 @@ export default function CustomerSessionView() {
   } = useAppData();
   const branding = useBranding();
   const [now, setNow] = useState(Date.now());
+  const [compactView, setCompactView] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 420 && window.innerHeight <= 180);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [extendOpen, setExtendOpen] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
@@ -203,6 +205,14 @@ export default function CustomerSessionView() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [hasActiveSession]);
+
+
+  useEffect(() => {
+    const syncCompactView = () => setCompactView(window.innerWidth <= 420 && window.innerHeight <= 180);
+    syncCompactView();
+    window.addEventListener('resize', syncCompactView);
+    return () => window.removeEventListener('resize', syncCompactView);
+  }, []);
 
   let remainingSeconds = null;
   let elapsedSeconds = null;
@@ -488,6 +498,45 @@ export default function CustomerSessionView() {
     }
   }
 
+  if (compactView && hasActiveSession) {
+    const compactTimer = legacyBillingSession
+      ? '--:--'
+      : formatClock(session.billing === 'prepaid' ? Math.max(0, remainingSeconds ?? 0) : Math.max(0, elapsedSeconds ?? 0));
+    return (
+      <div data-session-widget="compact" className="flex h-screen w-screen select-none flex-col overflow-hidden border border-surface-line bg-surface px-3 py-2 text-ink-900 shadow-card">
+        <div className="flex min-h-0 flex-1 items-center gap-2.5">
+          <img
+            src={branding.logoUrl || logo}
+            onError={(event) => { event.currentTarget.src = logo; }}
+            alt=""
+            className="h-9 w-9 shrink-0 rounded-xl"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">{pc?.label || 'Customer Station'} · {isGuest ? 'Guest' : (user.username || user.name || 'Member')}</p>
+            <div className="mt-0.5 flex items-baseline gap-2">
+              <span className={`stat-figure text-[25px] font-bold leading-none ${lowTime ? 'text-ember-dim' : 'text-ink-900'}`}>{compactTimer}</span>
+              <span className="text-[10px] font-semibold text-slate-soft">{session.billing === 'prepaid' ? 'left' : 'elapsed'}</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.aezakmiClient?.showMiniDashboard?.()}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-surface-line bg-surface-raised text-ink-900 transition-colors hover:bg-dance/40"
+            title="Open full session dashboard"
+            aria-label="Open full session dashboard"
+          >
+            <Maximize2 size={15} />
+          </button>
+        </div>
+        {session.billing === 'prepaid' && !legacyBillingSession && (
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-dance/65">
+            <div className={`h-full rounded-full ${lowTime ? 'bg-ember' : 'bg-teal'}`} style={{ width:`${(progress ?? 0) * 100}%` }} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="customer-dashboard-shell">
       <header className="customer-topbar">
@@ -542,9 +591,9 @@ export default function CustomerSessionView() {
             type="button"
             onClick={() => window.aezakmiClient?.hideMiniDashboard?.()}
             className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
-            title="Hide this dashboard"
+            title="Compact to the session timer"
           >
-            <Minimize2 size={14} /> Hide
+            <Minimize2 size={14} /> Compact
           </button>
           {!legacyBillingSession && (
             <button

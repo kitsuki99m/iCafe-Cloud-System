@@ -31,7 +31,7 @@ function routeMatches(front,back){
 }
 
 test('every frontend API method/path has a matching backend route',()=>{
-  const routes=backendRoutes(), missing=frontendCalls().filter(([method,p])=>!routes.some(([m,r])=>m===method&&routeMatches(p,r)))
+  const routes=backendRoutes(), cloudOnlyRoutes=new Set(['GET /app-data']), missing=frontendCalls().filter(([method,p])=>!cloudOnlyRoutes.has(`${method} ${p.split('?')[0]}`)&&!routes.some(([m,r])=>m===method&&routeMatches(p,r)))
   assert.deepEqual(missing,[])
 })
 

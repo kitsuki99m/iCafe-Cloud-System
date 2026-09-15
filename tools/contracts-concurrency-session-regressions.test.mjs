@@ -34,7 +34,8 @@ test('every literal frontend API call has a backend route with the same HTTP met
     const prefix=file.endsWith('authRoutes.js')?'/auth':''
     for(const m of text.matchAll(/router\.(get|post|put|patch|delete)\(\s*(["'])(\/[^"']*)\2/g)) routes.push({method:m[1].toUpperCase(),path:prefix+m[3]})
   }
-  const missing=calls.filter(c=>!routes.some(r=>r.method===c.method&&pathMatches(c.path,r.path)))
+  const cloudOnlyRoutes=new Set(['GET /app-data'])
+  const missing=calls.filter(c=>!cloudOnlyRoutes.has(`${c.method} ${normalizeRoute(c.path)}`)&&!routes.some(r=>r.method===c.method&&pathMatches(c.path,r.path)))
   assert.deepEqual(missing,[])
 })
 

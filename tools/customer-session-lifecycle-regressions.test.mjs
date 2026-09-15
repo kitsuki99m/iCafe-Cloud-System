@@ -44,7 +44,7 @@ test('Customer startup recovers an interrupted session before auth and auto-dete
   assert.match(src,/await recoverPendingStationLifecycle\(\)/)
   assert.match(src,/hasPendingStationLifecycle\(\)/)
   assert.match(src,/apiGet\("\/guest\/session"\)/)
-  assert.match(src,/const timer=setInterval\(detect,1000\)/)
+  assert.match(src,/const timer=setInterval\(detect,60000\)/)
   assert.match(src,/role:"guest"/)
 })
 
@@ -113,22 +113,25 @@ test('Hard power-loss recovery uses a recent persisted lifecycle heartbeat inste
 })
 
 
-test('Station presence tolerates transient jitter before confirmed offline in Café Edge and Cloud Admin',()=>{
+test('Station presence uses low-frequency heartbeat grace and never lets connectivity override an active session',()=>{
   const server=read('backend/src/server.js')
   const cloudStation=read('apps/customer/src/lib/cloudStation.js')
   const cloudAdmin=read('apps/admin/src/lib/cloudClient.js')
   const cloudAdminApi=read('supabase/functions/admin-api/index.ts')
   const cloudStationAdmin=read('supabase/functions/station-admin/index.ts')
-  const presenceSql=read('supabase/migrations/20260914000015_presence_jitter_grace.sql')
+  const presenceSql=read('supabase/migrations/20260915000028_station_presence_heartbeat_grace.sql')
+  const electron=read('apps/customer/electron/main.cjs')
   assert.match(server,/STATION_DISCONNECT_GRACE_MS = 10000/)
   assert.match(server,/releaseStationSession\(pcId,\{reason:'station_disconnect',at:disconnectedAt,markAvailable:false\}\)/)
-  assert.match(cloudStation,/heartbeatTimer=setInterval\(\(\)=>void heartbeat\(\),1000\)/)
-  assert.match(cloudAdmin,/cloudHeartbeatAgeMs[\s\S]*< 10_000/)
-  assert.match(cloudAdmin,/!cloudOnline && row\.station_device_id \? "offline" : session \? "occupied"/)
+  assert.match(cloudStation,/heartbeatTimer=setInterval\(\(\)=>void heartbeat\(\),60000\)/)
+  assert.match(cloudStation,/pollTimer=setInterval\(\(\)=>void pollCommands\(\),300000\)/)
+  assert.match(cloudAdmin,/cloudHeartbeatAgeMs[\s\S]*< 180_000/)
+  assert.match(cloudAdmin,/session \? "occupied"[\s\S]*!cloudOnline/)
   assert.match(cloudAdmin,/cloudConnectionStatus: !row\.station_device_id \? "unpaired" : cloudDegraded \? "reconnecting" : cloudOnline \? "online" : "offline"/)
-  assert.match(cloudAdminApi,/Date\.now\(\)-seen>=10_000/)
-  assert.match(cloudStationAdmin,/STATION_OFFLINE_AFTER_MS=10_000/)
-  assert.match(presenceSql,/cloud_last_seen_at < ts-interval '10 seconds'/)
+  assert.match(cloudAdminApi,/Date\.now\(\)-seen>=180_000/)
+  assert.match(cloudStationAdmin,/STATION_OFFLINE_AFTER_MS=180_000/)
+  assert.match(presenceSql,/cloud_last_seen_at < ts-interval '180 seconds'/)
+  assert.match(electron,/backgroundThrottling:false/)
 })
 
 test('Explicit logout may return a powered-on station to Available, while shutdown/restart waits for presence loss',()=>{

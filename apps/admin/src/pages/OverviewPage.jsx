@@ -33,6 +33,7 @@ import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { formatAdminPeso } from '../lib/numeric.js'
+import { effectivePcStatus } from '../lib/pcStatus.js'
 import { buildRevenueScale, formatRevenueDay, normalizeSevenDayRevenue } from '../lib/revenueChart.js'
 import AdminSectionManual from '../components/admin/AdminSectionManual.jsx'
 
@@ -162,7 +163,7 @@ export default function OverviewPage(){
       if(active)void load()
     }
     void hydrate()
-    const timer=setInterval(()=>void load(),15000)
+    const timer=setInterval(()=>{if(document.visibilityState==='visible')void load()},60000)
     const clock=setInterval(()=>setNowMs(Date.now()),30000)
     const onOnline=()=>void load()
     const onVisible=()=>{if(document.visibilityState==='visible'){setNowMs(Date.now());void load()}}
@@ -179,14 +180,14 @@ export default function OverviewPage(){
   const summary=data?.summary||{}
   const statusCounts=useMemo(()=>{
     const counts={available:0,occupied:0,maintenance:0,offline:0,reserved:0}
-    for(const pc of pcs||[]){const status=String(pc?.status||'offline').toLowerCase();if(status in counts)counts[status] += 1;else counts.offline += 1}
+    for(const pc of pcs||[]){const status=effectivePcStatus(pc);if(status in counts)counts[status] += 1;else counts.offline += 1}
     return counts
   },[pcs])
   const cards=[['Available',statusCounts.available,MonitorCheck,'text-teal-dim bg-teal/10','available'],['In use',statusCounts.occupied,MonitorPlay,'text-gold bg-gold/10','occupied'],['Maintenance',statusCounts.maintenance,Wrench,'text-ember-dim bg-ember/10','maintenance'],['Offline',statusCounts.offline,MonitorCog,'text-slate-soft bg-surface-raised','offline'],['Revenue today',formatAdminPeso(summary.incomeToday,settings),CircleDollarSign,'text-gold bg-gold/10',null]]
 
   const floorPreview=useMemo(()=>{
     const rank={occupied:0,reserved:1,maintenance:2,offline:3,available:4}
-    return [...(pcs||[])].sort((a,b)=>(rank[a.status]??9)-(rank[b.status]??9)||String(a.label||'').localeCompare(String(b.label||''))).slice(0,12)
+    return [...(pcs||[])].sort((a,b)=>(rank[effectivePcStatus(a)]??9)-(rank[effectivePcStatus(b)]??9)||String(a.label||'').localeCompare(String(b.label||''))).slice(0,12)
   },[pcs])
 
   const liveSessions=useMemo(()=>{
@@ -292,7 +293,7 @@ export default function OverviewPage(){
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
             <OverviewCard title="Floor status" subtitle="A quick look at the stations that need attention." action={<button onClick={()=>navigate('/clients')} className="flex items-center gap-1 text-[10px] font-semibold text-gold">Open floor <ArrowUpRight size={12}/></button>}>
               {floorPreview.length?<div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-4">{floorPreview.map(pc=>{
-                const meta=STATUS_META[pc.status]||STATUS_META.offline
+                const meta=STATUS_META[effectivePcStatus(pc)]||STATUS_META.offline
                 const Icon=meta.icon
                 return <button key={pc.id} onClick={()=>navigate(`/clients?pc=${encodeURIComponent(pc.id)}`)} className="overview-soft-card group min-h-[82px] p-3 text-left transition-all hover:-translate-y-0.5">
                   <div className="flex items-center justify-between gap-2"><span className={`flex h-7 w-7 items-center justify-center rounded-full ${meta.tone}`}><Icon size={13}/></span><span className="h-1.5 w-1.5 rounded-full bg-current opacity-60"/></div>

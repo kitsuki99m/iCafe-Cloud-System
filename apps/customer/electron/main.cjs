@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, session, safeStorage } = require('electron')
+const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, session, safeStorage, screen } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -107,6 +107,9 @@ function configureCustomerInstallStorage() {
 const customerDataRoot = configureCustomerInstallStorage()
 const ACTIVE_WIDTH = 960
 const ACTIVE_HEIGHT = 680
+const COMPACT_WIDTH = 332
+const COMPACT_HEIGHT = 118
+const COMPACT_MARGIN = 12
 const WINDOW_STATES = Object.freeze({ LOCKED:'locked', IDLE:'idle', ACTIVE:'active' })
 
 let mainWindow = null
@@ -114,6 +117,7 @@ let tray = null
 let windowsKeyHook = null
 let windowState = WINDOW_STATES.LOCKED
 let dashboardVisible = false
+let activeDashboardMode = 'compact'
 let appIsQuitting = false
 let hookRestartTimer = null
 let sessionStartTransitionPending = false
@@ -341,9 +345,8 @@ function updateTrayMenu() {
   if (!tray || tray.isDestroyed()) return
   const template = isActive()
     ? [
-        { label:'Check Session Time', click:showMiniDashboard },
-        { label:'Open Mini Dashboard', click:showMiniDashboard },
-        { label:'Hide Mini Dashboard', enabled:dashboardVisible, click:hideMiniDashboard },
+        { label:'Open Full Dashboard', click:showMiniDashboard },
+        { label:'Compact Session Timer', enabled:activeDashboardMode !== 'compact', click:hideMiniDashboard },
         { type:'separator' },
         { label:'Lock / Log Out', click:() => mainWindow?.webContents.send('tray:logout') },
       ]
@@ -379,8 +382,35 @@ function applyLockedWindowMode() {
   dashboardVisible = false
 }
 
+function positionCompactSessionWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const currentBounds=mainWindow.getBounds()
+  const display=screen.getDisplayMatching(currentBounds) || screen.getPrimaryDisplay()
+  const workArea=display?.workArea || { x:0, y:0 }
+  mainWindow.setPosition(Math.round(workArea.x + COMPACT_MARGIN), Math.round(workArea.y + COMPACT_MARGIN), false)
+}
+
+function applyCompactSessionMode() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.setKiosk(false)
+  mainWindow.setFullScreen(false)
+  mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
+  mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
+  mainWindow.setResizable(false)
+  mainWindow.setSkipTaskbar(true)
+  // Keep only the small timer visible above normal applications. The full
+  // session dashboard remains a normal window when explicitly expanded.
+  mainWindow.setAlwaysOnTop(true, 'floating')
+  mainWindow.setSize(COMPACT_WIDTH, COMPACT_HEIGHT, false)
+  positionCompactSessionWindow()
+  mainWindow.showInactive()
+  activeDashboardMode = 'compact'
+  dashboardVisible = true
+}
+
 function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  activeDashboardMode = 'expanded'
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setKiosk(false)
@@ -462,9 +492,7 @@ function enterActiveState() {
 
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
-  applyActiveWindowMode({ show:false })
-  mainWindow.hide()
-  dashboardVisible = false
+  applyCompactSessionMode()
   createTray()
   updateTrayMenu()
   return true
@@ -493,9 +521,7 @@ function completeSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
   sessionStartTransitionPending = false
   if (!isActive()) return false
-  applyActiveWindowMode({ show:false })
-  mainWindow.hide()
-  dashboardVisible = false
+  applyCompactSessionMode()
   updateTrayMenu()
   return true
 }
@@ -509,8 +535,7 @@ function showMiniDashboard() {
 
 function hideMiniDashboard() {
   if (!isActive() || !mainWindow || mainWindow.isDestroyed()) return false
-  mainWindow.hide()
-  dashboardVisible = false
+  applyCompactSessionMode()
   updateTrayMenu()
   return true
 }
@@ -548,7 +573,7 @@ function lockClientWindow({ preserveState = false } = {}) {
   // by staff or the emergency shortcut) should surface the in-app "session is
   // locked" overlay.
   const isRemoteInterrupt = !remoteLockSnapshot && windowState !== WINDOW_STATES.LOCKED
-  if (!remoteLockSnapshot) remoteLockSnapshot = { windowState, dashboardVisible }
+  if (!remoteLockSnapshot) remoteLockSnapshot = { windowState, dashboardVisible, activeDashboardMode }
   windowState = WINDOW_STATES.LOCKED
   sessionStartTransitionPending = false
   dashboardVisible = false
@@ -568,8 +593,8 @@ function unlockClientWindow() {
   if (snapshot?.windowState === WINDOW_STATES.ACTIVE) {
     windowState=WINDOW_STATES.ACTIVE
     setWindowsKeyLocked(false)
-    applyActiveWindowMode({show:Boolean(snapshot.dashboardVisible)})
-    if (!snapshot.dashboardVisible) mainWindow.hide()
+    if (snapshot.activeDashboardMode === 'expanded') applyActiveWindowMode({show:true})
+    else applyCompactSessionMode()
     updateTrayMenu()
     return true
   }
@@ -669,6 +694,7 @@ function createWindow() {
       contextIsolation:true,
       nodeIntegration:false,
       sandbox:true,
+      backgroundThrottling:false,
     },
   })
   mainWindow.on('query-session-end', () => {
@@ -710,7 +736,8 @@ function createWindow() {
     if (isLocked()) applyLockedWindowMode()
     else if (sessionStartTransitionPending) beginSessionStartTransition()
     else if (isIdleDashboard()) applyIdleDashboardMode()
-    else applyActiveWindowMode({show:dashboardVisible})
+    else if (activeDashboardMode === 'expanded') applyActiveWindowMode({show:true})
+    else applyCompactSessionMode()
     // The renderer just (re)mounted — replay the current remote-lock state
     // so a page reload while locked still shows the "session is locked"
     // overlay instead of silently losing it.

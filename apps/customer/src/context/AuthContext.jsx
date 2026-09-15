@@ -274,7 +274,7 @@ export function AuthProvider({ children }) {
     if (!user || user.role === "guest" || !getToken()) return;
     const t = setInterval(
       () => apiPost("/auth/heartbeat").catch(() => {}),
-      10000,
+      10 * 60 * 1000,
     );
     return () => clearInterval(t);
   }, [user]);
@@ -304,7 +304,7 @@ export function AuthProvider({ children }) {
       if (running || hasPendingStationLifecycle() || readAdminSessionCloseFence()) return;
       running=true;
       try {
-        const d=await apiGet("/guest/session");
+        const d=await apiGet("/guest/session", { force:true });
         if (!cancelled && d?.session) {
           setToken(null);
           clearDeferredPasswordSetup();
@@ -314,9 +314,14 @@ export function AuthProvider({ children }) {
         }
       } catch {} finally { running=false; }
     };
+    const onCloudWakeup=(event)=>{
+      const reason=String(event?.detail?.reason||'').toLowerCase();
+      if(['session_started','session_restored'].includes(reason)) void detect();
+    };
     detect();
-    const timer=setInterval(detect,1000);
-    return () => { cancelled=true; clearInterval(timer); };
+    window.addEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup);
+    const timer=setInterval(detect,60000);
+    return () => { cancelled=true; clearInterval(timer); window.removeEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup); };
   }, [authLoading, stationPairingRequired, user]);
 
   async function loginCustomerCredentials(username, password) {

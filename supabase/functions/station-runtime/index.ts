@@ -13,9 +13,22 @@ async function stationAuth(req:Request,admin:SupabaseClient){const id=String(req
 async function cloudSessionAction(admin:SupabaseClient,station:any,action:string,payload:any,operationKey:string|null=null){const{data,error}=await admin.rpc('aezakmi_cloud_execute',{p_branch_id:station.branch_id,p_action:action,p_payload:payload||{},p_actor_kind:'station',p_actor_id:station.id,p_operation_key:operationKey});if(error)throw error;return data}
 async function rollbackLockCheckpoint(admin:SupabaseClient,station:any,commandId:string){const{data,error}=await admin.rpc('aezakmi_rollback_station_lock',{p_branch_id:station.branch_id,p_pc_id:station.local_station_id,p_command_id:commandId,p_resumed_at:new Date().toISOString()});if(error)throw error;return data}
 async function restoreStationAvailable(admin:SupabaseClient,station:any){const{data:active,error:activeError}=await admin.from('branch_sessions').select('local_id').eq('branch_id',station.branch_id).eq('pc_id',station.local_station_id).eq('status','active').limit(1).maybeSingle();if(activeError)throw activeError;if(active)return;const{data:row,error:rowError}=await admin.from('branch_stations').select('status').eq('branch_id',station.branch_id).eq('local_id',station.local_station_id).maybeSingle();if(rowError)throw rowError;const current=String(row?.status||'').toLowerCase();if(!['maintenance','reserved'].includes(current)){const{error}=await admin.from('branch_stations').update({status:'available',updated_at:new Date().toISOString()}).eq('branch_id',station.branch_id).eq('local_id',station.local_station_id);if(error)throw error}}
-async function mirrorStationStateToEdge(admin:SupabaseClient,station:any,command:any,result:any){if(!['lock','unlock','reboot','shutdown'].includes(String(command.command)))return;const{data:edge,error}=await admin.from('edge_servers').select('id').eq('branch_id',station.branch_id).is('revoked_at',null).order('last_seen_at',{ascending:false}).limit(1).maybeSingle();if(error||!edge)return;await admin.from('cloud_commands').insert({organization_id:station.organization_id,branch_id:station.branch_id,edge_id:edge.id,station_id:station.local_station_id,command:'station_state',payload:{stationCommandId:command.id,command:command.command,result:result&&typeof result==='object'?result:{}},expires_at:new Date(Date.now()+120000).toISOString()})}
+async function broadcastEdge(topicKey:string,payload:any){if(!topicKey)return;try{await fetch(`${projectUrl()}/realtime/v1/api/broadcast/${encodeURIComponent(`edge-wakeup:${topicKey}`)}/events/sync`,{method:'POST',headers:{apikey:secretKey(),'Content-Type':'application/json'},body:JSON.stringify(payload||{})})}catch{}}
+async function mirrorStationStateToEdge(admin:SupabaseClient,station:any,command:any,result:any){if(!['lock','unlock','reboot','shutdown'].includes(String(command.command)))return;const{data:edge,error}=await admin.from('edge_servers').select('id,realtime_topic_key').eq('branch_id',station.branch_id).is('revoked_at',null).order('last_seen_at',{ascending:false}).limit(1).maybeSingle();if(error||!edge)return;const inserted=await admin.from('cloud_commands').insert({organization_id:station.organization_id,branch_id:station.branch_id,edge_id:edge.id,station_id:station.local_station_id,command:'station_state',payload:{stationCommandId:command.id,command:command.command,result:result&&typeof result==='object'?result:{}},expires_at:new Date(Date.now()+120000).toISOString()});if(!inserted.error)await broadcastEdge(edge.realtime_topic_key,{kind:'station_state',stationId:station.local_station_id,command:command.command})}
 
-Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admin=adminClient(),station=await stationAuth(req,admin),body=await req.json().catch(()=>({})),action=String(body.action||'heartbeat'),now=new Date().toISOString();
+Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admin=adminClient(),body=await req.json().catch(()=>({})),action=String(body.action||'heartbeat'),now=new Date().toISOString();
+  if(action==='heartbeat'){
+    const id=String(req.headers.get('x-aezakmi-station-id')||'').trim(),token=String(req.headers.get('x-aezakmi-station-token')||'')
+    if(!id||!token)throw Object.assign(new Error('Customer Station credentials are required.'),{status:401,code:'STATION_AUTH_REQUIRED'})
+    const localIpRaw=String(body.localIp||'').trim()
+    const localIp=/^(?:\d{1,3}\.){3}\d{1,3}$/.test(localIpRaw)&&localIpRaw.split('.').every((part:string)=>Number(part)>=0&&Number(part)<=255)?localIpRaw:null
+    const softwareVersion=String(body.softwareVersion||'').trim().slice(0,64)||null
+    const{data,error}=await admin.rpc('aezakmi_station_runtime_heartbeat',{p_station_device_id:id,p_device_token_hash:await sha256(token),p_local_ip:localIp,p_software_version:softwareVersion,p_recovered_from_fallback:Boolean(body.recoveredFromFallback),p_used_fallback:Boolean(body.usedFallback)})
+    if(error)throw error
+    if(!data||data.success===false)throw Object.assign(new Error(data?.error||'Customer Station heartbeat failed.'),{status:Number(data?.status||500),code:data?.code||'STATION_HEARTBEAT_FAILED'})
+    return json(data)
+  }
+  const station=await stationAuth(req,admin)
   if(action==='unpair'){
     // Customer-side Reset Pairing must revoke the Cloud identity before the
     // Electron app deletes its local credential. This prevents ghost pairings
@@ -30,34 +43,6 @@ Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;try{const admi
     if(revoked.error)throw revoked.error;
     return json({success:true,unpaired:true,stationId:station.id,localStationId:station.local_station_id})
   }
-  if(action==='heartbeat'){
-    const recovered=Boolean(body.recoveredFromFallback)
-    const softwareVersion=String(body.softwareVersion||'').trim().slice(0,64)
-    const patch:any={status:'online',cloud_last_seen_at:now,updated_at:now}
-    if(recovered)patch.last_sync_restored_at=now
-    if(body.usedFallback)patch.last_fallback_at=now
-    if(softwareVersion)patch.software_version=softwareVersion
-    const deviceUpdate=await admin.from('station_devices').update(patch).eq('id',station.id)
-    if(deviceUpdate.error)throw deviceUpdate.error
-    await cloudSessionAction(admin,station,'session.heartbeat',{pcId:station.local_station_id},null)
-    const[{data:stationRow,error:stationError},{data:active,error:activeError},{data:pendingPower,error:pendingPowerError}]=await Promise.all([
-      admin.from('branch_stations').select('status').eq('branch_id',station.branch_id).eq('local_id',station.local_station_id).maybeSingle(),
-      admin.from('branch_sessions').select('local_id').eq('branch_id',station.branch_id).eq('pc_id',station.local_station_id).eq('status','active').limit(1).maybeSingle(),
-      admin.from('station_commands').select('id').eq('station_device_id',station.id).in('command',['reboot','shutdown']).in('status',['queued','running']).gt('expires_at',now).limit(1).maybeSingle()
-    ])
-    if(stationError)throw stationError
-    if(activeError)throw activeError
-    if(pendingPowerError)throw pendingPowerError
-    const persisted=String(stationRow?.status||'').toLowerCase()
-    const stationPatch:any={station_device_id:station.id,cloud_last_seen_at:now,cloud_connection_status:'online',updated_at:now,status:pendingPower?'offline':active?'occupied':(['maintenance','reserved'].includes(persisted)?persisted:'available')}
-    const localIp=String(body.localIp||'').trim()
-    if(/^(?:\d{1,3}\.){3}\d{1,3}$/.test(localIp)&&localIp.split('.').every((part:string)=>Number(part)>=0&&Number(part)<=255))stationPatch.ip_address=localIp
-    if(softwareVersion)stationPatch.customer_version=softwareVersion
-    const branchUpdate=await admin.from('branch_stations').update(stationPatch).eq('branch_id',station.branch_id).eq('local_id',station.local_station_id)
-    if(branchUpdate.error)throw branchUpdate.error
-    return json({success:true,station:{id:station.id,organizationId:station.organization_id,branchId:station.branch_id,localStationId:station.local_station_id,name:station.station_name},serverTime:now,powerTransition:Boolean(pendingPower)})
-  }
-
   if(action==='poll'){
     const{data:expired,error:expiredError}=await admin.from('station_commands').select('id,command,status').eq('station_device_id',station.id).in('status',['queued','running']).lte('expires_at',now);if(expiredError)throw expiredError;for(const command of expired||[]){if(command.command==='lock')await rollbackLockCheckpoint(admin,station,command.id);if(command.command==='reboot'||command.command==='shutdown')await restoreStationAvailable(admin,station);const{error:updateExpiredError}=await admin.from('station_commands').update({status:'expired',acknowledged_at:now,result:{error:'Station command expired before delivery.',code:'COMMAND_EXPIRED'}}).eq('id',command.id).eq('status',command.status);if(updateExpiredError)throw updateExpiredError}const{data,error}=await admin.from('station_commands').select('id,command,payload,status,requested_at,expires_at').eq('station_device_id',station.id).in('status',['queued','running']).gt('expires_at',now).order('requested_at',{ascending:true}).limit(20);if(error)throw error;return json({success:true,commands:data||[],serverTime:now})
   }

@@ -76,7 +76,7 @@ test('Signed-in member owns the station against conflicting Guest or member star
   assert.match(edgeApi,/PC_MEMBER_SIGNED_IN/)
   assert.match(stationApi,/stationActive[\s\S]*PC_IN_USE/)
   assert.match(adminApi,/branch_customer_auth_sessions[\s\S]*PC_MEMBER_SIGNED_IN/)
-  assert.match(adminApi,/requireAvailableStation\(admin,branchId,String\(body\?\.pcId\|\|''\),body\?\.customerId\?String\(body\.customerId\):null\)/)
+  assert.match(adminApi,/const pcId=String\(body\?\.pcId\|\|''\);await requireAvailableStation\(admin,branchId,pcId,body\?\.customerId\?String\(body\.customerId\):null\)/)
 })
 
 test('Admin lifecycle rolls back expired power transitions and legacy Edge commands are station-scoped',()=>{

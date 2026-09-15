@@ -51,9 +51,12 @@ test('Wallet-funded start ignores Add Time self-service toggle but preserves ext
   assert.doesNotMatch(migration,/RATE_PLAN_NOT_AVAILABLE[^\n]+customer self-service/)
 })
 
-test('Cloud customer wallet refresh polls fast enough for approved top-ups to map Start Session promptly',()=>{
+test('Cloud customer wallet refresh is event-driven with a low-frequency safety revalidation',()=>{
   const data=read('apps/customer/src/context/AppDataContext.jsx')
-  assert.match(data,/setInterval\(queueRefresh,user\?\.role === 'customer' \? 1000 : 5000\)/)
+  assert.match(data,/topup:updated/)
+  assert.match(data,/wallet:updated/)
+  assert.match(data,/aezakmi:cloud-station-wakeup/)
+  assert.match(data,/setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'\)queueRefresh\(\)\},60000\)/)
 })
 
 test('Cloud Customer start ignores stale Edge offline state but server-side blocks maintenance',()=>{

@@ -37,7 +37,7 @@ test('Guest sessions automatically leave Member Login even when Cloud sync trail
   assert.match(api,/basePath==='\/guest\/session' && !data\?\.session/)
   assert.match(api,/const localGuest=await localApiFetch\(path, options\)/)
   assert.match(api,/if \(localGuest\?\.session\) return \{ \.\.\.localGuest, guestSessionAuthority:'edge', guestSessionAbsentConfirmed:false \}/)
-  assert.match(auth,/setInterval\(detect,1000\)/)
+  assert.match(auth,/setInterval\(detect,60000\)/)
   assert.match(auth,/const guestUser=guestUserFromResponse\(d\);[\s\S]*if \(guestUser\) setUser\(guestUser\)/)
 })
 

@@ -201,6 +201,9 @@ function pcView(p, suppliedActive) {
     : null;
   const storedNumber = Number.parseInt(String(p.pc_number ?? ""), 10);
   const numberMatch = String(p.label || p.id || "").match(/\d+/);
+  const persistedStatus=String(p.status || 'offline').toLowerCase();
+  const stationOnline=persistedStatus !== 'offline';
+  const displayStatus=session && persistedStatus !== 'maintenance' ? 'occupied' : persistedStatus;
   return {
     id: p.id,
     pcNumber: Number.isInteger(storedNumber) && storedNumber > 0 ? storedNumber : numberMatch ? Number(numberMatch[0]) : null,
@@ -208,7 +211,10 @@ function pcView(p, suppliedActive) {
     ipAddress: p.ip_address,
     macAddress: p.mac_address,
     spec: p.spec,
-    status: p.status,
+    status: displayStatus,
+    stationOnline,
+    isOnline: stationOnline,
+    cloudConnectionStatus: stationOnline ? 'online' : 'offline',
     customerVersion: p.customer_version || null,
     session,
   };

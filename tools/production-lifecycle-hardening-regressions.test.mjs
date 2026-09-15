@@ -56,8 +56,9 @@ test('Interrupted Guest prepaid restore requires a genuinely Available online st
 
 test('Cloud station runtime preserves Offline through pending power transitions and rolls back failed or expired commands safely',()=>{
   const runtime=read('supabase/functions/station-runtime/index.ts')
-  assert.match(runtime,/pendingPower/)
-  assert.match(runtime,/status:pendingPower\?'offline':active\?'occupied'/)
+  const heartbeatSql=read('supabase/migrations/20260915000027_station_runtime_heartbeat_rpc.sql')
+  assert.match(heartbeatSql,/has_pending_power/)
+  assert.match(heartbeatSql,/when has_pending_power then 'offline'/)
   assert.match(runtime,/command\.command==='lock'\)await rollbackLockCheckpoint/)
   assert.match(runtime,/command\.command==='reboot'\|\|command\.command==='shutdown'\)await restoreStationAvailable/)
   assert.match(runtime,/status==='failed'&&\(command\.command==='reboot'\|\|command\.command==='shutdown'\)\)await restoreStationAvailable/)
@@ -77,7 +78,7 @@ test('Cloud Admin station lifecycle prevents fabricated availability, unsafe del
 test('Cloud paid-session starts and restores are rejected unless station availability and heartbeat are current',()=>{
   const admin=read('supabase/functions/admin-api/index.ts')
   assert.match(admin,/async function requireAvailableStation/)
-  assert.match(admin,/Date\.now\(\)-seen>=10_000/)
+  assert.match(admin,/Date\.now\(\)-seen>=180_000/)
   assert.match(admin,/route==='\/sessions\/start'[\s\S]*requireAvailableStation/)
   assert.match(admin,/restore-interrupted-guest[\s\S]*requireAvailableStation/)
 })

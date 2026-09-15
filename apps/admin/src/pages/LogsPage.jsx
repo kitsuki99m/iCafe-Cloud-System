@@ -97,7 +97,7 @@ export default function LogsPage() {
     }
   },[applySnapshot,cacheKey])
 
-  useEffect(()=>{let active=true;if(cacheKey)void readSnapshot(cacheKey).then(snapshot=>{if(active&&snapshot){applySnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void loadLogs()});else void loadLogs();const timer=setInterval(()=>void loadLogs(),30000);const onOnline=()=>void loadLogs();const onVisible=()=>{if(document.visibilityState==='visible')void loadLogs()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible);loadSequenceRef.current+=1}},[applySnapshot,cacheKey,loadLogs])
+  useEffect(()=>{let active=true;if(cacheKey)void readSnapshot(cacheKey).then(snapshot=>{if(active&&snapshot){applySnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void loadLogs()});else void loadLogs();const timer=setInterval(()=>{if(document.visibilityState==='visible')void loadLogs()},120000);const onOnline=()=>void loadLogs();const onVisible=()=>{if(document.visibilityState==='visible')void loadLogs()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible);loadSequenceRef.current+=1}},[applySnapshot,cacheKey,loadLogs])
   useEffect(()=>{setPage(1)},[query,actionFilter])
 
   function requestInterruptedSettlement(item, paymentMethod) {

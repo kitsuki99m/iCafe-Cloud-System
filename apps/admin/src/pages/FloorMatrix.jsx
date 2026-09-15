@@ -25,6 +25,7 @@ import { remainingSessionSeconds } from '../lib/sessionTime.js'
 import { runBulkMutation } from '../lib/bulkMutation.js'
 import { createOperationKey } from '../lib/api.js'
 import { cloudStationAdmin, isCloudAdmin } from '../lib/cloudClient.js'
+import { effectivePcStatus, isPcStationOnline } from '../lib/pcStatus.js'
 
 const CLIENT_STATUS_FILTERS = ['all','occupied','available','reserved','locked','maintenance','offline']
 const TIER_RANK = { Regular: 0, Gold: 1, VIP: 2 }
@@ -102,13 +103,13 @@ export default function FloorMatrix() {
   useEffect(() => {
     if (requestedStatusFilter !== filter) setFilter(requestedStatusFilter)
   }, [requestedStatusFilter, filter])
-  useEffect(() => { pcs.forEach(pc=>{const session=pc.session;if(pc.status!=='occupied'||session?.billing!=='prepaid')return;const remaining=remainingSessionSeconds(session,now);const key=`${pc.id}:${session.id}`;if(remaining>0&&remaining<=Number(settings.lowTimeWarningMinutes||5)*60&&!alerted.current.has(key)){alerted.current.add(key);playLowTimeAlert(key)}}) }, [now,pcs,settings.lowTimeWarningMinutes])
+  useEffect(() => { pcs.forEach(pc=>{const session=pc.session;if(effectivePcStatus(pc)!=='occupied'||session?.billing!=='prepaid')return;const remaining=remainingSessionSeconds(session,now);const key=`${pc.id}:${session.id}`;if(remaining>0&&remaining<=Number(settings.lowTimeWarningMinutes||5)*60&&!alerted.current.has(key)){alerted.current.add(key);playLowTimeAlert(key)}}) }, [now,pcs,settings.lowTimeWarningMinutes])
 
   const stats = useMemo(() => ({
-    available:pcs.filter(p=>p.status==='available').length,
-    occupied:pcs.filter(p=>p.status==='occupied').length,
-    maintenance:pcs.filter(p=>p.status==='maintenance').length,
-    offline:pcs.filter(p=>p.status==='offline').length,
+    available:pcs.filter(p=>effectivePcStatus(p)==='available').length,
+    occupied:pcs.filter(p=>effectivePcStatus(p)==='occupied').length,
+    maintenance:pcs.filter(p=>effectivePcStatus(p)==='maintenance').length,
+    offline:pcs.filter(p=>effectivePcStatus(p)==='offline').length,
     locked:pcs.filter(p=>p.session?.isLocked).length,
     total:pcs.length,
   }), [pcs])
@@ -117,9 +118,9 @@ export default function FloorMatrix() {
   const editingPc = editingPcId ? pcs.find((p) => p.id === editingPcId) ?? null : null
   const controlsPc = controlsPcId ? pcs.find((p) => String(p.id) === String(controlsPcId)) ?? null : null
   const bulkMemberTargets = members.map((member) => ({ id:member.id, label:member.name, sublabel:`${member.username || member.memberCode || 'Member'} · ₱${Number(member.wallet || 0).toFixed(2)}` }))
-  const bulkSessionTargets = members.filter((member) => pcs.some((pc) => pc.status === 'occupied' && String(pc.session?.customerId)===String(member.id))).map((member) => ({ id:member.id, label:member.name, sublabel:'Active session', tier:member.tier }))
-  const bulkPcTargets = pcs.filter((pc) => !['maintenance','offline'].includes(pc.status)).map((pc) => ({ id:pc.id, label:pc.label, sublabel:`${pc.ipAddress} · ${pc.status}` }))
-  const removablePcTargets = pcs.filter((pc) => !['occupied','reserved'].includes(pc.status) && !pc.session).map((pc) => ({ id:pc.id, label:pc.label, sublabel:`${pc.ipAddress} · ${pc.status}` }))
+  const bulkSessionTargets = members.filter((member) => pcs.some((pc) => effectivePcStatus(pc) === 'occupied' && String(pc.session?.customerId)===String(member.id))).map((member) => ({ id:member.id, label:member.name, sublabel:'Active session', tier:member.tier }))
+  const bulkPcTargets = pcs.filter((pc) => !['maintenance','offline'].includes(effectivePcStatus(pc)) && isPcStationOnline(pc)).map((pc) => ({ id:pc.id, label:pc.label, sublabel:`${pc.ipAddress} · ${pc.status}` }))
+  const removablePcTargets = pcs.filter((pc) => !['occupied','reserved'].includes(effectivePcStatus(pc)) && !pc.session).map((pc) => ({ id:pc.id, label:pc.label, sublabel:`${pc.ipAddress} · ${pc.status}` }))
   const sortedPcs = useMemo(() => {
     const term=query.trim().toLowerCase()
     const pcNumber = (pc) => {
@@ -127,7 +128,7 @@ export default function FloorMatrix() {
       return numeric ? Number(numeric[0]) : Number.MAX_SAFE_INTEGER
     }
     const order = (pc) => {
-      const status = String(pc.status || '').toLowerCase()
+      const status = effectivePcStatus(pc)
       // A live session is the primary operational priority. This also keeps a
       // recovering/legacy station with a session from being mixed in with
       // idle units before the next presence reconciliation.
@@ -139,7 +140,7 @@ export default function FloorMatrix() {
       return 4
     }
     return [...pcs]
-      .filter(pc => (filter==='all' || (filter==='locked' ? Boolean(pc.session?.isLocked) : pc.status===filter)) && (term===''||[pc.label,pc.ipAddress,pc.spec,pc.session?.customerName,pc.session?.username].some(value=>String(value||'').toLowerCase().includes(term))))
+      .filter(pc => (filter==='all' || (filter==='locked' ? Boolean(pc.session?.isLocked) : effectivePcStatus(pc)===filter)) && (term===''||[pc.label,pc.ipAddress,pc.spec,pc.session?.customerName,pc.session?.username].some(value=>String(value||'').toLowerCase().includes(term))))
       .sort((a, b) => order(a) - order(b) || pcNumber(a) - pcNumber(b) || String(a.label).localeCompare(String(b.label), undefined, { numeric:true }))
   }, [pcs,filter,query])
 
@@ -459,7 +460,8 @@ export default function FloorMatrix() {
 
       {detailPc && !pendingTimeAction && !timeAction && (() => {
         const pc=detailPc
-        const statusLabel=pc.session?.isLocked ? 'Session locked' : pc.status==='occupied' ? 'In use' : pc.status
+        const effectiveStatus=effectivePcStatus(pc)
+        const statusLabel=pc.session?.isLocked ? 'Session locked' : effectiveStatus==='occupied' ? 'In use' : effectiveStatus
         return <SidePanel
           open
           onClose={closePopover}
@@ -469,7 +471,7 @@ export default function FloorMatrix() {
         >
           <div className="space-y-5">
             <section className="overview-soft-card p-4">
-              <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Station</p><p className="mt-1 text-sm font-semibold text-ink-900">{pc.spec || 'Cafe PC'}</p><p className="stat-figure mt-1 text-[11px] text-slate-soft">{pc.ipAddress}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold capitalize ${pc.status==='available'?'bg-teal/10 text-teal-dim':pc.status==='maintenance'||pc.status==='offline'?'bg-ember/10 text-ember-dim':'bg-gold/10 text-gold-dim'}`}>{statusLabel}</span></div>
+              <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Station</p><p className="mt-1 text-sm font-semibold text-ink-900">{pc.spec || 'Cafe PC'}</p><p className="stat-figure mt-1 text-[11px] text-slate-soft">{pc.ipAddress}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold capitalize ${effectiveStatus==='available'?'bg-teal/10 text-teal-dim':effectiveStatus==='maintenance'||effectiveStatus==='offline'?'bg-ember/10 text-ember-dim':'bg-gold/10 text-gold-dim'}`}>{statusLabel}</span></div>
             </section>
 
             <StationActions
