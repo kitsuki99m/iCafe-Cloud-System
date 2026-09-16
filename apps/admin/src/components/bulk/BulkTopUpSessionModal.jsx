@@ -13,7 +13,12 @@ export default function BulkTopUpSessionModal({ open, targets = [], ratePlans = 
     return Math.min(lowest, TIER_RANK[String(target?.tier ?? 'Regular')] ?? 0)
   }, TIER_RANK.VIP), [selected, targets])
   const eligibleRatePlans = useMemo(() => ratePlans.filter((item) => item.isActive !== false && planTierRank(item) <= selectedTierRank), [ratePlans, selectedTierRank])
-  useEffect(() => { if (open) { setSelected(new Set()); setPlanId(ratePlans.find((item) => item.isActive !== false)?.id || ''); setAmount(''); setError('') } }, [open, ratePlans])
+  // `ratePlans` is commonly passed as a freshly filtered array. Depending on
+  // that reference here reset the selection whenever the parent re-renders
+  // (the Clients page ticks every second), making targets impossible to keep
+  // selected. Reset only for a new modal opening; the eligibility effect below
+  // still adjusts the plan if the available plans change while it is open.
+  useEffect(() => { if (open) { setSelected(new Set()); setPlanId(ratePlans.find((item) => item.isActive !== false)?.id || ''); setAmount(''); setError('') } }, [open])
   useEffect(() => { if (open && !eligibleRatePlans.some((item) => String(item.id) === String(planId))) setPlanId(eligibleRatePlans[0]?.id || '') }, [open, eligibleRatePlans, planId])
   const plan = eligibleRatePlans.find((item) => String(item.id) === String(planId)); const isPackage = plan?.mode === 'package'; const parsedAmount = positiveNumber(amount); const valid = selected.size > 0 && plan && (isPackage ? Number(plan.amount) > 0 : parsedAmount !== null && parsedAmount >= Number(plan.minAmount || 0))
   async function submit() { if (!valid || saving) return; setError(''); setSaving(true); try { await onConfirm([...selected], planId, isPackage ? null : parsedAmount) } catch (submitError) { setError(submitError?.message || 'The bulk session top-up could not be completed. Try again.') } finally { setSaving(false) } }
