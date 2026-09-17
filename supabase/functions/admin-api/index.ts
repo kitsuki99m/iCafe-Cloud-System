@@ -418,6 +418,29 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     if(error)throw error;
     return result({success:true,menuItem:{id:itemId,...row,price:n(row.price_centavos)/100}},201);
   }
+  if(method==='POST'&&route==='/menu-items/batch'){
+    const items=Array.isArray(body?.items)?body.items:[];
+    const nowStr=now();
+    const rows=items.filter((it:any)=>it?.name).map((it:any)=>({
+      branch_id:branchId,
+      local_id:id(),
+      name:String(it.name).trim(),
+      category:String(it.category||'Food'),
+      description:String(it.description||'').trim(),
+      price_centavos:Math.round(n(it.price,0)*100),
+      image_url:it.imageUrl||null,
+      stock_quantity:it.stockQuantity!=null&&it.stockQuantity!==''?n(it.stockQuantity):null,
+      is_available:it.isAvailable!==false,
+      is_active:true,
+      created_at:nowStr,
+      updated_at:nowStr
+    }));
+    if(rows.length>0){
+      const{error}=await admin.from('branch_menu_items').insert(rows);
+      if(error)throw error;
+    }
+    return result({success:true,count:rows.length},201);
+  }
   const menuItemMatch=route.match(/^\/menu-items\/([^/]+)$/);
   if(menuItemMatch&&method==='PATCH'){
     const localId=decodeURIComponent(menuItemMatch[1]),patch:any={updated_at:now()};

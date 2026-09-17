@@ -9,6 +9,16 @@ import {
   CheckCircle2,
   Pizza,
   Search,
+  Layers,
+  Sparkles,
+  CheckSquare,
+  Square,
+  X,
+  SlidersHorizontal,
+  ArrowRight,
+  ArrowLeft,
+  Upload,
+  Camera,
 } from 'lucide-react'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -18,12 +28,13 @@ import Modal from '../components/common/Modal.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import NumericInput from '../components/common/NumericInput.jsx'
 import { AdminEmptyState, AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
+import { PHILIPPINE_MENU_CATALOG, PHILIPPINE_MENU_CATEGORIES } from '../data/philippineMenuPresets.js'
 
 const CATEGORIES = ['All', 'Food', 'Drinks', 'Snacks', 'Combos']
 const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
 export default function MenuManagementPage() {
-  const { menuItems, menuOrders, createMenuItem, updateMenuItem, deleteMenuItem, updateOrderStatus, cancelMenuOrder } = useAppData()
+  const { menuItems, menuOrders, createMenuItem, batchCreateMenuItems, updateMenuItem, deleteMenuItem, updateOrderStatus, cancelMenuOrder } = useAppData()
   const { user } = useAuth()
   const isCashier = user?.role === 'cashier'
   const [activeTab, setActiveTab] = useState('orders') // 'orders' | 'items'
@@ -44,6 +55,127 @@ export default function MenuManagementPage() {
     isAvailable: true,
   })
   const [submitting, setSubmitting] = useState(false)
+
+  // Batch Add / Presets State
+  const [batchModalOpen, setBatchModalOpen] = useState(false)
+  const [batchStep, setBatchStep] = useState('catalog') // 'catalog' | 'configure'
+  const [selectedPresetIds, setSelectedPresetIds] = useState(new Set())
+  const [presetCategory, setPresetCategory] = useState('All')
+  const [presetSearch, setPresetSearch] = useState('')
+  const [batchRows, setBatchRows] = useState([])
+  const [batchSubmitting, setBatchSubmitting] = useState(false)
+
+  const filteredPresets = useMemo(() => {
+    return PHILIPPINE_MENU_CATALOG.filter((item) => {
+      const matchCat = presetCategory === 'All' || item.subcategory === presetCategory || item.category === presetCategory
+      const q = presetSearch.toLowerCase().trim()
+      const matchSearch = !q || item.name.toLowerCase().includes(q) || (item.subcategory && item.subcategory.toLowerCase().includes(q))
+      return matchCat && matchSearch
+    })
+  }, [presetCategory, presetSearch])
+
+  function openBatchModal() {
+    setSelectedPresetIds(new Set())
+    setPresetCategory('All')
+    setPresetSearch('')
+    setBatchRows([])
+    setBatchStep('catalog')
+    setBatchModalOpen(true)
+  }
+
+  function togglePreset(id) {
+    setSelectedPresetIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAllFilteredPresets() {
+    setSelectedPresetIds((prev) => {
+      const next = new Set(prev)
+      filteredPresets.forEach((p) => next.add(p.id))
+      return next
+    })
+  }
+
+  function deselectAllPresets() {
+    setSelectedPresetIds(new Set())
+  }
+
+  function proceedToConfigure() {
+    if (selectedPresetIds.size === 0) return
+    const rows = PHILIPPINE_MENU_CATALOG.filter((p) => selectedPresetIds.has(p.id)).map((p) => ({
+      name: p.name,
+      category: p.category,
+      subcategory: p.subcategory,
+      price: String(p.price),
+      stockQuantity: p.stockQuantity != null ? String(p.stockQuantity) : '',
+      imageUrl: p.imageUrl,
+      description: p.description,
+      isAvailable: true,
+    }))
+    setBatchRows(rows)
+    setBatchStep('configure')
+  }
+
+  function addCustomBatchRow() {
+    setBatchRows((prev) => [
+      ...prev,
+      {
+        name: '',
+        category: 'Food',
+        subcategory: 'Custom',
+        price: '25.00',
+        stockQuantity: '20',
+        imageUrl: '',
+        description: '',
+        isAvailable: true,
+      },
+    ])
+  }
+
+  function updateBatchRow(idx, field, val) {
+    setBatchRows((prev) => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], [field]: val }
+      return next
+    })
+  }
+
+  function removeBatchRow(idx) {
+    setBatchRows((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  async function handleSaveBatch() {
+    const validRows = batchRows.filter((r) => r.name && r.name.trim())
+    if (validRows.length === 0) {
+      showToast({ title: 'Validation Error', message: 'Please provide at least one valid item name.', tone: 'error' })
+      return
+    }
+
+    setBatchSubmitting(true)
+    try {
+      const payload = validRows.map((r) => ({
+        name: r.name.trim(),
+        category: r.category || 'Food',
+        price: Math.max(0, Number(r.price) || 0),
+        stockQuantity: r.stockQuantity === '' || r.stockQuantity === null || r.stockQuantity === undefined ? null : Math.max(0, parseInt(r.stockQuantity, 10) || 0),
+        imageUrl: r.imageUrl ? r.imageUrl.trim() : '',
+        description: r.description ? r.description.trim() : '',
+        isAvailable: r.isAvailable !== false,
+      }))
+
+      await batchCreateMenuItems(payload)
+      showToast({ title: 'Batch Added', message: `Successfully added ${validRows.length} items to the menu!`, tone: 'success' })
+      setBatchModalOpen(false)
+    } catch (err) {
+      showToast({ title: 'Batch Add Failed', message: err.message, tone: 'error' })
+    } finally {
+      setBatchSubmitting(false)
+    }
+  }
 
   const pendingOrders = useMemo(() => {
     return menuOrders.filter((o) => (o.order_status || o.orderStatus) === 'pending')
@@ -84,6 +216,21 @@ export default function MenuManagementPage() {
       isAvailable: item.is_available !== undefined ? Boolean(item.is_available) : Boolean(item.isAvailable),
     })
     setModalOpen(true)
+  }
+
+  function handleImageFileUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2.5 * 1024 * 1024) {
+      showToast({ title: 'File Too Large', message: 'Image file size must be less than 2.5MB.', tone: 'error' })
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setFormData((prev) => ({ ...prev, imageUrl: event.target.result }))
+      showToast({ title: 'Photo Selected', message: 'Image loaded into preview. Click Save to apply.' })
+    }
+    reader.readAsDataURL(file)
   }
 
   async function handleSaveItem(e) {
@@ -251,9 +398,14 @@ export default function MenuManagementPage() {
             </div>
 
             {activeTab === 'items' && !isCashier && (
-              <Button variant="primary" icon={Plus} onClick={openCreateModal}>
-                Add Item
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" icon={Layers} onClick={openBatchModal}>
+                  Presets & Batch Add
+                </Button>
+                <Button variant="primary" icon={Plus} onClick={openCreateModal}>
+                  Add Item
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -452,8 +604,19 @@ export default function MenuManagementPage() {
               <AdminEmptyState
                 icon={UtensilsCrossed}
                 title="No Menu Items Found"
-                description="Add food and beverage items to start selling to customers in-session."
-                action={!isCashier ? <Button variant="primary" icon={Plus} onClick={openCreateModal}>Add Menu Item</Button> : null}
+                description="Add food and beverage items or select from our Philippine market presets to start selling."
+                action={
+                  !isCashier ? (
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" icon={Layers} onClick={openBatchModal}>
+                        Philippine Presets & Batch
+                      </Button>
+                      <Button variant="primary" icon={Plus} onClick={openCreateModal}>
+                        Add Menu Item
+                      </Button>
+                    </div>
+                  ) : null
+                }
               />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -472,18 +635,18 @@ export default function MenuManagementPage() {
                     >
                       <div>
                         {/* Image */}
-                        <div className="h-32 bg-surface-raised relative overflow-hidden flex items-center justify-center">
+                        <div className={`h-32 rounded-xl relative overflow-hidden flex items-center justify-center p-2 m-2 mb-0 transition ${item.image_url || item.imageUrl ? 'bg-white' : 'bg-surface-raised'}`}>
                           {item.image_url || item.imageUrl ? (
                             <img
                               src={item.image_url || item.imageUrl}
                               alt={item.name}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain"
                               onError={(e) => { e.target.style.display = 'none' }}
                             />
                           ) : (
                             <UtensilsCrossed className="w-8 h-8 text-slate-soft/50" />
                           )}
-                          <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-surface/90 backdrop-blur-xs text-ink-900 border border-surface-line">
+                          <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-surface/90 backdrop-blur-xs text-ink-900 border border-surface-line shadow-xs">
                             {item.category || 'Food'}
                           </span>
                           {(!isAvail || isOutOfStock) && (
@@ -646,14 +809,50 @@ export default function MenuManagementPage() {
           </div>
 
           <div>
-            <label className="eyebrow mb-1.5 block">Photo / Image URL</label>
-            <input
-              type="url"
-              value={formData.imageUrl}
-              onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-              placeholder="https://..."
-              className={inputClass}
-            />
+            <label className="eyebrow mb-1.5 block">Product Photo</label>
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-surface-line customer-neutral-surface">
+              <div className="w-16 h-16 rounded-xl bg-white overflow-hidden flex items-center justify-center p-1 shrink-0 border border-surface-line shadow-xs">
+                {formData.imageUrl ? (
+                  <img
+                    src={formData.imageUrl}
+                    alt="Preview"
+                    className="w-full h-full object-contain"
+                    onError={(e) => { e.target.style.display = 'none' }}
+                  />
+                ) : (
+                  <UtensilsCrossed className="w-6 h-6 text-slate-400" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-surface border border-surface-line hover:border-gold/50 text-ink-900 transition shadow-xs">
+                    <Upload size={12} /> Upload Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageFileUpload}
+                    />
+                  </label>
+                  {formData.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, imageUrl: '' })}
+                      className="px-2 py-1 text-xs font-semibold rounded-lg text-ember-dim hover:bg-ember/10 transition"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
+                  placeholder="Or paste image URL (https://… or /assets/…)"
+                  className="w-full text-xs rounded-lg border border-surface-line customer-neutral-surface px-2.5 py-1.5 text-ink-900 focus:outline-none focus:border-gold/50"
+                />
+              </div>
+            </div>
           </div>
 
           <div>
@@ -667,6 +866,270 @@ export default function MenuManagementPage() {
             />
           </div>
         </form>
+      </Modal>
+
+      {/* BATCH ADD / PRESETS MODAL */}
+      <Modal
+        open={batchModalOpen}
+        onClose={() => setBatchModalOpen(false)}
+        eyebrow="Philippine iCafe Catalog"
+        title={batchStep === 'catalog' ? 'Batch Add Menu Presets' : 'Configure Batch Prices & Stock'}
+        description={
+          batchStep === 'catalog'
+            ? 'Select popular Philippine internet cafe snacks, noodles, chips, drinks, and biscuits.'
+            : 'Review selected items, set customized prices (₱), and define initial stock quantities.'
+        }
+        maxWidth="max-w-4xl"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <div>
+              {batchStep === 'catalog' ? (
+                <span className="text-xs text-slate-soft">
+                  {selectedPresetIds.size} item{selectedPresetIds.size === 1 ? '' : 's'} selected
+                </span>
+              ) : (
+                <Button
+                  variant="ghost"
+                  icon={ArrowLeft}
+                  onClick={() => setBatchStep('catalog')}
+                  disabled={batchSubmitting}
+                >
+                  Back to Catalog
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => setBatchModalOpen(false)} disabled={batchSubmitting}>
+                Cancel
+              </Button>
+              {batchStep === 'catalog' ? (
+                <Button
+                  variant="primary"
+                  icon={ArrowRight}
+                  onClick={proceedToConfigure}
+                  disabled={selectedPresetIds.size === 0}
+                >
+                  Configure Prices & Stock ({selectedPresetIds.size})
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  icon={Plus}
+                  onClick={handleSaveBatch}
+                  disabled={batchSubmitting || batchRows.length === 0}
+                >
+                  {batchSubmitting ? 'Adding Items…' : `Add ${batchRows.length} Items to Menu`}
+                </Button>
+              )}
+            </div>
+          </div>
+        }
+      >
+        {batchStep === 'catalog' ? (
+          <div className="space-y-4 max-h-[65vh] flex flex-col min-h-0">
+            {/* Toolbar: Category Chips & Search & Quick Select */}
+            <div className="space-y-2 shrink-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 max-w-full">
+                  {PHILIPPINE_MENU_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setPresetCategory(cat)}
+                      className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                        presetCategory === cat
+                          ? 'bg-gold/15 text-gold-dim border border-gold/30'
+                          : 'border border-surface-line customer-neutral-surface text-slate-soft hover:text-ink-900'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="relative w-full sm:w-56 shrink-0">
+                  <Search className="w-3.5 h-3.5 text-slate-soft absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search Philippine items…"
+                    value={presetSearch}
+                    onChange={(e) => setPresetSearch(e.target.value)}
+                    className="w-full rounded-xl border border-surface-line customer-neutral-surface pl-8 pr-3 py-1.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1 text-xs text-slate-soft">
+                <span>Showing {filteredPresets.length} items</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllFilteredPresets}
+                    className="text-gold-dim hover:underline font-semibold"
+                  >
+                    Select All in View
+                  </button>
+                  <span>•</span>
+                  <button
+                    type="button"
+                    onClick={deselectAllPresets}
+                    className="text-slate-soft hover:text-ink-900"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Presets Grid */}
+            <div className="overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+              {filteredPresets.map((preset) => {
+                const isSelected = selectedPresetIds.has(preset.id)
+                return (
+                  <div
+                    key={preset.id}
+                    onClick={() => togglePreset(preset.id)}
+                    className={`rounded-2xl border p-2.5 cursor-pointer transition flex flex-col justify-between select-none ${
+                      isSelected
+                        ? 'border-gold bg-gold/10 shadow-sm'
+                        : 'border-surface-line customer-neutral-surface hover:border-gold/40'
+                    }`}
+                  >
+                    <div>
+                      <div className="h-28 rounded-xl bg-surface-raised relative overflow-hidden flex items-center justify-center p-2 mb-2">
+                        <img
+                          src={preset.imageUrl}
+                          alt={preset.name}
+                          className="w-full h-full object-contain"
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                        <div className="absolute top-1.5 left-1.5">
+                          {isSelected ? (
+                            <div className="w-5 h-5 rounded-md bg-gold flex items-center justify-center text-ink-900 shadow">
+                              <CheckCircle2 size={14} className="stroke-[3]" />
+                            </div>
+                          ) : (
+                            <div className="w-5 h-5 rounded-md border border-surface-line bg-surface/80" />
+                          )}
+                        </div>
+                        <span className="absolute bottom-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-surface/90 text-gold-dim border border-surface-line">
+                          ₱{preset.price.toFixed(2)}
+                        </span>
+                      </div>
+                      <h4 className="font-semibold text-xs text-ink-900 leading-snug line-clamp-2">{preset.name}</h4>
+                      <p className="text-[10px] text-slate-soft mt-0.5">{preset.subcategory || preset.category}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 max-h-[65vh] flex flex-col min-h-0">
+            <div className="flex items-center justify-between shrink-0">
+              <p className="text-xs text-slate-soft">
+                Adjust the unit prices and stock quantities for each item before saving to your menu.
+              </p>
+              <Button variant="ghost" size="sm" icon={Plus} onClick={addCustomBatchRow}>
+                Add Blank Row
+              </Button>
+            </div>
+
+            <div className="overflow-y-auto pr-1 border border-surface-line rounded-2xl divide-y divide-surface-line">
+              {batchRows.map((row, idx) => (
+                <div key={idx} className="p-3 customer-neutral-surface flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <label
+                      className="relative w-12 h-12 rounded-xl bg-white flex items-center justify-center shrink-0 p-1 border border-surface-line cursor-pointer group shadow-xs"
+                      title="Click to change photo for this preset"
+                    >
+                      {row.imageUrl ? (
+                        <img src={row.imageUrl} alt="" className="w-full h-full object-contain" />
+                      ) : (
+                        <UtensilsCrossed size={16} className="text-slate-400" />
+                      )}
+                      <div className="absolute inset-0 bg-ink-900/60 rounded-xl opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition">
+                        <Camera size={14} />
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          if (file.size > 2.5 * 1024 * 1024) {
+                            showToast({ title: 'File Too Large', message: 'Image must be less than 2.5MB.', tone: 'error' })
+                            return
+                          }
+                          const reader = new FileReader()
+                          reader.onload = (ev) => {
+                            updateBatchRow(idx, 'imageUrl', ev.target.result)
+                            showToast({ title: 'Photo Changed', message: `Custom photo loaded for ${row.name || 'item'}.` })
+                          }
+                          reader.readAsDataURL(file)
+                        }}
+                      />
+                    </label>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <input
+                        type="text"
+                        value={row.name}
+                        onChange={(e) => updateBatchRow(idx, 'name', e.target.value)}
+                        placeholder="Item name…"
+                        className="w-full text-xs font-semibold text-ink-900 bg-transparent border-b border-transparent focus:border-gold/50 focus:outline-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-slate-soft shrink-0">{row.subcategory || row.category}</span>
+                        <input
+                          type="text"
+                          value={row.imageUrl || ''}
+                          onChange={(e) => updateBatchRow(idx, 'imageUrl', e.target.value)}
+                          placeholder="Image URL or click thumbnail to upload…"
+                          className="flex-1 text-[10px] text-slate-soft bg-transparent border-b border-surface-line/40 focus:border-gold/50 focus:outline-none truncate font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 sm:w-64 shrink-0">
+                    <div>
+                      <label className="text-[10px] text-slate-soft uppercase font-semibold block mb-0.5">Price (₱)</label>
+                      <NumericInput
+                        min="0"
+                        step="0.50"
+                        value={row.price}
+                        onChange={(e) => updateBatchRow(idx, 'price', e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-soft uppercase font-semibold block mb-0.5">Stock Qty</label>
+                      <NumericInput
+                        min="0"
+                        step="1"
+                        placeholder="Unlimited"
+                        value={row.stockQuantity}
+                        onChange={(e) => updateBatchRow(idx, 'stockQuantity', e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeBatchRow(idx)}
+                    className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 self-end sm:self-center shrink-0"
+                    title="Remove item"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* DELETE ITEM CONFIRMATION */}

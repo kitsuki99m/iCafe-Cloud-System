@@ -48,3 +48,31 @@ test('customer MenuOrderModal enforces stock limits and displays stock warnings'
   assert.ok(content.includes('Only '), 'MenuOrderModal must display low stock indicator')
   assert.ok(content.includes('Out of Stock'), 'MenuOrderModal must display out-of-stock badge and disable button')
 })
+
+test('backend apiRoutes and AppDataContext support batch menu items creation', () => {
+  const apiRoutesPath = path.join(repoRoot, 'backend', 'src', 'routes', 'apiRoutes.js')
+  const appDataContextPath = path.join(repoRoot, 'apps', 'admin', 'src', 'context', 'AppDataContext.jsx')
+  const apiContent = fs.readFileSync(apiRoutesPath, 'utf8')
+  const appCtxContent = fs.readFileSync(appDataContextPath, 'utf8')
+
+  assert.ok(apiContent.includes('/menu-items/batch'), 'apiRoutes must expose POST /menu-items/batch route')
+  assert.ok(appCtxContent.includes('batchCreateMenuItems'), 'AppDataContext must expose batchCreateMenuItems')
+})
+
+test('philippineMenuPresets and generated WebP assets exist and cover all requested Philippine categories', async () => {
+  const { PHILIPPINE_MENU_CATALOG, PHILIPPINE_MENU_CATEGORIES } = await import('../apps/admin/src/data/philippineMenuPresets.js')
+
+  assert.ok(PHILIPPINE_MENU_CATALOG.length >= 50, 'Catalog must contain comprehensive Philippine items')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Pancit Canton'), 'Catalog must include Pancit Canton category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Cup Noodles'), 'Catalog must include Cup Noodles category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Junk Food & Chips'), 'Catalog must include Junk Food & Chips category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Soft Drinks'), 'Catalog must include Soft Drinks category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Biscuits & Sweets'), 'Catalog must include Biscuits category')
+
+  // Verify public assets/menu directory exists
+  const adminMenuAssets = path.join(repoRoot, 'apps', 'admin', 'public', 'assets', 'menu')
+  const customerMenuAssets = path.join(repoRoot, 'apps', 'customer', 'public', 'assets', 'menu')
+
+  assert.ok(fs.existsSync(adminMenuAssets), 'Admin public assets/menu directory must exist')
+  assert.ok(fs.existsSync(customerMenuAssets), 'Customer public assets/menu directory must exist')
+})

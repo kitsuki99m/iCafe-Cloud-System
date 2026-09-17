@@ -179,13 +179,13 @@ export default function MenuOrderModal({ isOpen, onClose }) {
                     }`}
                   >
                     <div>
-                      <div className="h-24 rounded-xl bg-surface-raised overflow-hidden relative mb-2 flex items-center justify-center">
+                      <div className={`h-24 rounded-xl overflow-hidden relative mb-2 flex items-center justify-center p-1.5 transition ${item.image_url || item.imageUrl ? 'bg-white' : 'bg-surface-raised'}`}>
                         {item.image_url || item.imageUrl ? (
-                          <img src={item.image_url || item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                          <img src={item.image_url || item.imageUrl} alt={item.name} className="w-full h-full object-contain" onError={(e) => { e.target.style.display = 'none' }} />
                         ) : (
                           <UtensilsCrossed className="w-7 h-7 text-slate-soft/50" />
                         )}
-                        <span className="absolute top-1 right-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-surface/90 text-gold-dim border border-surface-line">
+                        <span className="absolute top-1 right-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-surface/90 text-gold-dim border border-surface-line shadow-xs">
                           ₱{Number(item.price).toFixed(2)}
                         </span>
                         {isOutOfStock && (

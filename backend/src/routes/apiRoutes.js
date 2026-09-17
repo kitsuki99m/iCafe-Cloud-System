@@ -6854,6 +6854,46 @@ router.post("/menu-items", auth, requireRole("admin", "cashier"), (req, res) => 
   res.status(201).json({ success: true, menuItem: { id: itemId, name, category, description, price: Number(price), imageUrl, stockQuantity, isAvailable: Boolean(isAvailable) } });
 });
 
+router.post("/menu-items/batch", auth, requireRole("admin", "cashier"), (req, res) => {
+  const { items = [] } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, error: "At least one item is required for batch creation." });
+  }
+  const createdItems = [];
+  const now = nowIso();
+  const insertStmt = db.prepare(`
+    INSERT INTO menu_items (id, name, category, description, price, image_url, stock_quantity, is_available, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `);
+
+  transaction(() => {
+    for (const it of items) {
+      if (!it?.name || typeof it.name !== 'string') continue;
+      const itemId = id();
+      const cat = String(it.category || 'Food');
+      const desc = String(it.description || '').trim();
+      const priceVal = Math.max(0, Number(it.price) || 0);
+      const img = it.imageUrl ? String(it.imageUrl).trim() : null;
+      const stockVal = it.stockQuantity != null && it.stockQuantity !== '' ? Math.max(0, parseInt(it.stockQuantity, 10) || 0) : null;
+      const avail = it.isAvailable !== false ? 1 : 0;
+      insertStmt.run(itemId, it.name.trim(), cat, desc, priceVal, img, stockVal, avail, now, now);
+      createdItems.push({
+        id: itemId,
+        name: it.name.trim(),
+        category: cat,
+        description: desc,
+        price: priceVal,
+        imageUrl: img,
+        stockQuantity: stockVal,
+        isAvailable: Boolean(avail)
+      });
+    }
+  });
+
+  emitDataChanged({ entity: 'menu_items' });
+  res.status(201).json({ success: true, count: createdItems.length, menuItems: createdItems });
+});
+
 router.patch("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, res) => {
   const existing = db.prepare("SELECT * FROM menu_items WHERE id=?").get(req.params.id);
   if (!existing) return res.status(404).json({ success: false, error: "Menu item not found." });

@@ -1,3 +1,4 @@
+import path from 'node:path'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -16,7 +17,7 @@ export function createApp() {
   const app = express()
   if (env.trustProxy) app.set('trust proxy', 1)
 
-  app.use(helmet())
+  app.use(helmet({ crossOriginResourcePolicy: false }))
   const allowedOrigins = env.corsOrigin.split(',').map((x) => x.trim()).filter(Boolean)
   app.use(cors({
     origin(origin, callback) {
@@ -25,8 +26,9 @@ export function createApp() {
     },
     credentials: false,
   }))
-  app.use(express.json({ limit: '1mb' }))
+  app.use(express.json({ limit: '5mb' }))
   app.use(attachClientIdentity)
+  app.use('/assets', express.static(path.resolve(process.cwd(), 'public', 'assets')))
   app.use('/api', apiLimiter)
   app.use('/api', idempotency)
   // Broadcast successful mutating API calls. Clients use this as a lightweight

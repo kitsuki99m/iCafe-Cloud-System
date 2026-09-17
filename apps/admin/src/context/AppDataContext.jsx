@@ -1186,6 +1186,7 @@ export function AppDataProvider({ children }) {
 
   // Menu Items & Orders
   function createMenuItem(payload) { return refreshAfter(apiPost('/menu-items', payload)) }
+  function batchCreateMenuItems(items) { return refreshAfter(apiPost('/menu-items/batch', { items })) }
   function updateMenuItem(id, payload) { return refreshAfter(apiPatch(`/menu-items/${id}`, payload)) }
   function deleteMenuItem(id) { return refreshAfter(apiDelete(`/menu-items/${id}`)) }
   function updateOrderStatus(id, status) { return refreshAfter(apiPatch(`/menu-orders/${id}/status`, { status })) }
@@ -1278,6 +1279,7 @@ export function AppDataProvider({ children }) {
       updateSettings,
       updateSessionPolicy,
       createMenuItem,
+      batchCreateMenuItems,
       updateMenuItem,
       deleteMenuItem,
       updateOrderStatus,
