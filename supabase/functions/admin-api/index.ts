@@ -15,7 +15,7 @@ async function broadcastWakeup(topicKey:string,payload:Record<string,unknown>={}
 async function wakeBranchEdge(admin:SupabaseClient,branchId:string,payload:Record<string,unknown>={}){try{const{data:edge}=await admin.from('edge_servers').select('realtime_topic_key').eq('branch_id',branchId).is('revoked_at',null).order('last_seen_at',{ascending:false}).limit(1).maybeSingle();if(edge?.realtime_topic_key)await broadcastWakeup(edge.realtime_topic_key,payload)}catch{}}
 async function broadcastStationWakeup(admin:SupabaseClient,branchId:string,stationId:string,payload:Record<string,unknown>={}){if(!stationId)return;try{const{data:station}=await admin.from('branch_stations').select('station_device_id').eq('branch_id',branchId).eq('local_id',stationId).maybeSingle();if(!station?.station_device_id)return;const{data:device}=await admin.from('station_devices').select('realtime_topic_key').eq('id',station.station_device_id).maybeSingle();const topicKey=String(device?.realtime_topic_key||'');if(!topicKey)return;await fetch(`${projectUrl()}/realtime/v1/api/broadcast/${encodeURIComponent(`station-wakeup:${topicKey}`)}/events/sync`,{method:'POST',headers:{apikey:secretKey(),'Content-Type':'application/json'},body:JSON.stringify(payload)})}catch{}}
 const METHODS=new Set(['GET','POST','PATCH','PUT','DELETE'])
-const ALLOWED_ROOTS=new Set(['pcs','members','rate-plans','announcements','feedback','support','top-ups','sessions','session-extensions','transfer-requests','promos','logs','analytics','billing-policy','settings','wallet','expenses','tax-estimate','branding','remote-commands','dashboard','earnings','guest','client'])
+const ALLOWED_ROOTS=new Set(['pcs','members','rate-plans','announcements','feedback','support','top-ups','sessions','session-extensions','transfer-requests','promos','logs','analytics','billing-policy','settings','wallet','expenses','tax-estimate','branding','remote-commands','dashboard','earnings','guest','client','launcher','menu-items','menu-orders','shifts','vouchers','reports','health','tax-policy','public'])
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms))
 function normalizePath(input:unknown){const path=String(input||'').trim();if(!path.startsWith('/')||path.startsWith('//')||path.includes('..')||/^https?:/i.test(path))throw Object.assign(new Error('Invalid Admin API path.'),{status:400,code:'INVALID_PATH'});const root=path.split('?')[0].split('/').filter(Boolean)[0]||'';if(!ALLOWED_ROOTS.has(root))throw Object.assign(new Error('This Admin API path is not cloud-enabled.'),{status:403,code:'PATH_NOT_ALLOWED'});return path}
 function asUrl(path:string){return new URL(path,'https://aezakmi.local')}
@@ -342,6 +342,128 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   const reportMatch=route.match(/^\/earnings\/reports\/([^/]+)(?:\/pdf-data)?$/);
   if(reportMatch&&method==='GET'){
     const reportId=decodeURIComponent(reportMatch[1]),{data:row,error}=await admin.from('cloud_audit_logs').select('details').eq('branch_id',branchId).eq('id',reportId).eq('action','financial.report').maybeSingle();if(error)throw error;if(!row)return json({success:false,status:404,error:'Report not found.'},200);const report=row.details?.report||{},cfg=await readConfig(admin,branchId),settings=cfg.config.settings||{},payload:any={success:true,report:{id:reportId,...report}};if(route.endsWith('/pdf-data'))payload.branding={cafeName:settings.cafeName||'Aezakmi Cafe',branch:settings.branch||branch.name||'Main Branch',branchLocation:settings.branchLocation||'',logoDataUrl:settings.logoUrl||null};return result(payload);
+  }
+
+  if(method==='GET'&&route==='/launcher/categories'){
+    const{data,error}=await admin.from('branch_launcher_categories').select('*').eq('branch_id',branchId).eq('is_active',true).order('sort_order',{ascending:true}).order('name',{ascending:true});
+    if(error)throw error;
+    return result({success:true,categories:(data||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,sortOrder:n(r.sort_order),isActive:Boolean(r.is_active),createdAt:r.created_at}))});
+  }
+  if(method==='POST'&&route==='/launcher/categories'){
+    const catId=id(),nowStr=now();
+    const{error}=await admin.from('branch_launcher_categories').insert({branch_id:branchId,local_id:catId,name:String(body?.name||'').trim(),sort_order:n(body?.sortOrder,0),is_active:true,created_at:nowStr});
+    if(error)throw error;
+    return result({success:true,category:{id:catId,name:String(body?.name||'').trim(),sortOrder:n(body?.sortOrder,0),isActive:true,createdAt:nowStr}},201);
+  }
+  const launcherCatMatch=route.match(/^\/launcher\/categories\/([^/]+)$/);
+  if(launcherCatMatch&&method==='PATCH'){
+    const localId=decodeURIComponent(launcherCatMatch[1]),patch:any={};
+    if(body?.name!==undefined)patch.name=String(body.name).trim();
+    if(body?.sortOrder!==undefined)patch.sort_order=n(body.sortOrder);
+    if(body?.isActive!==undefined)patch.is_active=Boolean(body.isActive);
+    const{error}=await admin.from('branch_launcher_categories').update(patch).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
+  if(launcherCatMatch&&method==='DELETE'){
+    const localId=decodeURIComponent(launcherCatMatch[1]);
+    const{error}=await admin.from('branch_launcher_categories').update({is_active:false}).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
+
+  if(method==='GET'&&route==='/launcher/apps'){
+    const{data,error}=await admin.from('branch_launcher_apps').select('*').eq('branch_id',branchId).eq('is_enabled',true).order('sort_order',{ascending:true}).order('name',{ascending:true});
+    if(error)throw error;
+    return result({success:true,apps:(data||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,categoryId:r.category_id,categoryName:r.category_name||'Online Games',icon:r.icon,executablePath:r.executable_path,protocolUrl:r.protocol_url,launchArguments:r.launch_arguments,workingDirectory:r.working_directory,isEnabled:Boolean(r.is_enabled),sortOrder:n(r.sort_order),isPreset:Boolean(r.is_preset),createdAt:r.created_at,updatedAt:r.updated_at}))});
+  }
+  if(method==='POST'&&route==='/launcher/apps/batch'){
+    const apps=Array.isArray(body?.apps)?body.apps:[];
+    const rows=apps.map((a:any)=>({branch_id:branchId,local_id:id(),name:String(a.name||'').trim(),category_id:a.categoryId||null,category_name:String(a.categoryName||a.category||'Online Games'),icon:a.icon||'🎮',executable_path:a.executablePath||a.exe||null,protocol_url:a.protocolUrl||a.protocol||null,launch_arguments:a.launchArguments||null,working_directory:a.workingDirectory||null,is_enabled:a.isEnabled!==false,sort_order:n(a.sortOrder,0),is_preset:Boolean(a.isPreset),created_at:now(),updated_at:now()}));
+    if(rows.length){const{error}=await admin.from('branch_launcher_apps').insert(rows);if(error)throw error;}
+    return result({success:true,count:rows.length},201);
+  }
+  if(method==='POST'&&route==='/launcher/apps'){
+    const appId=id(),nowStr=now();
+    const row={branch_id:branchId,local_id:appId,name:String(body?.name||'').trim(),category_id:body?.categoryId||null,category_name:String(body?.categoryName||'Online Games'),icon:body?.icon||'🎮',executable_path:body?.executablePath||null,protocol_url:body?.protocolUrl||null,launch_arguments:body?.launchArguments||null,working_directory:body?.workingDirectory||null,is_enabled:body?.isEnabled!==false,sort_order:n(body?.sortOrder,0),is_preset:Boolean(body?.isPreset),created_at:nowStr,updated_at:nowStr};
+    const{error}=await admin.from('branch_launcher_apps').insert(row);
+    if(error)throw error;
+    return result({success:true,app:{id:appId,...row}},201);
+  }
+  const launcherAppMatch=route.match(/^\/launcher\/apps\/([^/]+)$/);
+  if(launcherAppMatch&&method==='PATCH'){
+    const localId=decodeURIComponent(launcherAppMatch[1]),patch:any={updated_at:now()};
+    const fields:any={name:'name',categoryId:'category_id',categoryName:'category_name',icon:'icon',executablePath:'executable_path',protocolUrl:'protocol_url',launchArguments:'launch_arguments',workingDirectory:'working_directory',isEnabled:'is_enabled',sortOrder:'sort_order'};
+    for(const[k,c]of Object.entries(fields)){if(body?.[k]!==undefined)patch[c as string]=body[k];}
+    const{error}=await admin.from('branch_launcher_apps').update(patch).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
+  if(launcherAppMatch&&method==='DELETE'){
+    const localId=decodeURIComponent(launcherAppMatch[1]);
+    const{error}=await admin.from('branch_launcher_apps').delete().eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
+
+  if(method==='GET'&&route==='/menu-items'){
+    const{data,error}=await admin.from('branch_menu_items').select('*').eq('branch_id',branchId).eq('is_active',true).order('category',{ascending:true}).order('name',{ascending:true});
+    if(error)throw error;
+    return result({success:true,menuItems:(data||[]).map((m:any)=>({id:m.local_id||m.id,name:m.name,category:m.category,description:m.description,price:n(m.price_centavos)/100,imageUrl:m.image_url,stockQuantity:m.stock_quantity!=null?n(m.stock_quantity):null,isAvailable:Boolean(m.is_available),isActive:Boolean(m.is_active),createdAt:m.created_at,updatedAt:m.updated_at}))});
+  }
+  if(method==='POST'&&route==='/menu-items'){
+    const itemId=id(),nowStr=now();
+    const row={branch_id:branchId,local_id:itemId,name:String(body?.name||'').trim(),category:String(body?.category||'snacks'),description:String(body?.description||''),price_centavos:Math.round(n(body?.price,0)*100),image_url:body?.imageUrl||null,stock_quantity:body?.stockQuantity!=null?n(body.stockQuantity):null,is_available:body?.isAvailable!==false,is_active:true,created_at:nowStr,updated_at:nowStr};
+    const{error}=await admin.from('branch_menu_items').insert(row);
+    if(error)throw error;
+    return result({success:true,menuItem:{id:itemId,...row,price:n(row.price_centavos)/100}},201);
+  }
+  const menuItemMatch=route.match(/^\/menu-items\/([^/]+)$/);
+  if(menuItemMatch&&method==='PATCH'){
+    const localId=decodeURIComponent(menuItemMatch[1]),patch:any={updated_at:now()};
+    if(body?.name!==undefined)patch.name=String(body.name).trim();
+    if(body?.category!==undefined)patch.category=String(body.category);
+    if(body?.description!==undefined)patch.description=String(body.description).trim();
+    if(body?.price!==undefined)patch.price_centavos=Math.round(n(body.price,0)*100);
+    if(body?.imageUrl!==undefined)patch.image_url=body.imageUrl;
+    if(body?.stockQuantity!==undefined)patch.stock_quantity=body.stockQuantity!=null?n(body.stockQuantity):null;
+    if(body?.isAvailable!==undefined)patch.is_available=Boolean(body.isAvailable);
+    if(body?.isActive!==undefined)patch.is_active=Boolean(body.isActive);
+    const{error}=await admin.from('branch_menu_items').update(patch).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
+  if(menuItemMatch&&method==='DELETE'){
+    const localId=decodeURIComponent(menuItemMatch[1]);
+    const{error}=await admin.from('branch_menu_items').update({is_active:false,updated_at:now()}).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
+
+  if(method==='GET'&&route==='/menu-orders'){
+    const{data,error}=await admin.from('branch_menu_orders').select('*').eq('branch_id',branchId).order('created_at',{ascending:false}).limit(100);
+    if(error)throw error;
+    return result({success:true,orders:(data||[]).map((r:any)=>({id:r.local_id||r.id,customerId:r.customer_id,customerName:r.customer_name,pcId:r.pc_id,pcLabel:r.pc_label,items:typeof r.items_json==='string'?JSON.parse(r.items_json):(r.items_json||[]),total:n(r.total_centavos)/100,paymentMethod:r.payment_method,paymentStatus:r.payment_status,orderStatus:r.order_status,notes:r.notes,createdAt:r.created_at,fulfilledAt:r.fulfilled_at,cancelledAt:r.cancelled_at}))});
+  }
+
+  if(method==='GET'&&route==='/vouchers'){
+    const{data,error}=await admin.from('branch_promo_vouchers').select('*').eq('branch_id',branchId).eq('is_active',true).order('created_at',{ascending:false});
+    if(error)throw error;
+    return result({success:true,vouchers:(data||[]).map((v:any)=>({id:v.local_id||v.id,code:v.code,benefitType:v.benefit_type,valueAmount:v.value_amount,maxRedemptions:v.max_redemptions,currentRedemptions:v.current_redemptions,expiresAt:v.expires_at,isActive:v.is_active,createdAt:v.created_at}))});
+  }
+  if(method==='POST'&&route==='/vouchers'){
+    const vId=id(),nowStr=now();
+    const row={branch_id:branchId,local_id:vId,code:String(body?.code||'').trim().toUpperCase(),benefit_type:body?.benefitType==='session_time'?'session_time':'wallet_credit',value_amount:n(body?.valueAmount,0),max_redemptions:body?.maxRedemptions!=null?n(body.maxRedemptions):null,current_redemptions:0,expires_at:body?.expiresAt||null,is_active:true,created_at:nowStr};
+    const{error}=await admin.from('branch_promo_vouchers').insert(row);
+    if(error)throw error;
+    return result({success:true,voucher:{id:vId,...row}},201);
+  }
+  const voucherMatch=route.match(/^\/vouchers\/([^/]+)$/);
+  if(voucherMatch&&method==='DELETE'){
+    const localId=decodeURIComponent(voucherMatch[1]);
+    const{error}=await admin.from('branch_promo_vouchers').update({is_active:false}).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
   }
 
   return null;

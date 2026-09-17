@@ -27,6 +27,10 @@ const ALLOWED_PATHS = [
   /^\/sessions\/[^/]+\/(?:end|time-adjustments)$/,
   /^\/public\/sessions\/[^/]+\/end$/,
   /^\/public\/remote-commands\/[^/]+$/,
+  /^\/launcher\/(categories|apps)$/,
+  /^\/menu-items$/,
+  /^\/menu-orders(?:\/[^/]+(?:\/cancel)?)?$/,
+  /^\/vouchers\/redeem$/,
 ]
 
 function safePath(value) {

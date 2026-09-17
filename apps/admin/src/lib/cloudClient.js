@@ -209,6 +209,12 @@ const CLOUD_REALTIME_TABLES = [
   "branch_feedback",
   "branch_announcements",
   "branch_configs",
+  "branch_launcher_categories",
+  "branch_launcher_apps",
+  "branch_menu_items",
+  "branch_menu_orders",
+  "branch_user_shifts",
+  "branch_promo_vouchers",
 ];
 
 export function startCloudRealtime({ branchId, onChange, onStatus } = {}) {
@@ -823,6 +829,99 @@ async function cloudDirectRead(path, branchId) {
     normalized = normalized.filter((item) => Boolean(item.archived) === archived && (!status || item.status === status));
     const total=normalized.length, start=(page-1)*limit, items=normalized.slice(start,start+limit);
     return { success:true, feedback:items, items, pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}, total, page, pages:Math.max(1,Math.ceil(total/limit)) };
+  }
+  if (route === "/launcher/categories") {
+    const rows = await rest(`branch_launcher_categories?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=sort_order.asc,name.asc`);
+    return {
+      success: true,
+      categories: (rows || []).map((r) => ({
+        id: r.local_id || r.id,
+        name: r.name,
+        sortOrder: Number(r.sort_order || 0),
+        isActive: Boolean(r.is_active),
+        createdAt: r.created_at,
+      }))
+    };
+  }
+  if (route === "/launcher/apps") {
+    const rows = await rest(`branch_launcher_apps?select=*&branch_id=eq.${encoded}&is_enabled=eq.true&order=sort_order.asc,name.asc`);
+    return {
+      success: true,
+      apps: (rows || []).map((r) => ({
+        id: r.local_id || r.id,
+        name: r.name,
+        categoryId: r.category_id,
+        categoryName: r.category_name || "Online Games",
+        icon: r.icon,
+        executablePath: r.executable_path,
+        protocolUrl: r.protocol_url,
+        launchArguments: r.launch_arguments,
+        workingDirectory: r.working_directory,
+        isEnabled: Boolean(r.is_enabled),
+        sortOrder: Number(r.sort_order || 0),
+        isPreset: Boolean(r.is_preset),
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      }))
+    };
+  }
+  if (route === "/menu-items") {
+    const rows = await rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=category.asc,name.asc`);
+    return {
+      success: true,
+      menuItems: (rows || []).map((m) => ({
+        id: m.local_id || m.id,
+        name: m.name,
+        category: m.category,
+        description: m.description,
+        price: Number(m.price_centavos || 0) / 100,
+        imageUrl: m.image_url,
+        stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null,
+        isAvailable: Boolean(m.is_available),
+        isActive: Boolean(m.is_active),
+        createdAt: m.created_at,
+        updatedAt: m.updated_at,
+      }))
+    };
+  }
+  if (route === "/menu-orders") {
+    const rows = await rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&order=created_at.desc&limit=100`);
+    return {
+      success: true,
+      orders: (rows || []).map((r) => ({
+        id: r.local_id || r.id,
+        customerId: r.customer_id,
+        customerName: r.customer_name,
+        pcId: r.pc_id,
+        pcLabel: r.pc_label,
+        items: typeof r.items_json === "string" ? JSON.parse(r.items_json) : (r.items_json || []),
+        total: Number(r.total_centavos || 0) / 100,
+        paymentMethod: r.payment_method,
+        paymentStatus: r.payment_status,
+        orderStatus: r.order_status,
+        notes: r.notes,
+        createdAt: r.created_at,
+        fulfilledAt: r.fulfilled_at,
+        cancelledAt: r.cancelled_at,
+      }))
+    };
+  }
+  if (route === "/vouchers") {
+    const rows = await rest(`branch_promo_vouchers?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=created_at.desc`);
+    return {
+      success: true,
+      vouchers: (rows || []).map((v) => ({
+        id: v.local_id || v.id,
+        code: v.code,
+        benefitType: v.benefit_type,
+        valueAmount: v.value_amount,
+        maxRedemptions: v.max_redemptions,
+        currentRedemptions: v.current_redemptions,
+        expiresAt: v.expires_at,
+        isActive: v.is_active,
+        createdAt: v.created_at,
+      }))
+    };
   }
   return null;
 }

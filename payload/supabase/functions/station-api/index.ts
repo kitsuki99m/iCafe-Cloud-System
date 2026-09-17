@@ -27,6 +27,10 @@ const allowed=[
   /^\/sessions\/[^/]+\/(?:end|time-adjustments)$/,
   /^\/public\/sessions\/[^/]+\/end$/,
   /^\/public\/remote-commands\/[^/]+$/,
+  /^\/launcher\/(categories|apps)$/,
+  /^\/menu-items$/,
+  /^\/menu-orders(?:\/[^/]+(?:\/cancel)?)?$/,
+  /^\/vouchers\/redeem$/,
 ]
 function preflight(req:Request){if(req.method==='OPTIONS')return new Response('ok',{headers:corsHeaders});return null}
 function json(value:unknown,status=200){return new Response(JSON.stringify(value),{status,headers:{...corsHeaders,'Content-Type':'application/json'}})}
@@ -47,6 +51,9 @@ async function directRead(admin:SupabaseClient,station:any,path:string){const ba
   if(base==='/rate-plans'||base==='/public/rate-plans'){const{data,error}=await admin.from('branch_rate_plans').select('local_id,data').eq('branch_id',station.branch_id);if(error)throw error;return{success:true,ratePlans:(data||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)}))}}
   if(base==='/announcements'||base==='/public/announcements'){const{data,error}=await admin.from('branch_announcements').select('local_id,data').eq('branch_id',station.branch_id).order('updated_at',{ascending:false});if(error)throw error;return{success:true,announcements:(data||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)}))}}
   if(base==='/settings'||base==='/public/settings'){const{data,error}=await admin.from('branch_configs').select('config').eq('branch_id',station.branch_id).maybeSingle();if(error)throw error;const config=data?.config&&typeof data.config==='object'?data.config:{};return{success:true,settings:(config as any).settings||config||{}}}
+  if(base==='/launcher/categories'){const{data,error}=await admin.from('branch_launcher_categories').select('*').eq('branch_id',station.branch_id).eq('is_active',true).order('sort_order',{ascending:true}).order('name',{ascending:true});if(error)throw error;return{success:true,categories:(data||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,sortOrder:Number(r.sort_order||0),isActive:Boolean(r.is_active)}))}}
+  if(base==='/launcher/apps'){const{data,error}=await admin.from('branch_launcher_apps').select('*').eq('branch_id',station.branch_id).eq('is_enabled',true).order('sort_order',{ascending:true}).order('name',{ascending:true});if(error)throw error;return{success:true,apps:(data||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,categoryId:r.category_id,categoryName:r.category_name||'Online Games',icon:r.icon,executablePath:r.executable_path,protocolUrl:r.protocol_url,launchArguments:r.launch_arguments,workingDirectory:r.working_directory,isEnabled:Boolean(r.is_enabled),sortOrder:Number(r.sort_order||0),isPreset:Boolean(r.is_preset)}))}}
+  if(base==='/menu-items'){const{data,error}=await admin.from('branch_menu_items').select('*').eq('branch_id',station.branch_id).eq('is_active',true).order('category',{ascending:true}).order('name',{ascending:true});if(error)throw error;return{success:true,menuItems:(data||[]).map((m:any)=>({id:m.local_id||m.id,name:m.name,category:m.category,description:m.description,price:Number(m.price_centavos||0)/100,imageUrl:m.image_url,stockQuantity:m.stock_quantity!=null?Number(m.stock_quantity):null,isAvailable:Boolean(m.is_available),isActive:Boolean(m.is_active)}))}}
   return null
 }
 async function waitFor(admin:SupabaseClient,id:string){const deadline=Date.now()+18_000;while(Date.now()<deadline){const{data,error}=await admin.from('cloud_commands').select('status,result').eq('id',id).single();if(error)throw error;if(data.status==='completed'){const r=data.result||{};return json(r.data??r,Number(r.status||200))}if(data.status==='failed'||data.status==='expired'){const r=data.result||{};return json({success:false,code:r.code||'EDGE_ACTION_FAILED',error:r.error||'Café Edge rejected the station request.',...(r.data&&typeof r.data==='object'?{data:r.data}:{})},Number(r.status||502))}await new Promise(r=>setTimeout(r,180))}return json({success:false,code:'EDGE_TIMEOUT',error:'Café Edge did not respond in time. Customer Station can retry using LAN fallback.'},504)}
