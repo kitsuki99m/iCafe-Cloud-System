@@ -697,21 +697,57 @@ function cloudMember(row) {
   };
 }
 async function cloudAppData(branchId) {
-  const bundle=await rpcRead('aezakmi_admin_app_data',{p_branch_id:branchId},{ttlMs:20_000});
-  const pcs=cloudPcsFromRows(bundle?.stations||[],bundle?.sessions||[]);
-  const memberRows=bundle?.members||[],rateRows=bundle?.ratePlans||[],topUpRows=bundle?.topUps||[],supportRows=bundle?.support||[],extensionRows=bundle?.extensions||[],announcementRows=bundle?.announcements||[];
-  const members=memberRows.map(cloudMember);
-  const memberMap=new Map(members.map((member)=>[String(member.id),member]));
-  const pcMap=new Map(pcs.map((pc)=>[String(pc.id),pc]));
-  const sessionMap=new Map(pcs.filter((pc)=>pc.session?.id).map((pc)=>[String(pc.session.id),pc.id]));
-  const topUpRequests=topUpRows.filter((row)=>!Boolean(row.data?.archived || row.data?.archivedAt)).map((row)=>{
-    const data=camelizeObject(row.data||{}),pc=pcMap.get(String(data.pcId||row.data?.pc_id||"")),member=memberMap.get(String(data.memberId||""));
-    return {id:row.local_id,status:data.status||"pending",createdAt:epoch(row.requested_at||data.requestedAt),customerId:data.memberId||null,customerName:member?.name||"Member",pcId:data.pcId||null,pcLabel:pc?.label||"Unknown PC",pcIp:pc?.ipAddress||null,amount:Number(data.amount||0),method:data.paymentMethod||"cash",gcashNumber:data.gcashNumber||data.refNo||null};
+  const encoded = encodeURIComponent(branchId);
+  const [bundle, launcherCats, launcherApps, menuItems, menuOrders, shifts, vouchers] = await Promise.all([
+    rpcRead('aezakmi_admin_app_data', { p_branch_id: branchId }, { ttlMs: 20_000 }),
+    rest(`branch_launcher_categories?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=sort_order.asc,name.asc`).catch(() => []),
+    rest(`branch_launcher_apps?select=*&branch_id=eq.${encoded}&is_enabled=eq.true&order=sort_order.asc,name.asc`).catch(() => []),
+    rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=category.asc,name.asc`).catch(() => []),
+    rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&order=created_at.desc&limit=100`).catch(() => []),
+    rest(`branch_user_shifts?select=*&branch_id=eq.${encoded}&order=opened_at.desc&limit=20`).catch(() => []),
+    rest(`branch_promo_vouchers?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=created_at.desc`).catch(() => []),
+  ]);
+  const pcs = cloudPcsFromRows(bundle?.stations || [], bundle?.sessions || []);
+  const memberRows = bundle?.members || [], rateRows = bundle?.ratePlans || [], topUpRows = bundle?.topUps || [], supportRows = bundle?.support || [], extensionRows = bundle?.extensions || [], announcementRows = bundle?.announcements || [];
+  const members = memberRows.map(cloudMember);
+  const memberMap = new Map(members.map((member) => [String(member.id), member]));
+  const pcMap = new Map(pcs.map((pc) => [String(pc.id), pc]));
+  const sessionMap = new Map(pcs.filter((pc) => pc.session?.id).map((pc) => [String(pc.session.id), pc.id]));
+  const topUpRequests = topUpRows.filter((row) => !Boolean(row.data?.archived || row.data?.archivedAt)).map((row) => {
+    const data = camelizeObject(row.data || {}), pc = pcMap.get(String(data.pcId || row.data?.pc_id || "")), member = memberMap.get(String(data.memberId || ""));
+    return { id: row.local_id, status: data.status || "pending", createdAt: epoch(row.requested_at || data.requestedAt), customerId: data.memberId || null, customerName: member?.name || "Member", pcId: data.pcId || null, pcLabel: pc?.label || "Unknown PC", pcIp: pc?.ipAddress || null, amount: Number(data.amount || 0), method: data.paymentMethod || "cash", gcashNumber: data.gcashNumber || data.refNo || null };
   });
-  const supportRequests=supportRows.map((row)=>{const member=memberMap.get(String(row.member_id||"")),pc=pcMap.get(String(row.pc_id||""));return{id:row.local_id,memberId:row.member_id||null,pcId:row.pc_id||null,pcLabel:pc?.label||"Unknown PC",pcIp:pc?.ipAddress||null,customerName:row.customer_name||member?.name||member?.username||"Guest",message:row.message||"Customer needs assistance.",status:row.status||"open",createdAt:epoch(row.created_at),readAt:row.read_at?epoch(row.read_at):null,resolvedBy:row.resolved_by||null}});
-  const extensions=extensionRows.map((row)=>{const data=camelizeObject(row.data||{}),sessionId=String(data.computerSessionId||data.sessionId||""),pcId=sessionMap.get(sessionId)||null,pc=pcMap.get(String(pcId||"")),member=memberMap.get(String(data.memberId||""));return{...data,id:row.local_id,sessionId:data.computerSessionId||data.sessionId||null,memberId:data.memberId||null,pcId,pcLabel:pc?.label||"Unknown PC",pcIp:pc?.ipAddress||null,customerName:member?.name||"Customer",requestedAt:row.requested_at||data.requestedAt}});
-  const config=bundle?.config&&typeof bundle.config==='object'?bundle.config:{};
-  return {success:true,pcs,members,ratePlans:rateRows.map(cloudRatePlan),topUpRequests,supportRequests,extensions,announcements:announcementRows.map((row)=>({id:row.local_id,...camelizeObject(row.data||{})})),settings:config.settings||config||{},clientContext:{success:true,cloud:true,branchId,transport:"supabase"},_rawSessions:bundle?.sessions||[]};
+  const supportRequests = supportRows.map((row) => { const member = memberMap.get(String(row.member_id || "")), pc = pcMap.get(String(row.pc_id || "")); return { id: row.local_id, memberId: row.member_id || null, pcId: row.pc_id || null, pcLabel: pc?.label || "Unknown PC", pcIp: pc?.ipAddress || null, customerName: row.customer_name || member?.name || member?.username || "Guest", message: row.message || "Customer needs assistance.", status: row.status || "open", createdAt: epoch(row.created_at), readAt: row.read_at ? epoch(row.read_at) : null, resolvedBy: row.resolved_by || null }; });
+  const extensions = extensionRows.map((row) => { const data = camelizeObject(row.data || {}), sessionId = String(data.computerSessionId || data.sessionId || ""), pcId = sessionMap.get(sessionId) || null, pc = pcMap.get(String(pcId || "")), member = memberMap.get(String(data.memberId || "")); return { ...data, id: row.local_id, sessionId: data.computerSessionId || data.sessionId || null, memberId: data.memberId || null, pcId, pcLabel: pc?.label || "Unknown PC", pcIp: pc?.ipAddress || null, customerName: member?.name || "Customer", requestedAt: row.requested_at || data.requestedAt }; });
+  const config = bundle?.config && typeof bundle.config === 'object' ? bundle.config : {};
+
+  const mappedLauncherCategories = (launcherCats || []).map((r) => ({ id: r.local_id || r.id, name: r.name, sortOrder: Number(r.sort_order || 0), isActive: Boolean(r.is_active), createdAt: r.created_at }));
+  const mappedLauncherApps = (launcherApps || []).map((r) => ({ id: r.local_id || r.id, name: r.name, categoryId: r.category_id, categoryName: r.category_name || "Online Games", icon: r.icon, executablePath: r.executable_path, protocolUrl: r.protocol_url, launchArguments: r.launch_arguments, workingDirectory: r.working_directory, isEnabled: Boolean(r.is_enabled), sortOrder: Number(r.sort_order || 0), isPreset: Boolean(r.is_preset), createdAt: r.created_at, updatedAt: r.updated_at }));
+  const mappedMenuItems = (menuItems || []).map((m) => ({ id: m.local_id || m.id, name: m.name, category: m.category, description: m.description, price: Number(m.price_centavos || 0) / 100, imageUrl: m.image_url, stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null, isAvailable: Boolean(m.is_available), isActive: Boolean(m.is_active), createdAt: m.created_at, updatedAt: m.updated_at }));
+  const mappedMenuOrders = (menuOrders || []).map((r) => ({ id: r.local_id || r.id, customerId: r.customer_id, customerName: r.customer_name, pcId: r.pc_id, pcLabel: r.pc_label, items: typeof r.items_json === "string" ? JSON.parse(r.items_json) : (r.items_json || []), total: Number(r.total_centavos || 0) / 100, paymentMethod: r.payment_method, paymentStatus: r.payment_status, orderStatus: r.order_status, notes: r.notes, createdAt: r.created_at, fulfilledAt: r.fulfilled_at, cancelledAt: r.cancelled_at }));
+  const openShift = (shifts || []).find((s) => !s.closed_at);
+  const currentShift = openShift ? { id: openShift.local_id || openShift.id, userId: openShift.user_id, userName: openShift.user_name, userRole: openShift.user_role, openingFloat: Number(openShift.opening_float_centavos || 0) / 100, notes: openShift.notes, openedAt: openShift.opened_at } : null;
+  const mappedVouchers = (vouchers || []).map((v) => ({ id: v.local_id || v.id, code: v.code, benefitType: v.benefit_type, valueAmount: v.value_amount, maxRedemptions: v.max_redemptions, currentRedemptions: v.current_redemptions, expiresAt: v.expires_at, isActive: v.is_active, createdAt: v.created_at }));
+
+  return {
+    success: true,
+    pcs,
+    members,
+    ratePlans: rateRows.map(cloudRatePlan),
+    topUpRequests,
+    supportRequests,
+    extensions,
+    announcements: announcementRows.map((row) => ({ id: row.local_id, ...camelizeObject(row.data || {}) })),
+    settings: config.settings || config || {},
+    launcherCategories: mappedLauncherCategories,
+    launcherApps: mappedLauncherApps,
+    menuItems: mappedMenuItems,
+    menuOrders: mappedMenuOrders,
+    currentShift,
+    vouchers: mappedVouchers,
+    clientContext: { success: true, cloud: true, branchId, transport: "supabase" },
+    _rawSessions: bundle?.sessions || []
+  };
 }
 
 async function cloudOverview(branchId) {

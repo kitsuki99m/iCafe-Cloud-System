@@ -36,10 +36,19 @@ export default function MenuOrderModal({ isOpen, onClose }) {
   const canPayWallet = !isGuest && walletBalance >= totalAmount
 
   function addToCart(item) {
+    const stock = item.stock_quantity !== undefined ? item.stock_quantity : item.stockQuantity
+    if (stock !== null && stock !== undefined && Number(stock) <= 0) {
+      showToast({ title: 'Out of Stock', message: `"${item.name}" is currently out of stock.`, tone: 'warning' })
+      return
+    }
     setCart((curr) => {
       const existing = curr[item.id]
-      const quantity = existing ? existing.quantity + 1 : 1
-      return { ...curr, [item.id]: { item, quantity } }
+      const currentQty = existing ? existing.quantity : 0
+      if (stock !== null && stock !== undefined && currentQty >= Number(stock)) {
+        showToast({ title: 'Stock Limit Reached', message: `Only ${stock} available in stock.`, tone: 'warning' })
+        return curr
+      }
+      return { ...curr, [item.id]: { item, quantity: currentQty + 1 } }
     })
   }
 
@@ -156,11 +165,18 @@ export default function MenuOrderModal({ isOpen, onClose }) {
               </div>
             ) : (
               filteredItems.map((item) => {
+                const stock = item.stock_quantity !== undefined ? item.stock_quantity : item.stockQuantity
+                const isOutOfStock = stock !== null && stock !== undefined && Number(stock) <= 0
+                const isLowStock = stock !== null && stock !== undefined && Number(stock) > 0 && Number(stock) <= 5
                 const inCart = cart[item.id]?.quantity || 0
+                const isAtMaxStock = stock !== null && stock !== undefined && inCart >= Number(stock)
+
                 return (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-surface-line customer-neutral-surface p-3 flex flex-col justify-between hover:border-gold/40 transition"
+                    className={`rounded-2xl border border-surface-line customer-neutral-surface p-3 flex flex-col justify-between hover:border-gold/40 transition ${
+                      isOutOfStock ? 'opacity-60' : ''
+                    }`}
                   >
                     <div>
                       <div className="h-24 rounded-xl bg-surface-raised overflow-hidden relative mb-2 flex items-center justify-center">
@@ -172,14 +188,35 @@ export default function MenuOrderModal({ isOpen, onClose }) {
                         <span className="absolute top-1 right-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-surface/90 text-gold-dim border border-surface-line">
                           ₱{Number(item.price).toFixed(2)}
                         </span>
+                        {isOutOfStock && (
+                          <div className="absolute inset-0 bg-surface/80 backdrop-blur-2xs flex items-center justify-center">
+                            <span className="text-[10px] font-semibold text-ember-dim px-2 py-0.5 bg-ember/15 rounded-full border border-ember/25">
+                              Out of Stock
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <h4 className="font-semibold text-xs text-ink-900 truncate">{item.name}</h4>
                       {item.description && (
                         <p className="text-[11px] text-slate-soft line-clamp-1 mt-0.5">{item.description}</p>
                       )}
+                      {isLowStock && (
+                        <p className="text-[10px] font-semibold text-ember-dim mt-1">
+                          Only {stock} left!
+                        </p>
+                      )}
                     </div>
                     <div className="mt-2.5">
-                      {inCart > 0 ? (
+                      {isOutOfStock ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled
+                          className="w-full justify-center text-slate-soft cursor-not-allowed"
+                        >
+                          Out of Stock
+                        </Button>
+                      ) : inCart > 0 ? (
                         <div className="flex items-center justify-between border border-surface-line customer-neutral-surface rounded-xl px-2 py-1">
                           <button
                             type="button"
@@ -192,7 +229,8 @@ export default function MenuOrderModal({ isOpen, onClose }) {
                           <button
                             type="button"
                             onClick={() => addToCart(item)}
-                            className="text-slate-soft hover:text-ink-900 p-0.5"
+                            disabled={isAtMaxStock}
+                            className={`p-0.5 ${isAtMaxStock ? 'text-slate-soft/30 cursor-not-allowed' : 'text-slate-soft hover:text-ink-900'}`}
                           >
                             <Plus size={12} />
                           </button>
@@ -229,33 +267,38 @@ export default function MenuOrderModal({ isOpen, onClose }) {
                 Your tray is empty.
               </div>
             ) : (
-              cartItems.map(({ item, quantity }) => (
-                <div key={item.id} className="p-2 rounded-xl border border-surface-line customer-neutral-surface flex items-center justify-between text-xs">
-                  <div className="min-w-0 pr-2">
-                    <p className="font-semibold text-ink-900 truncate">{item.name}</p>
-                    <p className="text-[11px] text-slate-soft">
-                      ₱{Number(item.price).toFixed(2)} × {quantity}
-                    </p>
+              cartItems.map(({ item, quantity }) => {
+                const stock = item.stock_quantity !== undefined ? item.stock_quantity : item.stockQuantity
+                const isAtMaxStock = stock !== null && stock !== undefined && quantity >= Number(stock)
+                return (
+                  <div key={item.id} className="p-2 rounded-xl border border-surface-line customer-neutral-surface flex items-center justify-between text-xs">
+                    <div className="min-w-0 pr-2">
+                      <p className="font-semibold text-ink-900 truncate">{item.name}</p>
+                      <p className="text-[11px] text-slate-soft">
+                        ₱{Number(item.price).toFixed(2)} × {quantity}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => removeFromCart(item.id)}
+                        className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-dance/35"
+                      >
+                        <Minus size={11} />
+                      </button>
+                      <span className="font-mono font-semibold text-ink-900 w-4 text-center">{quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => addToCart(item)}
+                        disabled={isAtMaxStock}
+                        className={`p-1 rounded-md ${isAtMaxStock ? 'text-slate-soft/30 cursor-not-allowed' : 'text-slate-soft hover:text-ink-900 hover:bg-dance/35'}`}
+                      >
+                        <Plus size={11} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => removeFromCart(item.id)}
-                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-dance/35"
-                    >
-                      <Minus size={11} />
-                    </button>
-                    <span className="font-mono font-semibold text-ink-900 w-4 text-center">{quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => addToCart(item)}
-                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-dance/35"
-                    >
-                      <Plus size={11} />
-                    </button>
-                  </div>
-                </div>
-              ))
+                )
+              })
             )}
           </div>
 

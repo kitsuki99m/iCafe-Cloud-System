@@ -210,6 +210,8 @@ export function AppDataProvider({ children }) {
           currentShift:data.currentShift ?? null,
           shiftsHistory:data.shiftsHistory ?? [],
           vouchers:data.vouchers ?? [],
+          launcherCategories:data.launcherCategories ?? [],
+          launcherApps:data.launcherApps ?? [],
           settings:normalizeSettings(data.settings ?? {}),
           loading:false,
           serverError:'',

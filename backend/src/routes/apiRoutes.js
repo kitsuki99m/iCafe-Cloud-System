@@ -6924,6 +6924,12 @@ router.post("/menu-orders", auth, (req, res, next) => {
       const dbItem = db.prepare("SELECT * FROM menu_items WHERE id=? AND is_active=1 AND is_available=1").get(it.id);
       if (!dbItem) return res.status(400).json({ success: false, error: `Item "${it.name || it.id}" is currently unavailable.` });
       const qty = Math.max(1, Math.floor(Number(it.quantity || 1)));
+      if (dbItem.stock_quantity !== null && dbItem.stock_quantity !== undefined && Number(dbItem.stock_quantity) < qty) {
+        return res.status(400).json({
+          success: false,
+          error: `Item "${dbItem.name}" only has ${dbItem.stock_quantity} available in stock (requested ${qty}).`
+        });
+      }
       const unitPrice = Number(dbItem.price || 0);
       const subtotal = unitPrice * qty;
       calculatedTotal += subtotal;
@@ -6963,6 +6969,14 @@ router.post("/menu-orders", auth, (req, res, next) => {
         `).run(id(), orderId, Math.round(calculatedTotal * 100), now, req.auth.userId || null);
       }
 
+      for (const it of validatedItems) {
+        db.prepare(`
+          UPDATE menu_items
+          SET stock_quantity = MAX(0, stock_quantity - ?), updated_at = ?
+          WHERE id = ? AND stock_quantity IS NOT NULL
+        `).run(it.quantity, now, it.id);
+      }
+
       db.prepare(`
         INSERT INTO menu_orders (id, customer_id, customer_name, pc_id, pc_label, items_json, total, payment_method, payment_status, order_status, notes, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
@@ -6988,6 +7002,7 @@ router.post("/menu-orders", auth, (req, res, next) => {
       const io = getIO();
       io?.emit("menu:new_order", newOrder);
       emitDataChanged({ entity: 'menu_orders' });
+      emitDataChanged({ entity: 'menu_items' });
       if (payMethod === 'wallet' && memberId) {
         const refreshed = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(memberId);
         emitWalletUpdated(memberId, Number(refreshed?.wallet_balance || 0));
@@ -7014,17 +7029,30 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
     if (status === 'cancelled') cancelledAt = now;
 
     transaction(() => {
-      if (status === 'cancelled' && order.payment_method === 'wallet' && order.payment_status === 'paid' && order.customer_id) {
-        const member = db.prepare("SELECT * FROM members WHERE id=?").get(order.customer_id);
-        if (member) {
-          const refundAmount = Number(order.total || 0);
-          const currentBal = Number(member.wallet_balance || 0);
-          const nextBal = currentBal + refundAmount;
-          db.prepare("UPDATE members SET wallet_balance=? WHERE id=?").run(nextBal, member.id);
-          db.prepare(`
-            INSERT INTO wallet_transactions (id, member_id, type, amount, balance_before, balance_after, reference_type, reference_id, created_at)
-            VALUES (?, ?, 'pos_refund', ?, ?, ?, 'menu_order_cancel', ?, ?)
-          `).run(id(), member.id, refundAmount, currentBal, nextBal, order.id, now);
+      if (status === 'cancelled' && order.order_status !== 'cancelled') {
+        if (order.payment_method === 'wallet' && order.payment_status === 'paid' && order.customer_id) {
+          const member = db.prepare("SELECT * FROM members WHERE id=?").get(order.customer_id);
+          if (member) {
+            const refundAmount = Number(order.total || 0);
+            const currentBal = Number(member.wallet_balance || 0);
+            const nextBal = currentBal + refundAmount;
+            db.prepare("UPDATE members SET wallet_balance=? WHERE id=?").run(nextBal, member.id);
+            db.prepare(`
+              INSERT INTO wallet_transactions (id, member_id, type, amount, balance_before, balance_after, reference_type, reference_id, created_at)
+              VALUES (?, ?, 'pos_refund', ?, ?, ?, 'menu_order_cancel', ?, ?)
+            `).run(id(), member.id, refundAmount, currentBal, nextBal, order.id, now);
+          }
+        }
+
+        const orderItems = parseJson(order.items_json, []);
+        for (const it of orderItems) {
+          if (it.id && it.quantity) {
+            db.prepare(`
+              UPDATE menu_items
+              SET stock_quantity = stock_quantity + ?, updated_at = ?
+              WHERE id = ? AND stock_quantity IS NOT NULL
+            `).run(Number(it.quantity), now, it.id);
+          }
         }
       }
       db.prepare(`
@@ -7037,6 +7065,13 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
       const io = getIO();
       io?.emit("menu:order_updated", updated);
       emitDataChanged({ entity: 'menu_orders' });
+      if (status === 'cancelled') {
+        emitDataChanged({ entity: 'menu_items' });
+      }
+      if (status === 'cancelled' && order.customer_id) {
+        const refreshed = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(order.customer_id);
+        emitWalletUpdated(order.customer_id, Number(refreshed?.wallet_balance || 0));
+      }
     } catch {}
 
     res.json({ success: true, order: updated });
@@ -7070,6 +7105,18 @@ router.post("/menu-orders/:id/cancel", auth, (req, res, next) => {
           `).run(id(), member.id, refundAmount, currentBal, nextBal, order.id, now);
         }
       }
+
+      const orderItems = parseJson(order.items_json, []);
+      for (const it of orderItems) {
+        if (it.id && it.quantity) {
+          db.prepare(`
+            UPDATE menu_items
+            SET stock_quantity = stock_quantity + ?, updated_at = ?
+            WHERE id = ? AND stock_quantity IS NOT NULL
+          `).run(Number(it.quantity), now, it.id);
+        }
+      }
+
       db.prepare("UPDATE menu_orders SET order_status='cancelled', cancelled_at=? WHERE id=?").run(now, order.id);
     });
 
@@ -7077,6 +7124,7 @@ router.post("/menu-orders/:id/cancel", auth, (req, res, next) => {
       const io = getIO();
       io?.emit("menu:order_updated", { ...order, orderStatus: 'cancelled', cancelledAt: now });
       emitDataChanged({ entity: 'menu_orders' });
+      emitDataChanged({ entity: 'menu_items' });
       if (order.customer_id) {
         const refreshed = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(order.customer_id);
         emitWalletUpdated(order.customer_id, Number(refreshed?.wallet_balance || 0));

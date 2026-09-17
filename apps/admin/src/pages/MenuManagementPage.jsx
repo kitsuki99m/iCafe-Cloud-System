@@ -40,6 +40,7 @@ export default function MenuManagementPage() {
     price: '',
     description: '',
     imageUrl: '',
+    stockQuantity: '',
     isAvailable: true,
   })
   const [submitting, setSubmitting] = useState(false)
@@ -66,18 +67,20 @@ export default function MenuManagementPage() {
 
   function openCreateModal() {
     setEditingItem(null)
-    setFormData({ name: '', category: 'Food', price: '', description: '', imageUrl: '', isAvailable: true })
+    setFormData({ name: '', category: 'Food', price: '', description: '', imageUrl: '', stockQuantity: '', isAvailable: true })
     setModalOpen(true)
   }
 
   function openEditModal(item) {
     setEditingItem(item)
+    const stock = item.stock_quantity !== undefined ? item.stock_quantity : item.stockQuantity
     setFormData({
       name: item.name,
       category: item.category || 'Food',
       price: item.price,
       description: item.description || '',
       imageUrl: item.image_url || item.imageUrl || '',
+      stockQuantity: stock != null ? String(stock) : '',
       isAvailable: item.is_available !== undefined ? Boolean(item.is_available) : Boolean(item.isAvailable),
     })
     setModalOpen(true)
@@ -87,25 +90,23 @@ export default function MenuManagementPage() {
     if (e && e.preventDefault) e.preventDefault()
     setSubmitting(true)
     try {
+      const stockQty = formData.stockQuantity === '' || formData.stockQuantity === null || formData.stockQuantity === undefined
+        ? null
+        : Math.max(0, parseInt(formData.stockQuantity, 10) || 0)
+      const payload = {
+        name: formData.name.trim(),
+        category: formData.category,
+        price: Number(formData.price),
+        description: formData.description.trim(),
+        imageUrl: formData.imageUrl.trim(),
+        stockQuantity: stockQty,
+        isAvailable: formData.isAvailable,
+      }
       if (editingItem) {
-        await updateMenuItem(editingItem.id, {
-          name: formData.name.trim(),
-          category: formData.category,
-          price: Number(formData.price),
-          description: formData.description.trim(),
-          imageUrl: formData.imageUrl.trim(),
-          isAvailable: formData.isAvailable,
-        })
+        await updateMenuItem(editingItem.id, payload)
         showToast({ title: 'Item Updated', message: formData.name })
       } else {
-        await createMenuItem({
-          name: formData.name.trim(),
-          category: formData.category,
-          price: Number(formData.price),
-          description: formData.description.trim(),
-          imageUrl: formData.imageUrl.trim(),
-          isAvailable: formData.isAvailable,
-        })
+        await createMenuItem(payload)
         showToast({ title: 'Item Created', message: formData.name })
       }
       setModalOpen(false)
@@ -183,6 +184,15 @@ export default function MenuManagementPage() {
                 <span className="text-slate-soft">Menu Items Active</span>
                 <span className="font-semibold text-ink-900 stat-figure text-sm">
                   {menuItems.filter((i) => i.is_available !== false && i.isAvailable !== false).length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-surface-line customer-neutral-surface p-3 text-xs">
+                <span className="text-slate-soft">Low / Out of Stock</span>
+                <span className="font-semibold text-ember-dim stat-figure text-sm">
+                  {menuItems.filter((i) => {
+                    const s = i.stock_quantity !== undefined ? i.stock_quantity : i.stockQuantity
+                    return s !== null && s !== undefined && Number(s) <= 5
+                  }).length}
                 </span>
               </div>
             </div>
@@ -449,11 +459,15 @@ export default function MenuManagementPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {filteredItems.map((item) => {
                   const isAvail = item.is_available !== undefined ? Boolean(item.is_available) : Boolean(item.isAvailable)
+                  const stock = item.stock_quantity !== undefined ? item.stock_quantity : item.stockQuantity
+                  const isOutOfStock = stock !== null && stock !== undefined && Number(stock) === 0
+                  const isLowStock = stock !== null && stock !== undefined && Number(stock) > 0 && Number(stock) <= 5
+
                   return (
                     <div
                       key={item.id}
                       className={`rounded-2xl border border-surface-line customer-neutral-surface overflow-hidden flex flex-col justify-between transition hover:border-gold/40 ${
-                        !isAvail ? 'opacity-60' : ''
+                        !isAvail || isOutOfStock ? 'opacity-70' : ''
                       }`}
                     >
                       <div>
@@ -472,26 +486,47 @@ export default function MenuManagementPage() {
                           <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-surface/90 backdrop-blur-xs text-ink-900 border border-surface-line">
                             {item.category || 'Food'}
                           </span>
-                          {!isAvail && (
+                          {(!isAvail || isOutOfStock) && (
                             <div className="absolute inset-0 bg-surface/80 backdrop-blur-2xs flex items-center justify-center">
                               <span className="text-[10px] font-semibold text-ember-dim px-2.5 py-0.5 bg-ember/15 rounded-full border border-ember/25">
-                                Out of Stock
+                                {!isAvail ? 'Unavailable' : 'Out of Stock'}
                               </span>
                             </div>
                           )}
                         </div>
 
                         {/* Info */}
-                        <div className="p-3.5">
+                        <div className="p-3.5 space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <h4 className="font-semibold text-xs text-ink-900 leading-snug">{item.name}</h4>
                             <span className="font-bold text-xs text-gold-dim stat-figure">
                               ₱{Number(item.price || 0).toFixed(2)}
                             </span>
                           </div>
+
                           {item.description && (
-                            <p className="text-[11px] text-slate-soft mt-1 line-clamp-2">{item.description}</p>
+                            <p className="text-[11px] text-slate-soft line-clamp-2">{item.description}</p>
                           )}
+
+                          <div className="flex items-center gap-1.5 pt-0.5">
+                            {stock == null ? (
+                              <span className="text-[10px] font-semibold text-teal-dim bg-teal/10 px-2 py-0.5 rounded-md border border-teal/20">
+                                Unlimited Stock
+                              </span>
+                            ) : isOutOfStock ? (
+                              <span className="text-[10px] font-semibold text-ember-dim bg-ember/15 px-2 py-0.5 rounded-md border border-ember/25">
+                                Out of Stock (0)
+                              </span>
+                            ) : isLowStock ? (
+                              <span className="text-[10px] font-semibold text-gold-dim bg-gold/15 px-2 py-0.5 rounded-md border border-gold/25">
+                                Low Stock: {stock} left
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-slate-soft bg-surface-raised px-2 py-0.5 rounded-md border border-surface-line">
+                                Stock: {stock}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -531,7 +566,7 @@ export default function MenuManagementPage() {
         onClose={() => setModalOpen(false)}
         eyebrow="Menu catalog"
         title={editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}
-        description="Configure product details, category, pricing, and stock availability."
+        description="Configure product details, category, pricing, and stock inventory."
         maxWidth="max-w-md"
         footer={
           <>
@@ -585,17 +620,29 @@ export default function MenuManagementPage() {
                 className={inputClass}
               />
             </div>
-            <div className="flex items-center pt-5">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-ink-900">
-                <input
-                  type="checkbox"
-                  checked={formData.isAvailable}
-                  onChange={(e) => setFormData({ ...formData, isAvailable: e.target.checked })}
-                  className="rounded border-surface-line text-gold-dim focus:ring-0"
-                />
-                In Stock & Available
-              </label>
+            <div>
+              <label className="eyebrow mb-1.5 block">Stock Quantity <span className="text-slate-soft font-normal text-[10px]">(Blank = Unlimited)</span></label>
+              <NumericInput
+                min="0"
+                step="1"
+                value={formData.stockQuantity}
+                onChange={(e) => setFormData({ ...formData, stockQuantity: e.target.value })}
+                placeholder="Unlimited"
+                className={inputClass}
+              />
             </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-ink-900 pt-1">
+              <input
+                type="checkbox"
+                checked={formData.isAvailable}
+                onChange={(e) => setFormData({ ...formData, isAvailable: e.target.checked })}
+                className="rounded border-surface-line text-gold-dim focus:ring-0"
+              />
+              Active / Listed on Station Menu
+            </label>
           </div>
 
           <div>

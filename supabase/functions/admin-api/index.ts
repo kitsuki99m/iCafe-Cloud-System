@@ -445,6 +445,65 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     if(error)throw error;
     return result({success:true,orders:(data||[]).map((r:any)=>({id:r.local_id||r.id,customerId:r.customer_id,customerName:r.customer_name,pcId:r.pc_id,pcLabel:r.pc_label,items:typeof r.items_json==='string'?JSON.parse(r.items_json):(r.items_json||[]),total:n(r.total_centavos)/100,paymentMethod:r.payment_method,paymentStatus:r.payment_status,orderStatus:r.order_status,notes:r.notes,createdAt:r.created_at,fulfilledAt:r.fulfilled_at,cancelledAt:r.cancelled_at}))});
   }
+  const menuOrderStatusMatch=route.match(/^\/menu-orders\/([^/]+)\/status$/);
+  if(menuOrderStatusMatch&&method==='PATCH'){
+    const localId=decodeURIComponent(menuOrderStatusMatch[1]);
+    const status=body?.status;
+    if(!['pending','preparing','fulfilled','cancelled'].includes(status))return result({success:false,error:'Invalid status'},400);
+    const nowStr=now();
+    const patch:any={order_status:status};
+    if(status==='fulfilled')patch.fulfilled_at=nowStr;
+    if(status==='cancelled')patch.cancelled_at=nowStr;
+    const{data:existingOrder}=await admin.from('branch_menu_orders').select('*').eq('branch_id',branchId).eq('local_id',localId).maybeSingle();
+    if(existingOrder&&status==='cancelled'&&existingOrder.order_status!=='cancelled'){
+      if(existingOrder.payment_method==='wallet'&&existingOrder.payment_status==='paid'&&existingOrder.customer_id){
+        const{data:member}=await admin.from('branch_members').select('*').eq('branch_id',branchId).eq('local_id',existingOrder.customer_id).maybeSingle();
+        if(member){
+          const refund=n(existingOrder.total_centavos);
+          await admin.from('branch_members').update({wallet_balance_centavos:n(member.wallet_balance_centavos)+refund,updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',member.local_id);
+        }
+      }
+      const orderItems=typeof existingOrder.items_json==='string'?JSON.parse(existingOrder.items_json):(existingOrder.items_json||[]);
+      for(const it of orderItems){
+        if(it.id&&it.quantity){
+          const{data:itemRow}=await admin.from('branch_menu_items').select('stock_quantity').eq('branch_id',branchId).eq('local_id',it.id).maybeSingle();
+          if(itemRow&&itemRow.stock_quantity!=null){
+            await admin.from('branch_menu_items').update({stock_quantity:n(itemRow.stock_quantity)+n(it.quantity),updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',it.id);
+          }
+        }
+      }
+    }
+    const{error}=await admin.from('branch_menu_orders').update(patch).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
+  const menuOrderCancelMatch=route.match(/^\/menu-orders\/([^/]+)\/cancel$/);
+  if(menuOrderCancelMatch&&method==='POST'){
+    const localId=decodeURIComponent(menuOrderCancelMatch[1]);
+    const nowStr=now();
+    const{data:existingOrder}=await admin.from('branch_menu_orders').select('*').eq('branch_id',branchId).eq('local_id',localId).maybeSingle();
+    if(existingOrder&&existingOrder.order_status!=='cancelled'){
+      if(existingOrder.payment_method==='wallet'&&existingOrder.payment_status==='paid'&&existingOrder.customer_id){
+        const{data:member}=await admin.from('branch_members').select('*').eq('branch_id',branchId).eq('local_id',existingOrder.customer_id).maybeSingle();
+        if(member){
+          const refund=n(existingOrder.total_centavos);
+          await admin.from('branch_members').update({wallet_balance_centavos:n(member.wallet_balance_centavos)+refund,updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',member.local_id);
+        }
+      }
+      const orderItems=typeof existingOrder.items_json==='string'?JSON.parse(existingOrder.items_json):(existingOrder.items_json||[]);
+      for(const it of orderItems){
+        if(it.id&&it.quantity){
+          const{data:itemRow}=await admin.from('branch_menu_items').select('stock_quantity').eq('branch_id',branchId).eq('local_id',it.id).maybeSingle();
+          if(itemRow&&itemRow.stock_quantity!=null){
+            await admin.from('branch_menu_items').update({stock_quantity:n(itemRow.stock_quantity)+n(it.quantity),updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',it.id);
+          }
+        }
+      }
+    }
+    const{error}=await admin.from('branch_menu_orders').update({order_status:'cancelled',cancelled_at:nowStr}).eq('branch_id',branchId).eq('local_id',localId);
+    if(error)throw error;
+    return result({success:true});
+  }
 
   if(method==='GET'&&route==='/vouchers'){
     const{data,error}=await admin.from('branch_promo_vouchers').select('*').eq('branch_id',branchId).eq('is_active',true).order('created_at',{ascending:false});
