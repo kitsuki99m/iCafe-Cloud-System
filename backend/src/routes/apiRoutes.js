@@ -1,7 +1,7 @@
 import { Router } from "express";
 import argon2 from "argon2";
 import { db, nowIso, transaction } from "../db/connection.js";
-import { authenticate, requireRole } from "../middleware/auth.js";
+import { authenticate, requireRole, requireAdmin, requireStaff } from "../middleware/auth.js";
 import {
   id,
   parseJson,
@@ -25,6 +25,10 @@ import {
   emitAnnouncementsUpdated,
   emitSessionExtensionRequest,
   emitSessionExtensionUpdated,
+  emitOrderCreated,
+  emitOrderUpdated,
+  emitShiftUpdated,
+  emitVouchersUpdated,
   emitToStaff,
   getIO,
 } from "../realtime.js";
@@ -6813,4 +6817,577 @@ router.delete("/expenses/:id", auth, requireRole("admin"), (req, res) => {
   res.json({ success: true });
 });
 
+// ==========================================
+// MENU ITEMS & IN-SESSION SNACK ORDERING
+// ==========================================
+
+router.get("/menu-items", (req, res) => {
+  const items = db.prepare("SELECT * FROM menu_items WHERE is_active=1 ORDER BY category ASC, name ASC").all();
+  res.json({
+    success: true,
+    menuItems: items.map(m => ({
+      id: m.id,
+      name: m.name,
+      category: m.category,
+      description: m.description,
+      price: Number(m.price || 0),
+      imageUrl: m.image_url,
+      stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null,
+      isAvailable: Boolean(m.is_available),
+      isActive: Boolean(m.is_active),
+      createdAt: m.created_at,
+      updatedAt: m.updated_at,
+    }))
+  });
+});
+
+router.post("/menu-items", auth, requireRole("admin", "cashier"), (req, res) => {
+  const { name, category = 'snacks', description = '', price = 0, imageUrl = '', stockQuantity = null, isAvailable = true } = req.body || {};
+  if (!name || typeof name !== 'string') return res.status(400).json({ success: false, error: "Item name is required." });
+  const itemId = id();
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO menu_items (id, name, category, description, price, image_url, stock_quantity, is_available, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(itemId, name.trim(), category, description.trim(), Math.max(0, Number(price) || 0), imageUrl || null, stockQuantity != null ? Math.max(0, Number(stockQuantity)) : null, isAvailable ? 1 : 0, now, now);
+  emitDataChanged({ entity: 'menu_items' });
+  res.status(201).json({ success: true, menuItem: { id: itemId, name, category, description, price: Number(price), imageUrl, stockQuantity, isAvailable: Boolean(isAvailable) } });
+});
+
+router.patch("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM menu_items WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Menu item not found." });
+  const { name, category, description, price, imageUrl, stockQuantity, isAvailable, isActive } = req.body || {};
+  const nextName = name !== undefined ? String(name).trim() : existing.name;
+  const nextCategory = category !== undefined ? String(category) : existing.category;
+  const nextDescription = description !== undefined ? String(description).trim() : existing.description;
+  const nextPrice = price !== undefined ? Math.max(0, Number(price)) : existing.price;
+  const nextImage = imageUrl !== undefined ? imageUrl : existing.image_url;
+  const nextStock = stockQuantity !== undefined ? (stockQuantity != null ? Math.max(0, Number(stockQuantity)) : null) : existing.stock_quantity;
+  const nextAvailable = isAvailable !== undefined ? (isAvailable ? 1 : 0) : existing.is_available;
+  const nextActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
+  db.prepare(`
+    UPDATE menu_items SET name=?, category=?, description=?, price=?, image_url=?, stock_quantity=?, is_available=?, is_active=?, updated_at=?
+    WHERE id=?
+  `).run(nextName, nextCategory, nextDescription, nextPrice, nextImage, nextStock, nextAvailable, nextActive, nowIso(), req.params.id);
+  emitDataChanged({ entity: 'menu_items' });
+  res.json({ success: true, menuItem: { id: req.params.id, name: nextName, category: nextCategory, description: nextDescription, price: Number(nextPrice), imageUrl: nextImage, stockQuantity: nextStock, isAvailable: Boolean(nextAvailable), isActive: Boolean(nextActive) } });
+});
+
+router.delete("/menu-items/:id", auth, requireRole("admin"), (req, res) => {
+  db.prepare("UPDATE menu_items SET is_active=0, updated_at=? WHERE id=?").run(nowIso(), req.params.id);
+  emitDataChanged({ entity: 'menu_items' });
+  res.json({ success: true });
+});
+
+router.get("/menu-orders", auth, (req, res) => {
+  const isStaff = ['admin', 'cashier'].includes(req.auth.role);
+  const rows = isStaff
+    ? db.prepare("SELECT * FROM menu_orders ORDER BY created_at DESC LIMIT 100").all()
+    : db.prepare("SELECT * FROM menu_orders WHERE customer_id=? ORDER BY created_at DESC LIMIT 50").all(req.auth.memberId || req.auth.userId);
+  res.json({
+    success: true,
+    orders: rows.map(r => ({
+      id: r.id,
+      customerId: r.customer_id,
+      customerName: r.customer_name,
+      pcId: r.pc_id,
+      pcLabel: r.pc_label,
+      items: parseJson(r.items_json, []),
+      total: Number(r.total || 0),
+      paymentMethod: r.payment_method,
+      paymentStatus: r.payment_status,
+      orderStatus: r.order_status,
+      notes: r.notes,
+      createdAt: r.created_at,
+      fulfilledAt: r.fulfilled_at,
+      cancelledAt: r.cancelled_at,
+    }))
+  });
+});
+
+router.post("/menu-orders", auth, (req, res, next) => {
+  try {
+    const { items = [], paymentMethod = 'wallet', notes = '' } = req.body || {};
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: "Order must contain at least one item." });
+    }
+    const memberId = req.auth.memberId || null;
+    const member = memberId ? db.prepare("SELECT * FROM members WHERE id=?").get(memberId) : null;
+    const customerName = member?.name || req.auth.username || 'Customer';
+    const pcId = req.auth.pcId || req.pc?.id || null;
+    const pcLabel = req.pc?.label || (pcId ? db.prepare("SELECT label FROM pcs WHERE id=?").get(pcId)?.label : null) || 'Customer Station';
+
+    let calculatedTotal = 0;
+    const validatedItems = [];
+    for (const it of items) {
+      const dbItem = db.prepare("SELECT * FROM menu_items WHERE id=? AND is_active=1 AND is_available=1").get(it.id);
+      if (!dbItem) return res.status(400).json({ success: false, error: `Item "${it.name || it.id}" is currently unavailable.` });
+      const qty = Math.max(1, Math.floor(Number(it.quantity || 1)));
+      const unitPrice = Number(dbItem.price || 0);
+      const subtotal = unitPrice * qty;
+      calculatedTotal += subtotal;
+      validatedItems.push({
+        id: dbItem.id,
+        name: dbItem.name,
+        category: dbItem.category,
+        unitPrice,
+        quantity: qty,
+        subtotal,
+      });
+    }
+
+    const orderId = id();
+    const now = nowIso();
+    const payMethod = paymentMethod === 'cash' ? 'cash' : 'wallet';
+
+    transaction(() => {
+      if (payMethod === 'wallet') {
+        if (!member) throw new Error("A registered member wallet is required for wallet payments.");
+        const currentBalance = Number(member.wallet_balance || 0);
+        if (currentBalance < calculatedTotal) {
+          const err = new Error(`Insufficient wallet balance. Total is ₱${calculatedTotal.toFixed(2)}, but you only have ₱${currentBalance.toFixed(2)}.`);
+          err.status = 400;
+          throw err;
+        }
+        const nextBalance = currentBalance - calculatedTotal;
+        db.prepare("UPDATE members SET wallet_balance=? WHERE id=?").run(nextBalance, member.id);
+        const txnId = id();
+        db.prepare(`
+          INSERT INTO wallet_transactions (id, member_id, type, amount, balance_before, balance_after, reference_type, reference_id, created_at)
+          VALUES (?, ?, 'pos_purchase', ?, ?, ?, 'menu_order', ?, ?)
+        `).run(txnId, member.id, -calculatedTotal, currentBalance, nextBalance, orderId, now);
+        db.prepare(`
+          INSERT INTO revenue_events (id, event_type, source_type, source_id, amount_centavos, occurred_at, created_by)
+          VALUES (?, 'pos_sale', 'menu_order', ?, ?, ?, ?)
+        `).run(id(), orderId, Math.round(calculatedTotal * 100), now, req.auth.userId || null);
+      }
+
+      db.prepare(`
+        INSERT INTO menu_orders (id, customer_id, customer_name, pc_id, pc_label, items_json, total, payment_method, payment_status, order_status, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      `).run(orderId, memberId, customerName, pcId, pcLabel, JSON.stringify(validatedItems), calculatedTotal, payMethod, payMethod === 'wallet' ? 'paid' : 'pending_counter', notes || null, now);
+    });
+
+    const newOrder = {
+      id: orderId,
+      customerId: memberId,
+      customerName,
+      pcId,
+      pcLabel,
+      items: validatedItems,
+      total: calculatedTotal,
+      paymentMethod: payMethod,
+      paymentStatus: payMethod === 'wallet' ? 'paid' : 'pending_counter',
+      orderStatus: 'pending',
+      notes,
+      createdAt: now,
+    };
+
+    try {
+      const io = getIO();
+      io?.emit("menu:new_order", newOrder);
+      emitDataChanged({ entity: 'menu_orders' });
+      if (payMethod === 'wallet' && memberId) {
+        const refreshed = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(memberId);
+        emitWalletUpdated(memberId, Number(refreshed?.wallet_balance || 0));
+      }
+    } catch {}
+
+    res.status(201).json({ success: true, order: newOrder });
+  } catch (error) { next(error); }
+});
+
+router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (req, res, next) => {
+  try {
+    const { status } = req.body || {};
+    if (!['pending', 'preparing', 'fulfilled', 'cancelled'].includes(status)) {
+      return res.status(400).json({ success: false, error: "Invalid order status." });
+    }
+    const order = db.prepare("SELECT * FROM menu_orders WHERE id=?").get(req.params.id);
+    if (!order) return res.status(404).json({ success: false, error: "Order not found." });
+
+    const now = nowIso();
+    let fulfilledAt = order.fulfilled_at;
+    let cancelledAt = order.cancelled_at;
+    if (status === 'fulfilled') fulfilledAt = now;
+    if (status === 'cancelled') cancelledAt = now;
+
+    transaction(() => {
+      if (status === 'cancelled' && order.payment_method === 'wallet' && order.payment_status === 'paid' && order.customer_id) {
+        const member = db.prepare("SELECT * FROM members WHERE id=?").get(order.customer_id);
+        if (member) {
+          const refundAmount = Number(order.total || 0);
+          const currentBal = Number(member.wallet_balance || 0);
+          const nextBal = currentBal + refundAmount;
+          db.prepare("UPDATE members SET wallet_balance=? WHERE id=?").run(nextBal, member.id);
+          db.prepare(`
+            INSERT INTO wallet_transactions (id, member_id, type, amount, balance_before, balance_after, reference_type, reference_id, created_at)
+            VALUES (?, ?, 'pos_refund', ?, ?, ?, 'menu_order_cancel', ?, ?)
+          `).run(id(), member.id, refundAmount, currentBal, nextBal, order.id, now);
+        }
+      }
+      db.prepare(`
+        UPDATE menu_orders SET order_status=?, fulfilled_at=?, cancelled_at=? WHERE id=?
+      `).run(status, fulfilledAt, cancelledAt, order.id);
+    });
+
+    const updated = { ...order, orderStatus: status, fulfilledAt, cancelledAt };
+    try {
+      const io = getIO();
+      io?.emit("menu:order_updated", updated);
+      emitDataChanged({ entity: 'menu_orders' });
+    } catch {}
+
+    res.json({ success: true, order: updated });
+  } catch (error) { next(error); }
+});
+
+router.post("/menu-orders/:id/cancel", auth, (req, res, next) => {
+  try {
+    const order = db.prepare("SELECT * FROM menu_orders WHERE id=?").get(req.params.id);
+    if (!order) return res.status(404).json({ success: false, error: "Order not found." });
+    const isStaff = ['admin', 'cashier'].includes(req.auth.role);
+    if (!isStaff && String(order.customer_id) !== String(req.auth.memberId || req.auth.userId)) {
+      return res.status(403).json({ success: false, error: "You can only cancel your own orders." });
+    }
+    if (order.order_status !== 'pending') {
+      return res.status(400).json({ success: false, error: `Cannot cancel order that is already ${order.order_status}.` });
+    }
+
+    const now = nowIso();
+    transaction(() => {
+      if (order.payment_method === 'wallet' && order.payment_status === 'paid' && order.customer_id) {
+        const member = db.prepare("SELECT * FROM members WHERE id=?").get(order.customer_id);
+        if (member) {
+          const refundAmount = Number(order.total || 0);
+          const currentBal = Number(member.wallet_balance || 0);
+          const nextBal = currentBal + refundAmount;
+          db.prepare("UPDATE members SET wallet_balance=? WHERE id=?").run(nextBal, member.id);
+          db.prepare(`
+            INSERT INTO wallet_transactions (id, member_id, type, amount, balance_before, balance_after, reference_type, reference_id, created_at)
+            VALUES (?, ?, 'pos_refund', ?, ?, ?, 'menu_order_cancel', ?, ?)
+          `).run(id(), member.id, refundAmount, currentBal, nextBal, order.id, now);
+        }
+      }
+      db.prepare("UPDATE menu_orders SET order_status='cancelled', cancelled_at=? WHERE id=?").run(now, order.id);
+    });
+
+    try {
+      const io = getIO();
+      io?.emit("menu:order_updated", { ...order, orderStatus: 'cancelled', cancelledAt: now });
+      emitDataChanged({ entity: 'menu_orders' });
+      if (order.customer_id) {
+        const refreshed = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(order.customer_id);
+        emitWalletUpdated(order.customer_id, Number(refreshed?.wallet_balance || 0));
+      }
+    } catch {}
+
+    res.json({ success: true, message: "Order cancelled successfully." });
+  } catch (error) { next(error); }
+});
+
+// ==========================================
+// STAFF SHIFT MANAGEMENT & CASH RECONCILIATION
+// ==========================================
+
+router.get("/shifts/current", auth, requireRole("admin", "cashier"), (req, res) => {
+  const current = db.prepare("SELECT * FROM user_shifts WHERE user_id=? AND closed_at IS NULL ORDER BY opened_at DESC LIMIT 1").get(req.auth.userId);
+  if (!current) return res.json({ success: true, activeShift: null });
+
+  const cashTopUps = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM top_up_requests WHERE status='approved' AND payment_method='cash' AND processed_at >= ?").get(current.opened_at)?.total || 0;
+  const cashMenuOrders = db.prepare("SELECT COALESCE(SUM(total), 0) AS total FROM menu_orders WHERE order_status='fulfilled' AND payment_method='cash' AND fulfilled_at >= ?").get(current.opened_at)?.total || 0;
+  const cashSessionStarts = db.prepare("SELECT COALESCE(SUM(amount_paid), 0) AS total FROM computer_sessions WHERE settlement_method='cash' AND started_at >= ?").get(current.opened_at)?.total || 0;
+  const totalCashInflow = Number(cashTopUps) + Number(cashMenuOrders) + Number(cashSessionStarts);
+  const expectedCash = Number(current.opening_float || 0) + totalCashInflow;
+
+  res.json({
+    success: true,
+    activeShift: {
+      id: current.id,
+      userId: current.user_id,
+      userName: current.user_name,
+      userRole: current.user_role,
+      openingFloat: Number(current.opening_float || 0),
+      cashInflow: totalCashInflow,
+      expectedCash,
+      notes: current.notes,
+      openedAt: current.opened_at,
+    }
+  });
+});
+
+router.post("/shifts/open", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT id FROM user_shifts WHERE user_id=? AND closed_at IS NULL").get(req.auth.userId);
+  if (existing) return res.status(400).json({ success: false, error: "You already have an open shift. Please close your previous shift first." });
+
+  const { openingFloat = 0, notes = '' } = req.body || {};
+  const shiftId = id();
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO user_shifts (id, user_id, user_name, user_role, opening_float, notes, opened_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(shiftId, req.auth.userId, req.auth.name || req.auth.username || 'Staff', req.auth.role || 'cashier', Math.max(0, Number(openingFloat) || 0), notes || null, now);
+
+  res.status(201).json({ success: true, shift: { id: shiftId, openedAt: now, openingFloat: Number(openingFloat) } });
+});
+
+router.post("/shifts/close", auth, requireRole("admin", "cashier"), (req, res) => {
+  const current = db.prepare("SELECT * FROM user_shifts WHERE user_id=? AND closed_at IS NULL ORDER BY opened_at DESC LIMIT 1").get(req.auth.userId);
+  if (!current) return res.status(400).json({ success: false, error: "No active open shift found." });
+
+  const { closingCounted = 0, notes = '' } = req.body || {};
+  const now = nowIso();
+
+  const cashTopUps = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM top_up_requests WHERE status='approved' AND payment_method='cash' AND processed_at >= ?").get(current.opened_at)?.total || 0;
+  const cashMenuOrders = db.prepare("SELECT COALESCE(SUM(total), 0) AS total FROM menu_orders WHERE order_status='fulfilled' AND payment_method='cash' AND fulfilled_at >= ?").get(current.opened_at)?.total || 0;
+  const cashSessionStarts = db.prepare("SELECT COALESCE(SUM(amount_paid), 0) AS total FROM computer_sessions WHERE settlement_method='cash' AND started_at >= ?").get(current.opened_at)?.total || 0;
+  const totalCashInflow = Number(cashTopUps) + Number(cashMenuOrders) + Number(cashSessionStarts);
+  const expectedCash = Number(current.opening_float || 0) + totalCashInflow;
+  const counted = Math.max(0, Number(closingCounted) || 0);
+  const variance = counted - expectedCash;
+
+  db.prepare(`
+    UPDATE user_shifts SET closing_counted=?, expected_cash=?, variance=?, notes=?, closed_at=?
+    WHERE id=?
+  `).run(counted, expectedCash, variance, notes || current.notes, now, current.id);
+
+  res.json({
+    success: true,
+    shiftSummary: {
+      id: current.id,
+      openingFloat: Number(current.opening_float || 0),
+      totalCashInflow,
+      expectedCash,
+      closingCounted: counted,
+      variance,
+      openedAt: current.opened_at,
+      closedAt: now,
+    }
+  });
+});
+
+router.get("/shifts/history", auth, requireRole("admin", "cashier"), (req, res) => {
+  const isStaffAdmin = req.auth.role === 'admin';
+  const rows = isStaffAdmin
+    ? db.prepare("SELECT * FROM user_shifts WHERE closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT 50").all()
+    : db.prepare("SELECT * FROM user_shifts WHERE user_id=? AND closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT 50").all(req.auth.userId);
+  res.json({ success: true, shifts: rows });
+});
+
+// ==========================================
+// PROMO VOUCHERS & REDEMPTION
+// ==========================================
+
+router.get("/vouchers", auth, requireRole("admin", "cashier"), (req, res) => {
+  const rows = db.prepare("SELECT * FROM promo_vouchers WHERE is_active=1 ORDER BY created_at DESC").all();
+  res.json({ success: true, vouchers: rows });
+});
+
+router.post("/vouchers", auth, requireRole("admin"), (req, res) => {
+  const { code, benefitType = 'wallet_credit', valueAmount = 0, maxRedemptions = null, expiresAt = null } = req.body || {};
+  if (!code || typeof code !== 'string') return res.status(400).json({ success: false, error: "Voucher code is required." });
+  const cleanCode = code.trim().toUpperCase();
+  const existing = db.prepare("SELECT id FROM promo_vouchers WHERE code=?").get(cleanCode);
+  if (existing) return res.status(400).json({ success: false, error: "A voucher with this code already exists." });
+
+  const voucherId = id();
+  db.prepare(`
+    INSERT INTO promo_vouchers (id, code, benefit_type, value_amount, max_redemptions, current_redemptions, expires_at, is_active, created_at)
+    VALUES (?, ?, ?, ?, ?, 0, ?, 1, ?)
+  `).run(voucherId, cleanCode, benefitType === 'session_time' ? 'session_time' : 'wallet_credit', Math.max(0, Number(valueAmount) || 0), maxRedemptions != null ? Math.max(1, Number(maxRedemptions)) : null, expiresAt || null, nowIso());
+
+  res.status(201).json({ success: true, voucher: { id: voucherId, code: cleanCode, benefitType, valueAmount: Number(valueAmount) } });
+});
+
+router.post("/vouchers/redeem", auth, (req, res, next) => {
+  try {
+    const { code } = req.body || {};
+    if (!code) return res.status(400).json({ success: false, error: "Voucher code is required." });
+    const cleanCode = String(code).trim().toUpperCase();
+    const voucher = db.prepare("SELECT * FROM promo_vouchers WHERE code=? AND is_active=1").get(cleanCode);
+    if (!voucher) return res.status(404).json({ success: false, error: "Invalid or expired promo voucher." });
+
+    if (voucher.expires_at && new Date(voucher.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ success: false, error: "This promo voucher has expired." });
+    }
+    if (voucher.max_redemptions != null && Number(voucher.current_redemptions || 0) >= Number(voucher.max_redemptions)) {
+      return res.status(400).json({ success: false, error: "This voucher has reached its redemption limit." });
+    }
+
+    const memberId = req.auth.memberId || req.auth.userId;
+    const existingRedemption = db.prepare("SELECT id FROM voucher_redemptions WHERE voucher_id=? AND member_id=?").get(voucher.id, memberId);
+    if (existingRedemption) {
+      return res.status(400).json({ success: false, error: "You have already redeemed this voucher." });
+    }
+
+    const now = nowIso();
+    let message = '';
+    transaction(() => {
+      db.prepare("INSERT INTO voucher_redemptions (id, voucher_id, member_id, redeemed_at) VALUES (?, ?, ?, ?)").run(id(), voucher.id, memberId, now);
+      db.prepare("UPDATE promo_vouchers SET current_redemptions = current_redemptions + 1 WHERE id=?").run(voucher.id);
+
+      if (voucher.benefit_type === 'wallet_credit') {
+        const member = db.prepare("SELECT * FROM members WHERE id=?").get(memberId);
+        if (member) {
+          const credit = Number(voucher.value_amount || 0);
+          const curr = Number(member.wallet_balance || 0);
+          const next = curr + credit;
+          db.prepare("UPDATE members SET wallet_balance=? WHERE id=?").run(next, member.id);
+          db.prepare("INSERT INTO wallet_transactions (id, member_id, type, amount, balance_before, balance_after, reference_type, reference_id, created_at) VALUES (?, ?, 'voucher_credit', ?, ?, ?, 'voucher', ?, ?)").run(id(), member.id, credit, curr, next, voucher.id, now);
+          message = `₱${credit.toFixed(2)} was added to your wallet balance!`;
+        }
+      } else if (voucher.benefit_type === 'session_time') {
+        const seconds = Math.floor(Number(voucher.value_amount || 0));
+        db.prepare("UPDATE members SET session_seconds_remaining = session_seconds_remaining + ? WHERE id=?").run(seconds, memberId);
+        message = `${Math.round(seconds / 60)} minutes was added to your saved time!`;
+      }
+    });
+
+    try {
+      emitDataChanged({ entity: 'members' });
+      const refreshed = db.prepare("SELECT wallet_balance FROM members WHERE id=?").get(memberId);
+      if (refreshed) emitWalletUpdated(memberId, Number(refreshed.wallet_balance || 0));
+    } catch {}
+
+    res.json({ success: true, message: message || "Voucher redeemed successfully!", benefitType: voucher.benefit_type, valueAmount: Number(voucher.value_amount) });
+  } catch (error) { next(error); }
+});
+
+router.delete("/vouchers/:id", auth, requireRole("admin"), (req, res) => {
+  db.prepare("UPDATE promo_vouchers SET is_active=0 WHERE id=?").run(req.params.id);
+  emitVouchersUpdated({ id: req.params.id, deleted: true });
+  res.json({ success: true });
+});
+
+// ==========================================
+// ON-DEMAND & SCHEDULED EMAIL REPORTS (BREVO)
+// ==========================================
+
+router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), async (req, res, next) => {
+  try {
+    const { period = 'daily', recipientEmail } = req.body || {};
+    const cafeSettings = db.prepare("SELECT * FROM settings WHERE id=1").get() || {};
+    const cafeName = cafeSettings.cafe_name || "Aezakmi Cafe";
+    const targetEmail = recipientEmail || cafeSettings.admin_email || "kyle.serina05@gmail.com";
+
+    let sinceIso = '';
+    const now = new Date();
+    if (period === 'daily') {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      sinceIso = startOfDay.toISOString();
+    } else if (period === 'weekly') {
+      const startOfWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      sinceIso = startOfWeek.toISOString();
+    } else if (period === 'monthly') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      sinceIso = startOfMonth.toISOString();
+    } else {
+      sinceIso = new Date(0).toISOString();
+    }
+
+    const sessionRevenue = db.prepare("SELECT COALESCE(SUM(amount_paid), 0) AS total, COUNT(*) AS count FROM computer_sessions WHERE started_at >= ?").get(sinceIso);
+    const topUpRevenue = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM top_up_requests WHERE status='approved' AND processed_at >= ?").get(sinceIso);
+    const orderRevenue = db.prepare("SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count FROM menu_orders WHERE order_status='fulfilled' AND fulfilled_at >= ?").get(sinceIso);
+    const shiftSummary = db.prepare("SELECT COUNT(*) AS shift_count, COALESCE(SUM(variance), 0) AS total_variance FROM user_shifts WHERE opened_at >= ?").get(sinceIso);
+
+    const totalEarnings = Number(sessionRevenue?.total || 0) + Number(topUpRevenue?.total || 0) + Number(orderRevenue?.total || 0);
+
+    const reportData = {
+      period,
+      since: sinceIso,
+      generatedAt: nowIso(),
+      cafeName,
+      totalEarnings,
+      sessionRevenue: Number(sessionRevenue?.total || 0),
+      sessionsCount: Number(sessionRevenue?.count || 0),
+      topUpRevenue: Number(topUpRevenue?.total || 0),
+      topUpsCount: Number(topUpRevenue?.count || 0),
+      orderRevenue: Number(orderRevenue?.total || 0),
+      ordersCount: Number(orderRevenue?.count || 0),
+      shiftsLogged: Number(shiftSummary?.shift_count || 0),
+      shiftsVariance: Number(shiftSummary?.total_variance || 0),
+    };
+
+    const periodLabel = period.charAt(0).toUpperCase() + period.slice(1);
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
+        <div style="background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 24px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px; color: #ffffff; font-weight: 800;">${cafeName}</h1>
+          <p style="margin: 6px 0 0 0; color: #e0f2fe; font-size: 14px; font-weight: 500;">${periodLabel} Performance Summary</p>
+        </div>
+        <div style="padding: 24px;">
+          <div style="background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; text-align: center; border: 1px solid #334155;">
+            <div style="font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Total Net Revenue</div>
+            <div style="font-size: 32px; font-weight: 800; color: #38bdf8; margin-top: 4px;">₱${totalEarnings.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 10px 0; color: #94a3b8;">Direct Session Revenue</td>
+              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${Number(reportData.sessionRevenue).toFixed(2)} (${reportData.sessionsCount} sessions)</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 10px 0; color: #94a3b8;">Wallet Top-Ups</td>
+              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${Number(reportData.topUpRevenue).toFixed(2)} (${reportData.topUpsCount} top-ups)</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 10px 0; color: #94a3b8;">Snack & Drink Menu Orders</td>
+              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${Number(reportData.orderRevenue).toFixed(2)} (${reportData.ordersCount} orders)</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 10px 0; color: #94a3b8;">Staff Shifts Reconciled</td>
+              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">${reportData.shiftsLogged} shifts (Variance: ₱${Number(reportData.shiftsVariance).toFixed(2)})</td>
+            </tr>
+          </table>
+          <div style="font-size: 11px; color: #64748b; text-align: center; margin-top: 24px;">
+            Generated on ${new Date().toLocaleString()} by Aezakmi Cloud Management
+          </div>
+        </div>
+      </div>
+    `;
+
+    let emailSent = false;
+    let providerMessage = '';
+    if (env.brevoApiKey) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': env.brevoApiKey,
+            'accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: env.brevoSenderName, email: env.brevoSenderEmail },
+            to: [{ email: targetEmail }],
+            subject: `[${cafeName}] ${periodLabel} Summary Report - ₱${totalEarnings.toFixed(2)}`,
+            htmlContent: html,
+            tags: ['performance-summary', period]
+          })
+        });
+        if (response.ok) {
+          emailSent = true;
+          providerMessage = `Summary report email delivered to ${targetEmail} via Brevo.`;
+        } else {
+          const data = await response.json().catch(() => ({}));
+          providerMessage = data?.message || `Brevo returned HTTP ${response.status}`;
+        }
+      } catch (err) {
+        providerMessage = err.message || 'Email delivery failed';
+      }
+    } else {
+      providerMessage = 'Brevo API key is not configured in environment; report data returned locally.';
+    }
+
+    res.json({
+      success: true,
+      emailSent,
+      targetEmail,
+      message: providerMessage,
+      report: reportData,
+    });
+  } catch (error) { next(error); }
+});
+
 export default router;
+

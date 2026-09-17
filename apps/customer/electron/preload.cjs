@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('aezakmiClient', {
   markSessionExit:data => ipcRenderer.invoke('client:mark-session-exit', data),
   clearSessionLifecycleMarker:() => ipcRenderer.invoke('client:clear-session-lifecycle-marker'),
   executeRemoteCommand:command => ipcRenderer.invoke('client:remote-command', command),
+  launchApp:appKey => ipcRenderer.invoke('client:launch-app', appKey),
   shutdownClient:() => ipcRenderer.invoke('client:shutdown'),
   restartClient:() => ipcRenderer.invoke('client:restart'),
   restartCustomerStation:() => ipcRenderer.invoke('client:restart-app'),

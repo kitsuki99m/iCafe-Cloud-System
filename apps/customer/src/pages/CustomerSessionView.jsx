@@ -17,6 +17,12 @@ import {
   MessageSquareText,
   Power,
   LayoutDashboard,
+  UtensilsCrossed,
+  Ticket,
+  Gamepad2,
+  XCircle,
+  ShoppingBag,
+  ExternalLink,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppData } from "../context/AppDataContext.jsx";
@@ -26,11 +32,32 @@ import Modal from "../components/common/Modal.jsx";
 import TopUpModal from "../components/customer/TopUpModal.jsx";
 import ExtendSessionModal from "../components/customer/ExtendSessionModal.jsx";
 import StartSessionModal from "../components/customer/StartSessionModal.jsx";
+import MenuOrderModal from "../components/customer/MenuOrderModal.jsx";
+import VoucherRedemptionModal from "../components/customer/VoucherRedemptionModal.jsx";
 import { playSessionWarningVoice, playFinalSecondPing } from "../lib/sound.js";
+import { showToast } from "../lib/toast.js";
 import logo from "../assets/aktura-logo.svg";
 import { useTheme } from "../context/ThemeContext.jsx";
 import { useBranding } from "../hooks/useBranding.js";
 import { elapsedSessionSeconds, remainingSessionSeconds, sessionWarningMinute } from "../lib/sessionTime.js";
+
+const APP_CATEGORIES = ["All", "Games", "Browsers", "Office", "Utilities"];
+const APPS = [
+  { id: "steam", name: "Steam", category: "Games", icon: "🎮", command: "steam" },
+  { id: "riot", name: "Riot / Valorant", category: "Games", icon: "⚔️", command: "riot" },
+  { id: "epic", name: "Epic Games", category: "Games", icon: "⚡", command: "epic" },
+  { id: "roblox", name: "Roblox", category: "Games", icon: "🧱", command: "roblox" },
+  { id: "minecraft", name: "Minecraft", category: "Games", icon: "⛏️", command: "minecraft" },
+  { id: "chrome", name: "Google Chrome", category: "Browsers", icon: "🌐", command: "chrome" },
+  { id: "edge", name: "Microsoft Edge", category: "Browsers", icon: "🌊", command: "msedge" },
+  { id: "discord", name: "Discord", category: "Utilities", icon: "💬", command: "discord" },
+  { id: "spotify", name: "Spotify", category: "Utilities", icon: "🎵", command: "spotify" },
+  { id: "word", name: "Word", category: "Office", icon: "📝", command: "word" },
+  { id: "excel", name: "Excel", category: "Office", icon: "📊", command: "excel" },
+  { id: "powerpoint", name: "PowerPoint", category: "Office", icon: "📑", command: "powerpnt" },
+  { id: "calc", name: "Calculator", category: "Utilities", icon: "🧮", command: "calc" },
+  { id: "notepad", name: "Notepad", category: "Utilities", icon: "📄", command: "notepad" },
+];
 
 function formatClock(totalSeconds) {
   const sign = totalSeconds < 0 ? "-" : "";
@@ -116,6 +143,9 @@ export default function CustomerSessionView() {
     settings,
     members,
     announcements = [],
+    menuItems = [],
+    myOrders = [],
+    cancelMyOrder,
     getMemberWallet,
     serverError,
     endSession,
@@ -139,6 +169,10 @@ export default function CustomerSessionView() {
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [extendOpen, setExtendOpen] = useState(false);
   const [startOpen, setStartOpen] = useState(false);
+  const [menuOrderOpen, setMenuOrderOpen] = useState(false);
+  const [voucherOpen, setVoucherOpen] = useState(false);
+  const [cancellingOrderId, setCancellingOrderId] = useState(null);
+  const [appCategory, setAppCategory] = useState("All");
   const [assistanceSent, setAssistanceSent] = useState(false);
   const [assistanceBusy, setAssistanceBusy] = useState(false);
   const [assistanceError, setAssistanceError] = useState("");
@@ -160,6 +194,32 @@ export default function CustomerSessionView() {
   const endedSessionKey = useRef(null);
   const activeStateKey = useRef(null);
   const idleTriggered = useRef(false);
+
+  const handleLaunchApp = useCallback(async (app) => {
+    try {
+      if (window.aezakmiClient?.launchApp) {
+        await window.aezakmiClient.launchApp(app.command);
+        showToast({ title: `Opening ${app.name}`, message: 'Application process launched.', tone: 'info' });
+      } else {
+        showToast({ title: 'Application Launcher', message: `Launching ${app.name} is supported in the desktop station client.`, tone: 'info' });
+      }
+    } catch (err) {
+      showToast({ title: 'Launch Error', message: err.message || `Unable to launch ${app.name}`, tone: 'error' });
+    }
+  }, []);
+
+  const handleCancelOrder = useCallback(async (orderId) => {
+    if (cancellingOrderId || !cancelMyOrder) return;
+    setCancellingOrderId(orderId);
+    try {
+      await cancelMyOrder(orderId);
+      showToast({ title: 'Order Cancelled', message: 'Your order was cancelled and any wallet payment was refunded.', tone: 'success' });
+    } catch (err) {
+      showToast({ title: 'Cancel Failed', message: err.message || 'Unable to cancel order.', tone: 'error' });
+    } finally {
+      setCancellingOrderId(null);
+    }
+  }, [cancellingOrderId, cancelMyOrder]);
 
   const pc =
     (user?.pcId ? findPcById(pcs, user.pcId) : null) ??
@@ -557,16 +617,11 @@ export default function CustomerSessionView() {
         <button
           type="button"
           onClick={() => {
-            // Flip the layout state before asking Electron to resize. The
-            // BrowserWindow resize is native/instant, but React only learns
-            // about it from a 'resize' DOM event that arrives a frame (or
-            // more) later. Waiting for that event means the expanded
-            // dashboard is still mounted the instant the window grows,
-            // producing a visible flash of squeezed content. Setting state
-            // synchronously on click means the correct layout is already
-            // rendered before the window ever changes size.
-            setCompactView(false);
-            window.aezakmiClient?.showMiniDashboard?.();
+            if (window.aezakmiClient?.showMiniDashboard) {
+              window.aezakmiClient.showMiniDashboard();
+            } else {
+              setCompactView(false);
+            }
           }}
           className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-soft-white/70 transition-colors hover:bg-white/10 hover:text-soft-white"
           title="Open dashboard"
@@ -631,13 +686,11 @@ export default function CustomerSessionView() {
           <button
             type="button"
             onClick={() => {
-              // See the matching comment on the "Open dashboard" button: set
-              // the layout synchronously on click instead of waiting for the
-              // post-resize 'resize' event, or the full 960x680 dashboard
-              // stays mounted (squeezed into the 84x22 frame) for a frame or
-              // two before React catches up — that's the flicker.
-              setCompactView(true);
-              window.aezakmiClient?.hideMiniDashboard?.();
+              if (window.aezakmiClient?.hideMiniDashboard) {
+                window.aezakmiClient.hideMiniDashboard();
+              } else {
+                setCompactView(true);
+              }
             }}
             className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
             title="Compact to the session timer"
@@ -767,48 +820,84 @@ export default function CustomerSessionView() {
               )}
 
               {isGuest ? (
-                <div className={`grid ${canExtend ? "grid-cols-2" : "grid-cols-1"} gap-2 border-t border-surface-line p-3`}>
-                  {canExtend && (
+                <div className="space-y-2 border-t border-surface-line p-3">
+                  <div className={`grid ${canExtend ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
+                    {canExtend && (
+                      <Button
+                        variant="teal"
+                        icon={PlusCircle}
+                        onClick={() => setExtendOpen(true)}
+                        title="Add more prepaid time"
+                      >
+                        Add Time
+                      </Button>
+                    )}
                     <Button
-                      variant="teal"
+                      variant="primary"
+                      icon={Bell}
+                      onClick={handleHelp}
+                      disabled={assistanceSent || assistanceBusy}
+                    >
+                      {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="ghost"
+                      icon={UtensilsCrossed}
+                      onClick={() => setMenuOrderOpen(true)}
+                    >
+                      Order Food & Drinks
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      icon={Ticket}
+                      onClick={() => setVoucherOpen(true)}
+                    >
+                      Redeem Voucher
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 border-t border-surface-line p-3">
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button variant="primary" icon={Wallet} onClick={() => setTopUpOpen(true)}>
+                      Top Up
+                    </Button>
+                    <Button
+                      variant={canExtend ? "teal" : "ghost"}
                       icon={PlusCircle}
-                      onClick={() => setExtendOpen(true)}
-                      title="Add more prepaid time"
+                      onClick={() => canExtend && setExtendOpen(true)}
+                      disabled={!canExtend}
+                      title={canExtend ? "Add more prepaid time" : "Add Time is available during prepaid sessions"}
                     >
                       Add Time
                     </Button>
-                  )}
-                  <Button
-                    variant="primary"
-                    icon={Bell}
-                    onClick={handleHelp}
-                    disabled={assistanceSent || assistanceBusy}
-                  >
-                    {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 border-t border-surface-line p-3">
-                  <Button variant="primary" icon={Wallet} onClick={() => setTopUpOpen(true)}>
-                    Top Up
-                  </Button>
-                  <Button
-                    variant={canExtend ? "teal" : "ghost"}
-                    icon={PlusCircle}
-                    onClick={() => canExtend && setExtendOpen(true)}
-                    disabled={!canExtend}
-                    title={canExtend ? "Add more prepaid time" : "Add Time is available during prepaid sessions"}
-                  >
-                    Add Time
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    icon={assistanceSent ? CheckCircle2 : Bell}
-                    onClick={handleHelp}
-                    disabled={assistanceSent || assistanceBusy}
-                  >
-                    {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      icon={assistanceSent ? CheckCircle2 : Bell}
+                      onClick={handleHelp}
+                      disabled={assistanceSent || assistanceBusy}
+                    >
+                      {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="teal"
+                      icon={UtensilsCrossed}
+                      onClick={() => setMenuOrderOpen(true)}
+                    >
+                      Order Food & Drinks
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      icon={Ticket}
+                      onClick={() => setVoucherOpen(true)}
+                    >
+                      Redeem Voucher
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -862,34 +951,54 @@ export default function CustomerSessionView() {
                 </p>
               )}
 
-              <div className="grid grid-cols-2 gap-2 px-3 py-3 sm:grid-cols-3">
-                {!isGuest && canSelfStart ? (
-                  <Button variant="primary" icon={PlayCircle} onClick={() => setStartOpen(true)}>
-                    Start Session
-                  </Button>
-                ) : (
+              <div className="space-y-2 px-3 py-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {!isGuest && canSelfStart ? (
+                    <Button variant="primary" icon={PlayCircle} onClick={() => setStartOpen(true)}>
+                      Start Session
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      icon={Bell}
+                      onClick={handleHelp}
+                      disabled={assistanceSent || assistanceBusy}
+                    >
+                      {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
+                    </Button>
+                  )}
+                  {!isGuest && (
+                    <Button variant="teal" icon={Wallet} onClick={() => setTopUpOpen(true)}>
+                      Top Up
+                    </Button>
+                  )}
                   <Button
-                    variant="primary"
+                    variant="ghost"
                     icon={Bell}
                     onClick={handleHelp}
                     disabled={assistanceSent || assistanceBusy}
                   >
                     {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
                   </Button>
-                )}
+                </div>
                 {!isGuest && (
-                  <Button variant="teal" icon={Wallet} onClick={() => setTopUpOpen(true)}>
-                    Top Up
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="ghost"
+                      icon={UtensilsCrossed}
+                      onClick={() => setMenuOrderOpen(true)}
+                    >
+                      Order Food & Drinks
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      icon={Ticket}
+                      onClick={() => setVoucherOpen(true)}
+                    >
+                      Redeem Voucher
+                    </Button>
+                  </div>
                 )}
-                <Button
-                  variant="ghost"
-                  icon={Bell}
-                  onClick={handleHelp}
-                  disabled={assistanceSent || assistanceBusy}
-                >
-                  {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
-                </Button>
               </div>
 
               {!isGuest && selfServicePlans.length > 0 && (
@@ -917,6 +1026,126 @@ export default function CustomerSessionView() {
               )}
             </div>
           )}
+
+          {/* Active Food & Drink Orders Tracker */}
+          {myOrders.length > 0 && (
+            <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
+              <div className="flex items-center justify-between gap-2 border-b border-surface-line px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+                    <ShoppingBag size={16} />
+                  </span>
+                  <div>
+                    <p className="eyebrow">Cafe Kitchen</p>
+                    <h3 className="font-display text-[15px] font-semibold tracking-tight text-ink-900">Your Recent Orders</h3>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMenuOrderOpen(true)}
+                  className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-surface-line customer-neutral-surface px-2.5 text-xs font-semibold text-ink-900 hover:bg-dance/35"
+                >
+                  <PlusCircle size={13} /> Order More
+                </button>
+              </div>
+              <div className="divide-y divide-surface-line overflow-y-auto max-h-56">
+                {myOrders.slice(0, 5).map((order) => {
+                  const status = order.order_status || order.orderStatus || 'pending';
+                  const isPending = status === 'pending';
+                  const isPreparing = status === 'preparing';
+                  const isFulfilled = status === 'fulfilled';
+                  const isCancelled = status === 'cancelled';
+                  let parsedItems = [];
+                  try {
+                    parsedItems = typeof order.items_json === 'string' ? JSON.parse(order.items_json) : (order.items || []);
+                  } catch {
+                    parsedItems = [];
+                  }
+                  return (
+                    <div key={order.id} className="p-3.5 flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              isPending
+                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                : isPreparing
+                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                : isFulfilled
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-slate-800 text-slate-400'
+                            }`}
+                          >
+                            {status}
+                          </span>
+                          <span className="text-[11px] font-mono font-bold text-ink-900">₱{Number(order.total || 0).toFixed(2)}</span>
+                          <span className="text-[10px] text-slate-soft">· {order.payment_method || order.paymentMethod}</span>
+                        </div>
+                        <p className="mt-1 text-[11px] text-slate-soft truncate">
+                          {parsedItems.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Order items'}
+                        </p>
+                      </div>
+                      {isPending && (
+                        <button
+                          type="button"
+                          disabled={cancellingOrderId === order.id}
+                          onClick={() => handleCancelOrder(order.id)}
+                          className="shrink-0 px-2.5 py-1.5 rounded-xl border border-ember/30 bg-ember/10 text-ember-dim font-bold text-xs hover:bg-ember/20 transition disabled:opacity-50"
+                        >
+                          {cancellingOrderId === order.id ? 'Cancelling…' : 'Cancel / Undo'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Games & Applications Launcher Grid */}
+          <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
+            <div className="flex items-center justify-between gap-2 border-b border-surface-line px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-midnight/8 text-ink-900">
+                  <Gamepad2 size={16} />
+                </span>
+                <div>
+                  <p className="eyebrow">Station Programs</p>
+                  <h3 className="font-display text-[15px] font-semibold tracking-tight text-ink-900">Games & Applications</h3>
+                </div>
+              </div>
+              <div className="flex gap-1 overflow-x-auto">
+                {APP_CATEGORIES.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setAppCategory(cat)}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition ${
+                      appCategory === cat
+                        ? 'bg-midnight/10 text-ink-900'
+                        : 'text-slate-soft hover:text-ink-900'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+              {APPS.filter(a => appCategory === 'All' || a.category === appCategory).map((app) => (
+                <button
+                  key={app.id}
+                  type="button"
+                  onClick={() => handleLaunchApp(app)}
+                  className="customer-neutral-surface border border-surface-line rounded-2xl p-2.5 flex flex-col items-center justify-center text-center gap-1.5 hover:bg-dance/40 hover:border-gold/40 transition group"
+                >
+                  <span className="text-2xl group-hover:scale-110 transition transform">{app.icon}</span>
+                  <span className="text-[11px] font-bold text-ink-900 truncate w-full">{app.name}</span>
+                  <span className="text-[9px] uppercase font-semibold text-slate-soft tracking-wider">{app.category}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
 
         <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden">
@@ -1192,6 +1421,16 @@ export default function CustomerSessionView() {
           Any unsaved files or game progress may be lost.
         </div>
       </Modal>
+
+      <MenuOrderModal
+        isOpen={menuOrderOpen}
+        onClose={() => setMenuOrderOpen(false)}
+      />
+
+      <VoucherRedemptionModal
+        isOpen={voucherOpen}
+        onClose={() => setVoucherOpen(false)}
+      />
     </div>
   );
 }

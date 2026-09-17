@@ -143,6 +143,11 @@ export function AppDataProvider({ children }) {
     supportRequests: [],
     sessionExtensions: [],
     announcements: [],
+    menuItems: [],
+    menuOrders: [],
+    currentShift: null,
+    shiftsHistory: [],
+    vouchers: [],
     settings: EMPTY_SETTINGS,
     loading: true,
     serverError: '',
@@ -176,7 +181,7 @@ export function AppDataProvider({ children }) {
           pcs: guestData.pc ? [{
             id:guestData.pc.id, label:guestData.pc.label, ipAddress:guestData.pc.ipAddress, spec:guestData.pc.spec, status:guestData.pc.status, session:guestData.session
           }] : [],
-          members:[], ratePlans:[], topUpRequests:[], supportRequests:[], sessionExtensions:[], announcements:[], settings:EMPTY_SETTINGS, loading:false, serverError:'', clientContext:null,
+          members:[], ratePlans:[], topUpRequests:[], supportRequests:[], sessionExtensions:[], announcements:[], menuItems:[], menuOrders:[], currentShift:null, shiftsHistory:[], vouchers:[], settings:EMPTY_SETTINGS, loading:false, serverError:'', clientContext:null,
         }
         if (generation !== refreshGenerationRef.current) return
         setState((current) => ({ ...current, ...snapshot }))
@@ -184,7 +189,8 @@ export function AppDataProvider({ children }) {
       }
 
       let snapshot
-      if (isCloudAdmin() && user.role === 'admin') {
+      const isStaff = ['admin', 'cashier'].includes(user.role)
+      if (isCloudAdmin() && isStaff) {
         // Cloud Admin receives one branch snapshot instead of fanning a single
         // refresh into many duplicate PostgREST reads. The Cloud client still
         // queries the authoritative tables, but shared lookups happen once.
@@ -197,6 +203,11 @@ export function AppDataProvider({ children }) {
           supportRequests:(data.supportRequests ?? []).map((request)=>({...request})),
           sessionExtensions:(data.extensions ?? []).map(normalizeSessionExtension),
           announcements:data.announcements ?? [],
+          menuItems:data.menuItems ?? [],
+          menuOrders:data.menuOrders ?? [],
+          currentShift:data.currentShift ?? null,
+          shiftsHistory:data.shiftsHistory ?? [],
+          vouchers:data.vouchers ?? [],
           settings:normalizeSettings(data.settings ?? {}),
           loading:false,
           serverError:'',
@@ -213,32 +224,46 @@ export function AppDataProvider({ children }) {
         let supportRequests = []
         let sessionExtensions = []
         let announcements = []
+        let menuItems = []
+        let menuOrders = []
+        let currentShift = null
+        let vouchers = []
         let settings = EMPTY_SETTINGS
 
-        if (user.role === 'admin') {
-          const [membersData, topUpsData, supportData, extensionsData, settingsData, announcementsData] = await Promise.all([
-            apiGet('/members'),
-            apiGet('/top-ups'),
-            apiGet('/support'),
-            apiGet('/session-extensions'),
-            apiGet('/settings'),
-            apiGet('/announcements'),
+        if (isStaff) {
+          const [membersData, topUpsData, supportData, extensionsData, settingsData, announcementsData, menuItemsData, menuOrdersData, shiftData, vouchersData] = await Promise.all([
+            apiGet('/members').catch(() => ({ members: [] })),
+            apiGet('/top-ups').catch(() => ({ topUpRequests: [] })),
+            apiGet('/support').catch(() => ({ supportRequests: [] })),
+            apiGet('/session-extensions').catch(() => ({ extensions: [] })),
+            apiGet('/settings').catch(() => ({ settings: {} })),
+            apiGet('/announcements').catch(() => ({ announcements: [] })),
+            apiGet('/menu-items').catch(() => ({ menuItems: [] })),
+            apiGet('/menu-orders').catch(() => ({ orders: [] })),
+            apiGet('/shifts/current').catch(() => ({ activeShift: null })),
+            apiGet('/vouchers').catch(() => ({ vouchers: [] })),
           ])
           members = (membersData.members ?? []).map(normalizeMember)
           topUpRequests = topUpsData.topUpRequests ?? []
           supportRequests = (supportData.supportRequests ?? []).map((request) => ({ ...request }))
           sessionExtensions = (extensionsData.extensions ?? []).map(normalizeSessionExtension)
           announcements = announcementsData.announcements ?? []
+          menuItems = menuItemsData.menuItems ?? []
+          menuOrders = menuOrdersData.orders ?? []
+          currentShift = shiftData.activeShift ?? null
+          vouchers = vouchersData.vouchers ?? []
           settings = normalizeSettings(settingsData.settings ?? {})
         } else {
-          const [memberData, settingsData, announcementsData] = await Promise.all([
-            apiGet('/members/me'),
-            apiGet('/settings'),
-            apiGet('/announcements'),
+          const [memberData, settingsData, announcementsData, menuItemsData] = await Promise.all([
+            apiGet('/members/me').catch(() => ({ member: null })),
+            apiGet('/settings').catch(() => ({ settings: {} })),
+            apiGet('/announcements').catch(() => ({ announcements: [] })),
+            apiGet('/menu-items').catch(() => ({ menuItems: [] })),
           ])
           members = memberData.member ? [normalizeMember(memberData.member)] : []
           settings = normalizeSettings(settingsData.settings ?? {})
           announcements = announcementsData.announcements ?? []
+          menuItems = menuItemsData.menuItems ?? []
         }
 
         snapshot={
@@ -249,6 +274,11 @@ export function AppDataProvider({ children }) {
           supportRequests,
           sessionExtensions,
           announcements,
+          menuItems,
+          menuOrders,
+          currentShift,
+          shiftsHistory:[],
+          vouchers,
           settings,
           loading:false,
           serverError:'',
@@ -309,7 +339,7 @@ export function AppDataProvider({ children }) {
       })
       // Realtime is the fast path; this only heals missed events or a
       // temporarily unavailable subscription.
-      timer=setInterval(cloudRefresh,30_000)
+      timer=setInterval(cloudRefresh,60000)
       return()=>{active=false;if(refreshGenerationRef.current===effectGeneration)refreshGenerationRef.current+=1;clearInterval(timer);stopRealtime?.();window.removeEventListener('online',onOnline);window.removeEventListener('focus',onVisible);window.removeEventListener('aezakmi:cloud-branch-changed',onBranch);document.removeEventListener('visibilitychange',onVisible)}
     }
     const socket = connectSocket()
@@ -471,7 +501,7 @@ export function AppDataProvider({ children }) {
 
     const onSupport = (request) => {
       setState((current) => {
-        if (!['admin'].includes(user.role)) return current
+        if (!['admin', 'cashier'].includes(user.role)) return current
         if (current.supportRequests.some((item) => item.id === request.id)) return current
         const next = {
           id: request.id,
@@ -486,6 +516,34 @@ export function AppDataProvider({ children }) {
         }
         return { ...current, supportRequests: [next, ...current.supportRequests] }
       })
+    }
+
+    const onOrderNewRequest = (order) => {
+      if (!['admin', 'cashier'].includes(user.role)) return
+      playAdminSound('order')
+      setState((current) => ({
+        ...current,
+        menuOrders: [order, ...current.menuOrders.filter((o) => o.id !== order.id)],
+      }))
+    }
+
+    const onOrderUpdated = (order) => {
+      setState((current) => ({
+        ...current,
+        menuOrders: current.menuOrders.map((o) => (o.id === order.id ? { ...o, ...order } : o)),
+      }))
+    }
+
+    const onShiftUpdated = (payload) => {
+      if (payload?.activeShift !== undefined) {
+        setState((current) => ({ ...current, currentShift: payload.activeShift }))
+      } else {
+        invalidateAndRefresh()
+      }
+    }
+
+    const onVouchersUpdated = () => {
+      invalidateAndRefresh()
     }
 
     socket.on('connect', onSocketConnect)
@@ -504,6 +562,11 @@ export function AppDataProvider({ children }) {
     socket.on('support:new_request', onSupport)
     socket.on('extension:new_request', onExtensionRequest)
     socket.on('extension:updated', onExtensionUpdated)
+    socket.on('order:new_request', onOrderNewRequest)
+    socket.on('order:updated', onOrderUpdated)
+    socket.on('menu:order_updated', onOrderUpdated)
+    socket.on('shift:updated', onShiftUpdated)
+    socket.on('vouchers:updated', onVouchersUpdated)
 
     return () => {
       socket.off('connect', onSocketConnect)
@@ -522,6 +585,11 @@ export function AppDataProvider({ children }) {
       socket.off('support:new_request', onSupport)
       socket.off('extension:new_request', onExtensionRequest)
       socket.off('extension:updated', onExtensionUpdated)
+      socket.off('order:new_request', onOrderNewRequest)
+      socket.off('order:updated', onOrderUpdated)
+      socket.off('menu:order_updated', onOrderUpdated)
+      socket.off('shift:updated', onShiftUpdated)
+      socket.off('vouchers:updated', onVouchersUpdated)
       clearTimeout(refreshTimer)
       active=false
       if (refreshGenerationRef.current === effectGeneration) refreshGenerationRef.current += 1
@@ -782,17 +850,9 @@ export function AppDataProvider({ children }) {
   }
 
   function addPc(pc, options = {}) {
-    const optimistic = normalizePc({
-      ...pc,
-      id: pc.id || `pending:${Date.now()}`,
-      status: pc.status || 'offline',
-      pending: true,
-    })
-    optimisticState((current) => ({
-      ...current,
-      pcs: [...current.pcs, optimistic]
-    }))
-    return apiPost('/pcs', pc, { operationKey: options.operationKey }).then((result) => {
+    // Adding a PC is confirmation-first: never insert a temporary optimistic row
+    // into the local array. A station create assigns the canonical ID and capacity slot.
+    return apiPost('/pcs', pc, { operationKey:options.operationKey }).then((result) => {
       showToast({
         title: result?.duplicate ? 'PC already registered' : 'PC added',
         message: result?.duplicate ? `${pc.label} was already saved and has been restored to the floor.` : `${pc.label} is now registered.`,
@@ -800,10 +860,6 @@ export function AppDataProvider({ children }) {
       refresh().catch(() => {})
       return result
     }).catch((error) => {
-      setState((current) => ({
-        ...current,
-        pcs: current.pcs.filter((item) => item.id !== optimistic.id)
-      }))
       refresh().catch(() => {})
       throw error
     })
@@ -814,23 +870,13 @@ export function AppDataProvider({ children }) {
     return apiPatch(`/pcs/${id}`, patch).then((result) => { showToast({ title:'PC updated', message:'Station details saved.' }); refresh(); return result }).catch((error)=>{refresh();throw error})
   }
 
-  function removePc(id, options = {}) {
-    const previousPc = state.pcs.find((pc) => String(pc.id) === String(id))
-    optimisticState((current) => ({
-      ...current,
-      pcs: current.pcs.filter((pc) => String(pc.id) !== String(id))
-    }))
-    return apiDelete(`/pcs/${id}`).then((result) => {
-      if (!options.silent) showToast({ title: 'PC removed', message: 'The station was removed from the floor.' })
-      refresh().catch(() => {})
-      return result
-    }).catch((error) => {
-      if (previousPc) {
-        setState((current) => ({ ...current, pcs: [...current.pcs, previousPc] }))
-      }
-      refresh().catch(() => {})
-      throw error
-    })
+  async function removePc(id, options = {}) {
+    // Removing a PC is confirmation-first: wait for server confirmation before
+    // removing from state.
+    const result = await apiDelete(`/pcs/${id}`)
+    if (!options.silent) showToast({ title: 'PC removed', message: 'The station was removed from the floor.' })
+    await refresh()
+    return result
   }
 
   function getMemberWallet(memberId) {
@@ -1122,6 +1168,27 @@ export function AppDataProvider({ children }) {
   function updateAnnouncement(id, payload) { return refreshAfter(apiPatch(`/announcements/${id}`, payload)) }
   function deleteAnnouncement(id) { return refreshAfter(apiDelete(`/announcements/${id}`)) }
 
+  // Menu Items & Orders
+  function createMenuItem(payload) { return refreshAfter(apiPost('/menu-items', payload)) }
+  function updateMenuItem(id, payload) { return refreshAfter(apiPatch(`/menu-items/${id}`, payload)) }
+  function deleteMenuItem(id) { return refreshAfter(apiDelete(`/menu-items/${id}`)) }
+  function updateOrderStatus(id, status) { return refreshAfter(apiPatch(`/menu-orders/${id}/status`, { status })) }
+  function cancelMenuOrder(id) { return refreshAfter(apiPost(`/menu-orders/${id}/cancel`, {})) }
+
+  // Shifts
+  function openShift(payload) { return refreshAfter(apiPost('/shifts/open', payload)) }
+  function closeShift(payload) { return refreshAfter(apiPost('/shifts/close', payload)) }
+  function fetchShiftHistory() { return apiGet('/shifts/history') }
+
+  // Vouchers
+  function createVoucher(payload) { return refreshAfter(apiPost('/vouchers', payload)) }
+  function deleteVoucher(id) { return refreshAfter(apiDelete(`/vouchers/${id}`)) }
+
+  // Reports
+  function sendEmailSummary(period = 'daily', recipientEmail = '') {
+    return apiPost('/reports/send-summary', { period, recipientEmail })
+  }
+
   return (
     <AppDataContext.Provider value={{
       pcs:state.pcs,
@@ -1131,6 +1198,10 @@ export function AppDataProvider({ children }) {
       supportRequests:state.supportRequests,
       sessionExtensions:state.sessionExtensions,
       announcements:state.announcements,
+      menuItems:state.menuItems,
+      menuOrders:state.menuOrders,
+      currentShift:state.currentShift,
+      vouchers:state.vouchers,
       settings:state.settings,
       loading:state.loading,
       serverError:state.serverError,
@@ -1178,6 +1249,17 @@ export function AppDataProvider({ children }) {
       planUsageCount,
       updateSettings,
       updateSessionPolicy,
+      createMenuItem,
+      updateMenuItem,
+      deleteMenuItem,
+      updateOrderStatus,
+      cancelMenuOrder,
+      openShift,
+      closeShift,
+      fetchShiftHistory,
+      createVoucher,
+      deleteVoucher,
+      sendEmailSummary,
     }}>
       {children}
     </AppDataContext.Provider>

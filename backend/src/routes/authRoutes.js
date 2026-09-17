@@ -92,13 +92,13 @@ router.post('/login', loginLimiter, async (req, res, next) => {
     const { role = 'customer', username, password, pin } = req.body ?? {}
     let user = null
 
-    if (role === 'admin') {
+    if (role === 'admin' || role === 'cashier' || role === 'staff') {
       const adminUsername=String(username || '').trim()
       // PIN-only login intentionally excludes combined-factor accounts: a
       // configured PIN + Password account must prove both values together.
       if (pin && !adminUsername && !password) {
-        const admins = db.prepare("SELECT * FROM users WHERE role='admin' AND is_active=1 AND auth_method = 'pin'").all()
-        for (const candidate of admins) {
+        const staffUsers = db.prepare("SELECT * FROM users WHERE role IN ('admin','cashier') AND is_active=1 AND auth_method = 'pin'").all()
+        for (const candidate of staffUsers) {
           if (candidate.pin_hash && await argon2.verify(candidate.pin_hash, String(pin))) {
             user = candidate
             break
@@ -109,15 +109,15 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         if (!adminUsername || !password) return res.status(400).json({ success:false, code:'AUTH_FIELDS_REQUIRED', error:'Username and password are required.' })
         user = db.prepare(`
           SELECT * FROM users
-          WHERE role='admin' AND username = ? AND is_active = 1
+          WHERE role IN ('admin','cashier') AND username = ? AND is_active = 1
         `).get(adminUsername)
-        if (!user) return res.status(401).json({ success:false, code:'INVALID_CREDENTIALS', error:'Incorrect Admin credentials.' })
+        if (!user) return res.status(401).json({ success:false, code:'INVALID_CREDENTIALS', error:'Incorrect staff credentials.' })
         const method=user.auth_method || 'pin'
         if(method === 'pin') return res.status(401).json({ success:false, code:'AUTH_METHOD_PIN_REQUIRED', error:'This account requires PIN login.' })
         if(method === 'pin_password' && !pin) return res.status(400).json({ success:false, code:'AUTH_METHOD_PIN_PASSWORD_REQUIRED', error:'This account requires both PIN and password.' })
         const passwordOk=Boolean(user.password_hash && await argon2.verify(user.password_hash,String(password)))
         const pinOk=method !== 'pin_password' || Boolean(user.pin_hash && await argon2.verify(user.pin_hash,String(pin)))
-        if(!passwordOk || !pinOk) return res.status(401).json({ success:false, code:'INVALID_CREDENTIALS', error:'Incorrect Admin credentials.' })
+        if(!passwordOk || !pinOk) return res.status(401).json({ success:false, code:'INVALID_CREDENTIALS', error:'Incorrect staff credentials.' })
       }
     } else {
       if (!username || !password) return res.status(400).json({ success:false, code:'AUTH_FIELDS_REQUIRED', error:'Username and password are required.' })
@@ -185,12 +185,16 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         if (remaining <= 0) {
           closeSessionAndSaveRemaining(activeComputerSession.id)
         } else if (String(activeComputerSession.pc_id) !== String(req.pc.id)) {
-          return res.status(409).json({
-            success:false,
-            code:'ACCOUNT_ALREADY_ACTIVE',
-            error:'This member already has an active session on another PC. Log out there before signing in here.',
-            activePcId:activeComputerSession.pc_id,
-          })
+          // Single-station guarantee: seamlessly auto-transfer the active session to this new PC
+          const previousPcId = activeComputerSession.pc_id
+          db.prepare("UPDATE computer_sessions SET pc_id=? WHERE id=?").run(req.pc.id, activeComputerSession.id)
+          db.prepare("UPDATE auth_sessions SET revoked_at=?, end_reason='session_transferred' WHERE user_id=? AND pc_id=? AND revoked_at IS NULL").run(nowIso(), candidate.id, previousPcId)
+          try {
+            const io = req.app.get('io')
+            io?.to(`pc:${previousPcId}`).emit('auth:revoked', { reason:'session_transferred', targetPcLabel: req.pc.label || 'another PC' })
+            io?.to(`pc:${previousPcId}`).emit('station:session-transferred', { targetPcId: req.pc.id, targetPcLabel: req.pc.label || 'another PC' })
+            io?.emit('data:changed', { entity:'sessions' })
+          } catch {}
         }
       }
 

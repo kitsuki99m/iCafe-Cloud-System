@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { CircleDollarSign, Download, Plus, ReceiptText, RefreshCw, TriangleAlert, TrendingUp, WalletCards } from 'lucide-react'
+import { CircleDollarSign, Download, Plus, ReceiptText, RefreshCw, TriangleAlert, TrendingUp, WalletCards, Mail, Send } from 'lucide-react'
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/api.js'
 import { connectSocket } from '../lib/socket.js'
 import { cloudBranchId, isCloudAdmin } from '../lib/cloudClient.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useAppData } from '../context/AppDataContext.jsx'
+import { showToast } from '../lib/toast.js'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import Button from '../components/common/Button.jsx'
@@ -40,9 +42,13 @@ async function downloadReport(reportId){
 
 export default function EarningsPage(){
   const { user } = useAuth()
+  const { sendEmailSummary } = useAppData()
   const [period,setPeriod]=useState('monthly'),[date,setDate]=useState(dayjs().format('YYYY-MM-DD')),[data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[modal,setModal]=useState(null),[saving,setSaving]=useState(false),[walletPage,setWalletPage]=useState(1)
   const [voidTarget,setVoidTarget]=useState(null)
   const [custom,setCustom]=useState({category:'',amount:'',description:''}),[fixed,setFixed]=useState({ispMonthly:'',dueDay:'1',effectiveFrom:dayjs().startOf('month').format('YYYY-MM-DD'),effectiveUntil:'',taxRatePercent:'8',confirmManual:false}),[estimate,setEstimate]=useState(null)
+  const [emailRecipient, setEmailRecipient] = useState('')
+  const [emailPeriod, setEmailPeriod] = useState('daily')
+  const [sendingEmail, setSendingEmail] = useState(false)
   const loadSequenceRef=useRef(0),estimateSequenceRef=useRef(0)
   const cacheKey=useMemo(()=>user?`earnings:${isCloudAdmin()?`cloud:${user.id}:${cloudBranchId()||'unselected'}`:`local:${user.id}`}:${period}:${date}`:null,[user,period,date])
   const load=useCallback(async()=>{
@@ -95,7 +101,25 @@ export default function EarningsPage(){
   async function voidExpense(){if(saving||!voidTarget?.id)return;setSaving(true);try{await apiDelete(`/expenses/${voidTarget.id}`);setVoidTarget(null);await load()}catch(err){setError(err.message)}finally{setSaving(false)}}
   const periodLabel = { daily: 'Daily', monthly: 'Monthly', yearly: 'Yearly', ytd: 'Year to date' }[period] || period
   const expenseCount = data?.expenses?.length || 0
-  const earningsRail = <>
+    async function handleSendEmailSummary(e) {
+      if (e) e.preventDefault()
+      setSendingEmail(true)
+      try {
+        const res = await sendEmailSummary(emailPeriod, emailRecipient)
+        showToast({
+          title: res?.emailSent ? 'Summary Email Sent' : 'Summary Report Generated',
+          message: res?.message || `Summary report for ${emailPeriod} generated.`,
+          tone: res?.emailSent ? 'success' : 'default',
+        })
+        setModal(null)
+      } catch (err) {
+        showToast({ title: 'Email Delivery Failed', message: err.message, tone: 'error' })
+      } finally {
+        setSendingEmail(false)
+      }
+    }
+
+    const earningsRail = <>
     <AdminRailCard title="Income snapshot">
       <div className="space-y-2">
         <div className="admin-rail-stat"><span className="text-slate-soft">Gross income</span><b className="stat-figure text-ink-900">{money(data?.summary?.gross)}</b></div>
@@ -135,6 +159,7 @@ export default function EarningsPage(){
         <div className="min-w-0"><p className="eyebrow">Reporting tools</p></div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="subtle" icon={RefreshCw} onClick={load} disabled={loading}>Refresh</Button>
+          <Button variant="subtle" icon={Mail} onClick={()=>setModal('email_summary')}>Email Summary</Button>
           <Button variant="primary" icon={Download} onClick={createReport} disabled={saving||loading}>{saving?'Working…':'Generate PDF'}</Button>
         </div>
       </div>
@@ -191,8 +216,10 @@ export default function EarningsPage(){
     />
     <Modal open={modal==='fixed'} onClose={()=>!saving&&setModal(null)} busy={saving} onSubmit={saveFixed} eyebrow="Recurring provisions" title={`Fixed expenses · ${date.slice(0,7)}`} maxWidth="max-w-lg" footer={<><Button variant="ghost" onClick={()=>setModal(null)} disabled={saving}>Cancel</Button><Button variant="primary" onClick={saveFixed} disabled={saving||!Number.isFinite(Number(fixed.taxRatePercent))}>{saving?'Saving…':'Save & provision'}</Button></>}><div className="space-y-4"><p className="text-xs leading-5 text-slate-soft">The ISP provision is recorded once per effective month on its due date. The date range controls when recurrence applies; it never duplicates a month.</p><div className="grid gap-3 sm:grid-cols-2"><label className="block"><span className="eyebrow mb-1.5 block">ISP monthly amount (₱)</span><input autoFocus value={fixed.ispMonthly} onChange={event=>setFixed({...fixed,ispMonthly:event.target.value})} inputMode="decimal" placeholder="0" className={inputClass}/></label><label className="block"><span className="eyebrow mb-1.5 block">Monthly due day</span><input value={fixed.dueDay} onChange={event=>setFixed({...fixed,dueDay:event.target.value})} inputMode="numeric" placeholder="1" className={inputClass}/></label><label className="block"><span className="eyebrow mb-1.5 block">Effective from</span><input type="date" value={fixed.effectiveFrom} onChange={event=>setFixed({...fixed,effectiveFrom:event.target.value})} className={inputClass}/></label><label className="block"><span className="eyebrow mb-1.5 block">Effective until (optional)</span><input type="date" value={fixed.effectiveUntil} onChange={event=>setFixed({...fixed,effectiveUntil:event.target.value})} className={inputClass}/></label></div><label className="block"><span className="eyebrow mb-1.5 block">Estimated tax rate (%)</span><input value={fixed.taxRatePercent} onChange={event=>setFixed({...fixed,taxRatePercent:event.target.value})} inputMode="decimal" placeholder="0" className={inputClass}/></label>{estimate&&<div className="rounded-lg bg-surface-raised p-3 text-xs"><div className="grid grid-cols-2 gap-2 text-slate-soft"><span>Gross YTD</span><b className="text-right text-ink-900">{money(estimate.grossYtd)}</b><span>Annual reduction</span><b className="text-right text-ink-900">{money(estimate.annualReduction)}</b><span>Taxable gross</span><b className="text-right text-ink-900">{money(estimate.taxableGross)}</b><span>Prior provisions</span><b className="text-right text-ink-900">{money(estimate.priorProvision)}</b><span>Current provision</span><b className="text-right text-ink-900">{money(estimate.proposedProvision)}</b></div>{estimate.regimeState==='manual_required'&&<label className="mt-3 flex gap-2 rounded-lg border border-ember/30 bg-ember/10 p-2 text-ember-dim"><input type="checkbox" checked={fixed.confirmManual} onChange={event=>setFixed({...fixed,confirmManual:event.target.checked})}/><span><TriangleAlert size={13} className="mr-1 inline"/>Gross exceeded ₱3 million. Confirm this as a custom estimate; it is not VAT or official tax due.</span></label>}</div>}<p className="text-[11px] text-slate-soft">Wallet receipts count in gross. Tax provision is an estimate only.</p></div></Modal>
     <Modal open={modal==='custom'} onClose={()=>!saving&&setModal(null)} busy={saving} onSubmit={saveCustom} eyebrow="Operating cost" title="Add custom expense" maxWidth="max-w-md" footer={<><Button variant="ghost" onClick={()=>setModal(null)} disabled={saving}>Cancel</Button><Button variant="primary" onClick={saveCustom} disabled={saving||!custom.category.trim()||!(Number(custom.amount)>0)}>Record expense</Button></>}><div className="space-y-3"><label className="block"><span className="eyebrow mb-1.5 block">Category</span><input autoFocus value={custom.category} onChange={event=>setCustom({...custom,category:event.target.value})} placeholder="Electricity, supplies…" className={inputClass}/></label><label className="block"><span className="eyebrow mb-1.5 block">Amount (₱)</span><input value={custom.amount} onChange={event=>setCustom({...custom,amount:event.target.value})} inputMode="decimal" placeholder="0" className={inputClass}/></label><label className="block"><span className="eyebrow mb-1.5 block">Note</span><input value={custom.description} onChange={event=>setCustom({...custom,description:event.target.value})} placeholder="Optional note" className={inputClass}/></label></div></Modal>
+    <Modal open={modal==='email_summary'} onClose={()=>!sendingEmail&&setModal(null)} busy={sendingEmail} onSubmit={handleSendEmailSummary} eyebrow="Automated & On-Demand Delivery" title="Send Summary to Email (Brevo)" maxWidth="max-w-md" footer={<><Button variant="ghost" onClick={()=>setModal(null)} disabled={sendingEmail}>Cancel</Button><Button variant="primary" onClick={handleSendEmailSummary} disabled={sendingEmail} icon={Send}>{sendingEmail?'Delivering…':'Send Summary Email'}</Button></>}><div className="space-y-4"><p className="text-xs leading-5 text-slate-soft">Instantly compiles revenues from sessions, wallet top-ups, snack orders, and shift records into a branded performance report sent directly to your inbox via Brevo.</p><div><label className="block"><span className="eyebrow mb-1.5 block">Summary Window</span><div className="grid grid-cols-3 gap-2">{[['daily','Daily'],['weekly','Weekly'],['monthly','Monthly']].map(([v,l])=><button type="button" key={v} onClick={()=>setEmailPeriod(v)} className={`rounded-lg py-1.5 text-xs font-semibold border transition ${emailPeriod===v?'bg-midnight text-soft-white border-gold/40':'border-surface-line text-slate-soft hover:text-ink-900'}`}>{l}</button>)}</div></label></div><label className="block"><span className="eyebrow mb-1.5 block">Recipient Email (Optional)</span><input type="email" value={emailRecipient} onChange={e=>setEmailRecipient(e.target.value)} placeholder="Leave blank to use default admin email" className={inputClass}/></label></div></Modal>
   </AdminPageWorkspace>
 }
 
 function Summary({label,value,strong=false}){return <div className={`overview-card p-4 ${strong?'border-teal/30 bg-teal/5':''}`}><p className="eyebrow">{label}</p><p className="stat-figure mt-2 text-xl font-bold text-ink-900">{money(value)}</p></div>}
 function Empty({children}){return <div className="rounded-lg border border-dashed border-surface-line px-3 py-8 text-center text-xs text-slate-soft">{children}</div>}
+

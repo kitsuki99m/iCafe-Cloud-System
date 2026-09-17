@@ -132,6 +132,20 @@ export function requireRole(...roles) {
   }
 }
 
+export function requireAdmin(req, res, next) {
+  if (req.auth?.role !== 'admin') {
+    return res.status(403).json({ success:false, code:'ADMIN_REQUIRED', error:'Administrator permissions are required for this action.' })
+  }
+  next()
+}
+
+export function requireStaff(req, res, next) {
+  if (!['admin', 'cashier'].includes(req.auth?.role)) {
+    return res.status(403).json({ success:false, code:'STAFF_REQUIRED', error:'Staff or Administrator permissions are required for this action.' })
+  }
+  next()
+}
+
 export function touchAuthSession(req) {
   if (!req.auth?.sessionId || req.auth?.cloudFallback) return
   db.prepare('UPDATE auth_sessions SET last_seen_at=? WHERE id=? AND revoked_at IS NULL')

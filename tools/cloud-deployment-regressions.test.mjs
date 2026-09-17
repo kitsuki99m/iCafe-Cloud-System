@@ -129,7 +129,7 @@ test('Vercel Admin uses branch-scoped IndexedDB cache and optimistic local state
   assert.match(data,/requestCacheKey !== scopedPageCacheKey\('app-data',user\)/)
   assert.match(data,/optimisticState/)
   assert.match(data,/writeSnapshot/)
-  assert.match(data,/setInterval\(cloudRefresh,30_000\)/)
+  assert.match(data,/setInterval\(cloudRefresh,60000\)/)
   assert.match(data,/startCloudRealtime/)
   assert.match(pageCache,/cloudBranchId\(\)/)
   assert.match(pageCache,/cloud:\$\{user\.id\}/)

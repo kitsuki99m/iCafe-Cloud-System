@@ -216,7 +216,7 @@ test('legacy reservation check-in cannot double-submit or bypass tier-safe plan 
 test('admin branding uses one dynamic useBranding source for layout and login', () => {
   const hook = read('apps/admin/src/hooks/useBranding.js')
   const layout = read('apps/admin/src/components/layout/MainLayout.jsx')
-  const login = read('apps/admin/src/components/auth/LoginForm.jsx')
+  const login = read('apps/admin/src/components/auth/AdminLoginForm.jsx')
   assert.match(hook, /aezakmi:branding-updated/)
   assert.match(hook, /apiGet\(['"]\/public\/settings['"]\)/)
   assert.match(layout, /useBranding\(\)/)

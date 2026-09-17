@@ -178,7 +178,7 @@ function connectWakeSocket() {
       const msg = JSON.parse(String(event.data || ''))
       if (msg?.event === 'broadcast' || msg?.event === 'station_wakeup' || msg?.event === 'sync' || msg?.event === 'phx_reply') {
         const outer = msg?.payload && typeof msg.payload === 'object' ? msg.payload : {}
-        const detail = outer?.payload && typeof outer.payload === 'object' ? outer.payload : outer
+        const detail=outer?.payload&&typeof outer.payload==='object'?outer.payload:outer
         window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-wakeup', { detail }))
         void pollCommands()
       }
@@ -203,7 +203,7 @@ export function startCloudStationRuntime() {
   // Realtime wakeups deliver commands immediately. This is only the recovery
   // path for a missed wakeup, kept short enough that a station command never
   // sits queued for minutes after a transient WebSocket reconnect.
-  if (!pollTimer) pollTimer=setInterval(()=>void pollCommands(),15000)
+  if (!pollTimer) pollTimer=setInterval(()=>void pollCommands(),300000)
   if (!heartbeatTimer) heartbeatTimer=setInterval(()=>void heartbeat(),60000)
   connectWakeSocket();void heartbeat();void pollCommands()
 }

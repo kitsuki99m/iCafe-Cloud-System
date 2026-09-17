@@ -23,7 +23,7 @@ function readTtl(path) {
   const base=String(path||'').split('?')[0]
   if (base==='/auth/me' || base==='/guest/session') return 0
   if (base==='/app-data' || base==='/client/context' || base==='/pcs/current' || base==='/members/me' || base==='/wallet') return 1_500
-  if (base==='/settings' || base==='/public/settings' || base==='/rate-plans' || base==='/public/rate-plans' || base==='/announcements' || base==='/public/announcements') return 30_000
+  if (base==='/settings' || base==='/public/settings' || base==='/rate-plans' || base==='/public/rate-plans' || base==='/announcements' || base==='/public/announcements') return 5 * 60_000
   if (base==='/feedback/me' || base==='/public/feedback/me') return 30_000
   return 2_000
 }

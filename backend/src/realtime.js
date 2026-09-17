@@ -137,3 +137,25 @@ export function emitSessionExtensionUpdated(payload = {}) {
   if (payload.pcId) emitToPc(payload.pcId, 'extension:updated', payload)
   emitToStaff('extension:updated', payload)
 }
+
+export function emitOrderCreated(payload = {}) {
+  if (payload.memberId) emitToCustomer(payload.memberId, 'order:created', payload)
+  if (payload.pcId) emitToPc(payload.pcId, 'order:created', payload)
+  emitToStaff('order:new_request', payload)
+}
+
+export function emitOrderUpdated(payload = {}) {
+  if (payload.memberId) emitToCustomer(payload.memberId, 'order:updated', payload)
+  if (payload.pcId) emitToPc(payload.pcId, 'order:updated', payload)
+  emitToStaff('order:updated', payload)
+}
+
+export function emitShiftUpdated(payload = {}) {
+  emitToStaff('shift:updated', payload)
+}
+
+export function emitVouchersUpdated(payload = {}) {
+  emitToStaff('vouchers:updated', payload)
+  io?.to('customer-stations').emit('vouchers:updated', { ...payload, at: Date.now() })
+}
+

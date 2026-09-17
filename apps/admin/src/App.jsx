@@ -13,6 +13,8 @@ import MembersPage from './pages/MembersPage.jsx'
 import EarningsPage from './pages/EarningsPage.jsx'
 import LogsPage from './pages/LogsPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
+import MenuManagementPage from './pages/MenuManagementPage.jsx'
+import VouchersPage from './pages/VouchersPage.jsx'
 import DeveloperConsolePage from './pages/DeveloperConsolePage.jsx'
 import CloudInviteSetup from './components/cloud/CloudInviteSetup.jsx'
 import CloudAccessPending from './components/cloud/CloudAccessPending.jsx'
@@ -31,14 +33,16 @@ export default function App() {
       <Routes>
         <Route path="/" element={<OverviewPage />} />
         <Route path="/clients" element={<FloorMatrix />} />
-        <Route path="/tariffs" element={<TariffsPage />} />
+        <Route path="/menu" element={<MenuManagementPage />} />
+        <Route path="/tariffs" element={user.role === 'cashier' ? <Navigate to="/" replace /> : <TariffsPage />} />
         <Route path="/members" element={<MembersPage />} />
+        <Route path="/vouchers" element={<VouchersPage />} />
         <Route path="/earnings" element={<EarningsPage />} />
         <Route path="/expenses" element={<EarningsPage />} />
         <Route path="/expense" element={<EarningsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/logs" element={<LogsPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings" element={user.role === 'cashier' ? <Navigate to="/" replace /> : <SettingsPage />} />
         <Route path="/developer" element={user.cloudDeveloper?<DeveloperConsolePage />:<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

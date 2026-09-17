@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8')
+const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8').replace(/\r\n/g,'\n')
 
 test('public registration uses six-digit server-generated verification plus submission throttles',()=>{
   const fn=read('supabase/functions/request-business-access/index.ts')

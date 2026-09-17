@@ -40,6 +40,9 @@ export const env = {
   databaseBackupRetention: Number(process.env.AEZAKMI_DATABASE_BACKUP_RETENTION ?? 28),
   observabilityWebhookUrl: String(process.env.AEZAKMI_OBSERVABILITY_WEBHOOK_URL ?? '').trim(),
   observabilityRetentionDays: Number(process.env.AEZAKMI_OBSERVABILITY_RETENTION_DAYS ?? 30),
+  brevoApiKey: String(process.env.BREVO_API_KEY ?? '').trim(),
+  brevoSenderEmail: String(process.env.BREVO_SENDER_EMAIL ?? 'kyle.serina05@gmail.com').trim(),
+  brevoSenderName: String(process.env.BREVO_SENDER_NAME ?? 'Aezakmi Cafe Management').trim(),
 }
 
 if (!Number.isFinite(env.port) || env.port < 1 || env.port > 65535) {

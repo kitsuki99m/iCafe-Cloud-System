@@ -123,6 +123,8 @@ export function createPublicState(overrides = {}) {
     pcs:[],
     members:[],
     ratePlans:[],
+    menuItems:[],
+    myOrders:[],
     topUpRequests:[],
     announcements:[],
     settings:{...EMPTY_SETTINGS},
@@ -151,7 +153,7 @@ export function AppDataProvider({ children }) {
     try {
       if (!user) {
         const cloudPublic=cloudStationFeatureEnabled()&&cloudStationPaired()&&cloudStationTransport()==='cloud'
-        let publicSettings,clientContext,announcementData,ratePlansData
+        let publicSettings,clientContext,announcementData,ratePlansData,menuData
         if(cloudPublic){
           // Public/login content is almost static. One bundled station RPC cached for
           // five minutes replaces four independent Cloud function calls; realtime
@@ -161,12 +163,14 @@ export function AppDataProvider({ children }) {
           clientContext=bundled.clientContext||{pc:bundled.pc}
           announcementData={announcements:bundled.announcements||[]}
           ratePlansData={ratePlans:bundled.ratePlans||[]}
+          menuData={menuItems:bundled.menuItems||[]}
         }else{
-          ;[publicSettings, clientContext, announcementData, ratePlansData] = await Promise.all([
+          ;[publicSettings, clientContext, announcementData, ratePlansData, menuData] = await Promise.all([
             apiGet('/public/settings'),
             apiGet('/client/context'),
             apiGet('/public/announcements'),
             apiGet('/public/rate-plans'),
+            apiGet('/menu-items').catch(() => ({ menuItems: [] })),
           ])
         }
         const snapshot=createPublicState({
@@ -174,6 +178,8 @@ export function AppDataProvider({ children }) {
           currentClientPc:normalizePc(clientContext.pc),
           announcements:announcementData.announcements ?? [],
           ratePlans:(ratePlansData.ratePlans ?? []).map(normalizeRatePlan),
+          menuItems:menuData.menuItems ?? [],
+          myOrders:[],
         })
         if (generation !== refreshGenerationRef.current) return
         setState((current) => preserveActiveSession(current, snapshot))
@@ -193,6 +199,10 @@ export function AppDataProvider({ children }) {
         const publicSettings={settings:bundled?.settings ?? {}}
         const announcementData={announcements:bundled?.announcements ?? []}
         const ratePlansData={ratePlans:bundled?.ratePlans ?? []}
+        const [menuData, ordersData] = await Promise.all([
+          apiGet('/menu-items').catch(() => ({ menuItems: [] })),
+          apiGet('/menu-orders').catch(() => ({ orders: [] })),
+        ])
         if (!guestData.session) {
           // Never tear down Guest UI on one Cloud-sync miss. A Guest has no
           // member token, and Cloud can briefly report null while the LAN Edge
@@ -218,6 +228,8 @@ export function AppDataProvider({ children }) {
           announcements:announcementData.announcements ?? [],
           settings:{...EMPTY_SETTINGS,...(publicSettings.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
           currentClientPc:currentPc,
+          menuItems:menuData.menuItems ?? [],
+          myOrders:ordersData.orders ?? [],
         })
         if (generation !== refreshGenerationRef.current) return
         setState((current) => preserveActiveSession(current, snapshot))
@@ -226,15 +238,23 @@ export function AppDataProvider({ children }) {
       }
 
       const cloudPrimary=cloudStationFeatureEnabled()&&cloudStationPaired()&&cloudStationTransport()==='cloud'
-      let pcData,plansData,clientContext,memberData,settingsData,announcementData
+      let pcData,plansData,clientContext,memberData,settingsData,announcementData,menuData,ordersData
       if(cloudPrimary){
         // One authenticated station-api invocation replaces six Cloud function
         // calls and authenticates the station/member only once per refresh.
         const bundled=await apiGet('/app-data', { force:true })
         pcData={pc:bundled.pc};plansData={ratePlans:bundled.ratePlans||[]};clientContext=bundled.clientContext||{};memberData={member:bundled.member};settingsData={settings:bundled.settings||{}};announcementData={announcements:bundled.announcements||[]}
+        const [mRes, oRes] = await Promise.all([
+          apiGet('/menu-items').catch(() => ({ menuItems: [] })),
+          apiGet('/menu-orders').catch(() => ({ orders: [] })),
+        ])
+        menuData = mRes
+        ordersData = oRes
       }else{
-        ;[pcData, plansData, clientContext, memberData, settingsData, announcementData] = await Promise.all([
+        ;[pcData, plansData, clientContext, memberData, settingsData, announcementData, menuData, ordersData] = await Promise.all([
           apiGet('/pcs/current'),apiGet('/rate-plans'),apiGet('/client/context'),apiGet('/members/me'),apiGet('/settings'),apiGet('/announcements'),
+          apiGet('/menu-items').catch(() => ({ menuItems: [] })),
+          apiGet('/menu-orders').catch(() => ({ orders: [] })),
         ])
       }
       const member=memberData.member ? normalizeMember({
@@ -250,6 +270,8 @@ export function AppDataProvider({ children }) {
         ratePlans:(plansData.ratePlans ?? []).map(normalizeRatePlan),
         announcements:announcementData.announcements ?? [],
         settings:{...EMPTY_SETTINGS,...(settingsData.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
+        menuItems:menuData.menuItems ?? [],
+        myOrders:ordersData.orders ?? [],
       })
       if (generation !== refreshGenerationRef.current) return
       setState(snapshot)
@@ -544,6 +566,27 @@ export function AppDataProvider({ children }) {
       }
     }
 
+    const onStationTransferred = (payload) => {
+      clearStationLifecycleMarker().catch?.(() => {})
+      window.aezakmiClient?.showLoginKiosk?.().catch?.(() => {})
+      window.dispatchEvent(new CustomEvent('aezakmi:session-transferred', { detail: payload }))
+      showToast({
+        title: 'Session Transferred',
+        message: `Your session was moved to ${payload?.targetPcLabel || 'another station'}.`,
+        tone: 'warning',
+      })
+    }
+    const onMenuOrderUpdated = (payload) => {
+      invalidateAndRefresh()
+      if (payload && (sameId(payload.customerId, user?.memberId) || sameId(payload.customer_id, user?.memberId))) {
+        if (payload.orderStatus === 'fulfilled' || payload.order_status === 'fulfilled') {
+          showToast({ title: 'Order Ready!', message: 'Your snacks/drinks order has been fulfilled by staff!', tone: 'success' })
+        } else if (payload.orderStatus === 'cancelled' || payload.order_status === 'cancelled') {
+          showToast({ title: 'Order Cancelled', message: 'Your order was cancelled.', tone: 'info' })
+        }
+      }
+    }
+
     function bindSocket(target) {
       if (!target) return
       target.on('connect', onSocketConnect)
@@ -558,6 +601,11 @@ export function AppDataProvider({ children }) {
       target.on('extension:updated', onExtensionUpdated)
       target.on('remote:command', onRemoteCommand)
       target.on('auth:revoked', onAuthRevoked)
+      target.on('station:session-transferred', onStationTransferred)
+      target.on('menu:new_order', onMenuOrderUpdated)
+      target.on('menu:order_updated', onMenuOrderUpdated)
+      target.on('order:created', onMenuOrderUpdated)
+      target.on('order:updated', onMenuOrderUpdated)
     }
     function unbindSocket(target) {
       if (!target) return
@@ -573,6 +621,11 @@ export function AppDataProvider({ children }) {
       target.off('extension:updated', onExtensionUpdated)
       target.off('remote:command', onRemoteCommand)
       target.off('auth:revoked', onAuthRevoked)
+      target.off('station:session-transferred', onStationTransferred)
+      target.off('menu:new_order', onMenuOrderUpdated)
+      target.off('menu:order_updated', onMenuOrderUpdated)
+      target.off('order:created', onMenuOrderUpdated)
+      target.off('order:updated', onMenuOrderUpdated)
     }
     const cloudPrimary = cloudStationFeatureEnabled() && cloudStationPaired()
     let cloudRefreshInterval = null
@@ -663,7 +716,7 @@ export function AppDataProvider({ children }) {
       // The session clock itself is continuous and runs locally from its
       // authoritative expiry anchor. This is only a reconciliation fallback
       // when a Cloud wakeup is missed, not a timer snapshot mechanism.
-      cloudRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')queueRefresh()},15000)
+      cloudRefreshInterval=setInterval(()=>{if(document.visibilityState==='visible')queueRefresh()},60000)
       window.addEventListener('aezakmi:station-transport',onTransport)
       window.addEventListener('aezakmi:cloud-station-command',onCloudCommand)
       window.addEventListener('aezakmi:cloud-station-wakeup',onCloudWakeup)
@@ -784,11 +837,35 @@ export function AppDataProvider({ children }) {
     return apiGet(user?.role==='guest' ? '/public/feedback/me' : '/feedback/me').then(data=>data.quota)
   }
 
+  function placeMenuOrder(payload, options = {}) {
+    return apiPost('/menu-orders', payload, options).then((data) => {
+      refresh()
+      return data.order
+    })
+  }
+
+  function cancelMyOrder(orderId, options = {}) {
+    return apiPost(`/menu-orders/${orderId}/cancel`, {}, options).then((data) => {
+      refresh()
+      return data
+    })
+  }
+
+  function redeemVoucher(code, options = {}) {
+    return apiPost('/vouchers/redeem', { code }, options).then((data) => {
+      refresh()
+      return data
+    })
+  }
+
   return (
     <AppDataContext.Provider value={{
       pcs:state.pcs,
       members:state.members,
+      currentMember:state.members[0] || null,
       ratePlans:state.ratePlans,
+      menuItems:state.menuItems,
+      myOrders:state.myOrders,
       announcements:state.announcements,
       topUpRequests:state.topUpRequests,
       settings:state.settings,
@@ -806,6 +883,9 @@ export function AppDataProvider({ children }) {
       getFeedbackHistory,
       startSelfServiceSession,
       requestSessionExtension,
+      placeMenuOrder,
+      cancelMyOrder,
+      redeemVoucher,
     }}>
       {children}
     </AppDataContext.Provider>

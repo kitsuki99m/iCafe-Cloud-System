@@ -39,10 +39,12 @@ test('every literal frontend API call has a backend route with the same HTTP met
   assert.deepEqual(missing,[])
 })
 
-test('runtime role contract is admin/customer only; legacy cashier is not authorized',()=>{
-  const files=['backend/src/routes/authRoutes.js','backend/src/routes/apiRoutes.js','backend/src/routes/operationsRoutes.js','backend/src/routes/cloudRoutes.js','backend/src/realtime.js','backend/src/server.js','backend/src/middleware/rateLimiter.js','apps/admin/src/context/AppDataContext.jsx','apps/admin/src/components/layout/MainLayout.jsx']
-  const offenders=files.filter(f=>/cashier/.test(read(f)))
-  assert.deepEqual(offenders,[])
+test('runtime role contract supports cashier role with restricted permissions',()=>{
+  const auth = read('backend/src/routes/authRoutes.js')
+  const api = read('backend/src/routes/apiRoutes.js')
+  assert.match(auth, /cashier/)
+  assert.match(api, /requireAdmin/)
+  assert.match(api, /requireStaff/)
 })
 
 test('guest Extend Time uses a paired public session-extension endpoint and staff can approve/reject it',()=>{

@@ -1,12 +1,13 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck, Menu, X, BookOpenText } from 'lucide-react'
+import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck, Menu, X, BookOpenText, UtensilsCrossed, Ticket, Clock } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import AdminNotificationCenter from '../admin/AdminNotificationCenter.jsx'
 import AnnouncementCenter from '../admin/AnnouncementCenter.jsx'
 import AdminQuickFind from '../admin/AdminQuickFind.jsx'
 import FeedbackInboxModal from '../admin/FeedbackInboxModal.jsx'
+import ShiftManagementModal from '../shift/ShiftManagementModal.jsx'
 import logo from '../../assets/aktura-logo.svg'
 import { apiPost } from '../../lib/api.js'
 import { useTheme } from '../../context/ThemeContext.jsx'
@@ -20,20 +21,24 @@ import PwaInstallButton from '../common/PwaInstallButton.jsx'
 const BASE_NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/clients', label: 'Clients', icon: MonitorCog },
-  { to: '/tariffs', label: 'Rates', icon: Tags },
+  { to: '/menu', label: 'Menu & Orders', icon: UtensilsCrossed },
+  { to: '/tariffs', label: 'Rates', icon: Tags, adminOnly: true },
   { to: '/members', label: 'Members', icon: Users },
+  { to: '/vouchers', label: 'Vouchers', icon: Ticket },
   { to: '/earnings', label: 'Earnings', icon: CircleDollarSign },
   { to: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
   { to: '/logs', label: 'Logs', icon: ScrollText },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
 ]
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 const PAGE_ALIASES = { '/expenses':'Earnings', '/expense':'Earnings' }
 const PAGE_PURPOSE = {
   Overview:'Live operations, customer signals, and today’s business health.',
   Clients:'Manage stations, active sessions, and remote actions.',
+  'Menu & Orders':'Snack & drink catalog, in-session orders, and kitchen queue.',
   Rates:'Set customer pricing, promotions, and session rules.',
   Members:'Manage accounts, balances, tiers, and transfers.',
+  Vouchers:'Promo redemption codes for free wallet balance or session time.',
   Earnings:'Review cash activity, expenses, tax estimates, and reports.',
   Analytics:'Understand trends, utilization, and customer activity.',
   Logs:'Audit operational and financial activity.',
@@ -42,17 +47,20 @@ const PAGE_PURPOSE = {
 }
 export default function MainLayout({ children }) {
   const { user, logout } = useAuth()
-  const { serverError, settings } = useAppData()
+  const { serverError, settings, currentShift } = useAppData()
   const { isDark, toggleTheme } = useTheme()
   const branding = useBranding()
   const location = useLocation()
-  const navItems = user?.cloudDeveloper ? [...BASE_NAV,{to:'/developer',label:'Developer',icon:ShieldCheck}] : BASE_NAV
+  const isCashier = user?.role === 'cashier'
+  const filteredNav = BASE_NAV.filter((item) => !(isCashier && item.adminOnly))
+  const navItems = user?.cloudDeveloper ? [...filteredNav, { to: '/developer', label: 'Developer', icon: ShieldCheck }] : filteredNav
   const currentLabel = PAGE_ALIASES[location.pathname] || navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to))?.label || 'Overview'
   const isOverview = location.pathname === '/'
   const [clock, setClock] = useState(() => new Date())
   const [locked, setLocked] = useState(false)
   const [feedbackOpen,setFeedbackOpen]=useState(false)
   const [manualOpen,setManualOpen]=useState(false)
+  const [shiftModalOpen, setShiftModalOpen] = useState(false)
   const [mobileNavOpen,setMobileNavOpen]=useState(false)
   const [pin, setPin] = useState('')
   const [password, setPassword] = useState('')
@@ -220,6 +228,14 @@ export default function MainLayout({ children }) {
               <p className="truncate font-display text-[15px] font-semibold leading-tight text-ink-900">{currentLabel}</p>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setShiftModalOpen(true)}
+                className={`admin-icon-button ${currentShift ? 'text-emerald-400' : ''}`}
+                title="Staff Shift & Cash Reconciliation"
+              >
+                <Clock size={16} />
+              </button>
               {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-icon-button" title={`${currentLabel} owner manual`} aria-label={`Open ${currentLabel} owner manual`}><BookOpenText size={16}/></button>}
               <AdminNotificationCenter />
               <AnnouncementCenter />
@@ -234,6 +250,19 @@ export default function MainLayout({ children }) {
             </div>
             <AdminQuickFind />
             <div className="ml-auto flex items-center gap-1.5 text-slate-soft">
+              <button
+                type="button"
+                onClick={() => setShiftModalOpen(true)}
+                className={`admin-header-pill flex items-center gap-1.5 font-bold ${
+                  currentShift
+                    ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10'
+                    : 'text-slate-soft hover:text-ink-900'
+                }`}
+                title="Staff Shift & Cash Drawer Reconciliation"
+              >
+                <Clock size={14} className={currentShift ? 'text-emerald-400' : ''} />
+                <span>{currentShift ? 'Shift Active' : 'Clock In'}</span>
+              </button>
               <button type="button" onClick={()=>setFeedbackOpen(true)} className="admin-header-pill hidden lg:flex" title="Open customer feedback"><MessageSquareText size={15}/> Feedback</button>
               {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-header-pill" title={`Open ${currentLabel} owner manual`}><BookOpenText size={15}/><span className="hidden xl:inline">Manual</span></button>}
               <AdminNotificationCenter />
@@ -247,6 +276,7 @@ export default function MainLayout({ children }) {
             </div>
           </header>}
           <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
+          <ShiftManagementModal isOpen={shiftModalOpen} onClose={() => setShiftModalOpen(false)} />
           {!isOverview && <FeedbackInboxModal open={feedbackOpen} onClose={()=>setFeedbackOpen(false)} />}
         </main>
       </div>

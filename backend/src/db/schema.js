@@ -317,6 +317,76 @@ export function migrate() {
       created_at TEXT NOT NULL,
       PRIMARY KEY(scope, request_key)
     );
+    CREATE TABLE IF NOT EXISTS menu_items (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'snacks',
+      description TEXT,
+      price REAL NOT NULL CHECK(price >= 0),
+      image_url TEXT,
+      stock_quantity INTEGER,
+      is_available INTEGER NOT NULL DEFAULT 1,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_menu_items_cat ON menu_items(category, is_active);
+
+    CREATE TABLE IF NOT EXISTS menu_orders (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT,
+      customer_name TEXT,
+      pc_id TEXT,
+      pc_label TEXT,
+      items_json TEXT NOT NULL DEFAULT '[]',
+      total REAL NOT NULL DEFAULT 0,
+      payment_method TEXT NOT NULL DEFAULT 'wallet',
+      payment_status TEXT NOT NULL DEFAULT 'paid',
+      order_status TEXT NOT NULL DEFAULT 'pending',
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      fulfilled_at TEXT,
+      cancelled_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_menu_orders_status ON menu_orders(order_status, created_at);
+
+    CREATE TABLE IF NOT EXISTS user_shifts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      user_name TEXT NOT NULL,
+      user_role TEXT NOT NULL DEFAULT 'cashier',
+      opening_float REAL NOT NULL DEFAULT 0,
+      closing_counted REAL,
+      expected_cash REAL DEFAULT 0,
+      variance REAL DEFAULT 0,
+      notes TEXT,
+      opened_at TEXT NOT NULL,
+      closed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_shifts_open ON user_shifts(opened_at);
+
+    CREATE TABLE IF NOT EXISTS promo_vouchers (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      benefit_type TEXT NOT NULL DEFAULT 'wallet_credit',
+      value_amount REAL NOT NULL DEFAULT 0,
+      max_redemptions INTEGER,
+      current_redemptions INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS voucher_redemptions (
+      id TEXT PRIMARY KEY,
+      voucher_id TEXT NOT NULL,
+      member_id TEXT NOT NULL,
+      redeemed_at TEXT NOT NULL,
+      UNIQUE(voucher_id, member_id),
+      FOREIGN KEY(voucher_id) REFERENCES promo_vouchers(id) ON DELETE CASCADE,
+      FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS station_control_requests (id TEXT PRIMARY KEY,pc_id TEXT,command TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'authorized',authorized_by TEXT,created_at TEXT NOT NULL,expires_at TEXT NOT NULL,completed_at TEXT,result TEXT);
 
     CREATE TABLE IF NOT EXISTS pos_products (id TEXT PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT 'Food',price REAL NOT NULL CHECK(price >= 0),stock INTEGER,is_active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);

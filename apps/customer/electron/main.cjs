@@ -594,8 +594,8 @@ function applyActiveWindowMode({ show = false } = {}) {
   const wasVisible = mainWindow.isVisible()
   // Do not expose the compact window while its native bounds and renderer
   // layout transition to the centered dashboard.
+  mainWindow.setOpacity(0)
   if (show && wasVisible) mainWindow.hide()
-  keepWindowContentOpaque()
   activeDashboardMode = 'expanded'
   notifyDashboardMode()
   // Compact mode is fixed at 84x22, so clear both constraints before growing
@@ -625,7 +625,10 @@ function applyActiveWindowMode({ show = false } = {}) {
     if (show) {
       mainWindow.show()
       mainWindow.focus()
+      keepWindowContentOpaque()
       dashboardVisible = true
+    } else {
+      keepWindowContentOpaque()
     }
   })
 }
@@ -887,6 +890,40 @@ async function executeRemoteCommand(command) {
   return false
 }
 
+const APP_EXECUTABLES = {
+  steam: { protocol: 'steam://', exe: 'steam.exe' },
+  riot: { protocol: 'riotclient://', exe: 'RiotClientServices.exe' },
+  epic: { protocol: 'com.epicgames.launcher://', exe: 'EpicGamesLauncher.exe' },
+  chrome: { exe: 'chrome.exe' },
+  edge: { exe: 'msedge.exe' },
+  discord: { protocol: 'discord://', exe: 'Discord.exe' },
+  word: { exe: 'winword.exe' },
+  excel: { exe: 'excel.exe' },
+  powerpoint: { exe: 'powerpnt.exe' },
+  calculator: { exe: 'calc.exe' },
+  notepad: { exe: 'notepad.exe' },
+}
+
+async function launchDesktopApp(appKey) {
+  const target = APP_EXECUTABLES[String(appKey || '').toLowerCase()]
+  if (!target) return false
+  if (target.protocol) {
+    try {
+      const { shell } = require('electron')
+      await shell.openExternal(target.protocol)
+      return true
+    } catch {}
+  }
+  if (target.exe) {
+    try {
+      const { exec } = require('node:child_process')
+      exec(`start "" "${target.exe}"`, { windowsHide: true })
+      return true
+    } catch {}
+  }
+  return false
+}
+
 async function executeEmergencyCommand(command) {
   if (String(command || '').toLowerCase() === 'quit') {
     // Alt+Shift+W is the last-resort local operator escape hatch. Persist only
@@ -1035,6 +1072,7 @@ app.whenReady().then(async () => {
   handleTrusted('client:mark-session-exit', (_event, data) => markSessionExit(data || {}))
   handleTrusted('client:clear-session-lifecycle-marker', () => clearSessionLifecycleMarker())
   handleTrusted('client:remote-command', (_event, command) => executeRemoteCommand(command))
+  handleTrusted('client:launch-app', (_event, appKey) => launchDesktopApp(appKey))
   handleTrusted('client:shutdown', () => executeRemoteCommand('shutdown'))
   handleTrusted('client:restart', () => executeRemoteCommand('reboot'))
   handleTrusted('client:restart-app', () => {

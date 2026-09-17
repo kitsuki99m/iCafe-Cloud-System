@@ -6,7 +6,7 @@ function toTimestamp(value) {
 }
 
 function snapshotAgeSeconds(session, now) {
-  const observedAt = toTimestamp(session?.observedAt ?? session?.updatedAt ?? session?.startedAt)
+  const observedAt = toTimestamp(session?.observedAt)
   return observedAt == null ? 0 : Math.max(0, Math.floor((now - observedAt) / 1000))
 }
 
