@@ -23,6 +23,9 @@ import {
   XCircle,
   ShoppingBag,
   ExternalLink,
+  SlidersHorizontal,
+  HardDrive,
+  Search,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppData } from "../context/AppDataContext.jsx";
@@ -34,6 +37,8 @@ import ExtendSessionModal from "../components/customer/ExtendSessionModal.jsx";
 import StartSessionModal from "../components/customer/StartSessionModal.jsx";
 import MenuOrderModal from "../components/customer/MenuOrderModal.jsx";
 import VoucherRedemptionModal from "../components/customer/VoucherRedemptionModal.jsx";
+import StationLauncherConfigModal from "../components/customer/StationLauncherConfigModal.jsx";
+import AdminPinGateModal from "../components/common/AdminPinGateModal.jsx";
 import { playSessionWarningVoice, playFinalSecondPing } from "../lib/sound.js";
 import { showToast } from "../lib/toast.js";
 import logo from "../assets/aktura-logo.svg";
@@ -41,22 +46,21 @@ import { useTheme } from "../context/ThemeContext.jsx";
 import { useBranding } from "../hooks/useBranding.js";
 import { elapsedSessionSeconds, remainingSessionSeconds, sessionWarningMinute } from "../lib/sessionTime.js";
 
-const APP_CATEGORIES = ["All", "Games", "Browsers", "Office", "Utilities"];
-const APPS = [
-  { id: "steam", name: "Steam", category: "Games", icon: "🎮", command: "steam" },
-  { id: "riot", name: "Riot / Valorant", category: "Games", icon: "⚔️", command: "riot" },
-  { id: "epic", name: "Epic Games", category: "Games", icon: "⚡", command: "epic" },
-  { id: "roblox", name: "Roblox", category: "Games", icon: "🧱", command: "roblox" },
-  { id: "minecraft", name: "Minecraft", category: "Games", icon: "⛏️", command: "minecraft" },
-  { id: "chrome", name: "Google Chrome", category: "Browsers", icon: "🌐", command: "chrome" },
-  { id: "edge", name: "Microsoft Edge", category: "Browsers", icon: "🌊", command: "msedge" },
-  { id: "discord", name: "Discord", category: "Utilities", icon: "💬", command: "discord" },
-  { id: "spotify", name: "Spotify", category: "Utilities", icon: "🎵", command: "spotify" },
-  { id: "word", name: "Word", category: "Office", icon: "📝", command: "word" },
-  { id: "excel", name: "Excel", category: "Office", icon: "📊", command: "excel" },
-  { id: "powerpoint", name: "PowerPoint", category: "Office", icon: "📑", command: "powerpnt" },
-  { id: "calc", name: "Calculator", category: "Utilities", icon: "🧮", command: "calc" },
-  { id: "notepad", name: "Notepad", category: "Utilities", icon: "📄", command: "notepad" },
+const DEFAULT_FALLBACK_APPS = [
+  { id: "steam", name: "Steam", categoryName: "Online Games", icon: "🎮", protocolUrl: "steam://", executablePath: "steam.exe" },
+  { id: "riot", name: "Riot / Valorant", categoryName: "Online Games", icon: "⚔️", protocolUrl: "riotclient://", executablePath: "RiotClientServices.exe" },
+  { id: "epic", name: "Epic Games", categoryName: "Online Games", icon: "⚡", protocolUrl: "com.epicgames.launcher://", executablePath: "EpicGamesLauncher.exe" },
+  { id: "roblox", name: "Roblox", categoryName: "Online Games", icon: "🧱", protocolUrl: "roblox://", executablePath: "RobloxPlayerLauncher.exe" },
+  { id: "minecraft", name: "Minecraft", categoryName: "Offline Games", icon: "⛏️", executablePath: "Minecraft.exe" },
+  { id: "chrome", name: "Google Chrome", categoryName: "Surfing & Browsers", icon: "🌐", executablePath: "chrome.exe" },
+  { id: "edge", name: "Microsoft Edge", categoryName: "Surfing & Browsers", icon: "🌊", executablePath: "msedge.exe" },
+  { id: "discord", name: "Discord", categoryName: "Utilities & Chat", icon: "💬", protocolUrl: "discord://", executablePath: "Discord.exe" },
+  { id: "spotify", name: "Spotify", categoryName: "Utilities & Chat", icon: "🎵", protocolUrl: "spotify://", executablePath: "Spotify.exe" },
+  { id: "word", name: "Word", categoryName: "Office & Productivity", icon: "📝", executablePath: "WINWORD.EXE" },
+  { id: "excel", name: "Excel", categoryName: "Office & Productivity", icon: "📊", executablePath: "EXCEL.EXE" },
+  { id: "powerpoint", name: "PowerPoint", categoryName: "Office & Productivity", icon: "📑", executablePath: "POWERPNT.EXE" },
+  { id: "calc", name: "Calculator", categoryName: "Utilities & Chat", icon: "🧮", executablePath: "calc.exe" },
+  { id: "notepad", name: "Notepad", categoryName: "Utilities & Chat", icon: "📄", executablePath: "notepad.exe" },
 ];
 
 function formatClock(totalSeconds) {
@@ -145,6 +149,10 @@ export default function CustomerSessionView() {
     announcements = [],
     menuItems = [],
     myOrders = [],
+    launcherCategories = [],
+    launcherApps = [],
+    stationLauncherConfig,
+    reloadStationLauncherConfig,
     cancelMyOrder,
     getMemberWallet,
     serverError,
@@ -173,6 +181,9 @@ export default function CustomerSessionView() {
   const [voucherOpen, setVoucherOpen] = useState(false);
   const [cancellingOrderId, setCancellingOrderId] = useState(null);
   const [appCategory, setAppCategory] = useState("All");
+  const [launcherSearchQuery, setLauncherSearchQuery] = useState("");
+  const [stationConfigModalOpen, setStationConfigModalOpen] = useState(false);
+  const [stationPinGateOpen, setStationPinGateOpen] = useState(false);
   const [assistanceSent, setAssistanceSent] = useState(false);
   const [assistanceBusy, setAssistanceBusy] = useState(false);
   const [assistanceError, setAssistanceError] = useState("");
@@ -195,10 +206,31 @@ export default function CustomerSessionView() {
   const activeStateKey = useRef(null);
   const idleTriggered = useRef(false);
 
+  const activeCategories = useMemo(() => {
+    const set = new Set(["All"]);
+    launcherCategories.forEach((c) => { if (c?.name) set.add(c.name); });
+    launcherApps.forEach((a) => { if (a?.categoryName || a?.category) set.add(a.categoryName || a.category); });
+    stationLauncherConfig?.localApps?.forEach((a) => { if (a?.category) set.add(a.category); });
+    return Array.from(set);
+  }, [launcherCategories, launcherApps, stationLauncherConfig]);
+
+  const activeAppsList = useMemo(() => {
+    const base = launcherApps.length > 0 ? launcherApps.filter((a) => a.isEnabled !== false) : DEFAULT_FALLBACK_APPS;
+    const local = stationLauncherConfig?.localApps || [];
+    const combined = [...base, ...local];
+    return combined.filter((a) => {
+      const cat = a.categoryName || a.category || "Online Games";
+      const matchCat = appCategory === "All" || cat === appCategory;
+      const q = (launcherSearchQuery || "").toLowerCase().trim();
+      const matchSearch = !q || a.name?.toLowerCase().includes(q) || cat.toLowerCase().includes(q) || a.executablePath?.toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [launcherApps, stationLauncherConfig, appCategory, launcherSearchQuery]);
+
   const handleLaunchApp = useCallback(async (app) => {
     try {
       if (window.aezakmiClient?.launchApp) {
-        await window.aezakmiClient.launchApp(app.command);
+        await window.aezakmiClient.launchApp(app);
         showToast({ title: `Opening ${app.name}`, message: 'Application process launched.', tone: 'info' });
       } else {
         showToast({ title: 'Application Launcher', message: `Launching ${app.name} is supported in the desktop station client.`, tone: 'info' });
@@ -1104,46 +1136,97 @@ export default function CustomerSessionView() {
 
           {/* Games & Applications Launcher Grid */}
           <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
-            <div className="flex items-center justify-between gap-2 border-b border-surface-line px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-midnight/8 text-ink-900">
-                  <Gamepad2 size={16} />
-                </span>
-                <div>
-                  <p className="eyebrow">Station Programs</p>
-                  <h3 className="font-display text-[15px] font-semibold tracking-tight text-ink-900">Games & Applications</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-surface-line px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-midnight/8 text-ink-900">
+                    <Gamepad2 size={16} />
+                  </span>
+                  <div>
+                    <p className="eyebrow">Station Programs</p>
+                    <h3 className="font-display text-[15px] font-semibold tracking-tight text-ink-900">Games & Applications</h3>
+                  </div>
                 </div>
+
+                {/* Technician Station Setup Button (Master PIN Protected) */}
+                <button
+                  type="button"
+                  onClick={() => setStationPinGateOpen(true)}
+                  className="sm:hidden inline-flex items-center gap-1 text-[11px] font-semibold text-slate-soft hover:text-gold-dim p-1.5 rounded-lg border border-surface-line customer-neutral-surface"
+                  title="Configure Local Game Paths (Requires Master PIN)"
+                >
+                  <SlidersHorizontal size={13} />
+                </button>
               </div>
-              <div className="flex gap-1 overflow-x-auto">
-                {APP_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setAppCategory(cat)}
-                    className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition ${
-                      appCategory === cat
-                        ? 'bg-midnight/10 text-ink-900'
-                        : 'text-slate-soft hover:text-ink-900'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
+
+              <div className="flex items-center gap-2">
+                {/* Search */}
+                <div className="relative min-w-[130px] sm:min-w-[170px]">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-soft" size={13} />
+                  <input
+                    type="text"
+                    placeholder="Search games…"
+                    value={launcherSearchQuery}
+                    onChange={(e) => setLauncherSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-surface-line customer-neutral-surface py-1 pl-7 pr-2.5 text-[11px] text-ink-900 focus:outline-none focus:border-gold/50"
+                  />
+                </div>
+
+                {/* Technician Station Setup Button on desktop */}
+                <button
+                  type="button"
+                  onClick={() => setStationPinGateOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-soft hover:text-gold-dim px-2.5 py-1 rounded-xl border border-surface-line customer-neutral-surface transition"
+                  title="Configure Local Game Paths (Requires Master PIN)"
+                >
+                  <SlidersHorizontal size={13} />
+                  <span>Station Paths</span>
+                </button>
               </div>
             </div>
-            <div className="p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {APPS.filter(a => appCategory === 'All' || a.category === appCategory).map((app) => (
+
+            {/* Category Filter Tabs */}
+            <div className="flex items-center gap-1 overflow-x-auto px-4 py-2 border-b border-surface-line/50 bg-surface-raised/30">
+              {activeCategories.map((cat) => (
                 <button
-                  key={app.id}
+                  key={cat}
                   type="button"
-                  onClick={() => handleLaunchApp(app)}
-                  className="customer-neutral-surface border border-surface-line rounded-2xl p-2.5 flex flex-col items-center justify-center text-center gap-1.5 hover:bg-dance/40 hover:border-gold/40 transition group"
+                  onClick={() => setAppCategory(cat)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition ${
+                    appCategory === cat
+                      ? "bg-midnight/10 text-ink-900 border border-gold/30 shadow-xs"
+                      : "text-slate-soft hover:text-ink-900 border border-transparent"
+                  }`}
                 >
-                  <span className="text-2xl group-hover:scale-110 transition transform">{app.icon}</span>
-                  <span className="text-[11px] font-bold text-ink-900 truncate w-full">{app.name}</span>
-                  <span className="text-[9px] uppercase font-semibold text-slate-soft tracking-wider">{app.category}</span>
+                  {cat}
                 </button>
               ))}
+            </div>
+
+            {/* Apps Grid */}
+            <div className="p-3">
+              {activeAppsList.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-soft border border-dashed border-surface-line rounded-2xl">
+                  No games or applications match your filter.
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2">
+                  {activeAppsList.map((app) => (
+                    <button
+                      key={app.id}
+                      type="button"
+                      onClick={() => handleLaunchApp(app)}
+                      className="customer-neutral-surface border border-surface-line rounded-2xl p-2.5 flex flex-col items-center justify-center text-center gap-1.5 hover:bg-dance/40 hover:border-gold/40 transition group relative"
+                    >
+                      <span className="text-2xl group-hover:scale-110 transition transform">{app.icon || "🎮"}</span>
+                      <span className="text-[11px] font-bold text-ink-900 truncate w-full">{app.name}</span>
+                      <span className="text-[9px] uppercase font-semibold text-slate-soft tracking-wider truncate w-full">
+                        {app.categoryName || app.category || "General"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -1430,6 +1513,23 @@ export default function CustomerSessionView() {
       <VoucherRedemptionModal
         isOpen={voucherOpen}
         onClose={() => setVoucherOpen(false)}
+      />
+
+      <AdminPinGateModal
+        open={stationPinGateOpen}
+        onClose={() => setStationPinGateOpen(false)}
+        onVerified={() => {
+          setStationPinGateOpen(false);
+          setStationConfigModalOpen(true);
+        }}
+      />
+
+      <StationLauncherConfigModal
+        open={stationConfigModalOpen}
+        onClose={() => setStationConfigModalOpen(false)}
+        serverApps={launcherApps}
+        serverCategories={launcherCategories}
+        onConfigChanged={() => reloadStationLauncherConfig?.()}
       />
     </div>
   );

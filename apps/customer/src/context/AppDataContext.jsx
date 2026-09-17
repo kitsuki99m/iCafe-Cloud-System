@@ -125,6 +125,9 @@ export function createPublicState(overrides = {}) {
     ratePlans:[],
     menuItems:[],
     myOrders:[],
+    launcherCategories:[],
+    launcherApps:[],
+    stationLauncherConfig:{ pathOverrides:{}, localApps:[] },
     topUpRequests:[],
     announcements:[],
     settings:{...EMPTY_SETTINGS},
@@ -139,6 +142,7 @@ export function createPublicState(overrides = {}) {
 export function AppDataProvider({ children }) {
   const { user } = useAuth()
   const [state, setState] = useState(() => createPublicState({ loading:true }))
+  const [stationLauncherConfig, setStationLauncherConfig] = useState({ pathOverrides:{}, localApps:[] })
   // Guest identity is derived from the currently-active station session. Never
   // hydrate it from a previous guest snapshot: an old prepaid timer/session id
   // can otherwise flash back in and race the newly-started guest session.
@@ -148,29 +152,46 @@ export function AppDataProvider({ children }) {
   if (!seqGuardRef.current) seqGuardRef.current = createSeqGuard()
   const guestAbsentConfirmationsRef=useRef(0)
 
+  const reloadStationLauncherConfig = useCallback(async () => {
+    try {
+      if (window.aezakmiClient?.getStationLauncherConfig) {
+        const cfg = await window.aezakmiClient.getStationLauncherConfig()
+        setStationLauncherConfig({
+          pathOverrides: cfg?.pathOverrides || {},
+          localApps: Array.isArray(cfg?.localApps) ? cfg.localApps : [],
+        })
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    reloadStationLauncherConfig()
+  }, [reloadStationLauncherConfig])
+
   const refresh = useCallback(async () => {
     const generation=refreshGenerationRef.current
     try {
       if (!user) {
         const cloudPublic=cloudStationFeatureEnabled()&&cloudStationPaired()&&cloudStationTransport()==='cloud'
-        let publicSettings,clientContext,announcementData,ratePlansData,menuData
+        let publicSettings,clientContext,announcementData,ratePlansData,menuData,launcherCatsData,launcherAppsData
         if(cloudPublic){
-          // Public/login content is almost static. One bundled station RPC cached for
-          // five minutes replaces four independent Cloud function calls; realtime
-          // invalidation still refreshes it immediately when the branch changes.
           const bundled=await apiGet('/app-data',{ force:true })
           publicSettings={settings:bundled.settings||{}}
           clientContext=bundled.clientContext||{pc:bundled.pc}
           announcementData={announcements:bundled.announcements||[]}
           ratePlansData={ratePlans:bundled.ratePlans||[]}
           menuData={menuItems:bundled.menuItems||[]}
+          launcherCatsData={categories:bundled.launcherCategories||[]}
+          launcherAppsData={apps:bundled.launcherApps||[]}
         }else{
-          ;[publicSettings, clientContext, announcementData, ratePlansData, menuData] = await Promise.all([
+          ;[publicSettings, clientContext, announcementData, ratePlansData, menuData, launcherCatsData, launcherAppsData] = await Promise.all([
             apiGet('/public/settings'),
             apiGet('/client/context'),
             apiGet('/public/announcements'),
             apiGet('/public/rate-plans'),
             apiGet('/menu-items').catch(() => ({ menuItems: [] })),
+            apiGet('/launcher/categories').catch(() => ({ categories: [] })),
+            apiGet('/launcher/apps').catch(() => ({ apps: [] })),
           ])
         }
         const snapshot=createPublicState({
@@ -179,6 +200,9 @@ export function AppDataProvider({ children }) {
           announcements:announcementData.announcements ?? [],
           ratePlans:(ratePlansData.ratePlans ?? []).map(normalizeRatePlan),
           menuItems:menuData.menuItems ?? [],
+          launcherCategories:launcherCatsData.categories ?? [],
+          launcherApps:launcherAppsData.apps ?? [],
+          stationLauncherConfig,
           myOrders:[],
         })
         if (generation !== refreshGenerationRef.current) return
@@ -199,16 +223,13 @@ export function AppDataProvider({ children }) {
         const publicSettings={settings:bundled?.settings ?? {}}
         const announcementData={announcements:bundled?.announcements ?? []}
         const ratePlansData={ratePlans:bundled?.ratePlans ?? []}
-        const [menuData, ordersData] = await Promise.all([
+        const [menuData, ordersData, launcherCatsData, launcherAppsData] = await Promise.all([
           apiGet('/menu-items').catch(() => ({ menuItems: [] })),
           apiGet('/menu-orders').catch(() => ({ orders: [] })),
+          apiGet('/launcher/categories').catch(() => ({ categories: [] })),
+          apiGet('/launcher/apps').catch(() => ({ apps: [] })),
         ])
         if (!guestData.session) {
-          // Never tear down Guest UI on one Cloud-sync miss. A Guest has no
-          // member token, and Cloud can briefly report null while the LAN Edge
-          // already owns the active walk-in session. api.js marks absence as
-          // confirmed only when both reachable authorities agree. Require two
-          // consecutive confirmed reads before treating it as a real end.
           if (guestData.guestSessionAbsentConfirmed) guestAbsentConfirmationsRef.current += 1
           else guestAbsentConfirmationsRef.current = 0
           if (guestAbsentConfirmationsRef.current >= 2) {
@@ -229,6 +250,9 @@ export function AppDataProvider({ children }) {
           settings:{...EMPTY_SETTINGS,...(publicSettings.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
           currentClientPc:currentPc,
           menuItems:menuData.menuItems ?? [],
+          launcherCategories:launcherCatsData.categories ?? [],
+          launcherApps:launcherAppsData.apps ?? [],
+          stationLauncherConfig,
           myOrders:ordersData.orders ?? [],
         })
         if (generation !== refreshGenerationRef.current) return
@@ -238,23 +262,27 @@ export function AppDataProvider({ children }) {
       }
 
       const cloudPrimary=cloudStationFeatureEnabled()&&cloudStationPaired()&&cloudStationTransport()==='cloud'
-      let pcData,plansData,clientContext,memberData,settingsData,announcementData,menuData,ordersData
+      let pcData,plansData,clientContext,memberData,settingsData,announcementData,menuData,ordersData,launcherCatsData,launcherAppsData
       if(cloudPrimary){
-        // One authenticated station-api invocation replaces six Cloud function
-        // calls and authenticates the station/member only once per refresh.
         const bundled=await apiGet('/app-data', { force:true })
         pcData={pc:bundled.pc};plansData={ratePlans:bundled.ratePlans||[]};clientContext=bundled.clientContext||{};memberData={member:bundled.member};settingsData={settings:bundled.settings||{}};announcementData={announcements:bundled.announcements||[]}
-        const [mRes, oRes] = await Promise.all([
+        const [mRes, oRes, lcRes, laRes] = await Promise.all([
           apiGet('/menu-items').catch(() => ({ menuItems: [] })),
           apiGet('/menu-orders').catch(() => ({ orders: [] })),
+          apiGet('/launcher/categories').catch(() => ({ categories: [] })),
+          apiGet('/launcher/apps').catch(() => ({ apps: [] })),
         ])
         menuData = mRes
         ordersData = oRes
+        launcherCatsData = lcRes
+        launcherAppsData = laRes
       }else{
-        ;[pcData, plansData, clientContext, memberData, settingsData, announcementData, menuData, ordersData] = await Promise.all([
+        ;[pcData, plansData, clientContext, memberData, settingsData, announcementData, menuData, ordersData, launcherCatsData, launcherAppsData] = await Promise.all([
           apiGet('/pcs/current'),apiGet('/rate-plans'),apiGet('/client/context'),apiGet('/members/me'),apiGet('/settings'),apiGet('/announcements'),
           apiGet('/menu-items').catch(() => ({ menuItems: [] })),
           apiGet('/menu-orders').catch(() => ({ orders: [] })),
+          apiGet('/launcher/categories').catch(() => ({ categories: [] })),
+          apiGet('/launcher/apps').catch(() => ({ apps: [] })),
         ])
       }
       const member=memberData.member ? normalizeMember({
@@ -271,6 +299,9 @@ export function AppDataProvider({ children }) {
         announcements:announcementData.announcements ?? [],
         settings:{...EMPTY_SETTINGS,...(settingsData.settings ?? {}),defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
         menuItems:menuData.menuItems ?? [],
+        launcherCategories:launcherCatsData.categories ?? [],
+        launcherApps:launcherAppsData.apps ?? [],
+        stationLauncherConfig,
         myOrders:ordersData.orders ?? [],
       })
       if (generation !== refreshGenerationRef.current) return
@@ -866,6 +897,10 @@ export function AppDataProvider({ children }) {
       ratePlans:state.ratePlans,
       menuItems:state.menuItems,
       myOrders:state.myOrders,
+      launcherCategories:state.launcherCategories,
+      launcherApps:state.launcherApps,
+      stationLauncherConfig,
+      reloadStationLauncherConfig,
       announcements:state.announcements,
       topUpRequests:state.topUpRequests,
       settings:state.settings,

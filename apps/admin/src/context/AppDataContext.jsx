@@ -148,6 +148,8 @@ export function AppDataProvider({ children }) {
     currentShift: null,
     shiftsHistory: [],
     vouchers: [],
+    launcherCategories: [],
+    launcherApps: [],
     settings: EMPTY_SETTINGS,
     loading: true,
     serverError: '',
@@ -228,10 +230,12 @@ export function AppDataProvider({ children }) {
         let menuOrders = []
         let currentShift = null
         let vouchers = []
+        let launcherCategories = []
+        let launcherApps = []
         let settings = EMPTY_SETTINGS
 
         if (isStaff) {
-          const [membersData, topUpsData, supportData, extensionsData, settingsData, announcementsData, menuItemsData, menuOrdersData, shiftData, vouchersData] = await Promise.all([
+          const [membersData, topUpsData, supportData, extensionsData, settingsData, announcementsData, menuItemsData, menuOrdersData, shiftData, vouchersData, launcherCatsData, launcherAppsData] = await Promise.all([
             apiGet('/members').catch(() => ({ members: [] })),
             apiGet('/top-ups').catch(() => ({ topUpRequests: [] })),
             apiGet('/support').catch(() => ({ supportRequests: [] })),
@@ -242,6 +246,8 @@ export function AppDataProvider({ children }) {
             apiGet('/menu-orders').catch(() => ({ orders: [] })),
             apiGet('/shifts/current').catch(() => ({ activeShift: null })),
             apiGet('/vouchers').catch(() => ({ vouchers: [] })),
+            apiGet('/launcher/categories').catch(() => ({ categories: [] })),
+            apiGet('/launcher/apps').catch(() => ({ apps: [] })),
           ])
           members = (membersData.members ?? []).map(normalizeMember)
           topUpRequests = topUpsData.topUpRequests ?? []
@@ -252,18 +258,24 @@ export function AppDataProvider({ children }) {
           menuOrders = menuOrdersData.orders ?? []
           currentShift = shiftData.activeShift ?? null
           vouchers = vouchersData.vouchers ?? []
+          launcherCategories = launcherCatsData.categories ?? []
+          launcherApps = launcherAppsData.apps ?? []
           settings = normalizeSettings(settingsData.settings ?? {})
         } else {
-          const [memberData, settingsData, announcementsData, menuItemsData] = await Promise.all([
+          const [memberData, settingsData, announcementsData, menuItemsData, launcherCatsData, launcherAppsData] = await Promise.all([
             apiGet('/members/me').catch(() => ({ member: null })),
             apiGet('/settings').catch(() => ({ settings: {} })),
             apiGet('/announcements').catch(() => ({ announcements: [] })),
             apiGet('/menu-items').catch(() => ({ menuItems: [] })),
+            apiGet('/launcher/categories').catch(() => ({ categories: [] })),
+            apiGet('/launcher/apps').catch(() => ({ apps: [] })),
           ])
           members = memberData.member ? [normalizeMember(memberData.member)] : []
           settings = normalizeSettings(settingsData.settings ?? {})
           announcements = announcementsData.announcements ?? []
           menuItems = menuItemsData.menuItems ?? []
+          launcherCategories = launcherCatsData.categories ?? []
+          launcherApps = launcherAppsData.apps ?? []
         }
 
         snapshot={
@@ -279,6 +291,8 @@ export function AppDataProvider({ children }) {
           currentShift,
           shiftsHistory:[],
           vouchers,
+          launcherCategories,
+          launcherApps,
           settings,
           loading:false,
           serverError:'',
@@ -1184,6 +1198,16 @@ export function AppDataProvider({ children }) {
   function createVoucher(payload) { return refreshAfter(apiPost('/vouchers', payload)) }
   function deleteVoucher(id) { return refreshAfter(apiDelete(`/vouchers/${id}`)) }
 
+  // Launcher Categories & Apps
+  function createLauncherCategory(payload) { return refreshAfter(apiPost('/launcher/categories', payload)) }
+  function updateLauncherCategory(id, payload) { return refreshAfter(apiPatch(`/launcher/categories/${id}`, payload)) }
+  function deleteLauncherCategory(id) { return refreshAfter(apiDelete(`/launcher/categories/${id}`)) }
+
+  function createLauncherApp(payload) { return refreshAfter(apiPost('/launcher/apps', payload)) }
+  function batchCreateLauncherApps(apps) { return refreshAfter(apiPost('/launcher/apps/batch', { apps })) }
+  function updateLauncherApp(id, payload) { return refreshAfter(apiPatch(`/launcher/apps/${id}`, payload)) }
+  function deleteLauncherApp(id) { return refreshAfter(apiDelete(`/launcher/apps/${id}`)) }
+
   // Reports
   function sendEmailSummary(period = 'daily', recipientEmail = '') {
     return apiPost('/reports/send-summary', { period, recipientEmail })
@@ -1202,6 +1226,8 @@ export function AppDataProvider({ children }) {
       menuOrders:state.menuOrders,
       currentShift:state.currentShift,
       vouchers:state.vouchers,
+      launcherCategories:state.launcherCategories,
+      launcherApps:state.launcherApps,
       settings:state.settings,
       loading:state.loading,
       serverError:state.serverError,
@@ -1259,6 +1285,13 @@ export function AppDataProvider({ children }) {
       fetchShiftHistory,
       createVoucher,
       deleteVoucher,
+      createLauncherCategory,
+      updateLauncherCategory,
+      deleteLauncherCategory,
+      createLauncherApp,
+      batchCreateLauncherApps,
+      updateLauncherApp,
+      deleteLauncherApp,
       sendEmailSummary,
     }}>
       {children}

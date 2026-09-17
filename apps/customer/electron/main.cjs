@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, session, safeStorage, screen } = require('electron')
+const { app, BrowserWindow, Menu, Tray, globalShortcut, ipcMain, nativeImage, session, safeStorage, screen, dialog } = require('electron')
 const { spawn, execFile, execFileSync } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
@@ -890,6 +890,36 @@ async function executeRemoteCommand(command) {
   return false
 }
 
+const LAUNCHER_CONFIG_PATH = path.join(customerDataRoot, 'launcher-station-config.json')
+
+function readStationLauncherConfig() {
+  try {
+    if (!fs.existsSync(LAUNCHER_CONFIG_PATH)) return { pathOverrides: {}, localApps: [] }
+    const raw = fs.readFileSync(LAUNCHER_CONFIG_PATH, 'utf8')
+    const parsed = JSON.parse(raw)
+    return {
+      pathOverrides: parsed?.pathOverrides && typeof parsed.pathOverrides === 'object' ? parsed.pathOverrides : {},
+      localApps: Array.isArray(parsed?.localApps) ? parsed.localApps : [],
+    }
+  } catch {
+    return { pathOverrides: {}, localApps: [] }
+  }
+}
+
+function writeStationLauncherConfig(config) {
+  try {
+    const valid = {
+      pathOverrides: config?.pathOverrides && typeof config.pathOverrides === 'object' ? config.pathOverrides : {},
+      localApps: Array.isArray(config?.localApps) ? config.localApps : [],
+    }
+    fs.mkdirSync(customerDataRoot, { recursive: true })
+    fs.writeFileSync(LAUNCHER_CONFIG_PATH, JSON.stringify(valid, null, 2), 'utf8')
+    return valid
+  } catch (err) {
+    return { pathOverrides: {}, localApps: [], error: err?.message }
+  }
+}
+
 const APP_EXECUTABLES = {
   steam: { protocol: 'steam://', exe: 'steam.exe' },
   riot: { protocol: 'riotclient://', exe: 'RiotClientServices.exe' },
@@ -904,23 +934,72 @@ const APP_EXECUTABLES = {
   notepad: { exe: 'notepad.exe' },
 }
 
-async function launchDesktopApp(appKey) {
-  const target = APP_EXECUTABLES[String(appKey || '').toLowerCase()]
-  if (!target) return false
-  if (target.protocol) {
-    try {
-      const { shell } = require('electron')
-      await shell.openExternal(target.protocol)
-      return true
-    } catch {}
-  }
-  if (target.exe) {
+async function launchDesktopApp(appTarget) {
+  const isObj = typeof appTarget === 'object' && appTarget !== null
+  const appId = isObj ? (appTarget.id || appTarget.command || appTarget.name) : String(appTarget || '')
+  const appKey = String(appId).toLowerCase()
+
+  // 1. Check local station override path
+  const stationConfig = readStationLauncherConfig()
+  const localOverride = stationConfig.pathOverrides?.[appId] || stationConfig.pathOverrides?.[appKey]
+
+  if (localOverride) {
     try {
       const { exec } = require('node:child_process')
-      exec(`start "" "${target.exe}"`, { windowsHide: true })
+      exec(`start "" "${localOverride}"`, { windowsHide: true })
       return true
     } catch {}
   }
+
+  // 2. Executable path from app definition (Central/Remote Game Disk path)
+  if (isObj && appTarget.executablePath) {
+    try {
+      const { exec } = require('node:child_process')
+      const args = appTarget.launchArguments ? ` ${appTarget.launchArguments}` : ''
+      const options = { windowsHide: true }
+      if (appTarget.workingDirectory) options.cwd = appTarget.workingDirectory
+      exec(`start "" "${appTarget.executablePath}"${args}`, options)
+      return true
+    } catch {}
+  }
+
+  // 3. Protocol URL
+  if (isObj && appTarget.protocolUrl) {
+    try {
+      const { shell } = require('electron')
+      await shell.openExternal(appTarget.protocolUrl)
+      return true
+    } catch {}
+  }
+
+  // 4. Fallback preset mapping
+  const target = APP_EXECUTABLES[appKey] || (isObj && appTarget.command ? APP_EXECUTABLES[String(appTarget.command).toLowerCase()] : null)
+  if (target) {
+    if (target.protocol) {
+      try {
+        const { shell } = require('electron')
+        await shell.openExternal(target.protocol)
+        return true
+      } catch {}
+    }
+    if (target.exe) {
+      try {
+        const { exec } = require('node:child_process')
+        exec(`start "" "${target.exe}"`, { windowsHide: true })
+        return true
+      } catch {}
+    }
+  }
+
+  // 5. If appTarget is just a raw exe name / string
+  if (typeof appTarget === 'string' && appTarget.endsWith('.exe')) {
+    try {
+      const { exec } = require('node:child_process')
+      exec(`start "" "${appTarget}"`, { windowsHide: true })
+      return true
+    } catch {}
+  }
+
   return false
 }
 
@@ -1073,6 +1152,33 @@ app.whenReady().then(async () => {
   handleTrusted('client:clear-session-lifecycle-marker', () => clearSessionLifecycleMarker())
   handleTrusted('client:remote-command', (_event, command) => executeRemoteCommand(command))
   handleTrusted('client:launch-app', (_event, appKey) => launchDesktopApp(appKey))
+  handleTrusted('client:get-station-launcher-config', () => readStationLauncherConfig())
+  handleTrusted('client:set-station-launcher-config', (_event, config) => writeStationLauncherConfig(config))
+  handleTrusted('client:browse-executable', async () => {
+    try {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Select Game or Application Executable',
+        filters: [
+          { name: 'Executables (*.exe)', extensions: ['exe'] },
+          { name: 'All Files', extensions: ['*'] }
+        ],
+        properties: ['openFile']
+      })
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) return null
+      return result.filePaths[0]
+    } catch {
+      return null
+    }
+  })
+  handleTrusted('client:extract-exe-icon', async (_event, exePath) => {
+    try {
+      if (!exePath) return null
+      const icon = await app.getFileIcon(exePath, { size: 'normal' })
+      return icon.toDataURL()
+    } catch {
+      return null
+    }
+  })
   handleTrusted('client:shutdown', () => executeRemoteCommand('shutdown'))
   handleTrusted('client:restart', () => executeRemoteCommand('reboot'))
   handleTrusted('client:restart-app', () => {

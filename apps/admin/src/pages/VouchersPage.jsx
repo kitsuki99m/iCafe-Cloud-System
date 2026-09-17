@@ -1,10 +1,27 @@
-import { useState } from 'react'
-import { Ticket, Plus, Trash2, Calendar, Clock, DollarSign, CheckCircle, AlertCircle, Copy, Check } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import {
+  Ticket,
+  Plus,
+  Trash2,
+  Calendar,
+  Clock3,
+  Copy,
+  Check,
+  CheckCircle2,
+  AlertCircle,
+  Search,
+  Sparkles,
+} from 'lucide-react'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { showToast } from '../lib/toast.js'
 import Button from '../components/common/Button.jsx'
+import Modal from '../components/common/Modal.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
+import NumericInput from '../components/common/NumericInput.jsx'
+import { AdminEmptyState, AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
+
+const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
 export default function VouchersPage() {
   const { vouchers, createVoucher, deleteVoucher } = useAppData()
@@ -13,6 +30,7 @@ export default function VouchersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteTargetVoucher, setDeleteTargetVoucher] = useState(null)
   const [actionBusy, setActionBusy] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [code, setCode] = useState('')
   const [benefitType, setBenefitType] = useState('wallet_credit') // 'wallet_credit' | 'session_time'
   const [valueAmount, setValueAmount] = useState('')
@@ -35,7 +53,7 @@ export default function VouchersPage() {
   }
 
   async function handleCreateVoucher(e) {
-    e.preventDefault()
+    if (e && e.preventDefault) e.preventDefault()
     setSubmitting(true)
     try {
       await createVoucher({
@@ -80,239 +98,328 @@ export default function VouchersPage() {
     }
   }
 
+  const activeVouchers = useMemo(() => {
+    return vouchers.filter((v) => {
+      const redemptions = Number(v.current_redemptions || v.currentRedemptions || 0)
+      const max = v.max_redemptions || v.maxRedemptions
+      const isExhausted = max != null && redemptions >= Number(max)
+      const isExpired = v.expires_at && new Date(v.expires_at).getTime() < Date.now()
+      return !isExhausted && !isExpired
+    })
+  }, [vouchers])
+
+  const filteredVouchers = useMemo(() => {
+    if (!searchQuery.trim()) return vouchers
+    return vouchers.filter((v) => v.code?.toLowerCase().includes(searchQuery.toLowerCase()))
+  }, [vouchers, searchQuery])
+
   return (
-    <div className="space-y-6 pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-white flex items-center gap-3">
-            <Ticket className="w-7 h-7 text-indigo-400" />
-            Promo Vouchers & Redemption Codes
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Issue discount codes and promotional balance/time gifts for events, tournaments, and social campaigns.
-          </p>
+    <AdminPageWorkspace
+      aside={
+        <>
+          <AdminRailCard title="Promo Stats">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-xl border border-surface-line customer-neutral-surface p-3 text-xs">
+                <span className="text-slate-soft">Active Vouchers</span>
+                <span className="font-semibold text-teal-dim stat-figure text-sm">{activeVouchers.length}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-surface-line customer-neutral-surface p-3 text-xs">
+                <span className="text-slate-soft">Total Issued</span>
+                <span className="font-semibold text-ink-900 stat-figure text-sm">{vouchers.length}</span>
+              </div>
+            </div>
+          </AdminRailCard>
+
+          <AdminRailCard title="Redemption Tips">
+            <p className="text-xs leading-5 text-slate-soft">
+              Customers can enter promo voucher codes on their station kiosk during active sessions or at login to claim free wallet balance or session minutes.
+            </p>
+          </AdminRailCard>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-[20px] font-bold tracking-tight text-ink-900 flex items-center gap-2.5">
+              <Ticket className="w-5 h-5 text-gold-dim" />
+              Promo Vouchers & Gift Codes
+            </h1>
+            <p className="text-xs text-slate-soft mt-0.5">
+              Issue promotional wallet credits or bonus session time for events, social promos, and tournaments.
+            </p>
+          </div>
+          {!isCashier && (
+            <Button
+              variant="primary"
+              icon={Plus}
+              onClick={() => {
+                generateRandomCode()
+                setModalOpen(true)
+              }}
+            >
+              Create Voucher
+            </Button>
+          )}
         </div>
-        {!isCashier && (
-          <Button
-            onClick={() => {
-              generateRandomCode()
-              setModalOpen(true)
-            }}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" /> Create Promo Voucher
-          </Button>
+
+        {/* Metric Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <AdminMetricCard
+            label="Active Codes"
+            value={activeVouchers.length}
+            icon={Ticket}
+            tone={activeVouchers.length > 0 ? 'success' : 'neutral'}
+          />
+          <AdminMetricCard
+            label="Total Vouchers"
+            value={vouchers.length}
+            icon={Sparkles}
+            tone="neutral"
+          />
+          <AdminMetricCard
+            label="Expired / Exhausted"
+            value={Math.max(0, vouchers.length - activeVouchers.length)}
+            icon={Clock3}
+            tone="neutral"
+          />
+        </div>
+
+        {/* Search Toolbar */}
+        {vouchers.length > 0 && (
+          <div className="flex justify-end">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-soft absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search voucher code…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-surface-line customer-neutral-surface pl-8 pr-3 py-1.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Vouchers List */}
+        {filteredVouchers.length === 0 ? (
+          <AdminEmptyState
+            icon={Ticket}
+            title="No Promo Vouchers Found"
+            description="Create promo codes that customers can enter on their station kiosk to claim free credits or time."
+            action={!isCashier ? (
+              <Button
+                variant="primary"
+                icon={Plus}
+                onClick={() => {
+                  generateRandomCode()
+                  setModalOpen(true)
+                }}
+              >
+                Create First Voucher
+              </Button>
+            ) : null}
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {filteredVouchers.map((v) => {
+              const isTime = v.benefit_type === 'session_time' || v.benefitType === 'session_time'
+              const value = Number(v.value_amount || v.valueAmount || 0)
+              const redemptions = Number(v.current_redemptions || v.currentRedemptions || 0)
+              const max = v.max_redemptions || v.maxRedemptions
+              const isExhausted = max != null && redemptions >= Number(max)
+              const isExpired = v.expires_at && new Date(v.expires_at).getTime() < Date.now()
+
+              return (
+                <div
+                  key={v.id}
+                  className={`rounded-2xl border p-4 transition flex flex-col justify-between ${
+                    isExhausted || isExpired
+                      ? 'border-surface-line customer-neutral-surface opacity-60'
+                      : 'border-surface-line customer-neutral-surface hover:border-gold/40'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 pb-3 border-b border-surface-line">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-xs text-ink-900 tracking-wider bg-surface-raised px-2 py-0.5 rounded-lg border border-surface-line">
+                          {v.code}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(v.code, v.id)}
+                          className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-dance/35 transition"
+                          title="Copy Code"
+                        >
+                          {copiedId === v.id ? <Check className="w-3.5 h-3.5 text-teal-dim" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <span
+                        className={`text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase ${
+                          isExpired
+                            ? 'bg-ember/15 text-ember-dim border border-ember/25'
+                            : isExhausted
+                            ? 'bg-gold/15 text-gold-dim border border-gold/25'
+                            : 'bg-teal/15 text-teal-dim border border-teal/25'
+                        }`}
+                      >
+                        {isExpired ? 'Expired' : isExhausted ? 'Exhausted' : 'Active'}
+                      </span>
+                    </div>
+
+                    <div className="py-3.5 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-soft">Benefit Gift:</span>
+                        <span className="font-bold text-gold-dim stat-figure text-xs">
+                          {isTime ? `${Math.round(value / 60)} Mins Time` : `+₱${value.toFixed(2)} Wallet Credit`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-soft">Redemptions:</span>
+                        <span className="font-mono text-ink-900 text-xs">
+                          {redemptions} / {max != null ? max : '∞ Unlimited'}
+                        </span>
+                      </div>
+
+                      {v.expires_at && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-soft">Expires:</span>
+                          <span className="text-slate-soft text-xs">
+                            {new Date(v.expires_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {!isCashier && (
+                    <div className="pt-2.5 border-t border-surface-line/60 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => promptDeleteVoucher(v)}
+                        className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition"
+                        title="Deactivate Voucher"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 
-      {/* Vouchers List */}
-      {vouchers.length === 0 ? (
-        <div className="p-12 text-center border border-slate-800 rounded-2xl bg-slate-900/40">
-          <Ticket className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-white">No Active Promo Vouchers</h3>
-          <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            Create codes that customers can enter on their station kiosk to claim free wallet credits or session time.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {vouchers.map((v) => {
-            const isTime = v.benefit_type === 'session_time' || v.benefitType === 'session_time'
-            const value = Number(v.value_amount || v.valueAmount || 0)
-            const redemptions = Number(v.current_redemptions || v.currentRedemptions || 0)
-            const max = v.max_redemptions || v.maxRedemptions
-            const isExhausted = max != null && redemptions >= Number(max)
-            const isExpired = v.expires_at && new Date(v.expires_at).getTime() < Date.now()
-
-            return (
-              <div
-                key={v.id}
-                className={`p-5 rounded-2xl border transition flex flex-col justify-between ${
-                  isExhausted || isExpired
-                    ? 'bg-slate-950/60 border-slate-800/80 opacity-60'
-                    : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-base text-white tracking-wider bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                        {v.code}
-                      </span>
-                      <button
-                        onClick={() => handleCopy(v.code, v.id)}
-                        className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition"
-                        title="Copy Code"
-                      >
-                        {copiedId === v.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <span
-                      className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
-                        isExpired
-                          ? 'bg-rose-950/60 text-rose-400 border border-rose-800'
-                          : isExhausted
-                          ? 'bg-amber-950/60 text-amber-400 border border-amber-800'
-                          : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800'
-                      }`}
-                    >
-                      {isExpired ? 'Expired' : isExhausted ? 'Exhausted' : 'Active'}
-                    </span>
-                  </div>
-
-                  <div className="py-4 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Benefit Gift:</span>
-                      <span className="font-bold text-sm text-indigo-400">
-                        {isTime ? `${Math.round(value / 60)} Mins Saved Time` : `+₱${value.toFixed(2)} Wallet Credit`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Redemptions:</span>
-                      <span className="font-mono text-slate-200">
-                        {redemptions} / {max != null ? max : '∞ Unlimited'}
-                      </span>
-                    </div>
-
-                    {v.expires_at && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-400">Expires:</span>
-                        <span className="text-slate-300">
-                          {new Date(v.expires_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {!isCashier && (
-                  <div className="pt-3 border-t border-slate-800/80 flex justify-end">
-                    <button
-                      onClick={() => promptDeleteVoucher(v)}
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 transition"
-                      title="Deactivate Voucher"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
       {/* CREATE MODAL */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Ticket className="w-5 h-5 text-indigo-400" /> Create Promo Voucher
-              </h3>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg">
-                ✕
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        eyebrow="Promo campaign"
+        title="Create Promo Voucher"
+        description="Generate a gift code for bonus wallet funds or session minutes."
+        maxWidth="max-w-md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setModalOpen(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={handleCreateVoucher} disabled={submitting || !code.trim() || !(Number(valueAmount) > 0)}>
+              {submitting ? 'Creating…' : 'Create Voucher'}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={handleCreateVoucher} className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="eyebrow block">Voucher Code <span className="text-ember-dim">*</span></label>
+              <button
+                type="button"
+                onClick={generateRandomCode}
+                className="text-[11px] font-semibold text-gold-dim hover:underline"
+              >
+                Generate Random
               </button>
             </div>
-            <form onSubmit={handleCreateVoucher} className="p-6 space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-slate-300">Voucher Code *</label>
-                  <button
-                    type="button"
-                    onClick={generateRandomCode}
-                    className="text-[11px] text-indigo-400 hover:underline"
-                  >
-                    Generate Random
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="e.g. SUMMER-2026"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono uppercase focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Benefit Type</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setBenefitType('wallet_credit')}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition ${
-                      benefitType === 'wallet_credit'
-                        ? 'bg-indigo-600 border-indigo-500 text-white'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Wallet Balance (₱)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBenefitType('session_time')}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition ${
-                      benefitType === 'session_time'
-                        ? 'bg-indigo-600 border-indigo-500 text-white'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Session Time (Seconds)
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  {benefitType === 'wallet_credit' ? 'Wallet Credit Amount (₱) *' : 'Session Time (Seconds, e.g. 3600 for 1h) *'}
-                </label>
-                <input
-                  type="number"
-                  step={benefitType === 'wallet_credit' ? '0.01' : '1'}
-                  required
-                  value={valueAmount}
-                  onChange={(e) => setValueAmount(e.target.value)}
-                  placeholder={benefitType === 'wallet_credit' ? '50.00' : '3600'}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Max Uses (Limit)</label>
-                  <input
-                    type="number"
-                    value={maxRedemptions}
-                    onChange={(e) => setMaxRedemptions(e.target.value)}
-                    placeholder="Unlimited"
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Expiry Date</label>
-                  <input
-                    type="date"
-                    value={expiresAt}
-                    onChange={(e) => setExpiresAt(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-                <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-                <Button type="submit" disabled={submitting} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold">
-                  {submitting ? 'Creating…' : 'Create Voucher'}
-                </Button>
-              </div>
-            </form>
+            <input
+              type="text"
+              required
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="e.g. SUMMER-2026"
+              className={`${inputClass} font-mono uppercase`}
+            />
           </div>
-        </div>
-      )}
+
+          <div>
+            <label className="eyebrow mb-1.5 block">Benefit Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setBenefitType('wallet_credit')}
+                className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
+                  benefitType === 'wallet_credit'
+                    ? 'bg-gold/15 border-gold/35 text-gold-dim'
+                    : 'border-surface-line customer-neutral-surface text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                Wallet Balance (₱)
+              </button>
+              <button
+                type="button"
+                onClick={() => setBenefitType('session_time')}
+                className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
+                  benefitType === 'session_time'
+                    ? 'bg-gold/15 border-gold/35 text-gold-dim'
+                    : 'border-surface-line customer-neutral-surface text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                Session Time (Secs)
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="eyebrow mb-1.5 block">
+              {benefitType === 'wallet_credit' ? 'Wallet Credit Amount (₱) *' : 'Session Time (Seconds, e.g. 3600 for 1h) *'}
+            </label>
+            <NumericInput
+              min="1"
+              step={benefitType === 'wallet_credit' ? '0.01' : '1'}
+              required
+              value={valueAmount}
+              onChange={(e) => setValueAmount(e.target.value)}
+              placeholder={benefitType === 'wallet_credit' ? '50.00' : '3600'}
+              className={inputClass}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="eyebrow mb-1.5 block">Max Uses (Limit)</label>
+              <input
+                type="number"
+                value={maxRedemptions}
+                onChange={(e) => setMaxRedemptions(e.target.value)}
+                placeholder="Unlimited"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="eyebrow mb-1.5 block">Expiry Date</label>
+              <input
+                type="date"
+                value={expiresAt}
+                onChange={(e) => setExpiresAt(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          </div>
+        </form>
+      </Modal>
 
       {/* DEACTIVATE VOUCHER CONFIRMATION */}
       <ConfirmModal
@@ -325,6 +432,6 @@ export default function VouchersPage() {
         onConfirm={confirmDeleteVoucher}
         onClose={() => setDeleteTargetVoucher(null)}
       />
-    </div>
+    </AdminPageWorkspace>
   )
 }

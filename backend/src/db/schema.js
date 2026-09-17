@@ -387,6 +387,33 @@ export function migrate() {
       FOREIGN KEY(member_id) REFERENCES members(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS launcher_categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_launcher_categories_sort ON launcher_categories(sort_order, is_active);
+
+    CREATE TABLE IF NOT EXISTS launcher_apps (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category_id TEXT,
+      category_name TEXT NOT NULL DEFAULT 'Online Games',
+      icon TEXT,
+      executable_path TEXT,
+      protocol_url TEXT,
+      launch_arguments TEXT,
+      working_directory TEXT,
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      is_preset INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_launcher_apps_cat ON launcher_apps(category_name, is_enabled);
+
     CREATE TABLE IF NOT EXISTS station_control_requests (id TEXT PRIMARY KEY,pc_id TEXT,command TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'authorized',authorized_by TEXT,created_at TEXT NOT NULL,expires_at TEXT NOT NULL,completed_at TEXT,result TEXT);
 
     CREATE TABLE IF NOT EXISTS pos_products (id TEXT PRIMARY KEY,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT 'Food',price REAL NOT NULL CHECK(price >= 0),stock INTEGER,is_active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
@@ -808,4 +835,55 @@ export function migrate() {
   if (!cols.includes('auth_method')) db.exec("ALTER TABLE users ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'pin'")
   const postpaidMinutes=db.prepare("SELECT value FROM settings WHERE key='postpaidMinutesPerPeso'").get()
   if(!postpaidMinutes){const legacy=Number(parseJson(db.prepare("SELECT value FROM settings WHERE key='postpaidPesoPerMinute'").get()?.value,'1'));const minutesPerPeso=legacy>0&&Number.isFinite(legacy)?1/legacy:1;db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('postpaidMinutesPerPeso',?)").run(JSON.stringify(minutesPerPeso))}
+
+  // Seed default launcher categories if empty
+  const categoryCount = db.prepare("SELECT COUNT(*) as cnt FROM launcher_categories").get()?.cnt || 0;
+  if (categoryCount === 0) {
+    const defaultCats = [
+      { id: 'cat-online', name: 'Online Games', sort_order: 10 },
+      { id: 'cat-offline', name: 'Offline Games', sort_order: 20 },
+      { id: 'cat-surfing', name: 'Surfing & Browsers', sort_order: 30 },
+      { id: 'cat-office', name: 'Office & Productivity', sort_order: 40 },
+      { id: 'cat-utilities', name: 'Utilities & Chat', sort_order: 50 },
+      { id: 'cat-emulators', name: 'Emulators', sort_order: 60 },
+    ];
+    const insertCat = db.prepare("INSERT INTO launcher_categories (id, name, sort_order, is_active, created_at) VALUES (?, ?, ?, 1, ?)");
+    for (const c of defaultCats) {
+      insertCat.run(c.id, c.name, c.sort_order, migrationNow);
+    }
+  }
+
+  // Seed default launcher apps if empty
+  const appCount = db.prepare("SELECT COUNT(*) as cnt FROM launcher_apps").get()?.cnt || 0;
+  if (appCount === 0) {
+    const defaultApps = [
+      { id: 'app-steam', name: 'Steam', category_name: 'Online Games', icon: '🎮', protocol_url: 'steam://', executable_path: 'steam.exe', sort_order: 10 },
+      { id: 'app-riot', name: 'Riot / Valorant', category_name: 'Online Games', icon: '⚔️', protocol_url: 'riotclient://', executable_path: 'RiotClientServices.exe', sort_order: 20 },
+      { id: 'app-epic', name: 'Epic Games', category_name: 'Online Games', icon: '⚡', protocol_url: 'com.epicgames.launcher://', executable_path: 'EpicGamesLauncher.exe', sort_order: 30 },
+      { id: 'app-roblox', name: 'Roblox', category_name: 'Online Games', icon: '🧱', protocol_url: 'roblox://', executable_path: 'RobloxPlayerLauncher.exe', sort_order: 40 },
+      { id: 'app-dota2', name: 'Dota 2', category_name: 'Online Games', icon: '🛡️', protocol_url: 'steam://rungameid/570', executable_path: 'dota2.exe', sort_order: 50 },
+      { id: 'app-lol', name: 'League of Legends', category_name: 'Online Games', icon: '🏆', protocol_url: 'riotclient://launch/league_of_legends', executable_path: 'LeagueClient.exe', sort_order: 60 },
+      { id: 'app-cs2', name: 'Counter-Strike 2', category_name: 'Online Games', icon: '🎯', protocol_url: 'steam://rungameid/730', executable_path: 'cs2.exe', sort_order: 70 },
+      { id: 'app-genshin', name: 'Genshin Impact', category_name: 'Online Games', icon: '✨', executable_path: 'GenshinImpact.exe', sort_order: 80 },
+      { id: 'app-minecraft', name: 'Minecraft', category_name: 'Offline Games', icon: '⛏️', executable_path: 'Minecraft.exe', sort_order: 90 },
+      { id: 'app-chrome', name: 'Google Chrome', category_name: 'Surfing & Browsers', icon: '🌐', executable_path: 'chrome.exe', sort_order: 100 },
+      { id: 'app-edge', name: 'Microsoft Edge', category_name: 'Surfing & Browsers', icon: '🌊', executable_path: 'msedge.exe', sort_order: 110 },
+      { id: 'app-brave', name: 'Brave Browser', category_name: 'Surfing & Browsers', icon: '🦁', executable_path: 'brave.exe', sort_order: 120 },
+      { id: 'app-discord', name: 'Discord', category_name: 'Utilities & Chat', icon: '💬', protocol_url: 'discord://', executable_path: 'Discord.exe', sort_order: 130 },
+      { id: 'app-spotify', name: 'Spotify', category_name: 'Utilities & Chat', icon: '🎵', protocol_url: 'spotify://', executable_path: 'Spotify.exe', sort_order: 140 },
+      { id: 'app-obs', name: 'OBS Studio', category_name: 'Utilities & Chat', icon: '📹', executable_path: 'obs64.exe', sort_order: 150 },
+      { id: 'app-word', name: 'Word', category_name: 'Office & Productivity', icon: '📝', executable_path: 'WINWORD.EXE', sort_order: 160 },
+      { id: 'app-excel', name: 'Excel', category_name: 'Office & Productivity', icon: '📊', executable_path: 'EXCEL.EXE', sort_order: 170 },
+      { id: 'app-powerpoint', name: 'PowerPoint', category_name: 'Office & Productivity', icon: '📑', executable_path: 'POWERPNT.EXE', sort_order: 180 },
+      { id: 'app-calc', name: 'Calculator', category_name: 'Utilities & Chat', icon: '🧮', executable_path: 'calc.exe', sort_order: 190 },
+      { id: 'app-notepad', name: 'Notepad', category_name: 'Utilities & Chat', icon: '📄', executable_path: 'notepad.exe', sort_order: 200 },
+    ];
+    const insertApp = db.prepare(`
+      INSERT INTO launcher_apps (id, name, category_name, icon, executable_path, protocol_url, is_enabled, sort_order, is_preset, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, ?, 1, ?, ?)
+    `);
+    for (const a of defaultApps) {
+      insertApp.run(a.id, a.name, a.category_name, a.icon, a.executable_path || null, a.protocol_url || null, a.sort_order, migrationNow, migrationNow);
+    }
+  }
 }

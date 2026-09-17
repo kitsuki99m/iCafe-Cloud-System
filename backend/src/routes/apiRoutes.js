@@ -7389,5 +7389,259 @@ router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), asyn
   } catch (error) { next(error); }
 });
 
+// ==========================================
+// DYNAMIC GAME & APP LAUNCHER MANAGEMENT
+// ==========================================
+
+router.get("/launcher/categories", (req, res) => {
+  const rows = db.prepare("SELECT * FROM launcher_categories WHERE is_active=1 ORDER BY sort_order ASC, name ASC").all();
+  res.json({
+    success: true,
+    categories: rows.map(r => ({
+      id: r.id,
+      name: r.name,
+      sortOrder: Number(r.sort_order || 0),
+      isActive: Boolean(r.is_active),
+      createdAt: r.created_at,
+    }))
+  });
+});
+
+router.post("/launcher/categories", auth, requireRole("admin", "cashier"), (req, res) => {
+  const { name, sortOrder = 0 } = req.body || {};
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ success: false, error: "Category name is required." });
+  }
+  const categoryId = id();
+  const now = nowIso();
+  db.prepare("INSERT INTO launcher_categories (id, name, sort_order, is_active, created_at) VALUES (?, ?, ?, 1, ?)").run(
+    categoryId,
+    name.trim(),
+    Number(sortOrder) || 0,
+    now
+  );
+  emitDataChanged({ entity: 'launcher' });
+  res.status(201).json({
+    success: true,
+    category: { id: categoryId, name: name.trim(), sortOrder: Number(sortOrder) || 0, isActive: true, createdAt: now }
+  });
+});
+
+router.patch("/launcher/categories/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM launcher_categories WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Category not found." });
+  const { name, sortOrder, isActive } = req.body || {};
+  const nextName = name !== undefined ? String(name).trim() : existing.name;
+  const nextSort = sortOrder !== undefined ? (Number(sortOrder) || 0) : existing.sort_order;
+  const nextActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
+  db.prepare("UPDATE launcher_categories SET name=?, sort_order=?, is_active=? WHERE id=?").run(nextName, nextSort, nextActive, req.params.id);
+  emitDataChanged({ entity: 'launcher' });
+  res.json({
+    success: true,
+    category: { id: req.params.id, name: nextName, sortOrder: nextSort, isActive: Boolean(nextActive) }
+  });
+});
+
+router.delete("/launcher/categories/:id", auth, requireRole("admin"), (req, res) => {
+  db.prepare("UPDATE launcher_categories SET is_active=0 WHERE id=?").run(req.params.id);
+  emitDataChanged({ entity: 'launcher' });
+  res.json({ success: true });
+});
+
+router.get("/launcher/apps", (req, res) => {
+  const rows = db.prepare("SELECT * FROM launcher_apps WHERE is_enabled=1 ORDER BY sort_order ASC, name ASC").all();
+  res.json({
+    success: true,
+    apps: rows.map(r => ({
+      id: r.id,
+      name: r.name,
+      categoryId: r.category_id,
+      categoryName: r.category_name || 'Online Games',
+      icon: r.icon,
+      executablePath: r.executable_path,
+      protocolUrl: r.protocol_url,
+      launchArguments: r.launch_arguments,
+      workingDirectory: r.working_directory,
+      isEnabled: Boolean(r.is_enabled),
+      sortOrder: Number(r.sort_order || 0),
+      isPreset: Boolean(r.is_preset),
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    }))
+  });
+});
+
+router.post("/launcher/apps", auth, requireRole("admin", "cashier"), (req, res) => {
+  const {
+    name,
+    categoryId = null,
+    categoryName = 'Online Games',
+    icon = '🎮',
+    executablePath = null,
+    protocolUrl = null,
+    launchArguments = null,
+    workingDirectory = null,
+    sortOrder = 0,
+    isEnabled = true,
+    isPreset = false
+  } = req.body || {};
+
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ success: false, error: "Application name is required." });
+  }
+
+  const appId = id();
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO launcher_apps (id, name, category_id, category_name, icon, executable_path, protocol_url, launch_arguments, working_directory, is_enabled, sort_order, is_preset, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    appId,
+    name.trim(),
+    categoryId || null,
+    categoryName.trim() || 'Online Games',
+    icon || '🎮',
+    executablePath || null,
+    protocolUrl || null,
+    launchArguments || null,
+    workingDirectory || null,
+    isEnabled ? 1 : 0,
+    Number(sortOrder) || 0,
+    isPreset ? 1 : 0,
+    now,
+    now
+  );
+
+  emitDataChanged({ entity: 'launcher' });
+  res.status(201).json({
+    success: true,
+    app: {
+      id: appId,
+      name: name.trim(),
+      categoryId,
+      categoryName,
+      icon,
+      executablePath,
+      protocolUrl,
+      launchArguments,
+      workingDirectory,
+      isEnabled: Boolean(isEnabled),
+      sortOrder: Number(sortOrder) || 0,
+      isPreset: Boolean(isPreset),
+    }
+  });
+});
+
+router.post("/launcher/apps/batch", auth, requireRole("admin", "cashier"), (req, res, next) => {
+  try {
+    const { apps = [] } = req.body || {};
+    if (!Array.isArray(apps) || apps.length === 0) {
+      return res.status(400).json({ success: false, error: "Apps array is required." });
+    }
+
+    const now = nowIso();
+    const inserted = [];
+    transaction(() => {
+      const stmt = db.prepare(`
+        INSERT INTO launcher_apps (id, name, category_id, category_name, icon, executable_path, protocol_url, launch_arguments, working_directory, is_enabled, sort_order, is_preset, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const item of apps) {
+        if (!item?.name) continue;
+        const appId = id();
+        const catName = item.categoryName || item.category || 'Online Games';
+        stmt.run(
+          appId,
+          String(item.name).trim(),
+          item.categoryId || null,
+          catName,
+          item.icon || '🎮',
+          item.executablePath || item.exe || null,
+          item.protocolUrl || item.protocol || null,
+          item.launchArguments || null,
+          item.workingDirectory || null,
+          item.isEnabled !== false ? 1 : 0,
+          Number(item.sortOrder || 0),
+          item.isPreset ? 1 : 0,
+          now,
+          now
+        );
+        inserted.push({ id: appId, name: item.name, categoryName: catName });
+      }
+    });
+
+    emitDataChanged({ entity: 'launcher' });
+    res.status(201).json({ success: true, count: inserted.length, apps: inserted });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.patch("/launcher/apps/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM launcher_apps WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Application not found." });
+
+  const {
+    name,
+    categoryId,
+    categoryName,
+    icon,
+    executablePath,
+    protocolUrl,
+    launchArguments,
+    workingDirectory,
+    isEnabled,
+    sortOrder,
+  } = req.body || {};
+
+  const nextName = name !== undefined ? String(name).trim() : existing.name;
+  const nextCatId = categoryId !== undefined ? categoryId : existing.category_id;
+  const nextCatName = categoryName !== undefined ? String(categoryName).trim() : existing.category_name;
+  const nextIcon = icon !== undefined ? icon : existing.icon;
+  const nextExe = executablePath !== undefined ? executablePath : existing.executable_path;
+  const nextProtocol = protocolUrl !== undefined ? protocolUrl : existing.protocol_url;
+  const nextArgs = launchArguments !== undefined ? launchArguments : existing.launch_arguments;
+  const nextWorkDir = workingDirectory !== undefined ? workingDirectory : existing.working_directory;
+  const nextEnabled = isEnabled !== undefined ? (isEnabled ? 1 : 0) : existing.is_enabled;
+  const nextSort = sortOrder !== undefined ? (Number(sortOrder) || 0) : existing.sort_order;
+
+  db.prepare(`
+    UPDATE launcher_apps SET
+      name=?, category_id=?, category_name=?, icon=?, executable_path=?,
+      protocol_url=?, launch_arguments=?, working_directory=?, is_enabled=?,
+      sort_order=?, updated_at=?
+    WHERE id=?
+  `).run(
+    nextName, nextCatId, nextCatName, nextIcon, nextExe,
+    nextProtocol, nextArgs, nextWorkDir, nextEnabled,
+    nextSort, nowIso(), req.params.id
+  );
+
+  emitDataChanged({ entity: 'launcher' });
+  res.json({
+    success: true,
+    app: {
+      id: req.params.id,
+      name: nextName,
+      categoryId: nextCatId,
+      categoryName: nextCatName,
+      icon: nextIcon,
+      executablePath: nextExe,
+      protocolUrl: nextProtocol,
+      launchArguments: nextArgs,
+      workingDirectory: nextWorkDir,
+      isEnabled: Boolean(nextEnabled),
+      sortOrder: nextSort,
+    }
+  });
+});
+
+router.delete("/launcher/apps/:id", auth, requireRole("admin"), (req, res) => {
+  db.prepare("DELETE FROM launcher_apps WHERE id=?").run(req.params.id);
+  emitDataChanged({ entity: 'launcher' });
+  res.json({ success: true });
+});
+
 export default router;
+
 

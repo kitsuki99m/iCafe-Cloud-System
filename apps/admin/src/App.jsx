@@ -15,6 +15,7 @@ import LogsPage from './pages/LogsPage.jsx'
 import SettingsPage from './pages/SettingsPage.jsx'
 import MenuManagementPage from './pages/MenuManagementPage.jsx'
 import VouchersPage from './pages/VouchersPage.jsx'
+import LauncherManagementPage from './pages/LauncherManagementPage.jsx'
 import DeveloperConsolePage from './pages/DeveloperConsolePage.jsx'
 import CloudInviteSetup from './components/cloud/CloudInviteSetup.jsx'
 import CloudAccessPending from './components/cloud/CloudAccessPending.jsx'
@@ -33,6 +34,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<OverviewPage />} />
         <Route path="/clients" element={<FloorMatrix />} />
+        <Route path="/launcher" element={<LauncherManagementPage />} />
         <Route path="/menu" element={<MenuManagementPage />} />
         <Route path="/tariffs" element={user.role === 'cashier' ? <Navigate to="/" replace /> : <TariffsPage />} />
         <Route path="/members" element={<MembersPage />} />

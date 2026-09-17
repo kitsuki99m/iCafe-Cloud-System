@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck, Menu, X, BookOpenText, UtensilsCrossed, Ticket, Clock } from 'lucide-react'
+import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck, Menu, X, BookOpenText, UtensilsCrossed, Ticket, Clock, Gamepad2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useAppData } from '../../context/AppDataContext.jsx'
 import AdminNotificationCenter from '../admin/AdminNotificationCenter.jsx'
@@ -21,6 +21,7 @@ import PwaInstallButton from '../common/PwaInstallButton.jsx'
 const BASE_NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/clients', label: 'Clients', icon: MonitorCog },
+  { to: '/launcher', label: 'Games & Apps', icon: Gamepad2 },
   { to: '/menu', label: 'Menu & Orders', icon: UtensilsCrossed },
   { to: '/tariffs', label: 'Rates', icon: Tags, adminOnly: true },
   { to: '/members', label: 'Members', icon: Users },
@@ -35,6 +36,7 @@ const PAGE_ALIASES = { '/expenses':'Earnings', '/expense':'Earnings' }
 const PAGE_PURPOSE = {
   Overview:'Live operations, customer signals, and today’s business health.',
   Clients:'Manage stations, active sessions, and remote actions.',
+  'Games & Apps':'Configure station executables, game disk paths, and launcher categories.',
   'Menu & Orders':'Snack & drink catalog, in-session orders, and kitchen queue.',
   Rates:'Set customer pricing, promotions, and session rules.',
   Members:'Manage accounts, balances, tiers, and transfers.',
