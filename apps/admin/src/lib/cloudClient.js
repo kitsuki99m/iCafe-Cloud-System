@@ -699,13 +699,13 @@ function cloudMember(row) {
 async function cloudAppData(branchId) {
   const encoded = encodeURIComponent(branchId);
   const [bundle, launcherCats, launcherApps, menuItems, menuOrders, shifts, vouchers] = await Promise.all([
-    rpcRead('aezakmi_admin_app_data', { p_branch_id: branchId }, { ttlMs: 20_000 }),
-    rest(`branch_launcher_categories?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=sort_order.asc,name.asc`).catch(() => []),
-    rest(`branch_launcher_apps?select=*&branch_id=eq.${encoded}&is_enabled=eq.true&order=sort_order.asc,name.asc`).catch(() => []),
-    rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=category.asc,name.asc`).catch(() => []),
+    rpcRead('aezakmi_admin_app_data', { p_branch_id: branchId }, { ttlMs: 20_000 }).catch(() => null),
+    rest(`branch_launcher_categories?select=*&branch_id=eq.${encoded}&order=sort_order.asc,name.asc`).catch(() => []),
+    rest(`branch_launcher_apps?select=*&branch_id=eq.${encoded}&order=sort_order.asc,name.asc`).catch(() => []),
+    rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&order=category.asc,name.asc`).catch(() => []),
     rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&order=created_at.desc&limit=100`).catch(() => []),
     rest(`branch_user_shifts?select=*&branch_id=eq.${encoded}&order=opened_at.desc&limit=20`).catch(() => []),
-    rest(`branch_promo_vouchers?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=created_at.desc`).catch(() => []),
+    rest(`branch_promo_vouchers?select=*&branch_id=eq.${encoded}&order=created_at.desc`).catch(() => []),
   ]);
   const pcs = cloudPcsFromRows(bundle?.stations || [], bundle?.sessions || []);
   const memberRows = bundle?.members || [], rateRows = bundle?.ratePlans || [], topUpRows = bundle?.topUps || [], supportRows = bundle?.support || [], extensionRows = bundle?.extensions || [], announcementRows = bundle?.announcements || [];
@@ -721,13 +721,19 @@ async function cloudAppData(branchId) {
   const extensions = extensionRows.map((row) => { const data = camelizeObject(row.data || {}), sessionId = String(data.computerSessionId || data.sessionId || ""), pcId = sessionMap.get(sessionId) || null, pc = pcMap.get(String(pcId || "")), member = memberMap.get(String(data.memberId || "")); return { ...data, id: row.local_id, sessionId: data.computerSessionId || data.sessionId || null, memberId: data.memberId || null, pcId, pcLabel: pc?.label || "Unknown PC", pcIp: pc?.ipAddress || null, customerName: member?.name || "Customer", requestedAt: row.requested_at || data.requestedAt }; });
   const config = bundle?.config && typeof bundle.config === 'object' ? bundle.config : {};
 
-  const mappedLauncherCategories = (launcherCats || []).map((r) => ({ id: r.local_id || r.id, name: r.name, sortOrder: Number(r.sort_order || 0), isActive: Boolean(r.is_active), createdAt: r.created_at }));
-  const mappedLauncherApps = (launcherApps || []).map((r) => ({ id: r.local_id || r.id, name: r.name, categoryId: r.category_id, categoryName: r.category_name || "Online Games", icon: r.icon, executablePath: r.executable_path, protocolUrl: r.protocol_url, launchArguments: r.launch_arguments, workingDirectory: r.working_directory, isEnabled: Boolean(r.is_enabled), sortOrder: Number(r.sort_order || 0), isPreset: Boolean(r.is_preset), createdAt: r.created_at, updatedAt: r.updated_at }));
-  const mappedMenuItems = (menuItems || []).map((m) => ({ id: m.local_id || m.id, name: m.name, category: m.category, description: m.description, price: Number(m.price_centavos || 0) / 100, imageUrl: m.image_url, stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null, isAvailable: Boolean(m.is_available), isActive: Boolean(m.is_active), createdAt: m.created_at, updatedAt: m.updated_at }));
-  const mappedMenuOrders = (menuOrders || []).map((r) => ({ id: r.local_id || r.id, customerId: r.customer_id, customerName: r.customer_name, pcId: r.pc_id, pcLabel: r.pc_label, items: typeof r.items_json === "string" ? JSON.parse(r.items_json) : (r.items_json || []), total: Number(r.total_centavos || 0) / 100, paymentMethod: r.payment_method, paymentStatus: r.payment_status, orderStatus: r.order_status, notes: r.notes, createdAt: r.created_at, fulfilledAt: r.fulfilled_at, cancelledAt: r.cancelled_at }));
-  const openShift = (shifts || []).find((s) => !s.closed_at);
+  const catsSource = (bundle?.launcherCategories && bundle.launcherCategories.length > 0) ? bundle.launcherCategories : launcherCats;
+  const appsSource = (bundle?.launcherApps && bundle.launcherApps.length > 0) ? bundle.launcherApps : launcherApps;
+  const menuSource = (bundle?.menuItems && bundle.menuItems.length > 0) ? bundle.menuItems : menuItems;
+  const ordersSource = (bundle?.menuOrders && bundle.menuOrders.length > 0) ? bundle.menuOrders : menuOrders;
+  const voucherSource = (bundle?.vouchers && bundle.vouchers.length > 0) ? bundle.vouchers : vouchers;
+  const openShift = bundle?.currentShift || (shifts || []).find((s) => !s.closed_at);
+
+  const mappedLauncherCategories = (catsSource || []).map((r) => ({ id: r.local_id || r.id, name: r.name, sortOrder: Number(r.sort_order || 0), isActive: Boolean(r.is_active), createdAt: r.created_at }));
+  const mappedLauncherApps = (appsSource || []).map((r) => ({ id: r.local_id || r.id, name: r.name, categoryId: r.category_id, categoryName: r.category_name || "Online Games", icon: r.icon, executablePath: r.executable_path, protocolUrl: r.protocol_url, launchArguments: r.launch_arguments, workingDirectory: r.working_directory, isEnabled: Boolean(r.is_enabled), sortOrder: Number(r.sort_order || 0), isPreset: Boolean(r.is_preset), createdAt: r.created_at, updatedAt: r.updated_at }));
+  const mappedMenuItems = (menuSource || []).map((m) => ({ id: m.local_id || m.id, name: m.name, category: m.category, description: m.description, price: Number(m.price_centavos || 0) / 100, imageUrl: m.image_url, stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null, isAvailable: Boolean(m.is_available), isActive: Boolean(m.is_active), createdAt: m.created_at, updatedAt: m.updated_at }));
+  const mappedMenuOrders = (ordersSource || []).map((r) => ({ id: r.local_id || r.id, customerId: r.customer_id, customerName: r.customer_name, pcId: r.pc_id, pcLabel: r.pc_label, items: typeof r.items_json === "string" ? JSON.parse(r.items_json) : (r.items_json || []), total: Number(r.total_centavos || 0) / 100, paymentMethod: r.payment_method, paymentStatus: r.payment_status, orderStatus: r.order_status, notes: r.notes, createdAt: r.created_at, fulfilledAt: r.fulfilled_at, cancelledAt: r.cancelled_at }));
   const currentShift = openShift ? { id: openShift.local_id || openShift.id, userId: openShift.user_id, userName: openShift.user_name, userRole: openShift.user_role, openingFloat: Number(openShift.opening_float_centavos || 0) / 100, notes: openShift.notes, openedAt: openShift.opened_at } : null;
-  const mappedVouchers = (vouchers || []).map((v) => ({ id: v.local_id || v.id, code: v.code, benefitType: v.benefit_type, valueAmount: v.value_amount, maxRedemptions: v.max_redemptions, currentRedemptions: v.current_redemptions, expiresAt: v.expires_at, isActive: v.is_active, createdAt: v.created_at }));
+  const mappedVouchers = (voucherSource || []).map((v) => ({ id: v.local_id || v.id, code: v.code, benefitType: v.benefit_type, valueAmount: v.value_amount, maxRedemptions: v.max_redemptions, currentRedemptions: v.current_redemptions, expiresAt: v.expires_at, isActive: v.is_active, createdAt: v.created_at }));
 
   return {
     success: true,
@@ -867,7 +873,7 @@ async function cloudDirectRead(path, branchId) {
     return { success:true, feedback:items, items, pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}, total, page, pages:Math.max(1,Math.ceil(total/limit)) };
   }
   if (route === "/launcher/categories") {
-    const rows = await rest(`branch_launcher_categories?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=sort_order.asc,name.asc`);
+    const rows = await rest(`branch_launcher_categories?select=*&branch_id=eq.${encoded}&order=sort_order.asc,name.asc`);
     return {
       success: true,
       categories: (rows || []).map((r) => ({
@@ -880,7 +886,7 @@ async function cloudDirectRead(path, branchId) {
     };
   }
   if (route === "/launcher/apps") {
-    const rows = await rest(`branch_launcher_apps?select=*&branch_id=eq.${encoded}&is_enabled=eq.true&order=sort_order.asc,name.asc`);
+    const rows = await rest(`branch_launcher_apps?select=*&branch_id=eq.${encoded}&order=sort_order.asc,name.asc`);
     return {
       success: true,
       apps: (rows || []).map((r) => ({
@@ -902,7 +908,7 @@ async function cloudDirectRead(path, branchId) {
     };
   }
   if (route === "/menu-items") {
-    const rows = await rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=category.asc,name.asc`);
+    const rows = await rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&order=category.asc,name.asc`);
     return {
       success: true,
       menuItems: (rows || []).map((m) => ({
@@ -942,8 +948,45 @@ async function cloudDirectRead(path, branchId) {
       }))
     };
   }
+  if (route === "/shifts/current") {
+    const rows = await rest(`branch_user_shifts?select=*&branch_id=eq.${encoded}&closed_at=is.null&order=opened_at.desc&limit=1`);
+    const s = rows?.[0];
+    return {
+      success: true,
+      activeShift: s ? {
+        id: s.local_id || s.id,
+        userId: s.user_id,
+        userName: s.user_name,
+        userRole: s.user_role,
+        openingFloat: Number(s.opening_float_centavos || 0) / 100,
+        notes: s.notes,
+        openedAt: s.opened_at,
+      } : null,
+    };
+  }
+  if (route === "/shifts/history") {
+    const rows = await rest(`branch_user_shifts?select=*&branch_id=eq.${encoded}&closed_at=not.is.null&order=opened_at.desc&limit=50`);
+    const shifts = (rows || []).map((s) => ({
+      id: s.local_id || s.id,
+      userId: s.user_id,
+      userName: s.user_name,
+      userRole: s.user_role,
+      openingFloat: Number(s.opening_float_centavos || 0) / 100,
+      closingCounted: s.closing_counted_centavos != null ? Number(s.closing_counted_centavos) / 100 : null,
+      expectedCash: Number(s.expected_cash_centavos || 0) / 100,
+      variance: Number(s.variance_centavos || 0) / 100,
+      notes: s.notes,
+      openedAt: s.opened_at,
+      closedAt: s.closed_at,
+    }));
+    return {
+      success: true,
+      shifts,
+      history: shifts,
+    };
+  }
   if (route === "/vouchers") {
-    const rows = await rest(`branch_promo_vouchers?select=*&branch_id=eq.${encoded}&is_active=eq.true&order=created_at.desc`);
+    const rows = await rest(`branch_promo_vouchers?select=*&branch_id=eq.${encoded}&order=created_at.desc`);
     return {
       success: true,
       vouchers: (rows || []).map((v) => ({

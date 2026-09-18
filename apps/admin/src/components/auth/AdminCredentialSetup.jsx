@@ -60,7 +60,7 @@ export default function AdminCredentialSetup() {
     }
   }
 
-  return <div className="fixed inset-0 z-[500] flex items-center justify-center bg-midnight/70 p-3 backdrop-blur-[2px] sm:p-6">
+  return <div className="fixed inset-0 z-[500] flex items-center justify-center bg-midnight/70 p-3 sm:p-6">
     <div ref={dialogRef} tabIndex={-1} onKeyDown={containFocus} className="admin-modal-shell w-full max-w-md overflow-hidden" role="dialog" aria-modal="true" aria-busy={busy ? 'true' : undefined} aria-labelledby="admin-credential-setup-title">
       <div className="admin-modal-header">
         <div className="flex items-start gap-3">

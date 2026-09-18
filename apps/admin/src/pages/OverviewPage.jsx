@@ -317,12 +317,34 @@ export default function OverviewPage(){
             </OverviewCard>
 
             <OverviewCard title="Quick actions" subtitle="Jump directly to the most common staff tasks.">
-              <div className="grid grid-cols-2 gap-2">{[
-                ['/clients','Floor matrix',MonitorCog],
-                ['/members','Members',Users],
-                ['/tariffs','Rates',Tags],
-                ['/earnings','Earnings',CircleDollarSign],
-              ].map(([to,label,Icon])=><button key={to} onClick={()=>navigate(to)} className="overview-soft-card flex min-h-[74px] items-center justify-between p-3 text-left transition-all hover:-translate-y-0.5"><span><Icon size={15} className="mb-2 text-gold"/><span className="block text-[10px] font-semibold text-ink-900">{label}</span></span><ChevronRight size={13} className="text-slate-soft"/></button>)}</div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {[
+                  { to: '/clients', label: 'Floor matrix', Icon: MonitorCog },
+                  { to: '/members', label: 'Members', Icon: Users },
+                  { to: '/tariffs', label: 'Rates', Icon: Tags },
+                  { to: '/earnings', label: 'Earnings', Icon: CircleDollarSign },
+                  { to: '/vouchers', label: 'Vouchers', Icon: WalletCards },
+                ].map(({ to, label, Icon }) => (
+                  <button key={to} onClick={() => navigate(to)} className="overview-soft-card flex min-h-[74px] items-center justify-between p-3 text-left transition-all hover:-translate-y-0.5">
+                    <span>
+                      <Icon size={15} className="mb-2 text-gold"/>
+                      <span className="block text-[10px] font-semibold text-ink-900">{label}</span>
+                    </span>
+                    <ChevronRight size={13} className="text-slate-soft"/>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => window.dispatchEvent(new CustomEvent('aezakmi:open-shift-modal'))}
+                  className="overview-soft-card flex min-h-[74px] items-center justify-between p-3 text-left transition-all hover:-translate-y-0.5"
+                >
+                  <span>
+                    <Clock3 size={15} className="mb-2 text-teal-dim"/>
+                    <span className="block text-[10px] font-semibold text-ink-900">Cashier Shift</span>
+                  </span>
+                  <ChevronRight size={13} className="text-slate-soft"/>
+                </button>
+              </div>
             </OverviewCard>
           </div>
         </div>

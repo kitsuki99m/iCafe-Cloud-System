@@ -649,11 +649,11 @@ export default function MenuManagementPage() {
                           ) : (
                             <UtensilsCrossed className="w-8 h-8 text-slate-soft/50" />
                           )}
-                          <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-surface/90 backdrop-blur-xs text-ink-900 border border-surface-line shadow-xs">
+                          <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-surface text-ink-900 border border-surface-line shadow-xs">
                             {item.category || 'Food'}
                           </span>
                           {(!isAvail || isOutOfStock) && (
-                            <div className="absolute inset-0 bg-surface/80 backdrop-blur-2xs flex items-center justify-center">
+                            <div className="absolute inset-0 bg-surface/90 flex items-center justify-center">
                               <span className="text-[10px] font-semibold text-ember-dim px-2.5 py-0.5 bg-ember/15 rounded-full border border-ember/25">
                                 {!isAvail ? 'Unavailable' : 'Out of Stock'}
                               </span>

@@ -163,6 +163,12 @@ export default function MainLayout({ children }) {
     catch(error){setUnlockError(error?.message||'Incorrect Admin credentials.')}
   }
 
+  useEffect(() => {
+    const handler = () => setShiftModalOpen(true)
+    window.addEventListener('aezakmi:open-shift-modal', handler)
+    return () => window.removeEventListener('aezakmi:open-shift-modal', handler)
+  }, [])
+
   return (
     <div className="admin-app-canvas h-dvh min-h-0 w-full overflow-hidden">
       <div className="admin-shell-frame flex h-full min-h-0 overflow-hidden">
@@ -233,7 +239,7 @@ export default function MainLayout({ children }) {
               <button
                 type="button"
                 onClick={() => setShiftModalOpen(true)}
-                className={`admin-icon-button ${currentShift ? 'text-emerald-400' : ''}`}
+                className={`admin-icon-button ${currentShift ? 'text-teal-dim' : ''}`}
                 title="Staff Shift & Cash Reconciliation"
               >
                 <Clock size={16} />
@@ -255,14 +261,14 @@ export default function MainLayout({ children }) {
               <button
                 type="button"
                 onClick={() => setShiftModalOpen(true)}
-                className={`admin-header-pill flex items-center gap-1.5 font-bold ${
+                className={`admin-header-pill flex items-center gap-1.5 font-bold cursor-pointer ${
                   currentShift
-                    ? 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10'
+                    ? 'border-teal/40 text-teal-dim bg-teal/10'
                     : 'text-slate-soft hover:text-ink-900'
                 }`}
                 title="Staff Shift & Cash Drawer Reconciliation"
               >
-                <Clock size={14} className={currentShift ? 'text-emerald-400' : ''} />
+                <Clock size={14} className={currentShift ? 'text-teal-dim' : ''} />
                 <span>{currentShift ? 'Shift Active' : 'Clock In'}</span>
               </button>
               <button type="button" onClick={()=>setFeedbackOpen(true)} className="admin-header-pill hidden lg:flex" title="Open customer feedback"><MessageSquareText size={15}/> Feedback</button>
@@ -283,7 +289,7 @@ export default function MainLayout({ children }) {
         </main>
       </div>
       {mobileNavOpen && <div className="fixed inset-0 z-[800] lg:hidden" role="presentation">
-        <button type="button" className="absolute inset-0 bg-midnight/45 backdrop-blur-[2px]" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"/>
+        <button type="button" className="absolute inset-0 bg-midnight/60" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"/>
         <aside className="admin-mobile-drawer absolute inset-y-0 left-0 flex w-[min(88vw,340px)] flex-col overflow-hidden border-r border-[var(--admin-ui-border)] bg-[var(--admin-sidebar-bg)] shadow-2xl" role="dialog" aria-modal="true" aria-label="Admin navigation">
           <div className="flex min-h-[64px] shrink-0 items-center gap-3 border-b border-[var(--admin-ui-border)] px-4">
             <img src={branding.logoUrl || logo} onError={event=>{event.currentTarget.src=logo}} alt="" className="h-9 w-9 rounded-[11px] shadow-sm"/>
@@ -315,7 +321,7 @@ export default function MainLayout({ children }) {
         </aside>
       </div>}
       <AdminSectionManual open={manualOpen} onClose={()=>setManualOpen(false)} section={currentLabel}/>
-      {locked && <div className="fixed inset-0 z-[900] flex items-center justify-center bg-midnight/95 p-3 backdrop-blur-[2px] sm:p-6">
+      {locked && <div className="fixed inset-0 z-[900] flex items-center justify-center bg-midnight/95 p-3 sm:p-6">
         <div ref={lockDialogRef} tabIndex={-1} onKeyDown={containLockFocus} className="admin-modal-shell w-full max-w-sm overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="admin-lock-title">
           <div className="admin-modal-header text-center">
             <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-gold/10 text-gold-dim"><LockKeyhole size={20}/></span>

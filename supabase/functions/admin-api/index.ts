@@ -345,7 +345,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   }
 
   if(method==='GET'&&route==='/launcher/categories'){
-    const{data,error}=await admin.from('branch_launcher_categories').select('*').eq('branch_id',branchId).eq('is_active',true).order('sort_order',{ascending:true}).order('name',{ascending:true});
+    const{data,error}=await admin.from('branch_launcher_categories').select('*').eq('branch_id',branchId).order('sort_order',{ascending:true}).order('name',{ascending:true});
     if(error)throw error;
     return result({success:true,categories:(data||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,sortOrder:n(r.sort_order),isActive:Boolean(r.is_active),createdAt:r.created_at}))});
   }
@@ -373,7 +373,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   }
 
   if(method==='GET'&&route==='/launcher/apps'){
-    const{data,error}=await admin.from('branch_launcher_apps').select('*').eq('branch_id',branchId).eq('is_enabled',true).order('sort_order',{ascending:true}).order('name',{ascending:true});
+    const{data,error}=await admin.from('branch_launcher_apps').select('*').eq('branch_id',branchId).order('sort_order',{ascending:true}).order('name',{ascending:true});
     if(error)throw error;
     return result({success:true,apps:(data||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,categoryId:r.category_id,categoryName:r.category_name||'Online Games',icon:r.icon,executablePath:r.executable_path,protocolUrl:r.protocol_url,launchArguments:r.launch_arguments,workingDirectory:r.working_directory,isEnabled:Boolean(r.is_enabled),sortOrder:n(r.sort_order),isPreset:Boolean(r.is_preset),createdAt:r.created_at,updatedAt:r.updated_at}))});
   }
@@ -407,7 +407,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   }
 
   if(method==='GET'&&route==='/menu-items'){
-    const{data,error}=await admin.from('branch_menu_items').select('*').eq('branch_id',branchId).eq('is_active',true).order('category',{ascending:true}).order('name',{ascending:true});
+    const{data,error}=await admin.from('branch_menu_items').select('*').eq('branch_id',branchId).order('category',{ascending:true}).order('name',{ascending:true});
     if(error)throw error;
     return result({success:true,menuItems:(data||[]).map((m:any)=>({id:m.local_id||m.id,name:m.name,category:m.category,description:m.description,price:n(m.price_centavos)/100,imageUrl:m.image_url,stockQuantity:m.stock_quantity!=null?n(m.stock_quantity):null,isAvailable:Boolean(m.is_available),isActive:Boolean(m.is_active),createdAt:m.created_at,updatedAt:m.updated_at}))});
   }
@@ -482,8 +482,9 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
       if(existingOrder.payment_method==='wallet'&&existingOrder.payment_status==='paid'&&existingOrder.customer_id){
         const{data:member}=await admin.from('branch_members').select('*').eq('branch_id',branchId).eq('local_id',existingOrder.customer_id).maybeSingle();
         if(member){
-          const refund=n(existingOrder.total_centavos);
-          await admin.from('branch_members').update({wallet_balance_centavos:n(member.wallet_balance_centavos)+refund,updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',member.local_id);
+          const refundCentavos=n(existingOrder.total_centavos);
+          const nextBal=(Math.round(n(member.wallet_balance)*100)+refundCentavos)/100;
+          await admin.from('branch_members').update({wallet_balance:nextBal,updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',member.local_id);
         }
       }
       const orderItems=typeof existingOrder.items_json==='string'?JSON.parse(existingOrder.items_json):(existingOrder.items_json||[]);
@@ -509,8 +510,9 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
       if(existingOrder.payment_method==='wallet'&&existingOrder.payment_status==='paid'&&existingOrder.customer_id){
         const{data:member}=await admin.from('branch_members').select('*').eq('branch_id',branchId).eq('local_id',existingOrder.customer_id).maybeSingle();
         if(member){
-          const refund=n(existingOrder.total_centavos);
-          await admin.from('branch_members').update({wallet_balance_centavos:n(member.wallet_balance_centavos)+refund,updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',member.local_id);
+          const refundCentavos=n(existingOrder.total_centavos);
+          const nextBal=(Math.round(n(member.wallet_balance)*100)+refundCentavos)/100;
+          await admin.from('branch_members').update({wallet_balance:nextBal,updated_at:nowStr}).eq('branch_id',branchId).eq('local_id',member.local_id);
         }
       }
       const orderItems=typeof existingOrder.items_json==='string'?JSON.parse(existingOrder.items_json):(existingOrder.items_json||[]);
@@ -528,8 +530,42 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     return result({success:true});
   }
 
+  if(method==='GET'&&route==='/shifts/current'){
+    const{data,error}=await admin.from('branch_user_shifts').select('*').eq('branch_id',branchId).is('closed_at',null).order('opened_at',{ascending:false}).limit(1).maybeSingle();
+    if(error)throw error;
+    if(!data)return result({success:true,activeShift:null});
+    return result({success:true,activeShift:{id:data.local_id||data.id,userId:data.user_id,userName:data.user_name,userRole:data.user_role,openingFloat:n(data.opening_float_centavos)/100,notes:data.notes,openedAt:data.opened_at}});
+  }
+  if(method==='GET'&&route==='/shifts/history'){
+    const{data,error}=await admin.from('branch_user_shifts').select('*').eq('branch_id',branchId).not('closed_at','is',null).order('opened_at',{ascending:false}).limit(50);
+    if(error)throw error;
+    const shifts=(data||[]).map((s:any)=>({id:s.local_id||s.id,userId:s.user_id,userName:s.user_name,userRole:s.user_role,openingFloat:n(s.opening_float_centavos)/100,closingCounted:s.closing_counted_centavos!=null?n(s.closing_counted_centavos)/100:null,expectedCash:n(s.expected_cash_centavos)/100,variance:n(s.variance_centavos)/100,notes:s.notes,openedAt:s.opened_at,closedAt:s.closed_at}));
+    return result({success:true,shifts,history:shifts});
+  }
+  if(method==='POST'&&route==='/shifts/open'){
+    const{data:active}=await admin.from('branch_user_shifts').select('id').eq('branch_id',branchId).is('closed_at',null).maybeSingle();
+    if(active)return result({success:false,error:'A shift is already open.'},400);
+    const shiftId=id(),nowStr=now(),openingCentavos=Math.round(n(body?.openingFloat,0)*100);
+    const row={branch_id:branchId,local_id:shiftId,user_id:String(user.id),user_name:user.email||'Staff',user_role:'cashier',opening_float_centavos:openingCentavos,expected_cash_centavos:openingCentavos,variance_centavos:0,notes:body?.notes||null,opened_at:nowStr};
+    const{error}=await admin.from('branch_user_shifts').insert(row);
+    if(error)throw error;
+    return result({success:true,shift:{id:shiftId,userId:row.user_id,userName:row.user_name,userRole:row.user_role,openingFloat:openingCentavos/100,notes:row.notes,openedAt:nowStr}},201);
+  }
+  if(method==='POST'&&route==='/shifts/close'){
+    const{data:active,error:findErr}=await admin.from('branch_user_shifts').select('*').eq('branch_id',branchId).is('closed_at',null).order('opened_at',{ascending:false}).limit(1).maybeSingle();
+    if(findErr)throw findErr;
+    if(!active)return result({success:false,error:'No active shift found.'},400);
+    const nowStr=now(),countedCentavos=Math.round(n(body?.closingCounted,0)*100);
+    const expectedCentavos=n(active.expected_cash_centavos||active.opening_float_centavos);
+    const varianceCentavos=countedCentavos-expectedCentavos;
+    const patch={closing_counted_centavos:countedCentavos,variance_centavos:varianceCentavos,notes:body?.notes!==undefined?body.notes:active.notes,closed_at:nowStr};
+    const{error}=await admin.from('branch_user_shifts').update(patch).eq('branch_id',branchId).eq('id',active.id);
+    if(error)throw error;
+    return result({success:true,shiftSummary:{closingCounted:countedCentavos/100,expectedCash:expectedCentavos/100,variance:varianceCentavos/100,closedAt:nowStr}});
+  }
+
   if(method==='GET'&&route==='/vouchers'){
-    const{data,error}=await admin.from('branch_promo_vouchers').select('*').eq('branch_id',branchId).eq('is_active',true).order('created_at',{ascending:false});
+    const{data,error}=await admin.from('branch_promo_vouchers').select('*').eq('branch_id',branchId).order('created_at',{ascending:false});
     if(error)throw error;
     return result({success:true,vouchers:(data||[]).map((v:any)=>({id:v.local_id||v.id,code:v.code,benefitType:v.benefit_type,valueAmount:v.value_amount,maxRedemptions:v.max_redemptions,currentRedemptions:v.current_redemptions,expiresAt:v.expires_at,isActive:v.is_active,createdAt:v.created_at}))});
   }

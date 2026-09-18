@@ -79,7 +79,7 @@ export default function SidePanel({
 
   return createPortal(
     <div className="fixed inset-0 z-[490]">
-      <div className="absolute inset-0 bg-midnight/20 backdrop-blur-[1px]" onMouseDown={() => !busy && onClose?.()} />
+      <div className="absolute inset-0 bg-midnight/35" onMouseDown={() => !busy && onClose?.()} />
       <aside
         ref={panelRef}
         tabIndex={-1}

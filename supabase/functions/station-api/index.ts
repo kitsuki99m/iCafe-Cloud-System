@@ -81,16 +81,30 @@ async function directRead(admin:SupabaseClient,station:any,path:string,localAuth
     const[{data:pc,error:pcError},{data:session,error:sessionError}]=await Promise.all([admin.from('branch_stations').select('*').eq('branch_id',station.branch_id).eq('local_id',station.local_station_id).maybeSingle(),admin.from('branch_sessions').select('*').eq('branch_id',station.branch_id).eq('pc_id',station.local_station_id).eq('status','active').order('started_at',{ascending:false}).limit(1).maybeSingle()]);if(pcError)throw pcError;if(sessionError)throw sessionError;const view=mapStation(pc,station,session);if(base==='/pcs/current')return{success:true,pc:view};if(!session||session.member_id)return{success:true,pc:view,session:null};return{success:true,pc:view,session:mapSession(session)}
   }
   if(base==='/app-data'){
-    const [{data:pc,error:pcError},{data:session,error:sessionError},{data:rateRows,error:rateError},{data:announcementRows,error:announcementError},{data:cfg,error:cfgError}]=await Promise.all([
+    const [{data:pc,error:pcError},{data:session,error:sessionError},{data:rateRows,error:rateError},{data:announcementRows,error:announcementError},{data:cfg,error:cfgError},{data:launcherCats},{data:launcherApps},{data:menuItems}]=await Promise.all([
       admin.from('branch_stations').select('*').eq('branch_id',station.branch_id).eq('local_id',station.local_station_id).maybeSingle(),
       admin.from('branch_sessions').select('*').eq('branch_id',station.branch_id).eq('pc_id',station.local_station_id).eq('status','active').order('started_at',{ascending:false}).limit(1).maybeSingle(),
       admin.from('branch_rate_plans').select('local_id,data').eq('branch_id',station.branch_id),
       admin.from('branch_announcements').select('local_id,data').eq('branch_id',station.branch_id).order('updated_at',{ascending:false}),
       admin.from('branch_configs').select('config').eq('branch_id',station.branch_id).maybeSingle(),
+      admin.from('branch_launcher_categories').select('*').eq('branch_id',station.branch_id).eq('is_active',true).order('sort_order',{ascending:true}).order('name',{ascending:true}),
+      admin.from('branch_launcher_apps').select('*').eq('branch_id',station.branch_id).eq('is_enabled',true).order('sort_order',{ascending:true}).order('name',{ascending:true}),
+      admin.from('branch_menu_items').select('*').eq('branch_id',station.branch_id).eq('is_active',true).order('category',{ascending:true}).order('name',{ascending:true}),
     ]);if(pcError)throw pcError;if(sessionError)throw sessionError;if(rateError)throw rateError;if(announcementError)throw announcementError;if(cfgError)throw cfgError;
     const pcView=mapStation(pc,station,session),config=cfg?.config&&typeof cfg.config==='object'?cfg.config:{},rawSettings=(config as any).settings||config||{};
     let member:any=null;if(localAuthToken){const auth=await customerSession(admin,station,localAuthToken,{touch:false});member=auth.user}
-    return{success:true,pc:pcView,member,ratePlans:(rateRows||[]).map((r:any)=>canonicalRatePlan(r.data,r.local_id)),announcements:(announcementRows||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)})),settings:{...rawSettings,defaultBilling:'prepaid',postpaidMinutesPerPeso:0},clientContext:{success:true,cloud:true,stationId:station.id,pcId:station.local_station_id,branchId:station.branch_id,organizationId:station.organization_id,transport:'cloud',pc:pcView}}
+    return{
+      success:true,
+      pc:pcView,
+      member,
+      ratePlans:(rateRows||[]).map((r:any)=>canonicalRatePlan(r.data,r.local_id)),
+      announcements:(announcementRows||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)})),
+      settings:{...rawSettings,defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
+      launcherCategories:(launcherCats||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,sortOrder:n(r.sort_order),isActive:Boolean(r.is_active)})),
+      launcherApps:(launcherApps||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,categoryId:r.category_id,categoryName:r.category_name||'Online Games',icon:r.icon,executablePath:r.executable_path,protocolUrl:r.protocol_url,launchArguments:r.launch_arguments,workingDirectory:r.working_directory,isEnabled:Boolean(r.is_enabled),sortOrder:n(r.sort_order),isPreset:Boolean(r.is_preset)})),
+      menuItems:(menuItems||[]).map((m:any)=>({id:m.local_id||m.id,name:m.name,category:m.category,description:m.description,price:n(m.price_centavos)/100,imageUrl:m.image_url,stockQuantity:m.stock_quantity!=null?n(m.stock_quantity):null,isAvailable:Boolean(m.is_available),isActive:Boolean(m.is_active)})),
+      clientContext:{success:true,cloud:true,stationId:station.id,pcId:station.local_station_id,branchId:station.branch_id,organizationId:station.organization_id,transport:'cloud',pc:pcView}
+    }
   }
   if(base==='/rate-plans'||base==='/public/rate-plans'){const{data,error}=await admin.from('branch_rate_plans').select('local_id,data').eq('branch_id',station.branch_id);if(error)throw error;return{success:true,ratePlans:(data||[]).map((r:any)=>canonicalRatePlan(r.data,r.local_id))}}
   if(base==='/announcements'||base==='/public/announcements'){const{data,error}=await admin.from('branch_announcements').select('local_id,data').eq('branch_id',station.branch_id).order('updated_at',{ascending:false});if(error)throw error;return{success:true,announcements:(data||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)}))}}
@@ -120,7 +134,18 @@ async function bundledAppData(req:Request,admin:SupabaseClient,localAuthToken:st
   if(error)throw error
   if(!data||data.success===false)throw Object.assign(new Error(data?.error||'Unable to load Customer Station data.'),{status:Number(data?.status||500),code:data?.code||'STATION_APP_DATA_FAILED'})
   const station=data.station||{},pcView=mapStation(data.pc,station,data.session),config=data.config&&typeof data.config==='object'?data.config:{},rawSettings=(config as any).settings||config||{}
-  return{success:true,pc:pcView,member:data.member?memberView(data.member,station,Boolean(data.mustChangeCredentials)):null,ratePlans:(data.ratePlans||[]).map((r:any)=>canonicalRatePlan(r.data,r.local_id)),announcements:(data.announcements||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)})),settings:{...rawSettings,defaultBilling:'prepaid',postpaidMinutesPerPeso:0},clientContext:{success:true,cloud:true,stationId:station.id,pcId:station.local_station_id,branchId:station.branch_id,organizationId:station.organization_id,transport:'cloud',pc:pcView}}
+  return{
+    success:true,
+    pc:pcView,
+    member:data.member?memberView(data.member,station,Boolean(data.mustChangeCredentials)):null,
+    ratePlans:(data.ratePlans||[]).map((r:any)=>canonicalRatePlan(r.data,r.local_id)),
+    announcements:(data.announcements||[]).map((r:any)=>({...(r.data||{}),id:String(r.local_id)})),
+    settings:{...rawSettings,defaultBilling:'prepaid',postpaidMinutesPerPeso:0},
+    launcherCategories:(data.launcherCategories||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,sortOrder:n(r.sort_order),isActive:Boolean(r.is_active)})),
+    launcherApps:(data.launcherApps||[]).map((r:any)=>({id:r.local_id||r.id,name:r.name,categoryId:r.category_id,categoryName:r.category_name||'Online Games',icon:r.icon,executablePath:r.executable_path,protocolUrl:r.protocol_url,launchArguments:r.launch_arguments,workingDirectory:r.working_directory,isEnabled:Boolean(r.is_enabled),sortOrder:n(r.sort_order),isPreset:Boolean(r.is_preset)})),
+    menuItems:(data.menuItems||[]).map((m:any)=>({id:m.local_id||m.id,name:m.name,category:m.category,description:m.description,price:n(m.price_centavos)/100,imageUrl:m.image_url,stockQuantity:m.stock_quantity!=null?n(m.stock_quantity):null,isAvailable:Boolean(m.is_available),isActive:Boolean(m.is_active)})),
+    clientContext:{success:true,cloud:true,stationId:station.id,pcId:station.local_station_id,branchId:station.branch_id,organizationId:station.organization_id,transport:'cloud',pc:pcView}
+  }
 }
 
 Deno.serve(async req=>{const pre=preflight(req);if(pre)return pre;let admin:SupabaseClient|null=null;try{admin=adminClient();const body=await req.json().catch(()=>({})),method=String(body.method||'GET').toUpperCase(),path=cleanPath(body.path),base=path.split('?')[0],requestBody=body.body&&typeof body.body==='object'?body.body:{},operationKey=String(body.operationKey||'').trim()||null,localAuthToken=String(body.localAuthToken||'');if(!METHODS.has(method))return json({success:false,code:'METHOD_NOT_ALLOWED',error:'Unsupported method.'},400);

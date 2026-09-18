@@ -189,7 +189,7 @@ export default function MenuOrderModal({ isOpen, onClose }) {
                           ₱{Number(item.price).toFixed(2)}
                         </span>
                         {isOutOfStock && (
-                          <div className="absolute inset-0 bg-surface/80 backdrop-blur-2xs flex items-center justify-center">
+                          <div className="absolute inset-0 bg-surface/90 flex items-center justify-center">
                             <span className="text-[10px] font-semibold text-ember-dim px-2 py-0.5 bg-ember/15 rounded-full border border-ember/25">
                               Out of Stock
                             </span>

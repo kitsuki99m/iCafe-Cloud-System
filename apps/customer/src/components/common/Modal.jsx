@@ -108,7 +108,7 @@ export default function Modal({
     <div className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4 sm:p-6`}>
       <div
         data-overlay-backdrop="true"
-        className="absolute inset-0 bg-midnight/65 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-midnight/70"
         onClick={closeOnBackdrop ? requestClose : undefined}
       />
       <section
