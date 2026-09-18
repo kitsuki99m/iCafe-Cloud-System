@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Crown } from 'lucide-react'
 import Modal from '../common/Modal.jsx'
 import ConfirmModal from '../common/ConfirmModal.jsx'
 import Button from '../common/Button.jsx'
@@ -7,7 +8,7 @@ import { createOperationKey } from '../../lib/api.js'
 const inputClass =
   'w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
-const BLANK = { pcNumber: '', label: '', ipAddress: '', spec: '' }
+const BLANK = { pcNumber: '', label: '', ipAddress: '', spec: '', isVip: false }
 
 function validIpv4(value) {
   const ip = String(value || '').trim()
@@ -61,9 +62,10 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
 
   useEffect(() => {
     if (open) {
+      const isVip = Boolean(pc?.isVip || String(pc?.spec || '').toLowerCase().includes('vip'))
       setDraft(pc
-        ? { pcNumber: String(pcNumberFor(pc) ?? ''), label: pc.label, ipAddress: pc.ipAddress || '', spec: pc.spec ?? '' }
-        : { ...BLANK, pcNumber: String(nextStationNumber(existingPcs)) })
+        ? { pcNumber: String(pcNumberFor(pc) ?? ''), label: pc.label, ipAddress: pc.ipAddress || '', spec: pc.spec ?? '', isVip }
+        : { ...BLANK, pcNumber: String(nextStationNumber(existingPcs)), isVip: false })
       setRemoveConfirmOpen(false)
       setSaving(false)
       saveInFlightRef.current = false
@@ -213,13 +215,63 @@ export default function PcFormModal({ open, pc, onClose, onCreate, onSave, onRem
         )}
 
         <div>
-          <label className="eyebrow mb-1.5 block">Spec</label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="eyebrow block">Station Tier & Spec</label>
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-ink-900 select-none">
+              <input
+                type="checkbox"
+                checked={Boolean(draft.isVip || String(draft.spec || '').toLowerCase().includes('vip'))}
+                onChange={(e) => {
+                  const isChecked = e.target.checked
+                  const currentSpec = draft.spec || ''
+                  let nextSpec = currentSpec
+                  if (isChecked && !currentSpec.toLowerCase().includes('vip')) {
+                    nextSpec = currentSpec ? `VIP · ${currentSpec}` : 'VIP Esports Rig'
+                  } else if (!isChecked && currentSpec.toLowerCase().includes('vip')) {
+                    nextSpec = currentSpec.replace(/VIP\s*·?\s*/gi, '').trim() || 'Standard Rig'
+                  }
+                  setDraft({ ...draft, isVip: isChecked, spec: nextSpec })
+                }}
+                className="h-4 w-4 rounded border-surface-line text-gold focus:ring-gold cursor-pointer"
+              />
+              <span className="flex items-center gap-1 text-gold-dim">
+                <Crown size={12} className="text-gold" />
+                VIP Station
+              </span>
+            </label>
+          </div>
           <input
             value={draft.spec}
-            onChange={(e) => { if (!isEdit) createOperationKeyRef.current = createOperationKey(); setDraft({ ...draft, spec: e.target.value }) }}
-            placeholder="i5 · RTX 3060"
+            onChange={(e) => {
+              if (!isEdit) createOperationKeyRef.current = createOperationKey()
+              const val = e.target.value
+              setDraft({ ...draft, spec: val, isVip: val.toLowerCase().includes('vip') })
+            }}
+            placeholder="e.g. VIP Esports Rig · RTX 4070"
             className={inputClass}
           />
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {['Standard Rig', 'VIP Esports Rig', 'Streaming Booth', 'Console Lounge'].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  setDraft({
+                    ...draft,
+                    spec: preset,
+                    isVip: preset.toLowerCase().includes('vip'),
+                  })
+                }}
+                className={`rounded-md px-2 py-1 text-[10px] font-semibold border transition cursor-pointer ${
+                  draft.spec === preset
+                    ? 'bg-midnight text-soft-white border-gold/40'
+                    : 'bg-surface-raised border-surface-line text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                {preset.includes('VIP') ? '⭐ ' : ''}{preset}
+              </button>
+            ))}
+          </div>
         </div>
         {duplicateIp && <p className="text-xs font-medium text-ember-dim">That IP address is already assigned to another PC.</p>}
         {!cloudManaged && effectiveIp && !validIpv4(effectiveIp) && <p className="text-xs font-medium text-ember-dim">Enter a valid IPv4 address.</p>}

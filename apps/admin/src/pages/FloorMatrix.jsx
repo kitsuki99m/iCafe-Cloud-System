@@ -69,6 +69,7 @@ export default function FloorMatrix() {
     members,
     ratePlans,
     settings,
+    updateSettings,
     getSessionPreview,
     startSession,
     endSession,
@@ -653,6 +654,8 @@ export default function FloorMatrix() {
               ref={floorMapRef}
               pcs={sortedPcs}
               now={now}
+              settings={settings}
+              onSaveLayoutSettings={updateSettings}
               lowTimeWarningMinutes={settings.lowTimeWarningMinutes}
               onSelect={openPopover}
               onControls={(e, pc) => {

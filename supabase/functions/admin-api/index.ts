@@ -584,6 +584,126 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     return result({success:true});
   }
 
+  if(method==='POST'&&route==='/reports/send-summary'){
+    const period=String(body?.period||'daily').toLowerCase();
+    const recipientEmail=String(body?.recipientEmail||user.email||'').trim();
+    const nowObj=new Date();
+    let sinceIso='';
+    if(period==='daily'){
+      const startOfDay=new Date(nowObj.getFullYear(),nowObj.getMonth(),nowObj.getDate());
+      sinceIso=startOfDay.toISOString();
+    }else if(period==='weekly'){
+      const startOfWeek=new Date(nowObj.getTime()-7*24*60*60*1000);
+      sinceIso=startOfWeek.toISOString();
+    }else if(period==='monthly'){
+      const startOfMonth=new Date(nowObj.getFullYear(),nowObj.getMonth(),1);
+      sinceIso=startOfMonth.toISOString();
+    }else{
+      sinceIso=new Date(0).toISOString();
+    }
+
+    const{data:shiftsData}=await admin.from('branch_user_shifts').select('*').eq('branch_id',branchId).gte('opened_at',sinceIso);
+    const shiftsCount=(shiftsData||[]).length;
+    const shiftsVariance=(shiftsData||[]).reduce((sum:number,s:any)=>sum+n(s.variance_centavos)/100,0);
+
+    const{data:ordersData}=await admin.from('branch_menu_orders').select('*').eq('branch_id',branchId).gte('created_at',sinceIso);
+    const fulfilledOrders=(ordersData||[]).filter((o:any)=>String(o.order_status||o.orderStatus||'').toLowerCase()==='fulfilled'||o.status==='completed');
+    const orderRevenue=fulfilledOrders.reduce((sum:number,o:any)=>sum+n(o.total||o.total_amount,0),0);
+    const ordersCount=fulfilledOrders.length;
+
+    const{data:topUpsData}=await admin.from('wallet_ledger').select('*').eq('branch_id',branchId).gte('created_at',sinceIso);
+    const topUpRevenue=(topUpsData||[]).reduce((sum:number,t:any)=>sum+n(t.amount,0),0);
+    const topUpsCount=(topUpsData||[]).length;
+
+    const totalEarnings=orderRevenue+topUpRevenue;
+    const cafeName=branch.name||'Aezakmi Cafe';
+    const periodLabel=period.charAt(0).toUpperCase()+period.slice(1);
+
+    const brevoApiKey=String(Deno.env.get('BREVO_API_KEY')||'').trim();
+    const brevoSenderEmail=String(Deno.env.get('BREVO_SENDER_EMAIL')||'kyle.serina05@gmail.com').trim();
+    const brevoSenderName=String(Deno.env.get('BREVO_SENDER_NAME')||'Aezakmi Cafe Management').trim();
+
+    const targetEmail=recipientEmail||brevoSenderEmail;
+    let emailSent=false;
+    let message=`Summary report for ${period} compiled.`;
+
+    const html=`
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
+        <div style="background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 24px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px; color: #ffffff; font-weight: 800;">${cafeName}</h1>
+          <p style="margin: 6px 0 0 0; color: #e0f2fe; font-size: 14px; font-weight: 500;">${periodLabel} Performance Summary</p>
+        </div>
+        <div style="padding: 24px;">
+          <div style="background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; text-align: center; border: 1px solid #334155;">
+            <div style="font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Total Net Revenue</div>
+            <div style="font-size: 32px; font-weight: 800; color: #38bdf8; margin-top: 4px;">₱${totalEarnings.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 10px 0; color: #94a3b8;">Wallet Top-Ups</td>
+              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${topUpRevenue.toFixed(2)} (${topUpsCount} top-ups)</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 10px 0; color: #94a3b8;">Snack & Drink Orders</td>
+              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${orderRevenue.toFixed(2)} (${ordersCount} orders)</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 10px 0; color: #94a3b8;">Staff Shifts Logged</td>
+              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">${shiftsCount} shifts (Variance: ₱${shiftsVariance.toFixed(2)})</td>
+            </tr>
+          </table>
+          <div style="font-size: 11px; color: #64748b; text-align: center; margin-top: 24px;">
+            Generated on ${new Date().toLocaleString()} by Aezakmi Cloud Management
+          </div>
+        </div>
+      </div>
+    `;
+
+    if(brevoApiKey){
+      try{
+        const brevoRes=await fetch('https://api.brevo.com/v3/smtp/email',{
+          method:'POST',
+          headers:{
+            'api-key':brevoApiKey,
+            'accept':'application/json',
+            'Content-Type':'application/json'
+          },
+          body:JSON.stringify({
+            sender:{name:brevoSenderName,email:brevoSenderEmail},
+            to:[{email:targetEmail}],
+            subject:`[${cafeName}] ${periodLabel} Summary Report - ₱${totalEarnings.toFixed(2)}`,
+            htmlContent:html
+          })
+        });
+        if(brevoRes.ok){
+          emailSent=true;
+          message=`Summary report delivered to ${targetEmail} via Brevo.`;
+        }
+      }catch(_err){
+        // Brevo attempt failed, continue returning report data
+      }
+    }
+
+    return result({
+      success:true,
+      emailSent,
+      message,
+      reportData:{
+        period,
+        since:sinceIso,
+        generatedAt:now(),
+        cafeName,
+        totalEarnings,
+        topUpRevenue,
+        topUpsCount,
+        orderRevenue,
+        ordersCount,
+        shiftsLogged:shiftsCount,
+        shiftsVariance
+      }
+    });
+  }
+
   return null;
 }
 

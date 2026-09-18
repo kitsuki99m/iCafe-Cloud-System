@@ -13,6 +13,7 @@ const FloorStationNode = memo(function FloorStationNode({
   zoom,
   matchesFilter,
   onMouseDown,
+  onTouchStart,
   onClick,
 }) {
   const effectiveStatus = effectivePcStatus(pc)
@@ -43,10 +44,22 @@ const FloorStationNode = memo(function FloorStationNode({
     initialBadge = 'G'
   }
 
+  const isVip = Boolean(
+    pc.isVip ||
+    pc.vip ||
+    pc.tier === 'VIP' ||
+    pc.tier === 'vip' ||
+    String(pc.spec || '').toLowerCase().includes('vip') ||
+    String(pc.label || '').toLowerCase().includes('vip') ||
+    String(pc.zone || '').toLowerCase().includes('vip') ||
+    String(pc.category || '').toLowerCase().includes('vip')
+  )
+
   return (
     <div
       data-pc-node={pc.id}
       onMouseDown={(e) => onMouseDown(e, pc.id)}
+      onTouchStart={(e) => onTouchStart(e, pc.id)}
       onClick={(e) => onClick(e, pc)}
       style={{
         position: 'absolute',
@@ -56,12 +69,18 @@ const FloorStationNode = memo(function FloorStationNode({
         height: `${PC_SIZE * zoom}px`,
         willChange: 'transform',
         zIndex: 20,
+        touchAction: 'none',
       }}
       className={`group rounded-xl flex flex-col items-center justify-center relative cursor-grab select-none shadow-md transition-shadow duration-100 hover:scale-105 active:scale-95 ${blockBg} ${
         !matchesFilter ? 'opacity-20' : 'opacity-100'
       }`}
-      title={`${pc.label || `PC ${pcNum}`} · ${effectiveStatus} · Click for controls`}
+      title={`${pc.label || `PC ${pcNum}`}${isVip ? ' (VIP)' : ''} · ${effectiveStatus} · Click for controls`}
     >
+      {isVip && (
+        <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-amber-400 text-slate-950 font-black text-[9px] flex items-center justify-center shadow-md border border-amber-200 select-none" title="VIP Station">
+          ★
+        </span>
+      )}
       <span className="text-[9px] font-black uppercase tracking-wider leading-none opacity-90">
         PC
       </span>
@@ -80,6 +99,8 @@ const FloorStationNode = memo(function FloorStationNode({
 const FloorMap2D = forwardRef(function FloorMap2D({
   pcs = [],
   now = Date.now(),
+  settings = {},
+  onSaveLayoutSettings,
   lowTimeWarningMinutes = 5,
   onSelect,
   onControls,
@@ -89,12 +110,26 @@ const FloorMap2D = forwardRef(function FloorMap2D({
 }, ref) {
   const [positions, setPositions] = useState(() => {
     try {
+      if (settings?.floorPlanLayout && typeof settings.floorPlanLayout === 'object') {
+        return settings.floorPlanLayout
+      }
       const saved = localStorage.getItem(STORAGE_KEY_POSITIONS)
       return saved ? JSON.parse(saved) : {}
     } catch {
       return {}
     }
   })
+
+  // Sync with remote settings if updated on another device and no local draft in progress
+  useEffect(() => {
+    if (settings?.floorPlanLayout && typeof settings.floorPlanLayout === 'object') {
+      setPositions((prev) => {
+        // If has unsaved changes, don't clobber active draft
+        if (hasUnsavedChanges) return prev
+        return settings.floorPlanLayout
+      })
+    }
+  }, [settings?.floorPlanLayout])
 
   const [zoom, setZoom] = useState(1)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -149,11 +184,15 @@ const FloorMap2D = forwardRef(function FloorMap2D({
     try {
       localStorage.setItem(STORAGE_KEY_POSITIONS, JSON.stringify(nextPositions))
       setHasUnsavedChanges(false)
-      showToast({ title: 'Layout Saved', message: 'Station floor positions saved successfully.', tone: 'success' })
+      // Save to backend settings so all devices and mobile sessions share the same layout
+      if (onSaveLayoutSettings) {
+        onSaveLayoutSettings({ floorPlanLayout: nextPositions }).catch(() => {})
+      }
+      showToast({ title: 'Layout Saved', message: 'Station floor positions saved across all devices.', tone: 'success' })
     } catch (e) {
       console.warn('Failed to save layout:', e)
     }
-  }, [])
+  }, [onSaveLayoutSettings])
 
   const handleSaveLayout = useCallback(() => {
     savePositionsToStorage({ ...computedPositions, ...positions })
@@ -290,6 +329,100 @@ const FloorMap2D = forwardRef(function FloorMap2D({
     window.addEventListener('mouseup', onMouseUp)
   }, [computedPositions, zoom])
 
+  // Mobile Touch direct hardware-accelerated drag
+  const handleTouchStart = useCallback((e, pcId) => {
+    if (!e.touches || e.touches.length !== 1) return
+    const touch = e.touches[0]
+    const node = e.currentTarget
+    const currentPos = computedPositions[pcId] || { x: 36, y: 36 }
+
+    activeDragRef.current = {
+      pcId,
+      node,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initialX: currentPos.x,
+      initialY: currentPos.y,
+      currentSnapX: currentPos.x,
+      currentSnapY: currentPos.y,
+      moved: false,
+    }
+
+    node.style.zIndex = '100'
+    node.classList.add('shadow-2xl', 'ring-4', 'ring-white/50', 'scale-105')
+
+    function onTouchMove(moveEvent) {
+      if (!activeDragRef.current || !moveEvent.touches || moveEvent.touches.length !== 1) return
+      const curTouch = moveEvent.touches[0]
+      const drag = activeDragRef.current
+      const dx = (curTouch.clientX - drag.startX) / zoom
+      const dy = (curTouch.clientY - drag.startY) / zoom
+
+      if (!drag.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+        drag.moved = true
+      }
+
+      if (!drag.moved) return
+
+      // Prevent page scrolling while dragging station on touch screen
+      if (moveEvent.cancelable) {
+        moveEvent.preventDefault()
+      }
+
+      const rawX = drag.initialX + dx
+      const rawY = drag.initialY + dy
+      const snappedX = Math.max(16, Math.round(rawX / CELL_SIZE) * CELL_SIZE)
+      const snappedY = Math.max(16, Math.round(rawY / CELL_SIZE) * CELL_SIZE)
+
+      drag.currentSnapX = snappedX
+      drag.currentSnapY = snappedY
+
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      rafRef.current = requestAnimationFrame(() => {
+        if (drag.node) {
+          drag.node.style.transform = `translate3d(${(snappedX - drag.initialX) * zoom}px, ${(snappedY - drag.initialY) * zoom}px, 0)`
+        }
+      })
+    }
+
+    function onTouchEnd() {
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('touchend', onTouchEnd)
+      window.removeEventListener('touchcancel', onTouchEnd)
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+
+      if (!activeDragRef.current) return
+      const drag = activeDragRef.current
+      const finalX = drag.currentSnapX
+      const finalY = drag.currentSnapY
+      const didMove = drag.moved && (finalX !== drag.initialX || finalY !== drag.initialY)
+
+      if (drag.node) {
+        drag.node.style.zIndex = '20'
+        drag.node.style.transform = ''
+        drag.node.classList.remove('shadow-2xl', 'ring-4', 'ring-white/50', 'scale-105')
+      }
+
+      if (didMove) {
+        setPositions((prev) => ({
+          ...prev,
+          [drag.pcId]: { x: finalX, y: finalY },
+        }))
+        setHasUnsavedChanges(true)
+      }
+
+      setTimeout(() => {
+        if (activeDragRef.current?.pcId === drag.pcId) {
+          activeDragRef.current = null
+        }
+      }, 50)
+    }
+
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onTouchEnd)
+    window.addEventListener('touchcancel', onTouchEnd)
+  }, [computedPositions, zoom])
+
   const handleStationClick = useCallback((e, pc) => {
     if (activeDragRef.current?.moved) return
     if (onControls) onControls(e, pc)
@@ -344,6 +477,7 @@ const FloorMap2D = forwardRef(function FloorMap2D({
               zoom={zoom}
               matchesFilter={matchesFilter}
               onMouseDown={handleMouseDown}
+              onTouchStart={handleTouchStart}
               onClick={handleStationClick}
             />
           )

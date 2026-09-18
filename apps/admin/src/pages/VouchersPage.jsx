@@ -19,6 +19,7 @@ import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import NumericInput from '../components/common/NumericInput.jsx'
+import ManagerApprovalModal from '../components/admin/ManagerApprovalModal.jsx'
 import { AdminEmptyState, AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
 
 const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
@@ -26,8 +27,11 @@ const inputClass = 'w-full rounded-xl border border-surface-line customer-neutra
 export default function VouchersPage() {
   const { vouchers, createVoucher, deleteVoucher } = useAppData()
   const { user } = useAuth()
+  const isCashier = user?.role === 'cashier' || user?.role === 'staff'
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteTargetVoucher, setDeleteTargetVoucher] = useState(null)
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false)
+  const [pendingApprovalAction, setPendingApprovalAction] = useState(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [code, setCode] = useState('')
@@ -67,9 +71,19 @@ export default function VouchersPage() {
       showToast({ title: 'Invalid Input', message: 'Please enter a voucher code and value amount greater than 0.', tone: 'error' })
       return
     }
+
+    if (isCashier) {
+      setPendingApprovalAction({ type: 'create' })
+      setApprovalModalOpen(true)
+      return
+    }
+
+    await performCreateVoucher()
+  }
+
+  async function performCreateVoucher() {
     setSubmitting(true)
     try {
-      // If benefitType is session_time, convert minutes input to seconds for backend storage
       const finalValue = benefitType === 'session_time' ? Math.round(Number(valueAmount) * 60) : Number(valueAmount)
       await createVoucher({
         code: code.trim().toUpperCase(),
@@ -92,21 +106,36 @@ export default function VouchersPage() {
   }
 
   function promptDeleteVoucher(v) {
+    if (isCashier) {
+      setDeleteTargetVoucher(v)
+      setPendingApprovalAction({ type: 'delete', voucher: v })
+      setApprovalModalOpen(true)
+      return
+    }
     setDeleteTargetVoucher(v)
   }
 
-  async function confirmDeleteVoucher() {
-    if (!deleteTargetVoucher) return
+  async function confirmDeleteVoucher(target = deleteTargetVoucher) {
+    if (!target) return
     setActionBusy(true)
     try {
-      await deleteVoucher(deleteTargetVoucher.id)
-      showToast({ title: 'Voucher Deactivated', message: deleteTargetVoucher.code, tone: 'warning' })
+      await deleteVoucher(target.id)
+      showToast({ title: 'Voucher Deactivated', message: target.code, tone: 'warning' })
       setDeleteTargetVoucher(null)
     } catch (err) {
       showToast({ title: 'Deactivation Failed', message: err.message, tone: 'error' })
     } finally {
       setActionBusy(false)
     }
+  }
+
+  function handleManagerApproved() {
+    if (pendingApprovalAction?.type === 'create') {
+      void performCreateVoucher()
+    } else if (pendingApprovalAction?.type === 'delete') {
+      void confirmDeleteVoucher(pendingApprovalAction.voucher)
+    }
+    setPendingApprovalAction(null)
   }
 
   const activeVouchers = useMemo(() => {
@@ -464,14 +493,31 @@ export default function VouchersPage() {
 
       {/* DEACTIVATE VOUCHER CONFIRMATION */}
       <ConfirmModal
-        open={Boolean(deleteTargetVoucher)}
+        open={Boolean(deleteTargetVoucher) && !approvalModalOpen}
         title="Deactivate Promo Voucher"
         description={`Are you sure you want to deactivate voucher code "${deleteTargetVoucher?.code}"? Customers will no longer be able to redeem this voucher.`}
         confirmLabel={actionBusy ? 'Deactivating…' : 'Deactivate Voucher'}
         confirmTone="danger"
         disabled={actionBusy}
-        onConfirm={confirmDeleteVoucher}
+        onConfirm={() => confirmDeleteVoucher()}
         onClose={() => setDeleteTargetVoucher(null)}
+      />
+
+      {/* MANAGER APPROVAL MODAL FOR CASHIERS */}
+      <ManagerApprovalModal
+        open={approvalModalOpen}
+        onClose={() => {
+          setApprovalModalOpen(false)
+          setPendingApprovalAction(null)
+        }}
+        onApproved={handleManagerApproved}
+        title={pendingApprovalAction?.type === 'create' ? 'Manager Approval: Create Voucher' : 'Manager Approval: Deactivate Voucher'}
+        description={
+          pendingApprovalAction?.type === 'create'
+            ? 'Cashier accounts require manager or admin authorization to create and issue new promotional vouchers.'
+            : `Cashier accounts require manager or admin authorization to deactivate voucher "${pendingApprovalAction?.voucher?.code}".`
+        }
+        actionLabel={pendingApprovalAction?.type === 'create' ? 'Authorize & Create' : 'Authorize & Deactivate'}
       />
     </AdminPageWorkspace>
   )

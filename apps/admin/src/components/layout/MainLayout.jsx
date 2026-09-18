@@ -11,6 +11,7 @@ import ShiftManagementModal from '../shift/ShiftManagementModal.jsx'
 import logo from '../../assets/aktura-logo.svg'
 import { apiPost } from '../../lib/api.js'
 import { useTheme } from '../../context/ThemeContext.jsx'
+import { useAdminMode } from '../../context/AdminModeContext.jsx'
 import { useBranding } from '../../hooks/useBranding.js'
 import Button from '../common/Button.jsx'
 import CloudBranchPicker from '../cloud/CloudBranchPicker.jsx'
@@ -31,6 +32,7 @@ const BASE_NAV = [
   { to: '/logs', label: 'Logs', icon: ScrollText },
   { to: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
 ]
+const SIMPLE_NAV_PATHS = new Set(['/', '/clients', '/menu', '/members', '/vouchers'])
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 const PAGE_ALIASES = { '/expenses':'Earnings', '/expense':'Earnings' }
 const PAGE_PURPOSE = {
@@ -51,11 +53,16 @@ export default function MainLayout({ children }) {
   const { user, logout } = useAuth()
   const { serverError, settings, currentShift, menuOrders = [] } = useAppData()
   const { isDark, toggleTheme } = useTheme()
+  const { uiMode, isSimpleMode, isAdvanceMode, canToggleMode, setUiMode, toggleUiMode } = useAdminMode()
   const branding = useBranding()
   const location = useLocation()
-  const isCashier = user?.role === 'cashier'
-  const filteredNav = BASE_NAV.filter((item) => !(isCashier && item.adminOnly))
-  const navItems = user?.cloudDeveloper ? [...filteredNav, { to: '/developer', label: 'Developer', icon: ShieldCheck }] : filteredNav
+  const isCashier = user?.role === 'cashier' || user?.role === 'staff'
+  const filteredNav = BASE_NAV.filter((item) => {
+    if (isCashier && item.adminOnly) return false
+    if (isSimpleMode && !SIMPLE_NAV_PATHS.has(item.to)) return false
+    return true
+  })
+  const navItems = (user?.cloudDeveloper && isAdvanceMode) ? [...filteredNav, { to: '/developer', label: 'Developer', icon: ShieldCheck }] : filteredNav
   const currentLabel = PAGE_ALIASES[location.pathname] || navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to))?.label || 'Overview'
   const isOverview = location.pathname === '/'
   const pendingOrdersCount = useMemo(() => {
@@ -230,7 +237,13 @@ export default function MainLayout({ children }) {
             <div className="flex items-center justify-between gap-2 rounded-xl px-2 py-2">
               <div className="min-w-0 leading-tight">
                 <p className="truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</p>
-                <p className="mt-0.5 text-[9px] text-slate-soft">{'Administrator'}</p>
+                <div className="mt-0.5 flex items-center gap-1">
+                  <span className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                    isSimpleMode ? 'bg-teal/10 text-teal-dim' : 'bg-gold/10 text-gold-dim'
+                  }`}>
+                    {isSimpleMode ? '⚡ Simple' : '🛠️ Advance'}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-0.5">
                 <button type="button" className="admin-icon-button" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Light mode' : 'Dark mode'}>
@@ -254,6 +267,16 @@ export default function MainLayout({ children }) {
               <p className="truncate font-display text-[15px] font-semibold leading-tight text-ink-900">{currentLabel}</p>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
+              {canToggleMode && (
+                <button
+                  type="button"
+                  onClick={toggleUiMode}
+                  className="admin-header-pill text-[11px] font-bold"
+                  title={`Switch to ${isSimpleMode ? 'Advance' : 'Simple'} Mode (F8)`}
+                >
+                  <span>{isSimpleMode ? '⚡ Simple' : '🛠️ Advance'}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShiftModalOpen(true)}
@@ -275,10 +298,38 @@ export default function MainLayout({ children }) {
             </div>
             <AdminQuickFind />
             <div className="ml-auto flex items-center gap-1.5 text-slate-soft">
+              {canToggleMode && (
+                <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Simple vs Advance UI Mode (F8)">
+                  <button
+                    type="button"
+                    onClick={() => setUiMode('simple')}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      isSimpleMode
+                        ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
+                        : 'text-slate-soft hover:text-ink-900'
+                    }`}
+                  >
+                    <span>⚡</span>
+                    <span className="hidden xl:inline">Simple</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUiMode('advance')}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      isAdvanceMode
+                        ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
+                        : 'text-slate-soft hover:text-ink-900'
+                    }`}
+                  >
+                    <span>🛠️</span>
+                    <span className="hidden xl:inline">Advance</span>
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setShiftModalOpen(true)}
-                className={`admin-header-pill flex items-center gap-1.5 font-bold cursor-pointer ${
+                className={`admin-header-pill flex items-center gap-1.5 font-bold cursor-pointer shrink-0 ${
                   currentShift
                     ? 'border-teal/40 text-teal-dim bg-teal/10'
                     : 'text-slate-soft hover:text-ink-900'
@@ -286,15 +337,15 @@ export default function MainLayout({ children }) {
                 title="Staff Shift & Cash Drawer Reconciliation"
               >
                 <Clock size={14} className={currentShift ? 'text-teal-dim' : ''} />
-                <span>{currentShift ? 'Shift Active' : 'Clock In'}</span>
+                <span className="hidden sm:inline">{currentShift ? 'Shift Active' : 'Clock In'}</span>
               </button>
-              <button type="button" onClick={()=>setFeedbackOpen(true)} className="admin-header-pill hidden lg:flex" title="Open customer feedback"><MessageSquareText size={15}/> Feedback</button>
-              {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-header-pill" title={`Open ${currentLabel} owner manual`}><BookOpenText size={15}/><span className="hidden xl:inline">Manual</span></button>}
+              <button type="button" onClick={()=>setFeedbackOpen(true)} className="admin-header-pill hidden xl:flex shrink-0" title="Open customer feedback"><MessageSquareText size={15}/> Feedback</button>
+              {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-header-pill hidden 2xl:flex shrink-0" title={`Open ${currentLabel} owner manual`}><BookOpenText size={15}/><span className="hidden xl:inline">Manual</span></button>}
               <AdminNotificationCenter />
               <AnnouncementCenter />
-              <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>{isDark ? <Sun size={16}/> : <Moon size={16}/>}</button>
-              <button type="button" onClick={openLock} className="admin-icon-button" aria-label="Lock admin console" title="Lock admin console"><LockKeyhole size={16}/></button>
-              <div className="ml-1 hidden items-center gap-2 rounded-full border border-surface-line bg-surface py-1 pl-1 pr-3 sm:flex">
+              <button type="button" onClick={toggleTheme} className="admin-icon-button shrink-0" title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>{isDark ? <Sun size={16}/> : <Moon size={16}/>}</button>
+              <button type="button" onClick={openLock} className="admin-icon-button shrink-0" aria-label="Lock admin console" title="Lock admin console"><LockKeyhole size={16}/></button>
+              <div className="ml-1 hidden items-center gap-2 rounded-full border border-surface-line bg-surface py-1 pl-1 pr-3 sm:flex shrink-0">
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-midnight text-soft-white"><UserRound size={15}/></span>
                 <span className="max-w-[110px] truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</span>
               </div>

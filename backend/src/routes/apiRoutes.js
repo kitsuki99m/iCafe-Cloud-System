@@ -4125,6 +4125,7 @@ router.patch("/settings", auth, requireRole("admin"), (req, res, next) => {
       "numberFormat",
       "decimalPlaces",
       "defaultBilling",
+      "floorPlanLayout",
     ]);
     const entries = Object.entries(incoming).filter(([key]) =>
       allowed.has(key),

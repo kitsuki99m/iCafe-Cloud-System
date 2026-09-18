@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { CalendarClock, MonitorCheck, MonitorOff, MonitorPlay, Settings2, TriangleAlert, Wrench, Zap, User, Gamepad2, ShieldAlert } from 'lucide-react'
+import { CalendarClock, Crown, MonitorCheck, MonitorOff, MonitorPlay, Settings2, TriangleAlert, Wrench, Zap, User, Gamepad2, ShieldAlert } from 'lucide-react'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../../lib/sessionTime.js'
 import { effectivePcStatus } from '../../lib/pcStatus.js'
 
@@ -40,6 +40,22 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
   const stationNumber = pc.pcNumber != null && String(pc.pcNumber).trim() !== '' ? String(pc.pcNumber).padStart(2, '0') : null
   const stationTitle = stationNumber ? `PC-${stationNumber}` : (pc.label || 'PC')
 
+  const isVipStation = Boolean(
+    pc.isVip ||
+    pc.vip ||
+    pc.tier === 'VIP' ||
+    pc.tier === 'vip' ||
+    String(pc.spec || '').toLowerCase().includes('vip') ||
+    String(pc.label || '').toLowerCase().includes('vip') ||
+    String(pc.zone || '').toLowerCase().includes('vip') ||
+    String(pc.category || '').toLowerCase().includes('vip')
+  )
+
+  const normalizedLabel = String(pc.label || '').replace(/[\s-_]+/g, '').toLowerCase()
+  const normalizedTitle = String(stationTitle || '').replace(/[\s-_]+/g, '').toLowerCase()
+  const isDefaultNumberLabel = /^pc0*\d+$/i.test(normalizedLabel) || normalizedLabel === normalizedTitle
+  const customNickname = !isDefaultNumberLabel && pc.label && pc.label !== stationTitle ? pc.label : null
+
   return (
     <article
       data-pc-id={pc.id}
@@ -62,14 +78,20 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-soft/80">STATION</span>
+            {isVipStation && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 border border-gold/40 px-1.5 py-0.2 text-[9px] font-black text-gold-dim">
+                <Crown size={10} className="text-gold-dim" />
+                VIP
+              </span>
+            )}
           </div>
           <div className="flex items-baseline gap-1.5 min-w-0 flex-nowrap overflow-hidden">
             <h3 className="font-display text-base sm:text-lg font-black tracking-tight text-ink-900 whitespace-nowrap shrink-0">
               {stationTitle}
             </h3>
-            {pc.label && pc.label !== stationTitle && pc.label !== `PC ${pc.pcNumber}` && (
-              <span className="truncate text-[10px] font-medium text-slate-soft shrink min-w-0" title={pc.label}>
-                ({pc.label})
+            {customNickname && (
+              <span className="truncate text-[10px] font-medium text-slate-soft shrink min-w-0" title={customNickname}>
+                ({customNickname})
               </span>
             )}
           </div>

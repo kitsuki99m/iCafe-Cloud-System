@@ -38,9 +38,30 @@ router.post('/verify-admin-credentials', authenticate, adminCredentialLimiter, a
       verified=pinOk && passwordOk
     }
     if(!verified) return res.status(401).json({success:false,code:'INVALID_CREDENTIALS',error:'Incorrect Admin credentials.'})
+router.post('/verify-manager-override', authenticate, adminCredentialLimiter, async (req,res,next) => {
+  try {
+    const pin=String(req.body?.pin||'').trim()
+    const password=String(req.body?.password||'')
+    const adminUsers=db.prepare("SELECT pin_hash,password_hash,auth_method FROM users WHERE role='admin' AND is_active=1").all()
+    if(!adminUsers.length) return res.status(401).json({success:false,code:'NO_ADMIN',error:'No Admin account is configured.'})
+    let verified=false
+    for (const admin of adminUsers) {
+      const method=admin.auth_method || 'pin'
+      if(method === 'pin' && pin && admin.pin_hash && await argon2.verify(admin.pin_hash, pin)) {
+        verified=true; break;
+      } else if(method === 'password' && password && admin.password_hash && await argon2.verify(admin.password_hash, password)) {
+        verified=true; break;
+      } else if(method === 'pin_password' && pin && password && admin.pin_hash && admin.password_hash) {
+        if(await argon2.verify(admin.pin_hash, pin) && await argon2.verify(admin.password_hash, password)) {
+          verified=true; break;
+        }
+      }
+    }
+    if(!verified) return res.status(401).json({success:false,code:'INVALID_MANAGER_CREDENTIALS',error:'Incorrect Admin/Owner PIN or Password.'})
     res.json({success:true,verifiedAt:nowIso()})
   } catch(error) { next(error) }
 })
+
 
 function userView(user, member = null, pc = null) {
   const wallet = member ? Number(member.wallet_balance ?? 0) : null

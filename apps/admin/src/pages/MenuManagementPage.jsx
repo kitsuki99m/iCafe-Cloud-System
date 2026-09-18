@@ -355,20 +355,20 @@ export default function MenuManagementPage() {
     >
       <div className="space-y-4">
         {/* Page Topbar with Tab Switcher */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex rounded-xl border border-surface-line bg-surface-raised p-1 shadow-2xs">
+        <div className="flex items-center justify-between gap-3 overflow-x-auto pb-1">
+          <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-surface-line bg-surface-raised p-1 shadow-2xs shrink-0">
             <button
               type="button"
               onClick={() => setActiveTab('orders')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
                 activeTab === 'orders'
                   ? 'bg-surface text-ink-900 shadow-sm'
                   : 'text-slate-soft hover:text-ink-900'
               }`}
             >
-              <ShoppingBag size={14} /> Live Orders
+              <ShoppingBag size={14} className="shrink-0" /> <span>Live Orders</span>
               {pendingOrders.length > 0 && (
-                <span className="rounded-full bg-ember/15 text-ember-dim px-1.5 py-0.2 text-[10px] font-bold">
+                <span className="rounded-full bg-ember/15 text-ember-dim px-1.5 py-0.2 text-[10px] font-bold shrink-0">
                   {pendingOrders.length}
                 </span>
               )}
@@ -376,13 +376,13 @@ export default function MenuManagementPage() {
             <button
               type="button"
               onClick={() => setActiveTab('items')}
-              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
                 activeTab === 'items'
                   ? 'bg-surface text-ink-900 shadow-sm'
                   : 'text-slate-soft hover:text-ink-900'
               }`}
             >
-              <Pizza size={14} /> Menu Catalog ({menuItems.length})
+              <Pizza size={14} className="shrink-0" /> <span>Menu Catalog ({menuItems.length})</span>
             </button>
           </div>
         </div>

@@ -28,6 +28,7 @@ export default function App() {
   if (user.cloud && user.cloudBusinessSuspended) return <><CloudAccessPending suspended /><ToastContainer /></>
   if (user.cloud && user.cloudDeveloper && user.cloudNeedsSetup) return <><DeveloperConsolePage standalone /><ToastContainer /></>
   if (user.cloud && user.cloudNeedsSetup) return <><CloudAccessPending /><ToastContainer /></>
+  const isStaffOrCashier = user?.role === 'cashier' || user?.role === 'staff'
   return <>
     {mustChange && <AdminCredentialSetup />}
     <MainLayout>
@@ -36,16 +37,16 @@ export default function App() {
         <Route path="/clients" element={<FloorMatrix />} />
         <Route path="/launcher" element={<LauncherManagementPage />} />
         <Route path="/menu" element={<MenuManagementPage />} />
-        <Route path="/tariffs" element={user.role === 'cashier' ? <Navigate to="/" replace /> : <TariffsPage />} />
+        <Route path="/tariffs" element={isStaffOrCashier ? <Navigate to="/" replace /> : <TariffsPage />} />
         <Route path="/members" element={<MembersPage />} />
         <Route path="/vouchers" element={<VouchersPage />} />
-        <Route path="/earnings" element={<EarningsPage />} />
-        <Route path="/expenses" element={<EarningsPage />} />
-        <Route path="/expense" element={<EarningsPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/logs" element={<LogsPage />} />
-        <Route path="/settings" element={user.role === 'cashier' ? <Navigate to="/" replace /> : <SettingsPage />} />
-        <Route path="/developer" element={user.cloudDeveloper?<DeveloperConsolePage />:<Navigate to="/" replace />} />
+        <Route path="/earnings" element={isStaffOrCashier ? <Navigate to="/" replace /> : <EarningsPage />} />
+        <Route path="/expenses" element={isStaffOrCashier ? <Navigate to="/" replace /> : <EarningsPage />} />
+        <Route path="/expense" element={isStaffOrCashier ? <Navigate to="/" replace /> : <EarningsPage />} />
+        <Route path="/analytics" element={isStaffOrCashier ? <Navigate to="/" replace /> : <AnalyticsPage />} />
+        <Route path="/logs" element={isStaffOrCashier ? <Navigate to="/" replace /> : <LogsPage />} />
+        <Route path="/settings" element={isStaffOrCashier ? <Navigate to="/" replace /> : <SettingsPage />} />
+        <Route path="/developer" element={user.cloudDeveloper && !isStaffOrCashier ? <DeveloperConsolePage /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </MainLayout>
