@@ -154,19 +154,20 @@ export default function EarningsPage(){
       <AdminMetricCard label="Net income" value={money(data?.summary?.net)} icon={TrendingUp} tone="success"/>
     </div>
 
-    <section className="earnings-primary-actions mb-3.5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-surface-line bg-surface px-4 py-3 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="eyebrow mr-1 hidden sm:inline">Reporting tools:</span>
-        <Button variant="subtle" icon={RefreshCw} onClick={load} disabled={loading}>Refresh</Button>
-        <Button variant="subtle" icon={Mail} onClick={()=>setModal('email_summary')}>Email Summary</Button>
-        <Button variant="primary" icon={Download} onClick={createReport} disabled={saving||loading}>{saving?'Working…':'Generate PDF'}</Button>
+    <section className="earnings-primary-actions mb-3.5 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-surface-line bg-surface px-3 py-2 sm:px-4 sm:py-2.5 shadow-xs">
+      <div className="flex flex-wrap items-center gap-1.5" aria-label="Reporting tools">
+        <span className="sr-only">Reporting tools</span>
+        <Button size="sm" variant="subtle" icon={RefreshCw} onClick={load} disabled={loading}>Refresh</Button>
+        <Button size="sm" variant="subtle" icon={Mail} onClick={()=>setModal('email_summary')}>Email Summary</Button>
+        <Button size="sm" variant="subtle" icon={Download} onClick={createReport} disabled={saving||loading}>{saving?'Working…':'Generate PDF'}</Button>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="eyebrow mr-1 hidden sm:inline">Expense controls:</span>
-        <Button variant="subtle" icon={ReceiptText} onClick={()=>setModal('fixed')}>Fixed expenses</Button>
-        <Button variant="primary" icon={Plus} onClick={()=>setModal('custom')}>Add expense</Button>
+      <div className="flex flex-wrap items-center gap-1.5" aria-label="Expense controls">
+        <span className="sr-only">Expense controls</span>
+        <Button size="sm" variant="subtle" icon={ReceiptText} onClick={()=>setModal('fixed')}>Fixed expenses</Button>
+        <Button size="sm" variant="primary" icon={Plus} onClick={()=>setModal('custom')}>Add expense</Button>
       </div>
     </section>
+
 
     <section className="overview-card p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">

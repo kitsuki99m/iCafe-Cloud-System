@@ -720,28 +720,49 @@ export default function MenuManagementPage() {
         eyebrow="Menu catalog"
         title={editingItem ? 'Edit Menu Item' : 'Add New Menu Item'}
         description="Configure product details, category, pricing, and stock inventory."
-        maxWidth="max-w-md"
+        maxWidth="max-w-2xl"
         footer={
-          <>
-            <Button variant="ghost" onClick={() => setModalOpen(false)} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSaveItem} disabled={submitting || !formData.name.trim() || !(Number(formData.price) > 0)}>
-              {submitting ? 'Saving…' : 'Save Item'}
-            </Button>
-          </>
+          <div className="flex items-center justify-between w-full">
+            <div>
+              {editingItem && (
+                <Button
+                  variant="ghost"
+                  disabled={submitting}
+                  onClick={() => {
+                    const target = editingItem
+                    setModalOpen(false)
+                    setDeleteTarget(target)
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-ember-dim hover:bg-ember/10 border border-ember/20"
+                >
+                  <Trash2 size={13} />
+                  Delete Item
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => setModalOpen(false)} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button variant="primary" onClick={handleSaveItem} disabled={submitting || !formData.name.trim() || !(Number(formData.price) > 0)}>
+                {submitting ? 'Saving…' : 'Save Item'}
+              </Button>
+            </div>
+          </div>
         }
       >
-        <form onSubmit={handleSaveItem} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <form onSubmit={handleSaveItem} className="space-y-4.5 py-1">
+          {/* Row 1: Item Name + Category */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="eyebrow mb-1.5 block">Item Name <span className="text-ember-dim">*</span></label>
               <input
                 type="text"
                 required
+                autoFocus
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g. Pancit Canton"
+                placeholder="e.g. Pancit Canton (Calamansi / Extra Hot)"
                 className={inputClass}
               />
             </div>
@@ -752,17 +773,18 @@ export default function MenuManagementPage() {
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 className={inputClass}
               >
-                <option value="Food">Food</option>
-                <option value="Drinks">Drinks</option>
-                <option value="Snacks">Snacks</option>
-                <option value="Combos">Combos</option>
+                <option value="Food">Food (Meals, Rice, Noodles)</option>
+                <option value="Drinks">Drinks (Soda, Energy, Coffee, Juice)</option>
+                <option value="Snacks">Snacks (Chips, Biscuits, Candies)</option>
+                <option value="Combos">Combos (Meal & Drink Bundles)</option>
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Row 2: Price + Stock Quantity */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="eyebrow mb-1.5 block">Price (₱) <span className="text-ember-dim">*</span></label>
+              <label className="eyebrow mb-1.5 block">Unit Price (₱) <span className="text-ember-dim">*</span></label>
               <NumericInput
                 min="0"
                 step="0.01"
@@ -774,34 +796,46 @@ export default function MenuManagementPage() {
               />
             </div>
             <div>
-              <label className="eyebrow mb-1.5 block">Stock Quantity <span className="text-slate-soft font-normal text-[10px]">(Blank = Unlimited)</span></label>
+              <label className="eyebrow mb-1.5 block">Stock Quantity <span className="text-slate-soft font-normal text-[10px]">(Leave blank for unlimited)</span></label>
               <NumericInput
                 min="0"
                 step="1"
                 value={formData.stockQuantity}
                 onChange={(e) => setFormData({ ...formData, stockQuantity: e.target.value })}
-                placeholder="Unlimited"
+                placeholder="Unlimited stock"
                 className={inputClass}
               />
             </div>
           </div>
 
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-ink-900 pt-1">
-              <input
-                type="checkbox"
-                checked={formData.isAvailable}
-                onChange={(e) => setFormData({ ...formData, isAvailable: e.target.checked })}
-                className="rounded border-surface-line text-gold-dim focus:ring-0"
+          {/* Row 3: Active Status Modern Toggle Switch */}
+          <div className="flex items-center justify-between p-3.5 rounded-xl border border-surface-line customer-neutral-surface">
+            <div>
+              <span className="text-xs font-bold text-ink-900 block">Listed on Station Menu</span>
+              <span className="text-[11px] text-slate-soft">Allow customers to order this item directly from their PC station kiosk.</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={formData.isAvailable}
+              onClick={() => setFormData({ ...formData, isAvailable: !formData.isAvailable })}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                formData.isAvailable ? 'bg-gold' : 'bg-surface-raised border-surface-line'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                  formData.isAvailable ? 'translate-x-5' : 'translate-x-0'
+                }`}
               />
-              Active / Listed on Station Menu
-            </label>
+            </button>
           </div>
 
+          {/* Row 4: Product Photo */}
           <div>
-            <label className="eyebrow mb-1.5 block">Product Photo</label>
-            <div className="flex items-center gap-3 p-3 rounded-xl border border-surface-line customer-neutral-surface">
-              <div className="w-16 h-16 rounded-xl bg-white overflow-hidden flex items-center justify-center p-1 shrink-0 border border-surface-line shadow-xs">
+            <label className="eyebrow mb-1.5 block">Product Photo / Display Image</label>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl border border-surface-line customer-neutral-surface">
+              <div className="w-20 h-20 rounded-2xl bg-white overflow-hidden flex items-center justify-center p-2 shrink-0 border border-surface-line shadow-xs">
                 {formData.imageUrl ? (
                   <img
                     src={formData.imageUrl}
@@ -810,13 +844,13 @@ export default function MenuManagementPage() {
                     onError={(e) => { e.target.style.display = 'none' }}
                   />
                 ) : (
-                  <UtensilsCrossed className="w-6 h-6 text-slate-400" />
+                  <UtensilsCrossed className="w-8 h-8 text-slate-400" />
                 )}
               </div>
-              <div className="flex-1 min-w-0 space-y-2">
+              <div className="flex-1 w-full space-y-2.5">
                 <div className="flex items-center gap-2">
-                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg bg-surface border border-surface-line hover:border-gold/50 text-ink-900 transition shadow-xs">
-                    <Upload size={12} /> Upload Photo
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-surface border border-surface-line hover:border-gold/50 text-ink-900 transition shadow-xs">
+                    <Upload size={13} /> Upload Image File
                     <input
                       type="file"
                       accept="image/*"
@@ -828,9 +862,9 @@ export default function MenuManagementPage() {
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, imageUrl: '' })}
-                      className="px-2 py-1 text-xs font-semibold rounded-lg text-ember-dim hover:bg-ember/10 transition"
+                      className="px-2.5 py-1.5 text-xs font-semibold rounded-xl text-ember-dim hover:bg-ember/10 transition border border-ember/20 cursor-pointer"
                     >
-                      Remove
+                      Clear Photo
                     </button>
                   )}
                 </div>
@@ -838,20 +872,21 @@ export default function MenuManagementPage() {
                   type="text"
                   value={formData.imageUrl}
                   onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                  placeholder="Or paste image URL (https://… or /assets/…)"
-                  className="w-full text-xs rounded-lg border border-surface-line customer-neutral-surface px-2.5 py-1.5 text-ink-900 focus:outline-none focus:border-gold/50"
+                  placeholder="Or paste public image URL (https://… or /assets/food/...)"
+                  className="w-full text-xs rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-ink-900 focus:outline-none focus:border-gold/50 font-mono"
                 />
               </div>
             </div>
           </div>
 
+          {/* Row 5: Description */}
           <div>
-            <label className="eyebrow mb-1.5 block">Description</label>
+            <label className="eyebrow mb-1.5 block">Description / Serving Notes (Optional)</label>
             <textarea
               rows={2}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Flavors, serving size, or details…"
+              placeholder="Flavors, preparation instructions, or serving size details…"
               className={`${inputClass} resize-none`}
             />
           </div>

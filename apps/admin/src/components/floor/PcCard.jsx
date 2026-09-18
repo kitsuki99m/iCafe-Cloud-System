@@ -1,6 +1,8 @@
+import { memo } from 'react'
 import { CalendarClock, MonitorCheck, MonitorOff, MonitorPlay, Settings2, TriangleAlert, Wrench, Zap, User, Gamepad2, ShieldAlert } from 'lucide-react'
 import { elapsedSessionSeconds, remainingSessionSeconds } from '../../lib/sessionTime.js'
 import { effectivePcStatus } from '../../lib/pcStatus.js'
+
 
 const STATUS = {
   available:{ label:'READY', sublabel:'Station Ready', icon:MonitorCheck, color:'text-teal-dim', iconBg:'bg-teal/10', dotColor:'bg-teal/70', badgeClass:'border-teal/30 bg-teal/10 text-teal-dim', cardClass:'border-surface-line bg-surface hover:border-teal/40 hover:bg-teal/[0.015] hover:shadow-md' },
@@ -18,7 +20,8 @@ function formatClock(total) {
   return `${h ? `${String(h).padStart(2, '0')}:` : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-export default function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onControls }) {
+function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onControls }) {
+
   const session = pc.session
   const rawStatus = String(pc.status || '').trim().toLowerCase().replaceAll('_', '-')
   const statusKey=effectivePcStatus(pc)
@@ -200,3 +203,6 @@ export default function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5
     </article>
   )
 }
+
+export default memo(PcCard)
+

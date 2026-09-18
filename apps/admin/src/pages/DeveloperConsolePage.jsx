@@ -189,8 +189,35 @@ export default function DeveloperConsolePage({standalone=false}){
     </div>
     <div className="grid min-h-[520px] items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
       <section className="min-w-0 rounded-2xl border border-surface-line bg-surface p-3 sm:p-4 lg:sticky lg:top-4 lg:self-start lg:flex lg:max-h-[calc(100dvh-120px)] lg:flex-col lg:overflow-hidden">
-        <div className="relative min-w-0 flex-1"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-soft"/><input value={query} onChange={e=>setQuery(e.target.value)} className="min-h-11 w-full rounded-xl border border-surface-line bg-soft-white pl-9 pr-3 text-xs text-ink-900" placeholder="Search business, owner, email…"/></div>
-        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">{FILTERS.map(key=><button key={key} onClick={()=>setFilter(key)} className={`min-h-9 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-semibold ${filter===key?'bg-midnight text-soft-white':'bg-midnight/6 text-slate-soft'}`}>{labels[key]} {key!=='all'&&counts[key]?`· ${counts[key]}`:''}</button>)}</div>
+        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">{FILTERS.map(key=>{
+          const count = key !== 'all' ? (counts[key] || 0) : 0
+          const isActive = filter === key
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              className={`inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-semibold transition-colors ${
+                isActive
+                  ? 'bg-midnight text-soft-white shadow-xs'
+                  : 'bg-midnight/6 text-slate-soft hover:bg-midnight/10 hover:text-ink-900'
+              }`}
+            >
+              <span>{labels[key]}</span>
+              {count > 0 && (
+                <span
+                  className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none ${
+                    isActive
+                      ? 'bg-gold text-midnight'
+                      : 'bg-midnight/12 text-ink-900'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}</div>
         <div className="mt-3 space-y-2 overflow-y-auto lg:min-h-0 lg:flex-1 lg:max-h-none">{visible.length?visible.map(item=><button key={item.id} onClick={()=>{const suggested=packageForStations(item.expected_station_count||1,packageCatalog);const next=String(item.subscription_plan||suggested.id).toLowerCase();setSelected(item);setSubscriptionPlan(next);setUltraStationLimit(String(next==='ultra'?Math.max(ultraFloor,Number(item.subscription_max_stations)||0,Number(item.expected_station_count)||0):(item.subscription_max_stations||packageDefinition(next,packageCatalog).maxStations||50)));setNotes(item.review_notes||'');setActivationLink('');setNotice('')}} className={`w-full rounded-xl border p-3 text-left transition-colors ${selected?.id===item.id?'border-gold/50 bg-gold/5':'border-surface-line bg-surface-raised/35 hover:bg-surface-raised'}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink-900">{item.business_name}</p><p className="mt-0.5 truncate text-[11px] text-slate-soft">{item.owner_name} · {item.email}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${badge(item.status)}`}>{labels[item.status]||item.status}</span></div><div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-soft"><span>Submitted {formatDate(item.created_at)}</span>{item.organization_status&&<span className={`rounded-full px-2 py-0.5 font-semibold ${businessBadge(item.organization_status)}`}>{businessLabels[item.organization_status]||item.organization_status}</span>}</div></button>):<div className="flex min-h-40 items-center justify-center text-xs text-slate-soft">No applications in this view.</div>}</div>
       </section>
 

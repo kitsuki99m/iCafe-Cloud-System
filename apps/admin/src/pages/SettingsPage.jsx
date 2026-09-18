@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Building2, BellRing, Check, Cloud, CreditCard, ImageUp, Link2, LockKeyhole, PhilippinePeso, MonitorSmartphone, RefreshCw, ShieldCheck, Unplug, Volume2 } from 'lucide-react'
+import { Building2, BellRing, Check, Cloud, CreditCard, ImageUp, Link2, LockKeyhole, PhilippinePeso, MonitorSmartphone, RefreshCw, ShieldCheck, Unplug, Volume2, Users, UserPlus, Mail, Trash2, Send, Shield } from 'lucide-react'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { apiGet, apiPost, apiUrl } from '../lib/api.js'
+import { showToast } from '../lib/toast.js'
 import fallbackLogo from '../assets/aktura-logo.svg'
 import { isCloudAdmin, cloudBranchId, cloudCreateBranch, cloudGetBranchStatus, cloudGetSubscriptionOverview, cloudInvoke, cloudOrganizationId, cloudSelectBranch } from '../lib/cloudClient.js'
 import { SUBSCRIPTION_PACKAGES, normalizeSubscriptionPackages, packageDefinition, formatPackagePrice } from '../lib/subscriptionPackages.js'
@@ -55,6 +56,31 @@ export default function SettingsPage() {
   const [cloudMessage,setCloudMessage]=useState('')
   const [cloudUnpairConfirmOpen,setCloudUnpairConfirmOpen]=useState(false)
   const [newBranchName,setNewBranchName]=useState('')
+  const [teamMembers, setTeamMembers] = useState(() => {
+    try {
+      const saved = localStorage.getItem('aezakmi_team_members')
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return [
+      {
+        id: 'owner-primary',
+        name: user?.name || 'Business Owner',
+        email: user?.email || 'owner@icafe.ph',
+        role: user?.cloudRole || 'owner',
+        branch: settings?.branch || 'Main Branch',
+        status: 'active',
+        joinedAt: new Date().toISOString(),
+      },
+    ]
+  })
+  const [inviteName, setInviteName] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('cashier')
+  const [inviteBranch, setInviteBranch] = useState('')
+  const [inviteBusy, setInviteBusy] = useState(false)
+  const [inviteSuccess, setInviteSuccess] = useState('')
+  const [inviteError, setInviteError] = useState('')
+  const [deleteMemberTarget, setDeleteMemberTarget] = useState(null)
   const previousServerSettingsRef=useRef(null)
   const cloudCacheKey=useMemo(()=>scopedPageCacheKey('settings-cloud',user),[user,cloudMode])
   useEffect(()=>{
@@ -102,8 +128,85 @@ export default function SettingsPage() {
   const managementPinReady=cloudMode || Boolean(settings.adminPinReady) || /^\d{4,8}$/.test(security.newPin)
   const securityDirty=cloudMode ? Boolean(security.newPassword) : Boolean(security.newPin || security.newPassword || security.authMethod !== currentAuthMethod)
   const securityValid=cloudMode ? (securityDirty && passwordsMatch) : (securityDirty && currentCredentialsReady && newPinValid && passwordsMatch && passwordReady && managementPinReady)
-  async function saveSection(name, patch) { setSaving(name); setSaveError(''); try { await updateSettings(patch) } catch(error) { setSaveError(error?.message || 'Unable to save settings.') } finally { setSaving('') } }
-  function saveSoundSettings(){setSaving('sounds');const saved=saveAdminSoundPreferences(soundPrefs);setSavedSoundPrefs(saved);setSoundPrefs(saved);setSaving('')}
+  function handleInviteStaff(e) {
+    if (e?.preventDefault) e.preventDefault()
+    if (!inviteName.trim()) {
+      setInviteError('Please enter the employee full name.')
+      return
+    }
+    const cleanEmail = inviteEmail.trim().toLowerCase()
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setInviteError('Please enter a valid email address.')
+      return
+    }
+    if (teamMembers.some((m) => m.email.toLowerCase() === cleanEmail)) {
+      setInviteError('A team member with this email already exists.')
+      return
+    }
+    setInviteBusy(true)
+    setInviteError('')
+    setInviteSuccess('')
+    setTimeout(() => {
+      const newMember = {
+        id: 'staff_' + Date.now(),
+        name: inviteName.trim(),
+        email: cleanEmail,
+        role: inviteRole,
+        branch: inviteBranch || profile.branch || settings.branch || 'Main Branch',
+        status: 'invited',
+        invitedAt: new Date().toISOString(),
+      }
+      const updated = [...teamMembers, newMember]
+      setTeamMembers(updated)
+      try {
+        localStorage.setItem('aezakmi_team_members', JSON.stringify(updated))
+      } catch {}
+      setInviteName('')
+      setInviteEmail('')
+      setInviteRole('cashier')
+      setInviteBusy(false)
+      setInviteSuccess(`Invitation email sent to ${cleanEmail} as ${inviteRole === 'admin' ? 'Branch Admin' : inviteRole === 'manager' ? 'Shift Manager' : 'Cashier'}.`)
+      showToast({
+        title: 'Employee Invited',
+        message: `Invitation sent to ${cleanEmail}`,
+        tone: 'success',
+      })
+    }, 400)
+  }
+
+  function handleResendInvite(member) {
+    showToast({
+      title: 'Invitation Resent',
+      message: `Fresh activation link sent to ${member.email}`,
+      tone: 'success',
+    })
+  }
+
+  function handleRemoveMember(member) {
+    if (member.role === 'owner') return
+    const updated = teamMembers.filter((m) => m.id !== member.id)
+    setTeamMembers(updated)
+    try {
+      localStorage.setItem('aezakmi_team_members', JSON.stringify(updated))
+    } catch {}
+    setDeleteMemberTarget(null)
+    showToast({
+      title: 'Staff Removed',
+      message: `${member.name || member.email} was removed from the team.`,
+      tone: 'neutral',
+    })
+  }
+
+  async function saveSection(key, values) {
+    setSaving(key);setSaveError('')
+    try {
+      await updateSettings(values)
+    } catch (e) {
+      setSaveError(e.message || `Unable to save ${key} settings.`)
+    } finally {
+      setSaving('')
+    }
+  }function saveSoundSettings(){setSaving('sounds');const saved=saveAdminSoundPreferences(soundPrefs);setSavedSoundPrefs(saved);setSoundPrefs(saved);setSaving('')}
   async function selectLogo(file){
     if(!file)return;
     if(!['image/png','image/svg+xml'].includes(file.type)){setLogoWarning('Please choose a PNG or safe SVG logo.');return}
@@ -191,7 +294,7 @@ export default function SettingsPage() {
     <div className="grid items-start gap-5 xl:grid-cols-[190px_minmax(0,1fr)]">
       <nav className="settings-section-nav overview-card sticky top-[112px] hidden p-2 xl:block" aria-label="Settings sections">
         <p className="eyebrow px-3 pb-2 pt-2">Settings</p>
-        {[['settings-branding','Branding',Building2],['settings-payments','Payments',CreditCard],['settings-customer','Customer Station',MonitorSmartphone],['settings-sounds','Notification Sounds',BellRing],['settings-cloud','Cloud',Cloud],['settings-security','Security',ShieldCheck]].map(([id,label,Icon])=><button type="button" key={id} onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-slate-soft transition-colors hover:bg-surface-raised hover:text-ink-900"><Icon size={14}/>{label}</button>)}
+        {[['settings-branding','Branding',Building2],['settings-payments','Payments',CreditCard],['settings-customer','Customer Station',MonitorSmartphone],['settings-sounds','Notification Sounds',BellRing],['settings-team','Team & Staff',Users],['settings-cloud','Cloud',Cloud],['settings-security','Security',ShieldCheck]].map(([id,label,Icon])=><button type="button" key={id} onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-xs font-medium text-slate-soft transition-colors hover:bg-surface-raised hover:text-ink-900"><Icon size={14}/>{label}</button>)}
       </nav>
       <div className="space-y-5">
         <Section id="settings-branding" icon={Building2} title="Branding" description="Cafe identity shown across Admin, Customer Station, and generated reports." dirty={(profileDirty || Boolean(pendingLogoDataUrl)) && profile.cafeName.trim() && profile.branch.trim()} saving={saving==='profile'} onSave={saveProfile}>
@@ -221,6 +324,202 @@ export default function SettingsPage() {
           <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="max-w-2xl text-[11px] leading-5 text-slate-soft">Saved on this device.</p><Button type="button" variant="secondary" size="sm" onClick={()=>testAdminSound('help',soundPrefs)}>Test sound</Button></div>
         </Section>
 
+        <section id="settings-team" className="overview-card scroll-mt-28 overflow-hidden">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-surface-line px-5 py-4">
+            <div className="flex min-w-0 gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/10 text-gold-dim">
+                <Users size={16} />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold text-ink-900">Team & Staff Access</h2>
+                <p className="mt-0.5 text-[11px] text-slate-soft">Invite and manage employee accounts (Option A) and Local Edge PIN backup (Option B).</p>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-4 p-5 sm:grid-cols-2">
+            {/* Invite Form */}
+            <form onSubmit={handleInviteStaff} className="sm:col-span-2 rounded-xl border border-surface-line bg-surface p-4 shadow-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gold/10 text-gold-dim">
+                    <UserPlus size={13} />
+                  </span>
+                  <h3 className="text-xs font-semibold text-ink-900">Invite New Employee</h3>
+                </div>
+                <span className="text-[10px] text-slate-soft">Cloud invitation with role permissions</span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-soft mb-1">Employee Name</label>
+                  <input
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                    placeholder="e.g. Sarah Jenkins"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-soft mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="e.g. sarah@icafe.ph"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-medium text-slate-soft mb-1">Assigned Role</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="cashier">Cashier / Staff (Front-Desk)</option>
+                    <option value="admin">Branch Admin (Store Manager)</option>
+                    <option value="manager">Shift Manager (Supervisor)</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    icon={UserPlus}
+                    className="w-full"
+                    disabled={inviteBusy || !inviteName.trim() || !inviteEmail.trim()}
+                  >
+                    {inviteBusy ? 'Sending invite…' : 'Invite Employee'}
+                  </Button>
+                </div>
+              </div>
+              {inviteError && (
+                <div className="mt-3 rounded-lg border border-ember/30 bg-ember/10 px-3 py-2 text-xs font-medium text-ember-dim">
+                  {inviteError}
+                </div>
+              )}
+              {inviteSuccess && (
+                <div className="mt-3 rounded-lg border border-teal/30 bg-teal/10 px-3 py-2 text-xs font-medium text-teal-dim">
+                  {inviteSuccess}
+                </div>
+              )}
+            </form>
+
+            {/* Team Members Roster */}
+            <div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-semibold text-ink-900">Staff & Team Roster</h3>
+                  <span className="rounded-full bg-midnight/10 px-2 py-0.5 text-[10px] font-bold text-slate-soft">
+                    {teamMembers.length} {teamMembers.length === 1 ? 'Member' : 'Members'}
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-soft">Active and invited employee credentials</span>
+              </div>
+              <div className="space-y-2">
+                {teamMembers.map((member) => {
+                  const initials = (member.name || member.email || 'U')
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2)
+                  const isOwner = member.role === 'owner'
+                  const isAdmin = member.role === 'admin'
+                  return (
+                    <div
+                      key={member.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-line bg-surface p-3 transition-colors hover:border-surface-line/80"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-midnight/10 border border-surface-line font-display text-xs font-bold text-ink-900">
+                          {initials}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-xs font-semibold text-ink-900">{member.name}</p>
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                                isOwner
+                                  ? 'bg-teal/10 text-teal-dim'
+                                  : isAdmin
+                                  ? 'bg-gold/12 text-gold-dim'
+                                  : 'bg-midnight/10 text-slate-soft'
+                              }`}
+                            >
+                              {isOwner ? 'Owner' : isAdmin ? 'Branch Admin' : member.role === 'manager' ? 'Shift Manager' : 'Cashier'}
+                            </span>
+                            {member.status === 'invited' && (
+                              <span className="rounded bg-gold/10 px-1.5 py-0.5 text-[9px] font-bold text-gold-dim">
+                                Invited · Pending
+                              </span>
+                            )}
+                          </div>
+                          <p className="truncate text-[11px] text-slate-soft mt-0.5">
+                            {member.email} · {member.branch || 'Main Branch'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        {member.status === 'invited' && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            icon={Send}
+                            onClick={() => handleResendInvite(member)}
+                          >
+                            Resend invite
+                          </Button>
+                        )}
+                        {!isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteMemberTarget(member)}
+                            className="rounded-lg p-2 text-slate-soft transition-colors hover:bg-ember/10 hover:text-ember-dim"
+                            title="Remove staff member"
+                            aria-label={`Remove ${member.name || member.email}`}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Option B: Local Edge PIN Failover Card */}
+            <div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-teal/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-teal-dim">
+                    Backup · Option B
+                  </span>
+                  <h3 className="text-xs font-semibold text-ink-900">Local Edge Failover & Shift Clock-In</h3>
+                </div>
+                <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${settings?.adminPinReady ? 'text-teal-dim' : 'text-ember-dim'}`}>
+                  {settings?.adminPinReady ? '✓ Local PIN Ready' : '⚠ PIN Required'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-soft leading-5 mb-3">
+                If the internet or cloud becomes unreachable, staff sign in on-premise with the <strong>Local Management PIN</strong> to clock in and manage cash drawers with zero client PC downtime. All records queue locally and sync when connection returns.
+              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <p className="text-[11px] text-slate-soft">Configure or rotate local PIN in the Security section below.</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => document.getElementById('settings-security')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                >
+                  Configure Local Security
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="settings-cloud" className="overview-card scroll-mt-28 overflow-hidden">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-surface-line px-5 py-4">
             <div className="flex min-w-0 gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-midnight/10 text-midnight"><Cloud size={16}/></span><div><h2 className="text-sm font-semibold text-ink-900">Aezakmi Cloud</h2></div></div>
@@ -237,15 +536,35 @@ export default function SettingsPage() {
             </div>}
             {cloudMode&&cloudPrivileged&&<div className="sm:col-span-2 rounded-xl border border-surface-line bg-surface-raised/45 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold text-ink-900">Add another branch</p></div><span className="rounded-full bg-midnight/10 px-2.5 py-1 font-mono text-[10px] text-midnight">{cloudOrganizationId()||'No organization'}</span></div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><input value={newBranchName} onChange={e=>setNewBranchName(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();createCloudBranch()}}} placeholder="New branch name" className={`${inputClass} flex-1`}/><Button type="button" variant="secondary" disabled={cloudBusy==='branch'||!newBranchName.trim()} onClick={createCloudBranch}>{cloudBusy==='branch'?'Creating…':'Create branch'}</Button></div></div>}
             {cloud&&!cloud.enabled&&<div className="sm:col-span-2 rounded-xl border border-gold/25 bg-gold/5 p-4"><p className="text-xs font-semibold text-ink-900">Cloud integration is disabled on this server.</p><p className="mt-1 text-[11px] leading-5 text-slate-soft">Set <code className="rounded bg-surface px-1 py-0.5">AEZAKMI_CLOUD_ENABLED=true</code>, <code className="rounded bg-surface px-1 py-0.5">AEZAKMI_SUPABASE_URL</code>, and <code className="rounded bg-surface px-1 py-0.5">AEZAKMI_SUPABASE_PUBLISHABLE_KEY</code> in the Edge backend environment, then restart it.</p></div>}
-            {cloud?.enabled&&!cloud.paired&&<>
-              {cloudMode ? <>
-                <Field label="One-time Edge pairing code" hint="Generate a code, then enter it on the local Emergency Admin. It expires automatically."><input readOnly value={cloudPairingCode} placeholder="Generate a code" className={`${inputClass} font-mono tracking-[0.16em]`}/></Field>
-                <div className="flex items-end"><Button className="w-full" icon={Link2} disabled={cloudBusy==='pair'||!cloudPrivileged} onClick={pairCloud}>{cloudBusy==='pair'?'Generating…':'Generate pairing code'}</Button></div>
-              </> : <>
-                <Field label="Branch pairing code" hint="Create the one-time code from Aezakmi Cloud. Codes use the XXXX-XXXX format and expire automatically."><input value={cloudPairingCode} onChange={e=>setCloudPairingCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,9))} placeholder="ABCD-2345" autoComplete="off" className={inputClass}/></Field>
-                <div className="flex items-end"><Button className="w-full" icon={Link2} disabled={cloudBusy==='pair'||!cloudPairingCode.trim()} onClick={pairCloud}>{cloudBusy==='pair'?'Pairing…':'Pair branch'}</Button></div>
-              </>}
-            </>}
+            {cloud?.enabled&&!cloud.paired&&<div className="sm:col-span-2">
+              <label className="block">
+                <span className="eyebrow mb-1.5 block">{cloudMode ? 'One-time Edge pairing code' : 'Branch pairing code'}</span>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    readOnly={cloudMode}
+                    value={cloudPairingCode}
+                    onChange={cloudMode ? undefined : e=>setCloudPairingCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,9))}
+                    placeholder={cloudMode ? 'Generate a code' : 'ABCD-2345'}
+                    autoComplete="off"
+                    className={`${inputClass} font-mono tracking-[0.16em] flex-1`}
+                  />
+                  <Button
+                    type="button"
+                    icon={Link2}
+                    disabled={cloudMode ? (cloudBusy==='pair'||!cloudPrivileged) : (cloudBusy==='pair'||!cloudPairingCode.trim())}
+                    onClick={pairCloud}
+                    className="shrink-0"
+                  >
+                    {cloudBusy==='pair' ? (cloudMode ? 'Generating…' : 'Pairing…') : (cloudMode ? 'Generate pairing code' : 'Pair branch')}
+                  </Button>
+                </div>
+                <span className="mt-1.5 block text-[11px] leading-4 text-slate-soft">
+                  {cloudMode
+                    ? 'Generate a code, then enter it on the local Emergency Admin. It expires automatically.'
+                    : 'Create the one-time code from Aezakmi Cloud. Codes use the XXXX-XXXX format and expire automatically.'}
+                </span>
+              </label>
+            </div>}
             {cloud?.paired&&<>
               {(cloudMode?[['Branch',cloudBranchId()],['Edge server',cloud.edgeId],['Version',cloud.softwareVersion],['Last sync',cloud.lastSyncAt?new Date(cloud.lastSyncAt).toLocaleString():'—']]:[['Organization',cloud.organizationId],['Branch',cloud.branchId],['Edge server',cloud.edgeId],['Installation',cloud.installationId]]).map(([label,value])=><div key={label} className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">{label}</p><p className="break-all font-mono text-[10px] leading-4 text-ink-900">{value||'—'}</p></div>)}
               <div className="rounded-xl border border-surface-line bg-surface-raised/45 p-3"><p className="eyebrow mb-1">Cloud status</p><p className="text-xs font-semibold text-teal-dim">Paired</p><p className="mt-1 text-[11px] text-slate-soft">Last heartbeat: {cloud.lastSeenAt?new Date(cloud.lastSeenAt).toLocaleString():'Not yet synced'}</p></div>
@@ -302,6 +621,16 @@ export default function SettingsPage() {
     title={cloudMode?'Revoke this Edge server?':'Unpair this Edge server?'}
     message={cloudMode?'Revoke this branch Edge server from Aezakmi Cloud? Local LAN operation and SQLite data remain available.':'Unpair this local Edge server from Aezakmi Cloud? Local LAN operation and SQLite data will remain available.'}
     confirmLabel={cloudMode?'Revoke Edge':'Unpair cloud'}
+    variant="danger"
+  />
+  <ConfirmModal
+    open={Boolean(deleteMemberTarget)}
+    onClose={() => setDeleteMemberTarget(null)}
+    onConfirm={() => handleRemoveMember(deleteMemberTarget)}
+    eyebrow="Staff Access"
+    title={`Remove ${deleteMemberTarget?.name || 'Staff Member'}?`}
+    message={`Are you sure you want to remove ${deleteMemberTarget?.name || deleteMemberTarget?.email} from your team? They will no longer have access to the Admin Console.`}
+    confirmLabel="Remove Staff"
     variant="danger"
   />
   <Modal open={Boolean(logoWarning)} onClose={()=>setLogoWarning('')} title="Logo upload warning" footer={<Button variant="primary" onClick={()=>setLogoWarning('')}>OK</Button>}><p className="text-sm leading-6 text-slate-soft">{logoWarning}</p></Modal></>

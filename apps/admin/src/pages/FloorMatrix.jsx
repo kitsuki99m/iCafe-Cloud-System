@@ -12,9 +12,19 @@ import {
   WifiOff,
   Wrench,
   Sparkles,
+  LayoutGrid,
+  Map,
+  RotateCcw,
+  Save,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Check,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PcCard from '../components/floor/PcCard.jsx'
+import FloorMap2D from '../components/floor/FloorMap2D.jsx'
+
 import SessionModal from '../components/floor/SessionModal.jsx'
 import PcFormModal from '../components/floor/PcFormModal.jsx'
 import Button from '../components/common/Button.jsx'
@@ -86,7 +96,18 @@ export default function FloorMatrix() {
   const [bulkSessionOperationKey,setBulkSessionOperationKey]=useState(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all')
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('aezakmi:floor_view_mode') || 'grid'
+    } catch {
+      return 'grid'
+    }
+  })
+  const floorMapRef = useRef(null)
+  const [floorMapHasChanges, setFloorMapHasChanges] = useState(false)
+  const [floorMapZoom, setFloorMapZoom] = useState(1)
   const [now, setNow] = useState(Date.now())
+
   const [controlsPcId, setControlsPcId] = useState(null)
   const controlsAnchorRef = useRef(null)
   const [commandBusy, setCommandBusy] = useState('')
@@ -197,6 +218,8 @@ export default function FloorMatrix() {
     setControlsPcId(null)
     controlsAnchorRef.current = null
   }
+
+
   function openSessionModal(pc){
     if (!pc?.id) return
     closeControls()
@@ -451,24 +474,141 @@ export default function FloorMatrix() {
       {/* 2-COLUMN LIVE CYBERCAFE WORKSPACE */}
       {/* FULL-WIDTH LIVE ESPORTS FLOOR MATRIX */}
       <section className="clients-floor-workspace w-full space-y-4">
-        <div className="admin-page-toolbar flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <div className="admin-search-field min-w-[200px] flex-1 sm:max-w-sm">
-              <Search size={14} />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search PC, IP, or customer…"
-                className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-slate-soft"
-              />
+        <div className="admin-page-toolbar space-y-2.5">
+          {/* Row 1: View Switcher, Search Bar, and Action Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
+              {/* View Mode Toggle: Grid Matrix vs 2D Floor Plan */}
+              <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode('grid')
+                    try { localStorage.setItem('aezakmi:floor_view_mode', 'grid') } catch {}
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    viewMode === 'grid'
+                      ? 'bg-midnight text-soft-white shadow-xs'
+                      : 'text-slate-soft hover:text-ink-900'
+                  }`}
+                  title="Grid Matrix View"
+                >
+                  <LayoutGrid size={13} />
+                  <span>Grid Matrix</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMode('map')
+                    try { localStorage.setItem('aezakmi:floor_view_mode', 'map') } catch {}
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    viewMode === 'map'
+                      ? 'bg-midnight text-soft-white shadow-xs'
+                      : 'text-slate-soft hover:text-ink-900'
+                  }`}
+                  title="2D Floor Plan Layout (Drag & Drop Stations)"
+                >
+                  <Map size={13} />
+                  <span>2D Floor Map</span>
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="admin-search-field min-w-[200px] flex-1 max-w-sm">
+                <Search size={14} />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search PC, IP, or customer…"
+                  className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-slate-soft"
+                />
+              </div>
             </div>
-            <div className="admin-segmented-control">
+
+            {/* Right Side: Stat Figure + Mode Actions */}
+            <div className="flex flex-wrap items-center justify-end gap-2.5">
+              <span className="stat-figure text-xs text-slate-soft mr-1">
+                <b className="text-ink-900">{stats.available}</b> of {stats.total} free
+              </span>
+
+              {viewMode === 'map' ? (
+                <div className="flex items-center gap-2">
+                  {/* Zoom Controls */}
+                  <div className="flex items-center gap-0.5 rounded-lg border border-surface-line bg-surface-raised p-0.5 shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => floorMapRef.current?.zoomOut()}
+                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut size={13} />
+                    </button>
+                    <span className="text-[10px] font-mono font-bold text-slate-soft w-8 text-center select-none">
+                      {Math.round(floorMapZoom * 100)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => floorMapRef.current?.zoomIn()}
+                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
+                      title="Zoom In"
+                    >
+                      <ZoomIn size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => floorMapRef.current?.zoomReset()}
+                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
+                      title="Fit to Screen (100%)"
+                    >
+                      <Maximize2 size={12} />
+                    </button>
+                  </div>
+
+                  {/* Reset Layout */}
+                  <button
+                    type="button"
+                    onClick={() => floorMapRef.current?.resetLayout()}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-soft border border-surface-line bg-surface hover:bg-surface-raised hover:text-ink-900 transition cursor-pointer"
+                    title="Auto-Arrange Layout"
+                  >
+                    <RotateCcw size={12} />
+                    <span>Reset</span>
+                  </button>
+
+                  {/* Save Layout */}
+                  <button
+                    type="button"
+                    onClick={() => floorMapRef.current?.saveLayout()}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer ${
+                      floorMapHasChanges
+                        ? 'bg-midnight text-soft-white ring-2 ring-teal/50 animate-pulse'
+                        : 'bg-midnight text-soft-white hover:bg-surface-line'
+                    }`}
+                  >
+                    {floorMapHasChanges ? <Save size={13} /> : <Check size={13} className="text-teal" />}
+                    <span>Save Layout</span>
+                  </button>
+
+                  <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
+                    Add PC
+                  </Button>
+                </div>
+              ) : (
+                toolbarActions
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Status Filter Strip */}
+          <div className="flex items-center justify-between gap-3 pt-1 border-t border-surface-line/50">
+            <div className="admin-segmented-control flex-nowrap overflow-x-auto max-w-full">
               {CLIENT_STATUS_FILTERS.map((value) => (
                 <button
                   type="button"
                   key={value}
                   onClick={()=>setClientStatusFilter(value)}
-                  className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold capitalize transition-colors ${
+                  className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold capitalize whitespace-nowrap transition-colors cursor-pointer ${
                     filter === value ? 'bg-midnight text-soft-white' : 'text-slate-soft hover:text-ink-900'
                   }`}
                 >
@@ -476,40 +616,81 @@ export default function FloorMatrix() {
                 </button>
               ))}
             </div>
-          </div>
-          <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
-            <span className="stat-figure text-xs text-slate-soft">
-              <b className="text-ink-900">{stats.available}</b> of {stats.total} free
-            </span>
-            {toolbarActions}
+
+            {viewMode === 'map' && isCloudAdmin() && (
+              <div className="hidden lg:flex items-center gap-2">
+                <Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>
+                  Pair Customer PC
+                </Button>
+                <BulkActionsDropdown
+                  items={[
+                    { id: 'wallet', icon: 'wallet', label: 'Top up wallets', hint: 'Select multiple members' },
+                    { id: 'session', icon: 'session', label: 'Add session time', hint: `${bulkSessionTargets.length} active session${bulkSessionTargets.length === 1 ? '' : 's'}` },
+                    { id: 'lock', icon: 'lock', label: 'Lock stations', hint: 'Pause active sessions' },
+                    { id: 'unlock', icon: 'unlock', label: 'Unlock stations', hint: 'Resume locked sessions' },
+                    { id: 'restart', icon: 'restart', label: 'Restart stations', hint: 'Shows a 5-second station warning' },
+                    { id: 'shutdown', icon: 'shutdown', label: 'Shutdown stations', hint: 'Shows a 5-second station warning' },
+                    { id: 'remove', icon: 'remove', label: 'Remove PCs', hint: `${removablePcTargets.length} removable station${removablePcTargets.length === 1 ? '' : 's'}` },
+                  ]}
+                  onAction={(id) => {
+                    if (id === 'wallet') {
+                      setBulkWalletOperationKey(createOperationKey())
+                      setBulkWalletOpen(true)
+                    } else if (id === 'session') {
+                      setBulkSessionOperationKey(createOperationKey())
+                      setBulkSessionOpen(true)
+                    } else setBulkPower(id)
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
         <div>
-          {pcs.length ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6">
-              {sortedPcs.map((pc) => (
-                <PcCard
-                  key={pc.id}
-                  pc={pc}
-                  now={now}
-                  lowTimeWarningMinutes={settings.lowTimeWarningMinutes}
-                  onSelect={openPopover}
-                  onControls={openControls}
-                />
-              ))}
-            </div>
-          ) : (
-            <AdminEmptyState
-              icon={Monitor}
-              title="No PC clients registered"
-              description="Add a PC to begin."
-              action={
-                <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
-                  Add PC
-                </Button>
-              }
+          {viewMode === 'map' ? (
+            <FloorMap2D
+              ref={floorMapRef}
+              pcs={sortedPcs}
+              now={now}
+              lowTimeWarningMinutes={settings.lowTimeWarningMinutes}
+              onSelect={openPopover}
+              onControls={(e, pc) => {
+                controlsAnchorRef.current = e.currentTarget
+                setControlsPcId(pc.id)
+              }}
+              activeFilter={filter}
+              onHasChangesChange={setFloorMapHasChanges}
+              onZoomChange={setFloorMapZoom}
             />
+          ) : (
+            <>
+              {pcs.length ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6">
+                  {sortedPcs.map((pc) => (
+                    <PcCard
+                      key={pc.id}
+                      pc={pc}
+                      now={now}
+                      lowTimeWarningMinutes={settings.lowTimeWarningMinutes}
+                      onSelect={openPopover}
+                      onControls={openControls}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <AdminEmptyState
+                  icon={Monitor}
+                  title="No PC clients registered"
+                  description="Add a PC to begin."
+                  action={
+                    <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
+                      Add PC
+                    </Button>
+                  }
+                />
+              )}
+            </>
           )}
         </div>
       </section>
