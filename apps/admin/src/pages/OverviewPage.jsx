@@ -299,72 +299,30 @@ export default function OverviewPage(){
       <div className={`overview-main-column min-w-0 ${isSimpleMode ? '' : 'border-b border-[var(--admin-ui-border)] xl:border-b-0 xl:border-r'}`}>
         <header className="overview-header flex min-h-[96px] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
           <div className="min-w-0">
-            <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}!</p>
+            <div className="flex items-center gap-2">
+              <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}!</p>
+              {isEsportsMode && (
+                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-md bg-teal/15 border border-teal/30 px-2 py-0.5 text-[9px] font-bold text-teal-dim uppercase tracking-wider">
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal opacity-75" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-teal" />
+                  </span>
+                  ARENA LIVE
+                </span>
+              )}
+            </div>
           </div>
           <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
-            {/* Dashboard vs Esports Persona Switcher */}
-            <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Dashboard vs Esports Persona (F9)">
-              <button
-                type="button"
-                onClick={() => setThemeMode('dashboard')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  isDashboardMode
-                    ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
-                    : 'text-slate-soft hover:text-ink-900'
-                }`}
-              >
-                Dashboard
-              </button>
-              <button
-                type="button"
-                onClick={() => setThemeMode('esports')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  isEsportsMode
-                    ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/30 text-teal-dim shadow-sm border border-teal/40'
-                    : 'text-slate-soft hover:text-ink-900'
-                }`}
-              >
-                Esports
-              </button>
-            </div>
-
-            {canToggleMode && (
-              <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Simple vs Advance UI Mode (F8)">
-                <button
-                  type="button"
-                  onClick={() => setUiMode('simple')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    isSimpleMode
-                      ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                >
-                  Simple
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUiMode('advance')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    isAdvanceMode
-                      ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                >
-                  Advance
-                </button>
-              </div>
-            )}
             <AdminQuickFind />
-            {isAdvanceMode && <button type="button" onClick={()=>setManualOpen(true)} className="overview-header-control hidden lg:flex" title="Open Overview owner manual"><BookOpenText size={15}/><span className="hidden xl:inline">Manual</span></button>}
             <button type="button" onClick={()=>setFeedbackOpen(true)} className="overview-header-control relative" title="Open customer feedback">
               <MessageSquareText size={15}/><span className="hidden xl:inline">Feedback</span>
               {feedbackCount>0&&<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-midnight px-1 text-[9px] font-bold text-soft-white">{feedbackCount>=3?'3+':feedbackCount}</span>}
             </button>
-            <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark?'Switch to light mode':'Switch to dark mode'} aria-label={isDark?'Switch to light mode':'Switch to dark mode'}>{isDark?<Sun size={16}/>:<Moon size={16}/>}</button>
             <AdminNotificationCenter />
             <AnnouncementCenter />
             <AdminProfileMenu
               currentLabel="Overview"
+              manualTitle="Open Overview owner manual"
               onOpenManual={() => setManualOpen(true)}
               onOpenShiftModal={() => window.dispatchEvent(new CustomEvent('aezakmi:open-shift-modal'))}
               onOpenFeedback={() => setFeedbackOpen(true)}

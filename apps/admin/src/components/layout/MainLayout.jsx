@@ -189,11 +189,20 @@ export default function MainLayout({ children }) {
         <aside className="admin-sidebar sticky top-0 z-[120] hidden h-full w-[220px] shrink-0 flex-col overflow-hidden px-4 py-5 lg:flex lg:w-[232px] lg:px-5 lg:py-6">
           <div className="admin-sidebar-brand mb-7 flex items-center gap-2.5 px-1 pt-0.5">
             <img key={branding.logoUrl || 'default-logo'} src={branding.logoUrl || logo} onError={event=>{event.currentTarget.src=logo}} alt="" className="h-9 w-9 rounded-[11px] shadow-sm" />
-            <div className="min-w-0">
-              <p className="truncate font-display text-[15px] font-bold uppercase leading-tight tracking-[0.045em] text-ink-900">
-                {branding.cafeName || settings?.cafeName || 'Aezakmi Cafe'}
-              </p>
-              <p className="mt-0.5 max-w-[148px] truncate text-[10px] font-medium uppercase tracking-[0.13em] text-slate-soft" title={branding.branchLocation || settings?.branchLocation || ''}>{branding.branch || settings?.branch || 'Davao Branch'}</p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <p className="truncate font-display text-[15px] font-bold uppercase leading-tight tracking-[0.045em] text-ink-900">
+                  {branding.cafeName || settings?.cafeName || 'Aezakmi Cafe'}
+                </p>
+              </div>
+              <div className="mt-0.5 flex items-center justify-between gap-1">
+                <p className="max-w-[120px] truncate text-[10px] font-medium uppercase tracking-[0.13em] text-slate-soft" title={branding.branchLocation || settings?.branchLocation || ''}>{branding.branch || settings?.branch || 'Davao Branch'}</p>
+                {isEsportsMode && (
+                  <span className="rounded bg-teal/15 px-1 py-0.2 text-[8px] font-bold tracking-wider text-teal-dim border border-teal/30">
+                    HUD
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="admin-sidebar-branch mb-3"><CloudBranchPicker /></div>
@@ -233,8 +242,12 @@ export default function MainLayout({ children }) {
                 <span className={`absolute inline-flex h-full w-full animate-led rounded-full ${serverError ? 'bg-ember' : 'bg-teal'}`} />
               </span>
               <div className="min-w-0 leading-tight">
-                <p className="text-[11px] font-semibold text-ink-900">{serverError ? (cloud ? 'Edge Offline' : 'Server Offline') : (cloud ? 'Edge Online' : 'Server Online')}</p>
-                <p className="admin-sidebar-status-subtitle mt-0.5 truncate text-[9px] text-slate-soft">{serverError ? (cloud ? 'Cloud cache available' : 'Check local network') : (cloud ? 'Supabase ↔ Edge synced' : 'Local network synced')}</p>
+                <p className="text-[11px] font-semibold text-ink-900">
+                  {isEsportsMode ? (serverError ? 'ARENA // OFFLINE' : 'ARENA // ONLINE') : (serverError ? (cloud ? 'Edge Offline' : 'Server Offline') : (cloud ? 'Edge Online' : 'Server Online'))}
+                </p>
+                <p className="admin-sidebar-status-subtitle mt-0.5 truncate text-[9px] text-slate-soft">
+                  {isEsportsMode ? (serverError ? 'Cloud Cache Active' : 'Synced · Latency <1ms') : (serverError ? (cloud ? 'Cloud cache available' : 'Check local network') : (cloud ? 'Supabase ↔ Edge synced' : 'Local network synced'))}
+                </p>
               </div>
             </div>
 
@@ -263,29 +276,16 @@ export default function MainLayout({ children }) {
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-soft">{branding.cafeName || settings?.cafeName || 'Aezakmi Cafe'}</p>
               <p className="truncate font-display text-[15px] font-semibold leading-tight text-ink-900">{currentLabel}</p>
             </div>
-            <div className="flex shrink-0 items-center gap-0.5">
-              {canToggleMode && (
-                <button
-                  type="button"
-                  onClick={toggleUiMode}
-                  className="admin-header-pill text-[11px] font-bold"
-                  title={`Switch to ${isSimpleMode ? 'Advance' : 'Simple'} Mode (F8)`}
-                >
-                  <span>{isSimpleMode ? 'Simple' : 'Advance'}</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShiftModalOpen(true)}
-                className={`admin-icon-button ${currentShift ? 'text-teal-dim' : ''}`}
-                title="Staff Shift & Cash Reconciliation"
-              >
-                <Clock size={16} />
-              </button>
-              {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-icon-button" title={`${currentLabel} owner manual`} aria-label={`Open ${currentLabel} owner manual`}><BookOpenText size={16}/></button>}
+            <div className="flex shrink-0 items-center gap-1">
               <AdminNotificationCenter />
               <AnnouncementCenter />
-              <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>{isDark ? <Sun size={16}/> : <Moon size={16}/>}</button>
+              <AdminProfileMenu
+                currentLabel={currentLabel}
+                onOpenManual={() => setManualOpen(true)}
+                onOpenShiftModal={() => setShiftModalOpen(true)}
+                onOpenFeedback={() => setFeedbackOpen(true)}
+                onOpenLock={openLock}
+              />
             </div>
           </header>
           {!isOverview && <header className="admin-global-header z-[110] hidden min-h-[96px] shrink-0 items-center gap-4 px-5 py-3.5 sm:px-6 lg:flex lg:px-7">
@@ -294,80 +294,13 @@ export default function MainLayout({ children }) {
               <h1 className="mt-1 font-display text-[24px] font-semibold leading-tight tracking-[-0.03em] text-ink-900">{currentLabel}</h1>
             </div>
             <AdminQuickFind />
-            <div className="ml-auto flex items-center gap-1.5 text-slate-soft">
-              {/* Dashboard vs Esports Persona Switcher */}
-              <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Dashboard vs Esports Persona (F9)">
-                <button
-                  type="button"
-                  onClick={() => setThemeMode('dashboard')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    isDashboardMode
-                      ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                >
-                  Dashboard
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setThemeMode('esports')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    isEsportsMode
-                      ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/30 text-teal-dim shadow-sm border border-teal/40'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                >
-                  Esports
-                </button>
-              </div>
-
-              {canToggleMode && (
-                <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Simple vs Advance UI Mode (F8)">
-                  <button
-                    type="button"
-                    onClick={() => setUiMode('simple')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      isSimpleMode
-                        ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
-                        : 'text-slate-soft hover:text-ink-900'
-                    }`}
-                  >
-                    Simple
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setUiMode('advance')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
-                      isAdvanceMode
-                        ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
-                        : 'text-slate-soft hover:text-ink-900'
-                    }`}
-                  >
-                    Advance
-                  </button>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setShiftModalOpen(true)}
-                className={`admin-header-pill flex items-center gap-1.5 font-bold cursor-pointer shrink-0 ${
-                  currentShift
-                    ? 'border-teal/40 text-teal-dim bg-teal/10'
-                    : 'text-slate-soft hover:text-ink-900'
-                }`}
-                title="Staff Shift & Cash Drawer Reconciliation"
-              >
-                <Clock size={14} className={currentShift ? 'text-teal-dim' : ''} />
-                <span className="hidden sm:inline">{currentShift ? 'Shift Active' : 'Clock In'}</span>
-              </button>
-              <button type="button" onClick={()=>setFeedbackOpen(true)} className="admin-header-pill hidden xl:flex shrink-0" title="Open customer feedback"><MessageSquareText size={15}/> Feedback</button>
-              {hasSectionManual(currentLabel)&&<button type="button" onClick={()=>setManualOpen(true)} className="admin-header-pill hidden 2xl:flex shrink-0" title={`Open ${currentLabel} owner manual`}><BookOpenText size={15}/><span className="hidden xl:inline">Manual</span></button>}
+            <div className="ml-auto flex items-center gap-2 text-slate-soft">
               <AdminNotificationCenter />
               <AnnouncementCenter />
-              <button type="button" onClick={toggleTheme} className="admin-icon-button shrink-0" title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>{isDark ? <Sun size={16}/> : <Moon size={16}/>}</button>
-              <button type="button" onClick={openLock} className="admin-icon-button shrink-0" aria-label="Lock admin console" title="Lock admin console"><LockKeyhole size={16}/></button>
               <AdminProfileMenu
+                triggerClassName="admin-header-pill"
                 currentLabel={currentLabel}
+                manualTitle={`Open ${currentLabel} owner manual`}
                 onOpenManual={() => setManualOpen(true)}
                 onOpenShiftModal={() => setShiftModalOpen(true)}
                 onOpenFeedback={() => setFeedbackOpen(true)}

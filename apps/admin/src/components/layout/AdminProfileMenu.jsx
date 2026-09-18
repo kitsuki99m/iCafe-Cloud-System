@@ -36,6 +36,8 @@ function getInitials(name = 'Admin') {
 
 export default function AdminProfileMenu({
   currentLabel = 'Overview',
+  manualTitle,
+  triggerClassName = '',
   onOpenManual,
   onOpenShiftModal,
   onOpenFeedback,
@@ -87,7 +89,7 @@ export default function AdminProfileMenu({
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-haspopup="true"
-        className={`flex items-center gap-2 rounded-full border border-surface-line bg-surface py-1 pl-1 pr-2.5 transition-all cursor-pointer hover:border-surface-line/80 hover:bg-surface-raised/60 ${
+        className={`admin-header-pill ${triggerClassName} flex items-center gap-2 rounded-full border border-surface-line bg-surface py-1 pl-1 pr-2.5 transition-all cursor-pointer hover:border-surface-line/80 hover:bg-surface-raised/60 ${
           open ? 'ring-2 ring-gold/40 border-gold/40' : ''
         }`}
         title={`Profile & Quick Controls (${displayName})`}
@@ -118,112 +120,96 @@ export default function AdminProfileMenu({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="truncate text-xs font-bold text-ink-900">{displayName}</p>
-                <span
-                  className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider ${
-                    isOwner
-                      ? 'bg-teal/15 text-teal-dim'
-                      : isAdmin
-                      ? 'bg-gold/15 text-gold-dim'
-                      : 'bg-midnight/10 text-slate-soft'
-                  }`}
-                >
+                <span className="rounded-full bg-surface-raised px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-soft">
                   {isOwner ? 'Owner' : isAdmin ? 'Admin' : isCashier ? 'Cashier' : 'Staff'}
                 </span>
               </div>
-              <p className="truncate text-[11px] text-slate-soft mt-0.5">
-                {user?.email || 'counter@icafe.ph'}
-              </p>
-              <p className="truncate text-[10px] text-slate-soft font-medium">
-                {settings?.branch || 'Main Branch'}
+              <p className="truncate text-[10px] text-slate-soft" title={user?.email || ''}>
+                {user?.email || 'admin@aezakmi.cafe'}
               </p>
             </div>
           </div>
 
-          {/* Interactive Toggles Container */}
-          <div className="py-2.5 border-b border-surface-line/80 space-y-2">
-            {/* Esports vs Dashboard Theme Persona */}
-            <div>
-              <div className="flex items-center justify-between px-1 mb-1">
-                <span className="eyebrow text-[10px]">Theme Persona (F9)</span>
-                {isEsportsMode && (
-                  <span className="text-[9px] font-bold text-teal-dim uppercase tracking-wider">
-                    HUD Active
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line">
-                <button
-                  type="button"
-                  onClick={() => setThemeMode('dashboard')}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
-                    isDashboardMode
-                      ? 'bg-surface text-ink-900 shadow-xs border border-surface-line font-bold'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                >
-                  <LayoutDashboard size={13} />
-                  <span>Dashboard</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setThemeMode('esports')}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
-                    isEsportsMode
-                      ? 'bg-teal/15 text-teal-dim shadow-xs border border-teal/40 font-bold'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                >
-                  <Gamepad2 size={13} />
-                  <span>Esports</span>
-                </button>
-              </div>
+          {/* Quick Persona Mode Switcher: Dashboard vs Esports */}
+          <div className="py-2.5 border-b border-surface-line/80">
+            <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-soft mb-1.5">
+              Theme Persona
+            </p>
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line/60">
+              <button
+                type="button"
+                onClick={() => setThemeMode('dashboard')}
+                className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
+                  isDashboardMode
+                    ? 'bg-surface text-ink-900 shadow-xs border border-surface-line'
+                    : 'text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                <LayoutDashboard size={13} />
+                <span>Dashboard</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setThemeMode('esports')}
+                className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
+                  isEsportsMode
+                    ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/30 text-teal-dim shadow-xs border border-teal/40'
+                    : 'text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                <Gamepad2 size={13} />
+                <span>Esports</span>
+              </button>
             </div>
+          </div>
 
-            {/* Simple vs Advance UI Mode Toggle */}
+          {/* UI Complexity & Appearance Toggles */}
+          <div className="py-2.5 border-b border-surface-line/80 space-y-2">
             {canToggleMode && (
               <div>
-                <div className="flex items-center justify-between px-1 mb-1">
-                  <span className="eyebrow text-[10px]">Interface Mode (F8)</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line">
+                <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-soft mb-1.5">
+                  UI Mode
+                </p>
+                <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line/60">
                   <button
                     type="button"
                     onClick={() => setUiMode('simple')}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
                       isSimpleMode
-                        ? 'bg-surface text-ink-900 shadow-xs border border-surface-line font-bold'
+                        ? 'bg-surface text-ink-900 shadow-xs border border-surface-line'
                         : 'text-slate-soft hover:text-ink-900'
                     }`}
                   >
+                    <Sparkles size={13} />
                     <span>Simple</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setUiMode('advance')}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
                       isAdvanceMode
-                        ? 'bg-surface text-ink-900 shadow-xs border border-surface-line font-bold'
+                        ? 'bg-surface text-ink-900 shadow-xs border border-surface-line'
                         : 'text-slate-soft hover:text-ink-900'
                     }`}
                   >
+                    <ShieldCheck size={13} />
                     <span>Advance</span>
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Light vs Dark Appearance Toggle */}
             <div>
-              <div className="flex items-center justify-between px-1 mb-1">
-                <span className="eyebrow text-[10px]">Appearance</span>
-              </div>
-              <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line">
+              <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-soft mb-1.5">
+                Appearance
+              </p>
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line/60">
                 <button
                   type="button"
                   onClick={() => !isDark || toggleTheme()}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
                     !isDark
-                      ? 'bg-surface text-ink-900 shadow-xs border border-surface-line font-bold'
+                      ? 'bg-surface text-ink-900 shadow-xs border border-surface-line'
                       : 'text-slate-soft hover:text-ink-900'
                   }`}
                 >
@@ -233,9 +219,9 @@ export default function AdminProfileMenu({
                 <button
                   type="button"
                   onClick={() => isDark || toggleTheme()}
-                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition cursor-pointer ${
+                  className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
                     isDark
-                      ? 'bg-surface text-ink-900 shadow-xs border border-surface-line font-bold'
+                      ? 'bg-surface text-ink-900 shadow-xs border border-surface-line'
                       : 'text-slate-soft hover:text-ink-900'
                   }`}
                 >
@@ -251,6 +237,7 @@ export default function AdminProfileMenu({
             {hasManual && onOpenManual && (
               <button
                 type="button"
+                title={manualTitle || `Open ${currentLabel} owner manual`}
                 onClick={() => {
                   setOpen(false)
                   onOpenManual()

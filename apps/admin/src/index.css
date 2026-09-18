@@ -144,28 +144,75 @@
   /* Esports Persona Theme Styling */
   html[data-theme-persona="esports"] {
     --font-display: "Space Grotesk", "Chakra Petch", sans-serif;
+    --app-dot: rgba(0, 245, 160, 0.08);
+    --color-midnight: #090D16;
+    --color-bluish: #1E293B;
+    --color-grape: #64748B;
+    --color-trillium: #94A3B8;
+    --color-new-wool: #00F5A0;
+    --color-dance: #00D2FF;
+    --color-soft-white: #F8FAFC;
+    --color-ink: #090D16;
+    --color-ink-soft: #94A3B8;
+    --color-ink-900: #F8FAFC;
+    --color-surface: #111827;
+    --color-surface-raised: #1A2438;
+    --color-surface-line: #25354F;
+    --color-gold: #00F5A0;
+    --color-gold-soft: #00D2FF;
+    --color-gold-dim: #38BDF8;
+    --color-teal: #00F5A0;
+    --color-teal-soft: #10B981;
+    --color-teal-dim: #00F5A0;
+    --color-orange: #FF9F1C;
+    --color-orange-soft: #7C3F12;
+    --color-orange-dim: #FFA726;
+    --color-ember: #FF4655;
+    --color-ember-soft: #C86B6B;
+    --color-ember-dim: #FF7582;
+    --color-slate: #64748B;
+    --color-slate-soft: #94A3B8;
   }
-  html[data-theme-persona="esports"] .admin-app-canvas {
-    background-image: radial-gradient(circle at 50% 0%, rgba(46, 158, 107, 0.06) 0%, transparent 60%);
+  html[data-theme-persona="esports"] body {
+    background-color: #090D16;
+    color: #F8FAFC;
+    background-image: 
+      radial-gradient(circle at 50% -10%, rgba(0, 245, 160, 0.12) 0%, transparent 45%),
+      radial-gradient(circle at 100% 100%, rgba(245, 158, 11, 0.06) 0%, transparent 40%),
+      linear-gradient(to right, rgba(0, 245, 160, 0.02) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 245, 160, 0.02) 1px, transparent 1px);
+    background-size: auto, auto, 32px 32px, 32px 32px;
   }
-  html[data-theme-persona="esports"][data-theme="dark"], 
-  html[data-theme-persona="esports"].dark {
-    --color-ink: #0f172a;
-    --color-ink-900: #f8fafc;
-    --color-surface: #172033;
-    --color-surface-raised: #1e293b;
-    --color-surface-line: #334155;
-    --color-gold: #f59e0b;
-    --color-gold-dim: #fbbf24;
-    --color-teal: #10b981;
-    --color-teal-dim: #34d399;
+  html[data-theme-persona="esports"][data-theme="light"] {
+    --app-dot: rgba(14, 165, 233, 0.12);
+    --color-midnight: #0F172A;
+    --color-bluish: #1E293B;
+    --color-grape: #475569;
+    --color-trillium: #64748B;
+    --color-new-wool: #0284C7;
+    --color-dance: #38BDF8;
+    --color-soft-white: #FFFFFF;
+    --color-ink: #F8FAFC;
+    --color-ink-900: #0F172A;
+    --color-ink-soft: #64748B;
+    --color-surface: #FFFFFF;
+    --color-surface-raised: #F1F5F9;
+    --color-surface-line: #CBD5E1;
+    --color-gold: #0284C7;
+    --color-gold-soft: #38BDF8;
+    --color-gold-dim: #0369A1;
+    --color-teal: #059669;
+    --color-teal-dim: #047857;
+    --color-slate-soft: #475569;
   }
-  html[data-theme-persona="esports"][data-theme="dark"] body,
-  html[data-theme-persona="esports"].dark body {
-    background-color: #0f172a;
-    color: #f8fafc;
-    background-image: radial-gradient(circle at 50% -10%, rgba(16, 185, 129, 0.12) 0%, transparent 45%),
-                      radial-gradient(circle at 100% 100%, rgba(245, 158, 11, 0.06) 0%, transparent 40%);
+  html[data-theme-persona="esports"][data-theme="light"] body {
+    background-color: #F8FAFC;
+    color: #0F172A;
+    background-image: 
+      radial-gradient(circle at 50% -10%, rgba(14, 165, 233, 0.08) 0%, transparent 45%),
+      linear-gradient(to right, rgba(14, 165, 233, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(14, 165, 233, 0.03) 1px, transparent 1px);
+    background-size: auto, 32px 32px, 32px 32px;
   }
   html, body, #root {
     width: 100%;
@@ -327,6 +374,26 @@
     --admin-ui-border: rgba(245, 245, 245, 0.14);
     --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.34);
   }
+  html[data-theme-persona="esports"] {
+    --admin-canvas-bg: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 245, 160, 0.14), transparent 70%), linear-gradient(180deg, #070A10 0%, #0D1322 100%);
+    --admin-shell-bg: #090D16;
+    --admin-sidebar-bg: rgba(13, 18, 31, 0.99);
+    --admin-card-bg: #111827;
+    --admin-card-subtle: rgba(0, 245, 160, 0.05);
+    --admin-card-strong: rgba(0, 245, 160, 0.09);
+    --admin-ui-border: rgba(0, 245, 160, 0.18);
+    --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+  }
+  html[data-theme-persona="esports"][data-theme="light"] {
+    --admin-canvas-bg: linear-gradient(135deg, #E2E8F0, #F1F5F9 50%, #E2E8F0);
+    --admin-shell-bg: #F8FAFC;
+    --admin-sidebar-bg: #FFFFFF;
+    --admin-card-bg: #FFFFFF;
+    --admin-card-subtle: rgba(14, 165, 233, 0.06);
+    --admin-card-strong: rgba(14, 165, 233, 0.12);
+    --admin-ui-border: rgba(14, 165, 233, 0.28);
+    --admin-shell-shadow: 0 24px 72px rgba(15, 23, 42, 0.12);
+  }
 }
 
 @layer components {
@@ -394,6 +461,14 @@
   html[data-theme="dark"] .nav-item.active::before {
     background: var(--color-dance);
   }
+  html[data-theme-persona="esports"] .nav-item.active {
+    color: #00F5A0;
+    background: rgba(0, 245, 160, 0.12);
+  }
+  html[data-theme-persona="esports"] .nav-item.active::before {
+    background: #00F5A0;
+    box-shadow: 0 0 12px #00F5A0;
+  }
   .overview-workspace {
     min-height: 100%;
     background: var(--admin-shell-bg);
@@ -405,6 +480,10 @@
     border: 1px solid var(--admin-ui-border);
     border-radius: 18px;
     background: var(--admin-card-bg);
+  }
+  html[data-theme-persona="esports"] .overview-card:hover {
+    border-color: rgba(0, 245, 160, 0.5);
+    box-shadow: 0 0 20px -4px rgba(0, 245, 160, 0.25);
   }
   .overview-soft-card {
     width: 100%;
@@ -1284,3 +1363,236 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* ==========================================================================
+   AEZAKMI ESPORTS MODE THEME SYSTEM (Tactical Gaming Lounge Arena HUD)
+   ========================================================================== */
+
+/* Keyframe animations for Esports HUD */
+@keyframes esportsPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(0.95); }
+}
+
+@keyframes esportsGlow {
+  0%, 100% { box-shadow: 0 0 15px -3px rgba(0, 245, 160, 0.35); }
+  50% { box-shadow: 0 0 25px 2px rgba(0, 245, 160, 0.55); }
+}
+
+@keyframes esportsScanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(1000%); }
+}
+
+html[data-theme-persona="esports"] {
+  /* Esports Navigation & Sidebar */
+  .admin-sidebar {
+    background: linear-gradient(180deg, #0A0F1D 0%, #060912 100%);
+    border-right: 1px solid rgba(0, 245, 160, 0.16);
+    box-shadow: 4px 0 24px -4px rgba(0, 0, 0, 0.6);
+  }
+
+  .admin-sidebar-brand {
+    padding: 6px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(0, 245, 160, 0.08) 0%, rgba(0, 210, 255, 0.04) 100%);
+    border: 1px solid rgba(0, 245, 160, 0.2);
+  }
+
+  .nav-item {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .nav-item:hover {
+    background: rgba(0, 245, 160, 0.07);
+    border-color: rgba(0, 245, 160, 0.18);
+    color: #F8FAFC;
+    transform: translateX(2px);
+  }
+
+  .nav-item.active {
+    background: linear-gradient(90deg, rgba(0, 245, 160, 0.18) 0%, rgba(0, 210, 255, 0.05) 100%);
+    border: 1px solid rgba(0, 245, 160, 0.35);
+    color: #00F5A0;
+    box-shadow: 0 0 20px -4px rgba(0, 245, 160, 0.25);
+  }
+
+  .nav-item.active::before {
+    background: #00F5A0;
+    box-shadow: 0 0 12px #00F5A0, 0 0 2px #FFFFFF;
+  }
+
+  .admin-sidebar-status {
+    background: rgba(14, 22, 38, 0.85);
+    border: 1px solid rgba(0, 245, 160, 0.25);
+    box-shadow: 0 0 12px -2px rgba(0, 245, 160, 0.15);
+  }
+
+  /* Esports Command Headers */
+  .admin-global-header,
+  .overview-header {
+    background: rgba(9, 13, 23, 0.92);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(0, 245, 160, 0.18);
+  }
+
+  /* Esports Metric Cards & Stat Widgets */
+  .overview-card,
+  .admin-metric-card,
+  .admin-rail-card {
+    background: linear-gradient(145deg, #0E1626 0%, #090D18 100%);
+    border: 1px solid rgba(0, 245, 160, 0.18);
+    border-radius: 14px;
+    box-shadow: 0 6px 24px -6px rgba(0, 0, 0, 0.65);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .overview-card::before,
+  .admin-metric-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(0, 245, 160, 0.7), transparent);
+    opacity: 0.85;
+  }
+
+  .overview-card:hover,
+  .admin-metric-card:hover {
+    border-color: rgba(0, 245, 160, 0.45);
+    box-shadow: 0 0 28px -4px rgba(0, 245, 160, 0.35), 0 8px 30px rgba(0, 0, 0, 0.75);
+    transform: translateY(-2px);
+  }
+
+  .overview-card .stat-figure,
+  .admin-metric-card .stat-figure {
+    font-family: var(--font-mono);
+    color: #F8FAFC;
+    text-shadow: 0 0 14px rgba(0, 245, 160, 0.35);
+  }
+
+  .overview-soft-card {
+    background: rgba(14, 22, 38, 0.9);
+    border: 1px solid rgba(0, 245, 160, 0.15);
+    border-radius: 12px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .overview-soft-card:hover {
+    border-color: rgba(0, 245, 160, 0.4);
+    background: rgba(20, 31, 54, 0.95);
+    box-shadow: 0 0 18px -4px rgba(0, 245, 160, 0.25);
+    transform: translateY(-1.5px);
+  }
+
+  /* Esports Panels, Tables, and Inputs */
+  .panel {
+    background: linear-gradient(160deg, #0E1626 0%, #080D18 100%);
+    border: 1px solid rgba(0, 245, 160, 0.18);
+    box-shadow: 0 8px 32px -8px rgba(0, 0, 0, 0.7);
+    border-radius: 16px;
+  }
+
+  .admin-table-shell {
+    background: #090D18;
+    border: 1px solid rgba(0, 245, 160, 0.18);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border-radius: 14px;
+  }
+
+  .admin-table-shell thead th {
+    background: rgba(14, 22, 38, 0.95);
+    border-bottom: 1px solid rgba(0, 245, 160, 0.22);
+    color: #00F5A0;
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+
+  .admin-table-shell tbody tr {
+    border-bottom: 1px solid rgba(0, 245, 160, 0.08);
+    transition: background-color 0.15s ease;
+  }
+
+  .admin-table-shell tbody tr:hover {
+    background: rgba(0, 245, 160, 0.05);
+  }
+
+  .admin-search-field,
+  .admin-quickfind-input {
+    background: rgba(14, 22, 38, 0.9) !important;
+    border: 1px solid rgba(0, 245, 160, 0.22) !important;
+    color: #F8FAFC !important;
+    border-radius: 10px;
+  }
+
+  .admin-search-field:focus-within,
+  .admin-quickfind-input:focus {
+    border-color: #00F5A0 !important;
+    box-shadow: 0 0 0 2px rgba(0, 245, 160, 0.25), 0 0 16px rgba(0, 245, 160, 0.2) !important;
+  }
+
+  .admin-segmented-control {
+    background: rgba(10, 15, 28, 0.9);
+    border: 1px solid rgba(0, 245, 160, 0.2);
+    border-radius: 12px;
+  }
+
+  /* Esports UI Buttons & Pills */
+  .admin-header-pill {
+    background: rgba(14, 22, 38, 0.9);
+    border: 1px solid rgba(0, 245, 160, 0.25);
+    color: #F8FAFC;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
+  }
+
+  .admin-header-pill:hover {
+    border-color: #00F5A0;
+    box-shadow: 0 0 14px rgba(0, 245, 160, 0.3);
+    color: #00F5A0;
+  }
+
+  .admin-icon-button {
+    color: #94A3B8;
+    transition: all 0.2s ease;
+  }
+
+  .admin-icon-button:hover {
+    color: #00F5A0;
+    background: rgba(0, 245, 160, 0.12);
+    box-shadow: 0 0 12px rgba(0, 245, 160, 0.35);
+  }
+
+  /* Esports Modals & Overlays */
+  .admin-modal-shell {
+    background: linear-gradient(165deg, #0E1626 0%, #080D18 100%);
+    border: 1px solid rgba(0, 245, 160, 0.3);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 24px -6px rgba(0, 245, 160, 0.25);
+  }
+
+  .admin-modal-header {
+    border-bottom: 1px solid rgba(0, 245, 160, 0.18);
+  }
+
+  .admin-modal-title {
+    font-family: var(--font-display);
+    color: #F8FAFC;
+    letter-spacing: -0.01em;
+  }
+
+  .admin-modal-footer {
+    border-top: 1px solid rgba(0, 245, 160, 0.18);
+    background: rgba(10, 15, 28, 0.6);
+  }
+}
+
