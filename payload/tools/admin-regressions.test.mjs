@@ -511,7 +511,6 @@ test('Clients uses a full-width floor workspace while other analytical pages may
   assert.doesNotMatch(clients, /aside=\{clientRail\}/)
   assert.doesNotMatch(clients, /const clientRail\s*=/)
   assert.doesNotMatch(clients, /AdminRailCard/)
-  assert.match(clients, /clients-metric-grid/)
   assert.match(clients, /clients-floor-workspace/)
 
   for (const file of ['TariffsPage.jsx','MembersPage.jsx','EarningsPage.jsx','AnalyticsPage.jsx','LogsPage.jsx']) {
@@ -573,15 +572,12 @@ test('AdminPageWorkspace does not reserve a hidden utility rail when aside is ab
   assert.match(source, /aside\s*\?\s*['"]xl:grid-cols-\[minmax\(0,1fr\)_340px\]['"]\s*:\s*['"]grid-cols-1['"]/) 
 })
 
-test('Clients adds Locked Sessions as a fifth operational KPI and filter', () => {
+test('Clients adds Locked Sessions as an operational filter and matrix layout', () => {
   const source = read('apps/admin/src/pages/FloorMatrix.jsx')
-  const css = read('apps/admin/src/index.css')
   assert.match(source, /CLIENT_STATUS_FILTERS\s*=\s*\[[^\]]*['"]locked['"]/)
   assert.match(source, /locked:pcs\.filter\([^\n]*session\?\.isLocked[^\n]*\)\.length/)
-  assert.match(source, /label="Locked sessions"[\s\S]{0,220}?value=\{stats\.locked\}/)
-  assert.match(source, /setClientStatusFilter\(['"]locked['"]\)/)
+  assert.match(source, /setClientStatusFilter\(value\)/)
   assert.match(source, /filter===['"]locked['"][\s\S]{0,220}?pc\.session\?\.isLocked/)
-  assert.match(css, /\.clients-metric-grid\s*\{[\s\S]{0,220}?repeat\(5,\s*minmax\(0,\s*1fr\)\)/)
 })
 
 

@@ -1,1315 +1,1631 @@
+// Philippine iCafe Menu Catalog Presets (Merged Compact Filters & No Descriptions)
 export const PHILIPPINE_MENU_CATEGORIES = [
-  'All',
-  'Pancit Canton',
-  'Cup Noodles',
-  'Junk Food & Chips',
-  'Soft Drinks',
-  'Energy & Coffee',
-  'Biscuits & Sweets',
-  'Rice Meals & Silog'
+  "All",
+  "Beverages & Drinks",
+  "Chips, Nuts & Savory Snacks",
+  "Biscuits, Chocolates & Sweets",
+  "Noodles & Quick Meals"
 ]
 
 export const PHILIPPINE_MENU_CATALOG = [
-  // ==========================================
-  // PANCIT CANTON & INSTANT NOODLES
-  // ==========================================
-  {
-    id: 'lucky-me-pancit-canton-kalamansi',
-    name: 'Lucky Me! Pancit Canton Kalamansi',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 20.00,
-    stockQuantity: 48,
-    description: 'Iconic Filipino instant stir-fried noodles bursting with refreshing calamansi citrus flavor.',
-    imageUrl: '/assets/menu/lucky-me-pancit-canton-kalamansi.webp',
-    color: '#15803d',
-    badgeText: 'Kalamansi',
-    icon: '🍜'
-  },
-  {
-    id: 'lucky-me-pancit-canton-chilimansi',
-    name: 'Lucky Me! Pancit Canton Chilimansi',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 20.00,
-    stockQuantity: 48,
-    description: 'The nation’s favorite combination of zesty calamansi and spicy red chili peppers.',
-    imageUrl: '/assets/menu/lucky-me-pancit-canton-chilimansi.webp',
-    color: '#65a30d',
-    badgeText: 'Chilimansi',
-    icon: '🌶️'
-  },
-  {
-    id: 'lucky-me-pancit-canton-original',
-    name: 'Lucky Me! Pancit Canton Original',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 20.00,
-    stockQuantity: 36,
-    description: 'Classic savory and garlicky Filipino pancit canton flavor.',
-    imageUrl: '/assets/menu/lucky-me-pancit-canton-original.webp',
-    color: '#d97706',
-    badgeText: 'Original',
-    icon: '🥢'
-  },
-  {
-    id: 'lucky-me-pancit-canton-hot-chili',
-    name: 'Lucky Me! Pancit Canton Hot Chili',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 20.00,
-    stockQuantity: 36,
-    description: 'Fiery and spicy stir-fried instant noodles for hot chili enthusiasts.',
-    imageUrl: '/assets/menu/lucky-me-pancit-canton-hot-chili.webp',
-    color: '#dc2626',
-    badgeText: 'Hot Chili',
-    icon: '🔥'
-  },
-  {
-    id: 'lucky-me-pancit-canton-sweet-spicy',
-    name: 'Lucky Me! Pancit Canton Sweet & Spicy',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 20.00,
-    stockQuantity: 48,
-    description: 'Savory stir-fried noodles with a delicious balance of sweet glaze and spicy kick.',
-    imageUrl: '/assets/menu/lucky-me-pancit-canton-sweet-spicy.webp',
-    color: '#991b1b',
-    badgeText: 'Sweet & Spicy',
-    icon: '🍯'
-  },
-  {
-    id: 'payless-extra-big-sweet-spicy',
-    name: 'Payless Pancit Canton Extra Big Sweet & Spicy',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 25.00,
-    stockQuantity: 30,
-    description: 'Extra big serving of sweet and spicy fried noodles to satisfy long gaming sessions.',
-    imageUrl: '/assets/menu/payless-extra-big-sweet-spicy.webp',
-    color: '#b91c1c',
-    badgeText: 'Extra Big',
-    icon: '🍲'
-  },
-  {
-    id: 'payless-extra-big-chilimansi',
-    name: 'Payless Pancit Canton Extra Big Chilimansi',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 25.00,
-    stockQuantity: 30,
-    description: 'Hearty jumbo serving of zesty chilimansi noodles for hungry gamers.',
-    imageUrl: '/assets/menu/payless-extra-big-chilimansi.webp',
-    color: '#4d7c0f',
-    badgeText: 'Extra Big',
-    icon: '🍋'
-  },
-  {
-    id: 'indomie-mi-goreng-original',
-    name: 'Indomie Mi Goreng Original',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 25.00,
-    stockQuantity: 36,
-    description: 'World-famous Indonesian fried noodles with fried shallots and sweet soy seasoning.',
-    imageUrl: '/assets/menu/indomie-mi-goreng-original.webp',
-    color: '#ea580c',
-    badgeText: 'Mi Goreng',
-    icon: '🍳'
-  },
-  {
-    id: 'indomie-mi-goreng-hot-spicy',
-    name: 'Indomie Mi Goreng Hot & Spicy',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 25.00,
-    stockQuantity: 24,
-    description: 'Extra spicy Indonesian instant fried noodles topped with crispy shallots.',
-    imageUrl: '/assets/menu/indomie-mi-goreng-hot-spicy.webp',
-    color: '#c2410c',
-    badgeText: 'Pedas',
-    icon: '🌶️'
-  },
-
-  // ==========================================
-  // CUP NOODLES & SOUPS
-  // ==========================================
-  {
-    id: 'nissin-cup-noodles-beef',
-    name: 'Nissin Cup Noodles Beef',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 35.00,
-    stockQuantity: 30,
-    description: 'Rich and savory beef broth noodles with vegetables and tender meat chunks.',
-    imageUrl: '/assets/menu/nissin-cup-noodles-beef.webp',
-    color: '#991b1b',
-    badgeText: 'Beef',
-    icon: '🥩'
-  },
-  {
-    id: 'nissin-cup-noodles-chicken',
-    name: 'Nissin Cup Noodles Chicken',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 35.00,
-    stockQuantity: 30,
-    description: 'Comforting chicken broth with springy noodles, corn, and vegetables.',
-    imageUrl: '/assets/menu/nissin-cup-noodles-chicken.webp',
-    color: '#eab308',
-    badgeText: 'Chicken',
-    icon: '🍗'
-  },
-  {
-    id: 'nissin-cup-noodles-seafood',
-    name: 'Nissin Cup Noodles Seafood',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 38.00,
-    stockQuantity: 36,
-    description: 'Signature creamy seafood soup loaded with calamari, crab sticks, and cabbage.',
-    imageUrl: '/assets/menu/nissin-cup-noodles-seafood.webp',
-    color: '#0284c7',
-    badgeText: 'Seafood',
-    icon: '🦐'
-  },
-  {
-    id: 'nissin-cup-noodles-spicy-seafood',
-    name: 'Nissin Cup Noodles Spicy Seafood',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 38.00,
-    stockQuantity: 36,
-    description: 'Rich creamy seafood soup enhanced with fiery chili broth and vegetables.',
-    imageUrl: '/assets/menu/nissin-cup-noodles-spicy-seafood.webp',
-    color: '#0369a1',
-    badgeText: 'Spicy Seafood',
-    icon: '🌶️'
-  },
-  {
-    id: 'lucky-me-supreme-lapaz-batchoy',
-    name: 'Lucky Me! Supreme La Paz Batchoy',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 35.00,
-    stockQuantity: 30,
-    description: 'Authentic Ilonggo noodle soup topped with crunchy chicharon bits and garlic.',
-    imageUrl: '/assets/menu/lucky-me-supreme-lapaz-batchoy.webp',
-    color: '#ca8a04',
-    badgeText: 'La Paz Batchoy',
-    icon: '🍲'
-  },
-  {
-    id: 'lucky-me-supreme-bulalo',
-    name: 'Lucky Me! Supreme Bulalo',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 35.00,
-    stockQuantity: 30,
-    description: 'Hearty beef marrow broth inspired by Batangas-style bulalo.',
-    imageUrl: '/assets/menu/lucky-me-supreme-bulalo.webp',
-    color: '#78350f',
-    badgeText: 'Bulalo',
-    icon: '🥩'
-  },
-  {
-    id: 'lucky-me-supreme-chicken-mami',
-    name: 'Lucky Me! Supreme Chicken Mami',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 35.00,
-    stockQuantity: 24,
-    description: 'Classic Filipino chicken mami soup with toasted garlic and egg bits.',
-    imageUrl: '/assets/menu/lucky-me-supreme-chicken-mami.webp',
-    color: '#d97706',
-    badgeText: 'Chicken Mami',
-    icon: '🍜'
-  },
-  {
-    id: 'jin-ramen-cup-mild',
-    name: 'Ottogi Jin Ramen Cup (Mild)',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 50.00,
-    stockQuantity: 24,
-    description: 'Chewy Korean ramyun noodles in rich, savory, umami-packed broth.',
-    imageUrl: '/assets/menu/jin-ramen-cup-mild.webp',
-    color: '#2563eb',
-    badgeText: 'Jin Mild',
-    icon: '🍜'
-  },
-  {
-    id: 'jin-ramen-cup-spicy',
-    name: 'Ottogi Jin Ramen Cup (Spicy)',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 50.00,
-    stockQuantity: 24,
-    description: 'Bold and spicy Korean ramyun with deep beef broth and chewy noodles.',
-    imageUrl: '/assets/menu/jin-ramen-cup-spicy.webp',
-    color: '#b91c1c',
-    badgeText: 'Jin Spicy',
-    icon: '🌶️'
-  },
-  {
-    id: 'shin-ramyun-cup',
-    name: 'Nongshim Shin Ramyun Cup',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 65.00,
-    stockQuantity: 24,
-    description: 'World-renowned spicy Korean gourmet ramyun with deep mushroom and chili flavor.',
-    imageUrl: '/assets/menu/shin-ramyun-cup.webp',
-    color: '#991b1b',
-    badgeText: 'Shin Ramyun',
-    icon: '🔥'
-  },
-  {
-    id: 'samyang-buldak-2x-spicy',
-    name: 'Samyang Buldak 2x Spicy Hot Chicken',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 75.00,
-    stockQuantity: 18,
-    description: 'Extreme fire challenge Korean spicy chicken noodles with sesame seeds and nori.',
-    imageUrl: '/assets/menu/samyang-buldak-2x-spicy.webp',
-    color: '#18181b',
-    badgeText: '2x Spicy',
-    icon: '💀'
-  },
-
-  // ==========================================
-  // JUNK FOOD & CHIPS
-  // ==========================================
-  {
-    id: 'piattos-cheese',
-    name: 'Piattos Cheese',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 22.00,
-    stockQuantity: 40,
-    description: 'Crispy hexagonal potato crisps generously dusted with rich cheddar cheese powder.',
-    imageUrl: '/assets/menu/piattos-cheese.webp',
-    color: '#d97706',
-    badgeText: 'Cheese',
-    icon: '🧀'
-  },
-  {
-    id: 'piattos-sour-cream',
-    name: 'Piattos Sour Cream & Onion',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 22.00,
-    stockQuantity: 36,
-    description: 'Hexagonal potato chips with savory tang of sour cream and fragrant green onion.',
-    imageUrl: '/assets/menu/piattos-sour-cream.webp',
-    color: '#16a34a',
-    badgeText: 'Sour Cream',
-    icon: '🧅'
-  },
-  {
-    id: 'piattos-barbecue',
-    name: 'Piattos Roadhouse Barbecue',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 22.00,
-    stockQuantity: 36,
-    description: 'Smoky roadhouse barbecue seasoning on light and crunchy hexagonal crisps.',
-    imageUrl: '/assets/menu/piattos-barbecue.webp',
-    color: '#b91c1c',
-    badgeText: 'Roadhouse BBQ',
-    icon: '🍖'
-  },
-  {
-    id: 'nova-country-cheddar',
-    name: 'Nova Multigrain Country Cheddar',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 22.00,
-    stockQuantity: 36,
-    description: 'Healthy multigrain blend of corn, rice, wheat, and oats coated in savory cheddar.',
-    imageUrl: '/assets/menu/nova-country-cheddar.webp',
-    color: '#ca8a04',
-    badgeText: 'Multigrain',
-    icon: '🌾'
-  },
-  {
-    id: 'chippy-barbecue',
-    name: 'Chippy Barbecue',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 40,
-    description: 'The legendary crunchy barbecue corn chips that Filipinos love.',
-    imageUrl: '/assets/menu/chippy-barbecue.webp',
-    color: '#b91c1c',
-    badgeText: 'Barbecue',
-    icon: '🌽'
-  },
-  {
-    id: 'chippy-chilli-cheese',
-    name: 'Chippy Chilli & Cheese',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 36,
-    description: 'Crisp corn chips with bold melted cheese and tingling red chili powder.',
-    imageUrl: '/assets/menu/chippy-chilli-cheese.webp',
-    color: '#ea580c',
-    badgeText: 'Chilli Cheese',
-    icon: '🌶️'
-  },
-  {
-    id: 'vcut-cheese',
-    name: 'Vcut Potato Chips Cheese',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 25.00,
-    stockQuantity: 36,
-    description: 'Ridge-cut potato chips with an intensely satisfying crunch and rich cheese seasoning.',
-    imageUrl: '/assets/menu/vcut-cheese.webp',
-    color: '#eab308',
-    badgeText: 'Ridge Cut',
-    icon: '🥔'
-  },
-  {
-    id: 'vcut-barbecue',
-    name: 'Vcut Potato Chips Spicy Barbecue',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 25.00,
-    stockQuantity: 36,
-    description: 'Thick ridged potato chips flavored with spicy and sweet grill smoke.',
-    imageUrl: '/assets/menu/vcut-barbecue.webp',
-    color: '#991b1b',
-    badgeText: 'Spicy BBQ',
-    icon: '🔥'
-  },
-  {
-    id: 'clover-chips-cheese',
-    name: 'Clover Chips Cheese',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 30,
-    description: 'Unique clover-shaped puffed tapioca and corn snacks with intense cheese coating.',
-    imageUrl: '/assets/menu/clover-chips-cheese.webp',
-    color: '#f59e0b',
-    badgeText: 'Clover Cheese',
-    icon: '🍀'
-  },
-  {
-    id: 'clover-chips-barbecue',
-    name: 'Clover Chips Barbecue',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 30,
-    description: 'Classic clover-shaped crunchy chips coated in sweet and savory barbecue seasoning.',
-    imageUrl: '/assets/menu/clover-chips-barbecue.webp',
-    color: '#b91c1c',
-    badgeText: 'Clover BBQ',
-    icon: '🍀'
-  },
-  {
-    id: 'ding-dong-mixed-nuts',
-    name: 'Ding Dong Mixed Nuts (Original Red)',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 36,
-    description: 'A crunchy mix of peanuts, green peas, cornick, and savory fava beans.',
-    imageUrl: '/assets/menu/ding-dong-mixed-nuts.webp',
-    color: '#dc2626',
-    badgeText: 'Mixed Nuts',
-    icon: '🥜'
-  },
-  {
-    id: 'ding-dong-snack-mix',
-    name: 'Ding Dong Snack Mix (Black)',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 36,
-    description: 'Savory blend of seasoned corn bits, cracker nuts, green peas, and chips.',
-    imageUrl: '/assets/menu/ding-dong-snack-mix.webp',
-    color: '#27272a',
-    badgeText: 'Snack Mix',
-    icon: '🍿'
-  },
-  {
-    id: 'mr-chips-nacho-cheese',
-    name: 'Mr. Chips Nacho Cheese',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 30,
-    description: 'Classic corn tortilla triangle chips with authentic nacho cheese flavor.',
-    imageUrl: '/assets/menu/mr-chips-nacho-cheese.webp',
-    color: '#d97706',
-    badgeText: 'Nacho Cheese',
-    icon: '🧀'
-  },
-  {
-    id: 'oishi-prawn-crackers',
-    name: 'Oishi Prawn Crackers Spicy',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 30,
-    description: 'Light, crispy prawn-flavored crackers dusted with extra spicy chili powder.',
-    imageUrl: '/assets/menu/oishi-prawn-crackers.webp',
-    color: '#ea580c',
-    badgeText: 'Prawn Crackers',
-    icon: '🦐'
-  },
-  {
-    id: 'oishi-pillows-chocolate',
-    name: 'Oishi Pillows Chocolate',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 36,
-    description: 'Crunchy sponge biscuits filled with luscious, decadent chocolate cream.',
-    imageUrl: '/assets/menu/oishi-pillows-chocolate.webp',
-    color: '#713f12',
-    badgeText: 'Chocolate Pillows',
-    icon: '🍫'
-  },
-  {
-    id: 'oishi-pillows-ube',
-    name: 'Oishi Pillows Ube',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 30,
-    description: 'Bite-sized purple yam-filled pillows with a sweet and creamy Filipino ube center.',
-    imageUrl: '/assets/menu/oishi-pillows-ube.webp',
-    color: '#7e22ce',
-    badgeText: 'Ube Cream',
-    icon: '🍠'
-  },
-  {
-    id: 'mang-juan-sukang-paombong',
-    name: 'Chicharon ni Mang Juan Sukang Paombong',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 20.00,
-    stockQuantity: 30,
-    description: 'Delectably sour and salty vegetarian chicharon with authentic spiced palm vinegar flavor.',
-    imageUrl: '/assets/menu/mang-juan-sukang-paombong.webp',
-    color: '#15803d',
-    badgeText: 'Sukang Paombong',
-    icon: '🥓'
-  },
-  {
-    id: 'roller-coaster-cheese',
-    name: 'Roller Coaster Potato Rings Cheese',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 20.00,
-    stockQuantity: 30,
-    description: 'Fun ring-shaped crunchy potato snacks packed with rich cheesy delight.',
-    imageUrl: '/assets/menu/roller-coaster-cheese.webp',
-    color: '#ca8a04',
-    badgeText: 'Potato Rings',
-    icon: '💍'
-  },
-  {
-    id: 'boy-bawang-garlic',
-    name: 'Boy Bawang Garlic Cornick',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 15.00,
-    stockQuantity: 40,
-    description: 'Extra crunchy roasted corn nuts seasoned with aromatic toasted garlic.',
-    imageUrl: '/assets/menu/boy-bawang-garlic.webp',
-    color: '#eab308',
-    badgeText: 'Garlic Cornick',
-    icon: '🧄'
-  },
-  {
-    id: 'boy-bawang-chilli-cheese',
-    name: 'Boy Bawang Chilli Cheese Cornick',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 15.00,
-    stockQuantity: 30,
-    description: 'Toasted corn kernels loaded with hot chili pepper and tangy cheddar cheese.',
-    imageUrl: '/assets/menu/boy-bawang-chilli-cheese.webp',
-    color: '#c2410c',
-    badgeText: 'Chilli Cheese',
-    icon: '🌶️'
-  },
-  {
-    id: 'nagaraya-garlic',
-    name: 'Nagaraya Cracker Nuts Garlic',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 22.00,
-    stockQuantity: 30,
-    description: 'Crispy cracker-coated peanuts packed with irresistible garlic taste.',
-    imageUrl: '/assets/menu/nagaraya-garlic.webp',
-    color: '#15803d',
-    badgeText: 'Cracker Nuts',
-    icon: '🥜'
-  },
-  {
-    id: 'nagaraya-hot-spicy',
-    name: 'Nagaraya Cracker Nuts Hot & Spicy',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 22.00,
-    stockQuantity: 30,
-    description: 'Spicy crunchy peanut snack coated in thick and savory wheat shell.',
-    imageUrl: '/assets/menu/nagaraya-hot-spicy.webp',
-    color: '#b91c1c',
-    badgeText: 'Hot & Spicy',
-    icon: '🔥'
-  },
-
-  // ==========================================
-  // SOFT DRINKS & SODAS
-  // ==========================================
-  {
-    id: 'coca-cola-original',
-    name: 'Coca-Cola Original (Mismo 290ml)',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 22.00,
-    stockQuantity: 48,
-    description: 'The world’s favorite ice-cold refreshing cola beverage.',
-    imageUrl: '/assets/menu/coca-cola-original.webp',
-    color: '#dc2626',
-    badgeText: 'Coke Mismo',
-    icon: '🥤'
-  },
-  {
-    id: 'coca-cola-zero',
-    name: 'Coca-Cola Zero Sugar (Can)',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 25.00,
-    stockQuantity: 24,
-    description: 'Real Coke taste with zero sugar and zero calories.',
-    imageUrl: '/assets/menu/coca-cola-zero.webp',
-    color: '#09090b',
-    badgeText: 'Coke Zero',
-    icon: '🥤'
-  },
-  {
-    id: 'sprite-mismo',
-    name: 'Sprite (Mismo 290ml)',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 22.00,
-    stockQuantity: 36,
-    description: 'Crisp, refreshing lemon-lime flavored sparkling beverage.',
-    imageUrl: '/assets/menu/sprite-mismo.webp',
-    color: '#16a34a',
-    badgeText: 'Sprite',
-    icon: '🍋'
-  },
-  {
-    id: 'royal-tru-orange',
-    name: 'Royal Tru-Orange (Mismo 290ml)',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 22.00,
-    stockQuantity: 36,
-    description: 'Bold and playful orange carbonated drink loved across the Philippines.',
-    imageUrl: '/assets/menu/royal-tru-orange.webp',
-    color: '#ea580c',
-    badgeText: 'Royal Orange',
-    icon: '🍊'
-  },
-  {
-    id: 'mountain-dew-bottle',
-    name: 'Mountain Dew (300ml)',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 25.00,
-    stockQuantity: 48,
-    description: 'The definitive gamer citrus soda with invigorating charge and bold flavor.',
-    imageUrl: '/assets/menu/mountain-dew-bottle.webp',
-    color: '#65a30d',
-    badgeText: 'Mountain Dew',
-    icon: '⚡'
-  },
-  {
-    id: 'rc-cola-bottle',
-    name: 'RC Cola (240ml)',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 18.00,
-    stockQuantity: 48,
-    description: 'Budget-friendly crisp cola refreshment for non-stop PC gaming.',
-    imageUrl: '/assets/menu/rc-cola-bottle.webp',
-    color: '#1d4ed8',
-    badgeText: 'RC Cola',
-    icon: '🥤'
-  },
-  {
-    id: 'mineral-water-500ml',
-    name: 'Purified Mineral Water (500ml)',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 15.00,
-    stockQuantity: 60,
-    description: 'Pure and refreshing chilled bottled drinking water.',
-    imageUrl: '/assets/menu/mineral-water-500ml.webp',
-    color: '#0284c7',
-    badgeText: 'Mineral Water',
-    icon: '💧'
-  },
-
-  // ==========================================
-  // ENERGY DRINKS & COFFEE
-  // ==========================================
-  {
-    id: 'sting-energy-strawberry',
-    name: 'Sting Energy Drink Strawberry (Red)',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 28.00,
-    stockQuantity: 48,
-    description: 'High-energy sweet strawberry power drink packed with taurine and B-vitamins.',
-    imageUrl: '/assets/menu/sting-energy-strawberry.webp',
-    color: '#e11d48',
-    badgeText: 'Sting Red',
-    icon: '⚡'
-  },
-  {
-    id: 'cobra-energy-original',
-    name: 'Cobra Energy Drink Original (Yellow)',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 28.00,
-    stockQuantity: 48,
-    description: 'The #1 Philippine energy drink for sustained focus and late night clutch plays.',
-    imageUrl: '/assets/menu/cobra-energy-original.webp',
-    color: '#ca8a04',
-    badgeText: 'Cobra Yellow',
-    icon: '🐍'
-  },
-  {
-    id: 'cobra-energy-berry',
-    name: 'Cobra Energy Drink Berry (Red)',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 28.00,
-    stockQuantity: 36,
-    description: 'Berry-flavored revitalizing energy drink with ginseng and royal jelly.',
-    imageUrl: '/assets/menu/cobra-energy-berry.webp',
-    color: '#be123c',
-    badgeText: 'Cobra Berry',
-    icon: '🍓'
-  },
-  {
-    id: 'kopiko-lucky-day',
-    name: 'Kopiko Lucky Day / 78° Coffee',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 35.00,
-    stockQuantity: 36,
-    description: 'Rich creamy ready-to-drink roasted iced coffee with strong caffeine kick.',
-    imageUrl: '/assets/menu/kopiko-lucky-day.webp',
-    color: '#713f12',
-    badgeText: 'Kopiko Coffee',
-    icon: '☕'
-  },
-  {
-    id: 'nescafe-roast-ground',
-    name: 'Nescafe Canned Roast & Ground',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 35.00,
-    stockQuantity: 24,
-    description: 'Chilled canned espresso coffee blend made from 100% pure Robusta coffee beans.',
-    imageUrl: '/assets/menu/nescafe-roast-ground.webp',
-    color: '#854d0e',
-    badgeText: 'Nescafe',
-    icon: '☕'
-  },
-  {
-    id: 'c2-green-tea-apple',
-    name: 'C2 Green Tea Apple (355ml)',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 25.00,
-    stockQuantity: 36,
-    description: 'Real brewed green tea infused with sweet and crisp green apple flavor.',
-    imageUrl: '/assets/menu/c2-green-tea-apple.webp',
-    color: '#16a34a',
-    badgeText: 'C2 Apple',
-    icon: '🍏'
-  },
-  {
-    id: 'c2-green-tea-lemon',
-    name: 'C2 Green Tea Lemon (355ml)',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 25.00,
-    stockQuantity: 36,
-    description: 'Refreshing brewed green tea combined with citrusy lemon goodness.',
-    imageUrl: '/assets/menu/c2-green-tea-lemon.webp',
-    color: '#eab308',
-    badgeText: 'C2 Lemon',
-    icon: '🍋'
-  },
-  {
-    id: 'gatorade-blue-bolt',
-    name: 'Gatorade Blue Bolt (500ml)',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 45.00,
-    stockQuantity: 24,
-    description: 'Electrolyte thirst quencher for optimal hydration during intense matches.',
-    imageUrl: '/assets/menu/gatorade-blue-bolt.webp',
-    color: '#0284c7',
-    badgeText: 'Blue Bolt',
-    icon: '⚡'
-  },
-
-  // ==========================================
-  // BISCUITS & SWEET TREATS
-  // ==========================================
-  {
-    id: 'skyflakes-crackers',
-    name: 'SkyFlakes Crackers',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 10.00,
-    stockQuantity: 60,
-    description: 'The indisputable number one saltine cracker in the Philippines.',
-    imageUrl: '/assets/menu/skyflakes-crackers.webp',
-    color: '#1d4ed8',
-    badgeText: 'SkyFlakes',
-    icon: '🍘'
-  },
-  {
-    id: 'skyflakes-garlic',
-    name: 'SkyFlakes Garlic Flavor',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 36,
-    description: 'Crispy SkyFlakes cracker infused with aromatic roasted garlic flavor.',
-    imageUrl: '/assets/menu/skyflakes-garlic.webp',
-    color: '#ca8a04',
-    badgeText: 'Garlic Flakes',
-    icon: '🧄'
-  },
-  {
-    id: 'fita-crackers',
-    name: 'Fita Crackers',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 40,
-    description: 'Round golden baked crackers with an iconic buttery, slightly sweet taste.',
-    imageUrl: '/assets/menu/fita-crackers.webp',
-    color: '#dc2626',
-    badgeText: 'Fita',
-    icon: '🧈'
-  },
-  {
-    id: 'rebisco-sandwich-choco',
-    name: 'Rebisco Sandwich Chocolate',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 40,
-    description: 'Crispy cracker sandwich with double chocolate cream filling.',
-    imageUrl: '/assets/menu/rebisco-sandwich-choco.webp',
-    color: '#713f12',
-    badgeText: 'Rebisco Choco',
-    icon: '🍫'
-  },
-  {
-    id: 'rebisco-sandwich-butter',
-    name: 'Rebisco Sandwich Choco-Butter',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 36,
-    description: 'Crunchy sandwich biscuits filled with rich chocolate and creamy butter.',
-    imageUrl: '/assets/menu/rebisco-sandwich-butter.webp',
-    color: '#ca8a04',
-    badgeText: 'Choco Butter',
-    icon: '🧈'
-  },
-  {
-    id: 'fudgee-barr-chocolate',
-    name: 'Fudgee Barr Chocolate',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 48,
-    description: 'Soft, moist chocolate cake bar with luscious flowing chocolate fudge inside.',
-    imageUrl: '/assets/menu/fudgee-barr-chocolate.webp',
-    color: '#451a03',
-    badgeText: 'Fudgee Choco',
-    icon: '🍰'
-  },
-  {
-    id: 'fudgee-barr-dark-choco',
-    name: 'Fudgee Barr Dark Choco',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 36,
-    description: 'Rich dark chocolate cake bar loaded with decadent dark chocolate fudge.',
-    imageUrl: '/assets/menu/fudgee-barr-dark-choco.webp',
-    color: '#1c1917',
-    badgeText: 'Dark Choco',
-    icon: '🍫'
-  },
-  {
-    id: 'fudgee-barr-milk',
-    name: 'Fudgee Barr Milk',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 36,
-    description: 'Delightful vanilla sponge cake bar with sweet creamy condensed milk filling.',
-    imageUrl: '/assets/menu/fudgee-barr-milk.webp',
-    color: '#2563eb',
-    badgeText: 'Fudgee Milk',
-    icon: '🥛'
-  },
-  {
-    id: 'superstix-chocolate',
-    name: 'Superstix Chocolate Wafers',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 40,
-    description: 'Crisp rolled wafer sticks brimming with smooth chocolate cream filling.',
-    imageUrl: '/assets/menu/superstix-chocolate.webp',
-    color: '#713f12',
-    badgeText: 'Superstix Choco',
-    icon: '🥢'
-  },
-  {
-    id: 'superstix-milk',
-    name: 'Superstix Milk Wafers',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 36,
-    description: 'Light and crunchy wafer sticks filled with sweet creamy milk chocolate.',
-    imageUrl: '/assets/menu/superstix-milk.webp',
-    color: '#0284c7',
-    badgeText: 'Superstix Milk',
-    icon: '🥛'
-  },
-  {
-    id: 'choco-mucho-chocolate',
-    name: 'Choco Mucho Chocolate Wafer Bar',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 15.00,
-    stockQuantity: 40,
-    description: 'Big crunchy chocolate wafer bar filled with caramel, cereal crispies, and chocolate.',
-    imageUrl: '/assets/menu/choco-mucho-chocolate.webp',
-    color: '#78350f',
-    badgeText: 'Choco Mucho',
-    icon: '🍫'
-  },
-  {
-    id: 'choco-mucho-dark',
-    name: 'Choco Mucho Dark Chocolate',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 15.00,
-    stockQuantity: 36,
-    description: 'Intense dark chocolate bar with crunchy cereal crisps and caramel core.',
-    imageUrl: '/assets/menu/choco-mucho-dark.webp',
-    color: '#1c1917',
-    badgeText: 'Dark Mucho',
-    icon: '🍫'
-  },
-  {
-    id: 'cloud-9-classic',
-    name: 'Cloud 9 Classic Chocolate Bar',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 15.00,
-    stockQuantity: 36,
-    description: 'Rich chocolate-coated candy bar with nougat, caramel, and crunchy peanuts.',
-    imageUrl: '/assets/menu/cloud-9-classic.webp',
-    color: '#0284c7',
-    badgeText: 'Cloud 9',
-    icon: '🍫'
-  },
-  {
-    id: 'nissin-butter-coconut',
-    name: 'Nissin Butter Coconut Biscuits',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 30,
-    description: 'Delicate toasted coconut biscuits glazed with sweet golden butter.',
-    imageUrl: '/assets/menu/nissin-butter-coconut.webp',
-    color: '#ca8a04',
-    badgeText: 'Butter Coconut',
-    icon: '🥥'
-  },
-
-  // ==========================================
-  // RICE MEALS & SILOG (CAFE KITCHEN)
-  // ==========================================
-  {
-    id: 'fried-siomai-4pcs',
-    name: 'Fried Pork Siomai (4 pcs with Chili Dip)',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 35.00,
-    stockQuantity: 30,
-    description: 'Golden crispy pork siomai served with toasted garlic chili oil and calamansi dip.',
-    imageUrl: '/assets/menu/fried-siomai-4pcs.webp',
-    color: '#ea580c',
-    badgeText: 'Fried Siomai',
-    icon: '🥟'
-  },
-  {
-    id: 'hotsilog',
-    name: 'Hotsilog (Hotdog, Sinangag, Fried Egg)',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 55.00,
-    stockQuantity: 20,
-    description: 'Classic red Filipino hotdog paired with fragrant garlic fried rice and sunny side egg.',
-    imageUrl: '/assets/menu/hotsilog.webp',
-    color: '#dc2626',
-    badgeText: 'Hotsilog',
-    icon: '🌭'
-  },
-  {
-    id: 'tapsilog',
-    name: 'Tapsilog (Beef Tapa, Sinangag, Fried Egg)',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 75.00,
-    stockQuantity: 20,
-    description: 'Savory marinated beef tapa served with garlic rice and fried egg.',
-    imageUrl: '/assets/menu/tapsilog.webp',
-    color: '#7f1d1d',
-    badgeText: 'Tapsilog',
-    icon: '🥩'
-  },
-  {
-    id: 'tocilog',
-    name: 'Tocilog (Pork Tocino, Sinangag, Fried Egg)',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 65.00,
-    stockQuantity: 20,
-    description: 'Sweet cured pork tocino with garlicky fried sinangag and crispy fried egg.',
-    imageUrl: '/assets/menu/tocilog.webp',
-    color: '#be123c',
-    badgeText: 'Tocilog',
-    icon: '🥓'
-  },
-  {
-    id: 'hard-boiled-egg',
-    name: 'Hard Boiled Egg (with Salt & Pepper)',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 15.00,
-    stockQuantity: 30,
-    description: 'Fresh boiled egg served with seasoned salt, perfect partner for Pancit Canton.',
-    imageUrl: '/assets/menu/hard-boiled-egg.webp',
-    color: '#eab308',
-    badgeText: 'Boiled Egg',
-    icon: '🥚'
-  },
-  {
-    id: 'lucky-me-canton-extra-hot-chili',
-    name: 'Lucky Me! Pancit Canton Extra Hot Chili',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 22.00,
-    stockQuantity: 36,
-    description: 'Intensely spicy instant stir-fried noodles with extra chili kick.',
-    imageUrl: '/assets/menu/lucky-me-canton-extra-hot-chili.webp',
-    color: '#991b1b',
-    badgeText: 'Extra Hot',
-    icon: '🔥'
-  },
-  {
-    id: 'payless-extra-big-original',
-    name: 'Payless Pancit Canton Extra Big Original',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 18.00,
-    stockQuantity: 36,
-    description: 'Generous extra big serving of savory traditional pancit canton.',
-    imageUrl: '/assets/menu/payless-extra-big-original.webp',
-    color: '#d97706',
-    badgeText: 'Original',
-    icon: '🍜'
-  },
-  {
-    id: 'nissin-yakisoba-spicy-chicken',
-    name: 'Nissin Yakisoba Spicy Chicken',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 24.00,
-    stockQuantity: 36,
-    description: 'Savory Japanese-style yakisoba noodles infused with spicy roasted chicken flavor.',
-    imageUrl: '/assets/menu/nissin-yakisoba-spicy-chicken.webp',
-    color: '#ea580c',
-    badgeText: 'Spicy Chicken',
-    icon: '🥢'
-  },
-  {
-    id: 'nissin-yakisoba-savory-beef',
-    name: 'Nissin Yakisoba Savory Beef',
-    category: 'Food',
-    subcategory: 'Pancit Canton',
-    price: 24.00,
-    stockQuantity: 36,
-    description: 'Stir-fried yakisoba noodles with deep savory beef sauce.',
-    imageUrl: '/assets/menu/nissin-yakisoba-savory-beef.webp',
-    color: '#854d0e',
-    badgeText: 'Savory Beef',
-    icon: '🥩'
-  },
-  {
-    id: 'buldak-carbonara-cup',
-    name: 'Samyang Buldak Carbonara Cup Ramen',
-    category: 'Food',
-    subcategory: 'Cup Noodles',
-    price: 85.00,
-    stockQuantity: 24,
-    description: 'Creamy spicy carbonara chicken instant noodles with rich cheese and herbs.',
-    imageUrl: '/assets/menu/buldak-carbonara-cup.webp',
-    color: '#f472b6',
-    badgeText: 'Carbonara',
-    icon: '🧀'
-  },
-  {
-    id: 'piattos-roast-beef',
-    name: 'Piattos Roast Beef Flavored Potato Crisps',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 22.00,
-    stockQuantity: 30,
-    description: 'Hexagonal potato crisps seasoned with smoky oven-roasted beef flavor.',
-    imageUrl: '/assets/menu/piattos-roast-beef.webp',
-    color: '#7f1d1d',
-    badgeText: 'Roast Beef',
-    icon: '🥩'
-  },
-  {
-    id: 'oishi-tortillos-cheese',
-    name: 'Oishi Tortillos Real Corn Chips Cheese',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 18.00,
-    stockQuantity: 36,
-    description: 'Crispy stone-ground rolled corn chips coated in rich savory cheese.',
-    imageUrl: '/assets/menu/oishi-tortillos-cheese.webp',
-    color: '#f59e0b',
-    badgeText: 'Cheese',
-    icon: '🌽'
-  },
-  {
-    id: 'oishi-rinbee-cheese',
-    name: 'Oishi Rin-Bee Cheese Sticks',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 12.00,
-    stockQuantity: 40,
-    description: 'Nostalgic crunchy puffed cheese sticks packed with finger-licking cheese goodness.',
-    imageUrl: '/assets/menu/oishi-rinbee-cheese.webp',
-    color: '#eab308',
-    badgeText: 'Cheese Sticks',
-    icon: '🥖'
-  },
-  {
-    id: 'leslies-cheezy-corn-crunch',
-    name: 'Leslie\'s Cheezy Corn Crunch',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 20.00,
-    stockQuantity: 36,
-    description: 'Intensely cheesy and crunchy corn snacks with real melted cheese taste.',
-    imageUrl: '/assets/menu/leslies-cheezy-corn-crunch.webp',
-    color: '#d97706',
-    badgeText: 'Cheezy',
-    icon: '🧀'
-  },
-  {
-    id: 'regent-cheese-ring',
-    name: 'Regent Cheese Ring Snacks',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 15.00,
-    stockQuantity: 40,
-    description: 'All-time favorite puffy round rings drenched in sweet and savory cheddar cheese.',
-    imageUrl: '/assets/menu/regent-cheese-ring.webp',
-    color: '#f97316',
-    badgeText: 'Cheese Ring',
-    icon: '💍'
-  },
-  {
-    id: 'regent-sweet-corn',
-    name: 'Regent Sweet Corn Snack',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 15.00,
-    stockQuantity: 40,
-    description: 'Melt-in-your-mouth sweet corn balls with comforting roasted butter corn aroma.',
-    imageUrl: '/assets/menu/regent-sweet-corn.webp',
-    color: '#eab308',
-    badgeText: 'Sweet Corn',
-    icon: '🌽'
-  },
-  {
-    id: 'peewee-bbq',
-    name: 'Pee-wee Sizzling BBQ Snack',
-    category: 'Snacks',
-    subcategory: 'Junk Food & Chips',
-    price: 14.00,
-    stockQuantity: 36,
-    description: 'Crunchy bite-sized pizza corn snacks with sweet and tangy BBQ seasoning.',
-    imageUrl: '/assets/menu/peewee-bbq.webp',
-    color: '#b91c1c',
-    badgeText: 'BBQ',
-    icon: '🍕'
-  },
-  {
-    id: 'stick-o-chocolate',
-    name: 'Stick-O Chocolate Wafer Sticks',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 25.00,
-    stockQuantity: 36,
-    description: 'Crisp spiral wafer sticks generously filled with velvety chocolate cream.',
-    imageUrl: '/assets/menu/stick-o-chocolate.webp',
-    color: '#451a03',
-    badgeText: 'Stick-O',
-    icon: '🥢'
-  },
-  {
-    id: 'cream-o-vanilla',
-    name: 'Jack \'n Jill Cream-O Vanilla Cookies',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 16.00,
-    stockQuantity: 40,
-    description: 'Rich dark chocolate biscuit sandwich filled with thick sweet vanilla cream.',
-    imageUrl: '/assets/menu/cream-o-vanilla.webp',
-    color: '#292524',
-    badgeText: 'Cream-O',
-    icon: '🍪'
-  },
-  {
-    id: 'hansel-mocha-sandwich',
-    name: 'Hansel Mocha Sandwich Biscuits',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 12.00,
-    stockQuantity: 48,
-    description: 'Soft-crumbed biscuit sandwich packed with aromatic roasted mocha coffee cream.',
-    imageUrl: '/assets/menu/hansel-mocha-sandwich.webp',
-    color: '#78350f',
-    badgeText: 'Mocha',
-    icon: '☕'
-  },
-  {
-    id: 'presto-creams-peanut-butter',
-    name: 'Presto Creams Peanut Butter Cookies',
-    category: 'Snacks',
-    subcategory: 'Biscuits & Sweets',
-    price: 15.00,
-    stockQuantity: 40,
-    description: 'Classic chocolate cookie sandwich loaded with creamy savory peanut butter.',
-    imageUrl: '/assets/menu/presto-creams-peanut-butter.webp',
-    color: '#92400e',
-    badgeText: 'Peanut Butter',
-    icon: '🥜'
-  },
-  {
-    id: 'mogu-mogu-lychee',
-    name: 'Mogu Mogu Lychee Juice with Nata de Coco',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 45.00,
-    stockQuantity: 24,
-    description: 'Refreshing sweet lychee juice packed with chewy cubes of coconut nata de coco.',
-    imageUrl: '/assets/menu/mogu-mogu-lychee.webp',
-    color: '#f43f5e',
-    badgeText: 'Nata de Coco',
-    icon: '🧃'
-  },
-  {
-    id: 'nestle-chuckie-chocolate',
-    name: 'Nestle Chuckie Chocolate Milk Drink 250ml',
-    category: 'Drinks',
-    subcategory: 'Energy & Coffee',
-    price: 32.00,
-    stockQuantity: 30,
-    description: 'The Philippines’ favorite rich and creamy fortified chocolate milk drink.',
-    imageUrl: '/assets/menu/nestle-chuckie-chocolate.webp',
-    color: '#713f12',
-    badgeText: 'Chuckie',
-    icon: '🍫'
-  },
-  {
-    id: 'smart-c-lemon',
-    name: 'Smart C+ Lemon Juice Drink 500ml',
-    category: 'Drinks',
-    subcategory: 'Soft Drinks',
-    price: 35.00,
-    stockQuantity: 24,
-    description: 'Crisp and zesty ready-to-drink lemon beverage packed with 500mg of Vitamin C.',
-    imageUrl: '/assets/menu/smart-c-lemon.webp',
-    color: '#eab308',
-    badgeText: 'Vitamin C',
-    icon: '🍋'
-  },
-  {
-    id: 'longsilog',
-    name: 'Longsilog (Pork Longganisa, Sinangag, Fried Egg)',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 65.00,
-    stockQuantity: 20,
-    description: 'Sweet and garlicky native longganisa served with fried garlic rice and sunny egg.',
-    imageUrl: '/assets/menu/longsilog.webp',
-    color: '#991b1b',
-    badgeText: 'Longsilog',
-    icon: '🌭'
-  },
-  {
-    id: 'cornsilog',
-    name: 'Cornsilog (Corned Beef, Sinangag, Fried Egg)',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 65.00,
-    stockQuantity: 20,
-    description: 'Sauteed juicy corned beef with onions, garlic sinangag rice, and fried egg.',
-    imageUrl: '/assets/menu/cornsilog.webp',
-    color: '#b91c1c',
-    badgeText: 'Cornsilog',
-    icon: '🍳'
-  },
-  {
-    id: 'pork-sisig-rice',
-    name: 'Sizzling Pork Sisig Rice Meal',
-    category: 'Food',
-    subcategory: 'Rice Meals & Silog',
-    price: 75.00,
-    stockQuantity: 20,
-    description: 'Crispy chopped pork mask and liver seasoned with calamansi, chili, and onions with egg and rice.',
-    imageUrl: '/assets/menu/pork-sisig-rice.webp',
-    color: '#7f1d1d',
-    badgeText: 'Sisig Rice',
-    icon: '🍲'
+  {
+    "id": "lucky-me-pancit-canton-kalamansi",
+    "name": "Lucky Me! Pancit Canton Kalamansi",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 20,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/lucky-me-pancit-canton-kalamansi.webp"
+  },
+  {
+    "id": "lucky-me-pancit-canton-chilimansi",
+    "name": "Lucky Me! Pancit Canton Chilimansi",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 20,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/lucky-me-pancit-canton-chilimansi.webp"
+  },
+  {
+    "id": "lucky-me-pancit-canton-original",
+    "name": "Lucky Me! Pancit Canton Original",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 20,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/lucky-me-pancit-canton-original.webp"
+  },
+  {
+    "id": "lucky-me-pancit-canton-hot-chili",
+    "name": "Lucky Me! Pancit Canton Hot Chili",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 20,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/lucky-me-pancit-canton-hot-chili.webp"
+  },
+  {
+    "id": "lucky-me-pancit-canton-sweet-spicy",
+    "name": "Lucky Me! Pancit Canton Sweet & Spicy",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 20,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/lucky-me-pancit-canton-sweet-spicy.webp"
+  },
+  {
+    "id": "lucky-me-canton-extra-hot-chili",
+    "name": "Lucky Me! Pancit Canton Extra Hot Chili",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 22,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/lucky-me-canton-extra-hot-chili.webp"
+  },
+  {
+    "id": "payless-extra-big-sweet-spicy",
+    "name": "Payless Pancit Canton Extra Big Sweet & Spicy",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 25,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/payless-extra-big-sweet-spicy.webp"
+  },
+  {
+    "id": "payless-extra-big-chilimansi",
+    "name": "Payless Pancit Canton Extra Big Chilimansi",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 25,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/payless-extra-big-chilimansi.webp"
+  },
+  {
+    "id": "payless-extra-big-original",
+    "name": "Payless Pancit Canton Extra Big Original",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 22,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/payless-extra-big-original.webp"
+  },
+  {
+    "id": "indomie-mi-goreng-original",
+    "name": "Indomie Mi Goreng Original",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 25,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/indomie-mi-goreng-original.webp"
+  },
+  {
+    "id": "indomie-mi-goreng-hot-spicy",
+    "name": "Indomie Mi Goreng Hot & Spicy",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 25,
+    "stockQuantity": 24,
+    "imageUrl": "/assets/menu/indomie-mi-goreng-hot-spicy.webp"
+  },
+  {
+    "id": "nissin-yakisoba-spicy-chicken",
+    "name": "Nissin Yakisoba Spicy Chicken",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 24,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/nissin-yakisoba-spicy-chicken.webp"
+  },
+  {
+    "id": "nissin-yakisoba-savory-beef",
+    "name": "Nissin Yakisoba Savory Beef",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 24,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/nissin-yakisoba-savory-beef.webp"
+  },
+  {
+    "id": "nissin-cup-noodles-beef",
+    "name": "Nissin Cup Noodles Beef",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 35,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/nissin-cup-noodles-beef.webp"
+  },
+  {
+    "id": "nissin-cup-noodles-chicken",
+    "name": "Nissin Cup Noodles Chicken",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 35,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/nissin-cup-noodles-chicken.webp"
+  },
+  {
+    "id": "nissin-cup-noodles-seafood",
+    "name": "Nissin Cup Noodles Seafood",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 38,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/nissin-cup-noodles-seafood.webp"
+  },
+  {
+    "id": "nissin-cup-noodles-spicy-seafood",
+    "name": "Nissin Cup Noodles Spicy Seafood",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 38,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/nissin-cup-noodles-spicy-seafood.webp"
+  },
+  {
+    "id": "lucky-me-supreme-lapaz-batchoy",
+    "name": "Lucky Me! Supreme La Paz Batchoy",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 35,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/lucky-me-supreme-lapaz-batchoy.webp"
+  },
+  {
+    "id": "lucky-me-supreme-bulalo",
+    "name": "Lucky Me! Supreme Bulalo",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 35,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/lucky-me-supreme-bulalo.webp"
+  },
+  {
+    "id": "lucky-me-supreme-chicken-mami",
+    "name": "Lucky Me! Supreme Chicken Mami",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 35,
+    "stockQuantity": 24,
+    "imageUrl": "/assets/menu/lucky-me-supreme-chicken-mami.webp"
+  },
+  {
+    "id": "jin-ramen-cup-mild",
+    "name": "Ottogi Jin Ramen Cup (Mild)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 50,
+    "stockQuantity": 24,
+    "imageUrl": "/assets/menu/jin-ramen-cup-mild.webp"
+  },
+  {
+    "id": "jin-ramen-cup-spicy",
+    "name": "Ottogi Jin Ramen Cup (Spicy)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 50,
+    "stockQuantity": 24,
+    "imageUrl": "/assets/menu/jin-ramen-cup-spicy.webp"
+  },
+  {
+    "id": "shin-ramyun-cup",
+    "name": "Nongshim Shin Ramyun Cup",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 65,
+    "stockQuantity": 24,
+    "imageUrl": "/assets/menu/shin-ramyun-cup.webp"
+  },
+  {
+    "id": "samyang-buldak-2x-spicy",
+    "name": "Samyang Buldak 2x Spicy Hot Chicken",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 75,
+    "stockQuantity": 18,
+    "imageUrl": "/assets/menu/samyang-buldak-2x-spicy.webp"
+  },
+  {
+    "id": "buldak-carbonara-cup",
+    "name": "Samyang Buldak Carbonara Cup Ramen",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 85,
+    "stockQuantity": 24,
+    "imageUrl": "/assets/menu/buldak-carbonara-cup.webp"
+  },
+  {
+    "id": "fried-siomai-4pcs",
+    "name": "Fried Pork Siomai (4 pcs with Chili Dip)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 35,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/fried-siomai-4pcs.webp"
+  },
+  {
+    "id": "hotsilog",
+    "name": "Hotsilog (Hotdog, Sinangag, Fried Egg)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 55,
+    "stockQuantity": 20,
+    "imageUrl": "/assets/menu/hotsilog.webp"
+  },
+  {
+    "id": "tapsilog",
+    "name": "Tapsilog (Beef Tapa, Sinangag, Fried Egg)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 75,
+    "stockQuantity": 20,
+    "imageUrl": "/assets/menu/tapsilog.webp"
+  },
+  {
+    "id": "tocilog",
+    "name": "Tocilog (Pork Tocino, Sinangag, Fried Egg)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 65,
+    "stockQuantity": 20,
+    "imageUrl": "/assets/menu/tocilog.webp"
+  },
+  {
+    "id": "longsilog",
+    "name": "Longsilog (Pork Longganisa, Sinangag, Fried Egg)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 65,
+    "stockQuantity": 20,
+    "imageUrl": "/assets/menu/longsilog.webp"
+  },
+  {
+    "id": "cornsilog",
+    "name": "Cornsilog (Corned Beef, Sinangag, Fried Egg)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 65,
+    "stockQuantity": 20,
+    "imageUrl": "/assets/menu/cornsilog.webp"
+  },
+  {
+    "id": "pork-sisig-rice",
+    "name": "Sizzling Pork Sisig Rice Meal",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 75,
+    "stockQuantity": 20,
+    "imageUrl": "/assets/menu/pork-sisig-rice.webp"
+  },
+  {
+    "id": "hard-boiled-egg",
+    "name": "Hard Boiled Egg (with Salt & Pepper)",
+    "category": "Food",
+    "subcategory": "Noodles & Quick Meals",
+    "price": 15,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/hard-boiled-egg.webp"
+  },
+  {
+    "id": "coke-royal-sprite-swakto",
+    "name": "Coke / Royal / Sprite Swakto (180ml–200ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 15,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/coke-royal-sprite-swakto.webp"
+  },
+  {
+    "id": "coke-royal-sprite-mismo",
+    "name": "Coke / Royal / Sprite Mismo (250ml–300ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 20,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/coke-royal-sprite-mismo.webp"
+  },
+  {
+    "id": "coke-royal-sprite-8oz-rgb",
+    "name": "Coke / Royal / Sprite 8oz RGB (237ml Glass Bottle)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 15,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/coke-royal-sprite-8oz-rgb.webp"
+  },
+  {
+    "id": "coke-royal-sprite-1-5l",
+    "name": "Coke / Royal / Sprite 1.5L PET Bottle",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 80,
+    "stockQuantity": 20,
+    "imageUrl": "/assets/menu/coke-royal-sprite-1-5l.webp"
+  },
+  {
+    "id": "pepsi-mountain-dew-7up-pet",
+    "name": "Pepsi / Mountain Dew / 7Up PET (290ml–300ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 20,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/pepsi-mountain-dew-7up-pet.webp"
+  },
+  {
+    "id": "rc-cola-pop-cola-arcy",
+    "name": "RC Cola / Pop Cola / Arcy Root Beer (240ml–300ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 15,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/rc-cola-pop-cola-arcy.webp"
+  },
+  {
+    "id": "yakult-original-light",
+    "name": "Yakult (Original / Light 80ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 12,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/yakult-original-light.webp"
+  },
+  {
+    "id": "dutch-mill-yogurt-small",
+    "name": "Dutch Mill Yogurt Drink (Small 90ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 11,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/dutch-mill-yogurt-small.webp"
+  },
+  {
+    "id": "dutch-mill-yogurt-regular",
+    "name": "Dutch Mill Yogurt Drink (Regular 180ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 20,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/dutch-mill-yogurt-regular.webp"
+  },
+  {
+    "id": "dutch-mill-delight",
+    "name": "Dutch Mill Delight (100ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 12,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/dutch-mill-delight.webp"
+  },
+  {
+    "id": "chamyto-cultured-milk",
+    "name": "Chamyto Cultured Milk (100ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 11,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/chamyto-cultured-milk.webp"
+  },
+  {
+    "id": "c2-cool-clean-solo",
+    "name": "C2 Cool & Clean Solo (230ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 15,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/c2-cool-clean-solo.webp"
+  },
+  {
+    "id": "c2-cool-clean-regular",
+    "name": "C2 Cool & Clean Regular (355ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 22,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/c2-cool-clean-regular.webp"
+  },
+  {
+    "id": "c2-cool-clean-large",
+    "name": "C2 Cool & Clean Large (500ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 30,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/c2-cool-clean-large.webp"
+  },
+  {
+    "id": "zesto-doypack-juice",
+    "name": "Zest-O Doypack Juice Pouch (200ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 11,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/zesto-doypack-juice.webp"
+  },
+  {
+    "id": "zesto-big-250-juice",
+    "name": "Zest-O Big 250 Juice Pouch (250ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 14,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/zesto-big-250-juice.webp"
+  },
+  {
+    "id": "refresh-plus-juice-pouch",
+    "name": "Refresh / Plus! Juice Pouch (200ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 9,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/refresh-plus-juice-pouch.webp"
+  },
+  {
+    "id": "smart-c-350ml",
+    "name": "Smart C+ 500 (350ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 24,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/smart-c-350ml.webp"
+  },
+  {
+    "id": "smart-c-500ml",
+    "name": "Smart C+ 500 (500ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 38,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/smart-c-500ml.webp"
+  },
+  {
+    "id": "mogu-mogu-nata-de-coco",
+    "name": "Mogu Mogu Nata de Coco Drink (320ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 40,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/mogu-mogu-nata-de-coco.webp"
+  },
+  {
+    "id": "del-monte-pineapple-juice",
+    "name": "Del Monte Pineapple Juice (220ml–240ml Can)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 32,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/del-monte-pineapple-juice.webp"
+  },
+  {
+    "id": "cobra-energy-glass",
+    "name": "Cobra Energy Drink (240ml Glass RGB)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 16,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/cobra-energy-glass.webp"
+  },
+  {
+    "id": "cobra-energy-astig-pet",
+    "name": "Cobra Energy Drink Astig PET (330ml–350ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 24,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/cobra-energy-astig-pet.webp"
+  },
+  {
+    "id": "sting-energy-drink",
+    "name": "Sting Energy Drink (Red / Yellow 300ml–330ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 22,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/sting-energy-drink.webp"
+  },
+  {
+    "id": "gatorade-sports-drink-small",
+    "name": "Gatorade Sports Drink (Small 350ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 38,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/gatorade-sports-drink-small.webp"
+  },
+  {
+    "id": "gatorade-sports-drink-regular",
+    "name": "Gatorade Sports Drink (Regular 500ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 48,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/gatorade-sports-drink-regular.webp"
+  },
+  {
+    "id": "pocari-sweat-350ml",
+    "name": "Pocari Sweat Ion Supply Drink (350ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 38,
+    "stockQuantity": 24,
+    "imageUrl": "/assets/menu/pocari-sweat-350ml.webp"
+  },
+  {
+    "id": "nestle-chuckie-small",
+    "name": "Nestlé Chuckie (Small Baon Pack 110ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 15,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/nestle-chuckie-small.webp"
+  },
+  {
+    "id": "nestle-chuckie-regular",
+    "name": "Nestlé Chuckie (Regular 180ml–250ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 25,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/nestle-chuckie-regular.webp"
+  },
+  {
+    "id": "magnolia-chocolait",
+    "name": "Magnolia Chocolait (110ml–250ml Tetra)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 20,
+    "stockQuery": "Magnolia Chocolait 250ml tetra pack white background",
+    "imageUrl": "/assets/menu/magnolia-chocolait.webp"
+  },
+  {
+    "id": "bear-brand-sterilized-milk",
+    "name": "Bear Brand Sterilized Milk (140ml–200ml Tin)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 30,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/bear-brand-sterilized-milk.webp"
+  },
+  {
+    "id": "vitamilk-soy-milk",
+    "name": "Vitamilk Soy Milk (300ml Glass Bottle)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 35,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/vitamilk-soy-milk.webp"
+  },
+  {
+    "id": "tang-juice-sachet",
+    "name": "Tang Juice Sachet (Makes 1L 20g–25g)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 20,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/tang-juice-sachet.webp"
+  },
+  {
+    "id": "eight-oclock-juice-sachet",
+    "name": "Eight O'Clock Juice Sachet (Makes 1L 20g–25g)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 20,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/eight-oclock-juice-sachet.webp"
+  },
+  {
+    "id": "milo-powder-sachet",
+    "name": "Milo Powder Sachet (22g–24g Single-Serve)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 11,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/milo-powder-sachet.webp"
+  },
+  {
+    "id": "bear-brand-fortified-sachet",
+    "name": "Bear Brand Fortified Milk Sachet (29g–33g)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 15,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/bear-brand-fortified-sachet.webp"
+  },
+  {
+    "id": "kopiko-nescafe-great-taste-twin-pack",
+    "name": "Kopiko / Nescafé / Great Taste 3-in-1 Coffee (Twin Pack)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 12,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/kopiko-nescafe-great-taste-twin-pack.webp"
+  },
+  {
+    "id": "mineral-water-small",
+    "name": "Bottled Mineral Water (Small 350ml–500ml PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 12,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/mineral-water-small.webp"
+  },
+  {
+    "id": "mineral-water-large",
+    "name": "Bottled Mineral Water (Large 1L PET)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 22,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/mineral-water-large.webp"
+  },
+  {
+    "id": "ice-water-tubig-sa-plastic",
+    "name": "Ice Water (\"Tubig sa Plastic\" ~500ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 4,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/ice-water-tubig-sa-plastic.webp"
+  },
+  {
+    "id": "ice-candy-stick",
+    "name": "Ice Candy (Homemade Frozen Stick ~100ml)",
+    "category": "Drinks",
+    "subcategory": "Beverages & Drinks",
+    "price": 5,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/ice-candy-stick.webp"
+  },
+  {
+    "id": "piattos-solo-pack",
+    "name": "Piattos (Cheese, Sour Cream, BBQ, Roast Beef 38g–40g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 19,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/piattos-solo-pack.webp"
+  },
+  {
+    "id": "piattos-big-pack",
+    "name": "Piattos Medium / Big Pack (85g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 38,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/piattos-big-pack.webp"
+  },
+  {
+    "id": "nova-multigrain-solo",
+    "name": "Nova Multigrain Chips (Country Cheddar, BBQ 38g–40g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 19,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/nova-multigrain-solo.webp"
+  },
+  {
+    "id": "nova-multigrain-big-pack",
+    "name": "Nova Multigrain Chips Big Pack (78g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 38,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/nova-multigrain-big-pack.webp"
+  },
+  {
+    "id": "vcut-potato-chips-solo",
+    "name": "Vcut Potato Chips (Spicy BBQ, Cheese 25g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/vcut-potato-chips-solo.webp"
+  },
+  {
+    "id": "vcut-potato-chips-big-pack",
+    "name": "Vcut Potato Chips Big Pack (60g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 38,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/vcut-potato-chips-big-pack.webp"
+  },
+  {
+    "id": "jack-n-jill-potato-chips-classic-25g",
+    "name": "Jack 'n Jill Potato Chips Classic (25g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 11,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/jack-n-jill-potato-chips-classic-25g.webp"
+  },
+  {
+    "id": "jack-n-jill-potato-chips-classic-60g",
+    "name": "Jack 'n Jill Potato Chips Classic (60g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 38,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/jack-n-jill-potato-chips-classic-60g.webp"
+  },
+  {
+    "id": "oishi-natural-potato-chips-solo",
+    "name": "Oishi Natural Potato Chips / Ridges (22g–24g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/oishi-natural-potato-chips-solo.webp"
+  },
+  {
+    "id": "pringles-small-can-42g",
+    "name": "Pringles Potato Crisps (Small Can 42g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 48,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/pringles-small-can-42g.webp"
+  },
+  {
+    "id": "chippy-solo-pack",
+    "name": "Chippy (Barbecue, Garlic & Vinegar, Chili & Cheese 27g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/chippy-solo-pack.webp"
+  },
+  {
+    "id": "chippy-big-pack",
+    "name": "Chippy Big Pack (110g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 34,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/chippy-big-pack.webp"
+  },
+  {
+    "id": "mr-chips-nacho-cheese-solo",
+    "name": "Mr. Chips Nacho Cheese (24g–26g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/mr-chips-nacho-cheese-solo.webp"
+  },
+  {
+    "id": "mr-chips-nacho-cheese-big-pack",
+    "name": "Mr. Chips Nacho Cheese Big Pack (98g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 30,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/mr-chips-nacho-cheese-big-pack.webp"
+  },
+  {
+    "id": "clover-chips-solo-pack",
+    "name": "Clover Chips (Cheese, BBQ, Ham & Cheese 26g–35g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/clover-chips-solo-pack.webp"
+  },
+  {
+    "id": "clover-chips-big-pack",
+    "name": "Clover Chips Big Pack (55g–85g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 32,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/clover-chips-big-pack.webp"
+  },
+  {
+    "id": "tortillos-solo-pack",
+    "name": "Tortillos (Cheese, BBQ, Chili Garlic 40g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 17,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/tortillos-solo-pack.webp"
+  },
+  {
+    "id": "tortillos-big-pack",
+    "name": "Tortillos Big Pack (80g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 34,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/tortillos-big-pack.webp"
+  },
+  {
+    "id": "roller-coaster-rings-solo",
+    "name": "Roller Coaster Potato Rings (24g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/roller-coaster-rings-solo.webp"
+  },
+  {
+    "id": "roller-coaster-rings-big",
+    "name": "Roller Coaster Potato Rings Big Pack (85g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 34,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/roller-coaster-rings-big.webp"
+  },
+  {
+    "id": "kornets-corn-cones-solo",
+    "name": "Kornets Corn Cone Snacks (25g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/kornets-corn-cones-solo.webp"
+  },
+  {
+    "id": "cheezy-cheese-crunch-solo",
+    "name": "Cheezy Cheese Crunch (24g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/cheezy-cheese-crunch-solo.webp"
+  },
+  {
+    "id": "cheezy-cheese-crunch-big",
+    "name": "Cheezy Cheese Crunch Big Pack (70g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 34,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/cheezy-cheese-crunch-big.webp"
+  },
+  {
+    "id": "chiz-curls-solo",
+    "name": "Chiz Curls (18g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/chiz-curls-solo.webp"
+  },
+  {
+    "id": "cheese-ring-solo",
+    "name": "Cheese Ring (20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/cheese-ring-solo.webp"
+  },
+  {
+    "id": "cheese-ring-big",
+    "name": "Cheese Ring Big Pack (60g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 20,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/cheese-ring-big.webp"
+  },
+  {
+    "id": "pompoms-cheese-balls-solo",
+    "name": "Pompoms Cheese Balls (18g–20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 7,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/pompoms-cheese-balls-solo.webp"
+  },
+  {
+    "id": "peewee-solo-pack",
+    "name": "Peewee (Sizzling BBQ, Pizza 20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 7,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/peewee-solo-pack.webp"
+  },
+  {
+    "id": "snacku-vegetable-crackers-solo",
+    "name": "Snacku Vegetable Crackers (25g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/snacku-vegetable-crackers-solo.webp"
+  },
+  {
+    "id": "snacku-vegetable-crackers-big",
+    "name": "Snacku Vegetable Crackers Big Pack (60g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 20,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/snacku-vegetable-crackers-big.webp"
+  },
+  {
+    "id": "tomi-super-sweet-corn-solo",
+    "name": "Tomi Super Sweet Corn (23g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/tomi-super-sweet-corn-solo.webp"
+  },
+  {
+    "id": "tomi-super-sweet-corn-big",
+    "name": "Tomi Super Sweet Corn Big Pack (110g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 30,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/tomi-super-sweet-corn-big.webp"
+  },
+  {
+    "id": "moby-solo-pack",
+    "name": "Moby Caramel / Chocolate (20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/moby-solo-pack.webp"
+  },
+  {
+    "id": "moby-big-pack",
+    "name": "Moby Caramel / Chocolate Big Pack (90g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 28,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/moby-big-pack.webp"
+  },
+  {
+    "id": "oishi-pillows-solo",
+    "name": "Oishi Pillows (Chocolate, Ube, Cheese 24g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/oishi-pillows-solo.webp"
+  },
+  {
+    "id": "oishi-pillows-big",
+    "name": "Oishi Pillows Big Pack (38g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 17,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/oishi-pillows-big.webp"
+  },
+  {
+    "id": "sponge-crunch-solo",
+    "name": "Sponge Crunch (30g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 11,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/sponge-crunch-solo.webp"
+  },
+  {
+    "id": "sponge-crunch-big",
+    "name": "Sponge Crunch Big Pack (120g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 38,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/sponge-crunch-big.webp"
+  },
+  {
+    "id": "oishi-onion-rings-solo",
+    "name": "Oishi Onion Rings / Potato Fries (16g–24g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/oishi-onion-rings-solo.webp"
+  },
+  {
+    "id": "oishi-prawn-crackers-solo",
+    "name": "Oishi Prawn Crackers (Original, Spicy 24g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/oishi-prawn-crackers-solo.webp"
+  },
+  {
+    "id": "oishi-cracklings-solo",
+    "name": "Oishi Cracklings Salt & Vinegar (24g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/oishi-cracklings-solo.webp"
+  },
+  {
+    "id": "oishi-cracklings-big",
+    "name": "Oishi Cracklings Salt & Vinegar Big Pack (50g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 15,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/oishi-cracklings-big.webp"
+  },
+  {
+    "id": "oishi-kirei-yummy-flakes-solo",
+    "name": "Oishi Kirei Yummy Flakes / Spicy Seafood Curls (20g–24g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/oishi-kirei-yummy-flakes-solo.webp"
+  },
+  {
+    "id": "lala-fish-crackers-solo",
+    "name": "La-La Fish Crackers (20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 8,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/lala-fish-crackers-solo.webp"
+  },
+  {
+    "id": "mang-juan-chicharron-solo",
+    "name": "Chicharron ni Mang Juan (Spicy Vinegar, Garlic 25g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/mang-juan-chicharron-solo.webp"
+  },
+  {
+    "id": "mang-juan-chicken-skin-solo",
+    "name": "Mang Juan Chicken Skin (25g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/mang-juan-chicken-skin-solo.webp"
+  },
+  {
+    "id": "porky-popps-solo",
+    "name": "Porky Popps / Pork Rinds (20g–25g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 11,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/porky-popps-solo.webp"
+  },
+  {
+    "id": "boy-bawang-garlic-sachet",
+    "name": "Boy Bawang Garlic Cornick (18g–21g Sachet)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 5,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/boy-bawang-garlic-sachet.webp"
+  },
+  {
+    "id": "ding-dong-mixed-nuts-solo",
+    "name": "Ding Dong Mixed Nuts (20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 5,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/ding-dong-mixed-nuts-solo.webp"
+  },
+  {
+    "id": "ding-dong-mixed-nuts-big",
+    "name": "Ding Dong Mixed Nuts Big Pack (95g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 24,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/ding-dong-mixed-nuts-big.webp"
+  },
+  {
+    "id": "nagaraya-cracker-nuts-solo",
+    "name": "Nagaraya Cracker Nuts (20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 7,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/nagaraya-cracker-nuts-solo.webp"
+  },
+  {
+    "id": "nagaraya-cracker-nuts-big",
+    "name": "Nagaraya Cracker Nuts Big Pack (80g)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 24,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/nagaraya-cracker-nuts-big.webp"
+  },
+  {
+    "id": "happy-peanuts-sachet",
+    "name": "Happy Peanuts (Garlic, Chili 20g Sachet)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 5,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/happy-peanuts-sachet.webp"
+  },
+  {
+    "id": "growers-green-peas-sachet",
+    "name": "Growers Green Peas / Garlic Peanuts (20g Sachet)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 6,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/growers-green-peas-sachet.webp"
+  },
+  {
+    "id": "dragon-sid-squash-seeds",
+    "name": "Dragon Sid Squash Seeds (3g–5g Sachet)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 2.5,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/dragon-sid-squash-seeds.webp"
+  },
+  {
+    "id": "lumpia-shanghai-snack-pouch",
+    "name": "Lumpia Shanghai Snack (12g–15g Pouch)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 2.5,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/lumpia-shanghai-snack-pouch.webp"
+  },
+  {
+    "id": "kropek-kiss-crackers-pouch",
+    "name": "Kropek / Kiss Crackers / Yumshots (10g–15g Pouch)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 2.5,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/kropek-kiss-crackers-pouch.webp"
+  },
+  {
+    "id": "vinegar-pusit-cracklets-pouch",
+    "name": "Vinegar Pusit / Sizzling Bangus Crackers (10g–15g Pouch)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 2.5,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/vinegar-pusit-cracklets-pouch.webp"
+  },
+  {
+    "id": "rinbee-cheese-sticks-pouch",
+    "name": "Rinbee Cheese Sticks (18g Pouch)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 6,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/rinbee-cheese-sticks-pouch.webp"
+  },
+  {
+    "id": "wonder-boy-cheez-it-pouch",
+    "name": "Wonder Boy / Cheez-It (15g Pouch)",
+    "category": "Snacks",
+    "subcategory": "Chips, Nuts & Savory Snacks",
+    "price": 4,
+    "stockQuantity": 50,
+    "imageUrl": "/assets/menu/wonder-boy-cheez-it-pouch.webp"
+  },
+  {
+    "id": "skyflakes-crackers-single",
+    "name": "SkyFlakes Crackers (25g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/skyflakes-crackers-single.webp"
+  },
+  {
+    "id": "fita-crackers-single",
+    "name": "Fita Crackers (30g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/fita-crackers-single.webp"
+  },
+  {
+    "id": "magic-flakes-single",
+    "name": "Magic Flakes (28g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/magic-flakes-single.webp"
+  },
+  {
+    "id": "rebisco-crackers-single",
+    "name": "Rebisco Crackers (32g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/rebisco-crackers-single.webp"
+  },
+  {
+    "id": "rebisco-sandwich-single",
+    "name": "Rebisco Sandwich (32g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/rebisco-sandwich-single.webp"
+  },
+  {
+    "id": "hansel-sandwich-single",
+    "name": "Hansel Sandwich (31g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/hansel-sandwich-single.webp"
+  },
+  {
+    "id": "hansel-plain-crackers-single",
+    "name": "Hansel Plain Crackers (25g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/hansel-plain-crackers-single.webp"
+  },
+  {
+    "id": "cream-o-cookies-single",
+    "name": "Cream-O Cookies (30g–33g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 10,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/cream-o-cookies-single.webp"
+  },
+  {
+    "id": "presto-creams-single",
+    "name": "Presto Creams (30g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/presto-creams-single.webp"
+  },
+  {
+    "id": "magic-creams-single",
+    "name": "Magic Creams (28g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/magic-creams-single.webp"
+  },
+  {
+    "id": "frootees-biscuits-single",
+    "name": "Frootees Biscuits (30g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/frootees-biscuits-single.webp"
+  },
+  {
+    "id": "combi-triple-choco-single",
+    "name": "Combi Triple Choco (30g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/combi-triple-choco-single.webp"
+  },
+  {
+    "id": "bravo-biscuits-single",
+    "name": "Bravo Biscuits (30g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/bravo-biscuits-single.webp"
+  },
+  {
+    "id": "choco-topps-single",
+    "name": "Choco Topps (30g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/choco-topps-single.webp"
+  },
+  {
+    "id": "nissin-butter-coconut-single",
+    "name": "Nissin Butter Coconut (14g–28g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/nissin-butter-coconut-single.webp"
+  },
+  {
+    "id": "nissin-egg-nog-cookies-single",
+    "name": "Nissin Egg Nog Cookies (18g–20g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/nissin-egg-nog-cookies-single.webp"
+  },
+  {
+    "id": "fibisco-marie-single",
+    "name": "Fibisco Marie (25g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/fibisco-marie-single.webp"
+  },
+  {
+    "id": "croley-buttercream-single",
+    "name": "Croley Foods ButterCream Crackers (25g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/croley-buttercream-single.webp"
+  },
+  {
+    "id": "sunflower-crackers-single",
+    "name": "Sunflower Crackers (28g Single Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/sunflower-crackers-single.webp"
+  },
+  {
+    "id": "richeese-richoco-wafers-solo",
+    "name": "Richeese & Richoco Wafers (38g–50g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 11,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/richeese-richoco-wafers-solo.webp"
+  },
+  {
+    "id": "nissin-wafers-solo",
+    "name": "Nissin Wafers (12g–20g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 8,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/nissin-wafers-solo.webp"
+  },
+  {
+    "id": "cal-cheese-wafers-solo",
+    "name": "Cal Cheese Wafers (20g–35g Solo Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 10,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/cal-cheese-wafers-solo.webp"
+  },
+  {
+    "id": "oishi-bread-pan-small",
+    "name": "Oishi Bread Pan (24g–30g Small Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/oishi-bread-pan-small.webp"
+  },
+  {
+    "id": "fudgee-barr-quake-overload",
+    "name": "Fudgee Barr / Quake Overload (30g–38g Cake Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 11,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/fudgee-barr-quake-overload.webp"
+  },
+  {
+    "id": "ricoa-flat-tops-pc",
+    "name": "Ricoa Flat Tops (5g Piece)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 3,
+    "stockQuantity": 100,
+    "imageUrl": "/assets/menu/ricoa-flat-tops-pc.webp"
+  },
+  {
+    "id": "ricoa-curly-tops-pc",
+    "name": "Ricoa Curly Tops (5g Piece)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 3,
+    "stockQuantity": 100,
+    "imageUrl": "/assets/menu/ricoa-curly-tops-pc.webp"
+  },
+  {
+    "id": "chocnut-pc",
+    "name": "Chocnut (8g–10g Piece)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 3,
+    "stockQuantity": 100,
+    "imageUrl": "/assets/menu/chocnut-pc.webp"
+  },
+  {
+    "id": "hany-bar-pc",
+    "name": "Hany Bar (8g–10g Piece)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 3,
+    "stockQuantity": 100,
+    "imageUrl": "/assets/menu/hany-bar-pc.webp"
+  },
+  {
+    "id": "lala-fish-chocolate-bar",
+    "name": "Lala Fish Chocolate (15g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 6,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/lala-fish-chocolate-bar.webp"
+  },
+  {
+    "id": "choco-mani-bar",
+    "name": "Choco Mani (10g–15g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 4,
+    "stockQuantity": 60,
+    "imageUrl": "/assets/menu/choco-mani-bar.webp"
+  },
+  {
+    "id": "goya-mayfair-chocolate-coins",
+    "name": "Goya / Mayfair Chocolate Coins (3g–5g Piece)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 2,
+    "stockQuantity": 100,
+    "imageUrl": "/assets/menu/goya-mayfair-chocolate-coins.webp"
+  },
+  {
+    "id": "cloud-9-classic-solo",
+    "name": "Cloud 9 Classic (28g Solo Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 11,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/cloud-9-classic-solo.webp"
+  },
+  {
+    "id": "choco-mucho-solo-bar",
+    "name": "Choco Mucho (30g–33g Solo Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 11,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/choco-mucho-solo-bar.webp"
+  },
+  {
+    "id": "beng-beng-wafer-bar",
+    "name": "Beng-Beng Wafer Bar (22g–26.5g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 10,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/beng-beng-wafer-bar.webp"
+  },
+  {
+    "id": "safari-bar",
+    "name": "Safari Bar (28g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 11,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/safari-bar.webp"
+  },
+  {
+    "id": "tofiluk-bar",
+    "name": "Tofiluk Bar (30g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 11,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/tofiluk-bar.webp"
+  },
+  {
+    "id": "hello-coated-chocolate-bar",
+    "name": "Hello! Coated Chocolate (15g–20g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 7,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/hello-coated-chocolate-bar.webp"
+  },
+  {
+    "id": "big-bang-bar",
+    "name": "Big Bang Bar (30g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 11,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/big-bang-bar.webp"
+  },
+  {
+    "id": "nips-chocolate-peanut-pouch",
+    "name": "Nips Milk Chocolate / Peanut (14g–21g Pouch)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 9,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/nips-chocolate-peanut-pouch.webp"
+  },
+  {
+    "id": "tiwi-chocolates-pack",
+    "name": "Tiwi Chocolates (10g–15g Pack)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 6,
+    "stockQuantity": 48,
+    "imageUrl": "/assets/menu/tiwi-chocolates-pack.webp"
+  },
+  {
+    "id": "choko-choko-tube",
+    "name": "Choko Choko (10g Squeeze Tube)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 3,
+    "stockQuantity": 100,
+    "imageUrl": "/assets/menu/choko-choko-tube.webp"
+  },
+  {
+    "id": "goya-solo-bar",
+    "name": "Goya Solo Bar (15g–30g Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 12,
+    "stockQuantity": 40,
+    "imageUrl": "/assets/menu/goya-solo-bar.webp"
+  },
+  {
+    "id": "kitkat-2-finger-bar",
+    "name": "KitKat (17g 2-Finger Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 20,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/kitkat-2-finger-bar.webp"
+  },
+  {
+    "id": "snickers-fun-size",
+    "name": "Snickers (20g Fun Size)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 20,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/snickers-fun-size.webp"
+  },
+  {
+    "id": "cadbury-dairy-milk-solo",
+    "name": "Cadbury Dairy Milk (15g–30g Solo Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 22,
+    "stockQuantity": 36,
+    "imageUrl": "/assets/menu/cadbury-dairy-milk-solo.webp"
+  },
+  {
+    "id": "toblerone-mini-bar",
+    "name": "Toblerone (35g–50g Mini Bar)",
+    "category": "Snacks",
+    "subcategory": "Biscuits, Chocolates & Sweets",
+    "price": 40,
+    "stockQuantity": 30,
+    "imageUrl": "/assets/menu/toblerone-mini-bar.webp"
   }
 ]
-

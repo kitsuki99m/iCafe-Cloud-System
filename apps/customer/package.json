@@ -7,6 +7,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",
+    "dev:bypass": "vite --host 0.0.0.0 --port 5173 --mode devbypass",
+    "dev:direct": "vite --host 0.0.0.0 --port 5173 --mode devbypass",
+    "dev:auth": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "preview": "vite preview",
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",

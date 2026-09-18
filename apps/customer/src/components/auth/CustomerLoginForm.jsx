@@ -311,6 +311,18 @@ export default function CustomerLoginForm() {
               <UserRound size={15} />
               Continue as Guest
             </button>
+            {!import.meta.env.PROD && (
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem("aezakmi.dev.bypass", "true");
+                  window.location.reload();
+                }}
+                className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/20 cursor-pointer shadow-sm"
+              >
+                ⚡ Dev Bypass: Skip to Esports Platform
+              </button>
+            )}
           </section>
           <aside id="customer-login-announcements" className="customer-support-card min-h-0 overflow-y-auto p-5 sm:p-6">
             <div className="mb-4 flex items-center justify-between">

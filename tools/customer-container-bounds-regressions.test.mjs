@@ -7,10 +7,10 @@ import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8')
 
-test('customer desktop shells use bounded width and height instead of stretching edge-to-edge', () => {
+test('customer desktop shells support full-screen dashboard with bounded login shell', () => {
   const css = read('apps/customer/src/index.css')
-  assert.match(css, /\.customer-topbar[\s\S]*?max-width:\s*1320px/)
-  assert.match(css, /\.customer-content-grid[\s\S]*?max-width:\s*1320px[\s\S]*?max-height:\s*760px/)
+  assert.match(css, /\.customer-topbar[\s\S]*?max-width:\s*none/)
+  assert.match(css, /\.customer-content-grid[\s\S]*?width:\s*100%/)
   assert.match(css, /\.customer-login-header[\s\S]*?max-width:\s*1120px/)
   assert.match(css, /\.customer-login-grid[\s\S]*?max-width:\s*1120px[\s\S]*?max-height:\s*720px/)
 })

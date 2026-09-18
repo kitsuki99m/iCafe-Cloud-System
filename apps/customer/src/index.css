@@ -107,18 +107,22 @@
     border-radius: 2px;
   }
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 5px;
+    height: 5px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #A99898;
+    background: rgba(169, 152, 152, 0.45);
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #766664;
+    background: rgba(118, 102, 100, 0.75);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(169, 152, 152, 0.45) transparent;
   }
 }
 
@@ -201,29 +205,26 @@
   }
 
   .customer-dashboard-shell {
-    @apply flex h-screen min-h-0 flex-col items-center justify-center overflow-hidden bg-ink text-ink-900;
+    @apply flex h-screen min-h-0 w-full flex-col overflow-hidden bg-ink text-ink-900;
     border-radius: 0;
     gap: 12px;
-    padding: clamp(10px, 1.2vw, 18px);
+    padding: 14px;
   }
 
   .customer-dashboard-shell.customer-dashboard-windowed {
-    border-radius: 9px;
+    border-radius: 0;
   }
 
   .customer-topbar {
-    @apply flex w-full shrink-0 items-center justify-between gap-3 border border-surface-line bg-surface/95 px-4 py-3;
-    max-width: 1320px;
-    min-height: 62px;
-    max-height: 76px;
-    border-radius: 18px;
+    @apply flex w-full shrink-0 items-center justify-between gap-3 border border-surface-line bg-surface/95 px-4 py-2 rounded-2xl shadow-sm;
+    max-width: none;
+    min-height: 52px;
   }
 
   .customer-content-grid {
     @apply grid min-h-0 w-full flex-1 gap-3;
-    width: min(100%, 1320px);
-    max-width: 1320px;
-    max-height: 760px;
+    width: 100%;
+    max-width: none;
     grid-template-columns: minmax(0, 1.65fr) minmax(270px, 0.85fr);
   }
 

@@ -1,9 +1,11 @@
 const variants = {
   primary: 'bg-midnight text-soft-white hover:bg-bluish shadow-glow',
+  secondary: 'bg-surface-raised text-ink-900 border border-surface-line hover:bg-surface-line shadow-xs',
+  outline: 'bg-transparent text-ink-900 hover:bg-surface-raised border border-surface-line',
   teal: 'bg-teal text-soft-white hover:bg-teal/90 shadow-glow-teal',
   danger: 'bg-ember text-soft-white hover:bg-ember/90 shadow-glow-ember',
-  ghost: 'bg-transparent text-slate-soft hover:text-ink-900 hover:bg-dance/35 border border-surface-line',
-  subtle: 'bg-dance/40 text-ink-900 hover:bg-dance/65',
+  ghost: 'bg-transparent text-slate-soft hover:text-ink-900 hover:bg-surface-raised border border-surface-line',
+  subtle: 'bg-surface-raised text-ink-900 hover:bg-surface-line border border-surface-line/60',
 }
 
 const sizes = {
@@ -22,6 +24,8 @@ export default function Button({
   type = 'button',
   ...props
 }) {
+  const activeVariant = variants[variant] || variants.primary
+
   return (
     <button
       type={type}
@@ -29,7 +33,7 @@ export default function Button({
       className={`inline-flex items-center justify-center rounded-lg font-semibold
         transition-colors duration-150
         disabled:opacity-40 disabled:cursor-not-allowed
-        ${variants[variant]} ${sizes[size]} ${className}`}
+        ${activeVariant} ${sizes[size] || sizes.md} ${className}`}
       {...props}
     >
       {Icon && <Icon size={size === 'sm' ? 14 : 16} strokeWidth={2.25} />}

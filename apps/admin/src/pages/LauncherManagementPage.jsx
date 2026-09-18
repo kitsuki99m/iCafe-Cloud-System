@@ -364,12 +364,12 @@ export default function LauncherManagementPage() {
             Categories
           </Button>
           <Button
-            variant="ghost"
+            variant="secondary"
             onClick={() => {
               setSelectedPresets(new Set())
               setBatchModalOpen(true)
             }}
-            className="flex items-center gap-1.5 text-gold-dim"
+            className="flex items-center gap-1.5"
           >
             <Sparkles size={15} />
             Batch Add Presets
@@ -496,7 +496,7 @@ export default function LauncherManagementPage() {
           action={
             <div className="flex items-center gap-2">
               <Button
-                variant="ghost"
+                variant="secondary"
                 onClick={() => {
                   setSelectedPresets(new Set())
                   setBatchModalOpen(true)

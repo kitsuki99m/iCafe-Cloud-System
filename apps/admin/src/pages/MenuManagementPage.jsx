@@ -113,7 +113,7 @@ export default function MenuManagementPage() {
       price: String(p.price),
       stockQuantity: p.stockQuantity != null ? String(p.stockQuantity) : '',
       imageUrl: p.imageUrl,
-      description: p.description,
+      description: '',
       isAvailable: true,
     }))
     setBatchRows(rows)
@@ -397,41 +397,38 @@ export default function MenuManagementPage() {
           </div>
         </div>
 
-        {/* Metrics Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <AdminMetricCard
-            label="Pending Orders"
-            value={pendingOrders.length}
-            icon={ShoppingBag}
-            tone={pendingOrders.length > 0 ? 'warning' : 'neutral'}
-            onClick={() => setActiveTab('orders')}
-          />
-          <AdminMetricCard
-            label="Preparing"
-            value={preparingOrders.length}
-            icon={Clock3}
-            tone={preparingOrders.length > 0 ? 'success' : 'neutral'}
-            onClick={() => setActiveTab('orders')}
-          />
-          <AdminMetricCard
-            label="Fulfilled Today"
-            value={fulfilledOrders.length}
-            icon={CheckCircle2}
-            tone="neutral"
-            onClick={() => setActiveTab('orders')}
-          />
-          <AdminMetricCard
-            label="Catalog Items"
-            value={menuItems.length}
-            icon={UtensilsCrossed}
-            tone="neutral"
-            onClick={() => setActiveTab('items')}
-          />
-        </div>
-
         {/* ORDERS TAB */}
         {activeTab === 'orders' && (
           <div className="space-y-4">
+            {/* Metrics Row - Only shown for Live Orders */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <AdminMetricCard
+                label="Pending Orders"
+                value={pendingOrders.length}
+                icon={ShoppingBag}
+                tone={pendingOrders.length > 0 ? 'warning' : 'neutral'}
+              />
+              <AdminMetricCard
+                label="Preparing"
+                value={preparingOrders.length}
+                icon={Clock3}
+                tone={preparingOrders.length > 0 ? 'success' : 'neutral'}
+              />
+              <AdminMetricCard
+                label="Fulfilled Today"
+                value={fulfilledOrders.length}
+                icon={CheckCircle2}
+                tone="neutral"
+              />
+              <AdminMetricCard
+                label="Catalog Items"
+                value={menuItems.length}
+                icon={UtensilsCrossed}
+                tone="neutral"
+                onClick={() => setActiveTab('items')}
+              />
+            </div>
+
             {menuOrders.length === 0 ? (
               <AdminEmptyState
                 icon={ShoppingBag}

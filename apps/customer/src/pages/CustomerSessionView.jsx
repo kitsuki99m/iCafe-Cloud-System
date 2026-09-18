@@ -22,6 +22,8 @@ import {
   Gamepad2,
   XCircle,
   ShoppingBag,
+  Banknote,
+  ReceiptText,
   ExternalLink,
   SlidersHorizontal,
   HardDrive,
@@ -113,61 +115,9 @@ const TIER_STYLE = {
   VIP: "text-teal-dim bg-teal/10",
 };
 
-function AnnouncementBox({ announcements, onFeedback, birthdayAnnouncement = null }) {
-  const visible = [
-    ...(birthdayAnnouncement ? [birthdayAnnouncement] : []),
-    ...(announcements || []),
-  ].filter((item) => item.isActive !== false);
-
-  return (
-    <aside id="customer-announcements" className="customer-support-card flex min-h-0 flex-col overflow-hidden">
-      <div className="mb-2.5 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-midnight/8 text-ink-900">
-            <Megaphone size={14} />
-          </span>
-          <div>
-            <p className="eyebrow">Cafe updates</p>
-            <h2 className="font-display text-[14px] font-semibold tracking-tight text-ink-900">Announcements</h2>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onFeedback}
-          className="inline-flex min-h-8 items-center gap-1 rounded-xl border border-surface-line customer-neutral-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
-        >
-          <MessageSquareText size={12} />
-          Feedback
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto max-h-36 pr-1">
-        {visible.length ? (
-          visible.map((announcement) => (
-            <article key={announcement.id} className="rounded-xl border border-surface-line customer-neutral-surface p-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="rounded-full bg-midnight/8 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-ink-900">
-                  {announcement.kind || "Update"}
-                </span>
-                <span className="text-[10px] text-slate-soft">
-                  {announcement.createdAt ? new Date(announcement.createdAt).toLocaleDateString() : ""}
-                </span>
-              </div>
-              <h3 className="mt-1.5 font-display text-xs font-semibold text-ink-900">{announcement.title}</h3>
-              <p className="mt-0.5 text-[11px] leading-4 text-slate-soft">{announcement.message}</p>
-            </article>
-          ))
-        ) : (
-          <div className="flex min-h-[70px] items-center justify-center rounded-xl border border-dashed border-surface-line customer-neutral-surface px-4 text-center">
-            <p className="text-[11px] text-slate-soft">No new announcements right now.</p>
-          </div>
-        )}
-      </div>
-    </aside>
-  );
-}
 
 export default function CustomerSessionView() {
-  const { user, logout } = useAuth();
+  const { user, logout, isDevBypass } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const isGuest = user?.role === "guest";
   const {
@@ -191,6 +141,7 @@ export default function CustomerSessionView() {
     getFeedbackHistory,
     currentClientPc,
     loading,
+    placeMenuOrder,
   } = useAppData();
   const branding = useBranding();
   const [now, setNow] = useState(Date.now());
@@ -228,12 +179,218 @@ export default function CustomerSessionView() {
   const [feedbackHistory, setFeedbackHistory] = useState(null);
   const [viewFeedback, setViewFeedback] = useState(null);
   const [powerConfirm, setPowerConfirm] = useState(null);
+  const [sidebarCart, setSidebarCart] = useState({});
+  const [sidebarOrdering, setSidebarOrdering] = useState(false);
   const warning5Key = useRef(null);
   const warning1Key = useRef(null);
   const finalPingKey = useRef(null);
   const endedSessionKey = useRef(null);
   const activeStateKey = useRef(null);
   const idleTriggered = useRef(false);
+  const announcementsDropdownRef = useRef(null);
+  const [systemMenuOpen, setSystemMenuOpen] = useState(false);
+  const systemMenuRef = useRef(null);
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const ordersDropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (!ordersOpen) return;
+    function handleClickOutside(event) {
+      if (ordersDropdownRef.current && !ordersDropdownRef.current.contains(event.target)) {
+        setOrdersOpen(false);
+      }
+    }
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setOrdersOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [ordersOpen]);
+
+  useEffect(() => {
+    if (!announcementsOpen) return;
+    function handleClickOutside(event) {
+      if (announcementsDropdownRef.current && !announcementsDropdownRef.current.contains(event.target)) {
+        setAnnouncementsOpen(false);
+      }
+    }
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setAnnouncementsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [announcementsOpen]);
+
+  useEffect(() => {
+    if (!systemMenuOpen) return;
+    function handleClickOutside(event) {
+      if (systemMenuRef.current && !systemMenuRef.current.contains(event.target)) {
+        setSystemMenuOpen(false);
+      }
+    }
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setSystemMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [systemMenuOpen]);
+
+  const sidebarCartItems = useMemo(() => {
+    return Object.entries(sidebarCart).map(([id, qty]) => {
+      const item = menuItems.find(m => String(m.id) === String(id));
+      return { item, quantity: qty };
+    }).filter(i => i.item && i.quantity > 0);
+  }, [sidebarCart, menuItems]);
+
+  const sidebarCartTotal = useMemo(() => {
+    return sidebarCartItems.reduce((sum, { item, quantity }) => sum + (Number(item.price || 0) * quantity), 0);
+  }, [sidebarCartItems]);
+
+  const [quickCategory, setQuickCategory] = useState("All");
+
+  function addToSidebarCart(item) {
+    const stock = item.stock_quantity !== undefined ? item.stock_quantity : item.stockQuantity;
+    if (stock !== null && stock !== undefined && Number(stock) <= 0) {
+      showToast({ title: 'Out of Stock', message: `"${item.name}" is currently out of stock.`, tone: 'warning' });
+      return;
+    }
+    setSidebarCart(curr => {
+      const currentQty = curr[item.id] || 0;
+      if (stock !== null && stock !== undefined && currentQty >= Number(stock)) {
+        showToast({ title: 'Stock Limit Reached', message: `Only ${stock} available in stock.`, tone: 'warning' });
+        return curr;
+      }
+      return {
+        ...curr,
+        [item.id]: currentQty + 1,
+      };
+    });
+  }
+
+  function removeFromSidebarCart(itemId) {
+    setSidebarCart(curr => {
+      const next = { ...curr };
+      if ((next[itemId] || 0) <= 1) {
+        delete next[itemId];
+      } else {
+        next[itemId] -= 1;
+      }
+      return next;
+    });
+  }
+
+  const pendingOrdersCount = useMemo(() => {
+    return (myOrders || []).filter((o) => {
+      const status = o.order_status || o.orderStatus || o.status || 'pending';
+      return status === 'pending' || status === 'preparing';
+    }).length;
+  }, [myOrders]);
+
+  const lastCancelTimeRef = useRef(0);
+
+  async function handleSidebarOrder(paymentMethod = 'wallet') {
+    if (sidebarCartItems.length === 0 || sidebarOrdering || !placeMenuOrder) return;
+    if (pendingOrdersCount >= 3) {
+      showToast({
+        title: 'Order Limit Reached',
+        message: 'You already have 3 pending orders in the kitchen queue. Please wait before placing more orders.',
+        tone: 'warning',
+      });
+      return;
+    }
+    if (paymentMethod === 'wallet' && Number(wallet || 0) < sidebarCartTotal) {
+      showToast({ title: 'Insufficient Wallet', message: 'Not enough balance. Please choose cash or top up.', tone: 'error' });
+      return;
+    }
+    setSidebarOrdering(true);
+    try {
+      const payload = {
+        items: sidebarCartItems.map(({ item, quantity }) => ({
+          id: item.id,
+          name: item.name,
+          price: Number(item.price),
+          quantity,
+        })),
+        total: sidebarCartTotal,
+        paymentMethod,
+      };
+      await placeMenuOrder(payload);
+      showToast({
+        title: 'Order Placed!',
+        message: paymentMethod === 'wallet'
+          ? `₱${sidebarCartTotal.toFixed(2)} debited. Kitchen is preparing your order!`
+          : `Order sent! Please prepare ₱${sidebarCartTotal.toFixed(2)} cash.`,
+        tone: 'success',
+      });
+      setSidebarCart({});
+    } catch (err) {
+      showToast({ title: 'Order Failed', message: err?.message || 'Unable to place order.', tone: 'error' });
+    } finally {
+      setSidebarOrdering(false);
+    }
+  }
+
+  async function handleCancelOrder(orderId) {
+    if (!orderId || cancellingOrderId || !cancelMyOrder) return;
+    const now = Date.now();
+    if (now - lastCancelTimeRef.current < 4000) {
+      showToast({ title: 'Please Wait', message: 'Please wait a few seconds before cancelling another order.', tone: 'warning' });
+      return;
+    }
+    lastCancelTimeRef.current = now;
+    setCancellingOrderId(orderId);
+    try {
+      await cancelMyOrder(orderId);
+      showToast({ title: 'Order Cancelled', message: 'Your order was cancelled.', tone: 'info' });
+    } catch (err) {
+      showToast({ title: 'Cancel Failed', message: err?.message || 'Unable to cancel order.', tone: 'error' });
+    } finally {
+      setCancellingOrderId(null);
+    }
+  }
+
+  const popularMenuItems = useMemo(() => {
+    return menuItems.filter(m => m.isAvailable !== false).slice(0, 6);
+  }, [menuItems]);
+
+  const quickSnackCategories = useMemo(() => {
+    const cats = new Set(["All"]);
+    menuItems.forEach((item) => {
+      const isAvail = item.is_available !== undefined ? Boolean(item.is_available) : Boolean(item.isAvailable);
+      if (isAvail && item.category) {
+        const c = item.category.trim();
+        if (c) cats.add(c.charAt(0).toUpperCase() + c.slice(1).toLowerCase());
+      }
+    });
+    return Array.from(cats);
+  }, [menuItems]);
+
+  const quickSnackItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      const isAvail = item.is_available !== undefined ? Boolean(item.is_available) : Boolean(item.isAvailable);
+      if (!isAvail) return false;
+      if (quickCategory === "All") return true;
+      return (item.category || "").toLowerCase() === quickCategory.toLowerCase();
+    });
+  }, [menuItems, quickCategory]);
 
   const activeCategories = useMemo(() => {
     const set = new Set(["All"]);
@@ -269,19 +426,6 @@ export default function CustomerSessionView() {
     }
   }, []);
 
-  const handleCancelOrder = useCallback(async (orderId) => {
-    if (cancellingOrderId || !cancelMyOrder) return;
-    setCancellingOrderId(orderId);
-    try {
-      await cancelMyOrder(orderId);
-      showToast({ title: 'Order Cancelled', message: 'Your order was cancelled and any wallet payment was refunded.', tone: 'success' });
-    } catch (err) {
-      showToast({ title: 'Cancel Failed', message: err.message || 'Unable to cancel order.', tone: 'error' });
-    } finally {
-      setCancellingOrderId(null);
-    }
-  }, [cancellingOrderId, cancelMyOrder]);
-
   const pc =
     (user?.pcId ? findPcById(pcs, user.pcId) : null) ??
     currentClientPc ??
@@ -304,6 +448,13 @@ export default function CustomerSessionView() {
     createdAt: new Date().toISOString(),
     isActive: true,
   } : null;
+
+  const activeAnnouncementsList = useMemo(() => {
+    return [
+      ...(birthdayAnnouncement ? [birthdayAnnouncement] : []),
+      ...(announcements || []),
+    ].filter((item) => item.isActive !== false);
+  }, [birthdayAnnouncement, announcements]);
   const savedSessionSeconds = Number(
     memberRecord?.sessionSecondsRemaining ?? user.sessionSecondsRemaining ?? 0,
   );
@@ -617,7 +768,7 @@ export default function CustomerSessionView() {
   }, [canExtend, handleHelp, handleThisPc]);
 
   useEffect(() => {
-    if (!user || hasActiveSession) return undefined;
+    if (isDevBypass || !user || hasActiveSession) return undefined;
     // Intentional hard boundary: a signed-in member who has not started a paid
     // session gets five minutes to begin one. User activity and open dialogs do
     // not extend or pause this countdown.
@@ -695,8 +846,8 @@ export default function CustomerSessionView() {
   }
 
   return (
-    <div className={`customer-dashboard-shell h-screen w-full flex flex-col overflow-hidden bg-surface-deep text-ink-900 select-none`}>
-      <header className="customer-topbar flex shrink-0 items-center justify-between border-b border-surface-line px-4 py-2.5 customer-glass z-20">
+    <div className={`customer-dashboard-shell h-screen w-full flex flex-col overflow-hidden bg-surface-deep text-ink-900 select-none p-3.5 gap-3.5`}>
+      <header className="customer-topbar flex shrink-0 items-center justify-between border border-surface-line px-4 py-2 rounded-2xl customer-glass shadow-sm z-20">
         <div className="flex min-w-0 items-center gap-3">
           <img
             src={branding.logoUrl || logo}
@@ -734,6 +885,12 @@ export default function CustomerSessionView() {
               {peso(wallet)}
             </span>
           )}
+          {isDevBypass && (
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-bold text-emerald-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Dev Platform Bypass
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
@@ -746,31 +903,95 @@ export default function CustomerSessionView() {
           >
             <Bell size={14} /> <span className="hidden sm:inline">{assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}</span>
           </button>
-          <button
-            type="button"
-            onClick={() => setAnnouncementsOpen(true)}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
-            title="Cafe Announcements"
-          >
-            <Megaphone size={14} /> <span className="hidden sm:inline">Announcements</span>
-          </button>
-          <button
-            type="button"
-            onClick={openFeedback}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
-            title="Send Feedback to Staff"
-          >
-            <MessageSquareText size={14} /> <span className="hidden sm:inline">Feedback</span>
-          </button>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-xl border border-surface-line bg-surface text-slate-soft transition-colors hover:bg-dance/35 hover:text-ink-900"
-            title={isDark ? "Use light theme" : "Use dark theme"}
-            aria-label={isDark ? "Use light theme" : "Use dark theme"}
-          >
-            {isDark ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
+          {/* Announcements Dropdown Menu */}
+          <div className="relative" ref={announcementsDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setAnnouncementsOpen((prev) => !prev)}
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold transition-colors ${
+                announcementsOpen
+                  ? "border-gold bg-gold/20 text-ink-900 shadow-sm"
+                  : activeAnnouncementsList.length > 0
+                    ? "border-gold/40 bg-gold/10 text-gold-dim hover:bg-gold/20"
+                    : "border-surface-line bg-surface text-ink-900 hover:bg-dance/35"
+              }`}
+              title="Cafe Announcements & Promos"
+              aria-expanded={announcementsOpen}
+            >
+              <Megaphone size={14} className={activeAnnouncementsList.length > 0 || announcementsOpen ? "text-gold" : "text-slate-soft"} />
+              <span className="hidden sm:inline">Announcements</span>
+              {activeAnnouncementsList.length > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[9px] font-black text-midnight shadow-xs">
+                  {activeAnnouncementsList.length}
+                </span>
+              )}
+            </button>
+
+            {/* Compact Dropdown Popover */}
+            {announcementsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl border border-surface-line bg-surface shadow-2xl z-50 overflow-hidden flex flex-col">
+                {/* Dropdown Header */}
+                <div className="flex items-center justify-between border-b border-surface-line px-3.5 py-2.5 bg-surface-raised/40">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-midnight/8 text-gold-dim">
+                      <Megaphone size={12} />
+                    </span>
+                    <div>
+                      <p className="eyebrow">Updates</p>
+                      <h3 className="font-display text-xs font-bold text-ink-900">Announcements</h3>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-soft px-2 py-0.5 rounded-full bg-surface-raised">
+                    {activeAnnouncementsList.length} {activeAnnouncementsList.length === 1 ? "update" : "updates"}
+                  </span>
+                </div>
+
+                {/* Compact Announcements List */}
+                <div className="max-h-72 overflow-y-auto divide-y divide-surface-line/40 p-2 space-y-1.5">
+                  {activeAnnouncementsList.map((announcement) => (
+                    <article key={announcement.id} className="rounded-xl border border-surface-line/60 customer-neutral-surface p-2.5 space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="rounded-full bg-midnight/8 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider text-gold-dim border border-gold/20">
+                          {announcement.kind || "Update"}
+                        </span>
+                        <span className="text-[9px] text-slate-soft">
+                          {announcement.createdAt ? new Date(announcement.createdAt).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-ink-900 leading-tight">{announcement.title}</h4>
+                      <p className="text-[11px] leading-4 text-slate-soft">{announcement.message}</p>
+                    </article>
+                  ))}
+                  {activeAnnouncementsList.length === 0 && (
+                    <div className="py-6 text-center text-xs text-slate-soft">
+                      <p>No new announcements right now.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dropdown Footer */}
+                <div className="border-t border-surface-line p-2 bg-surface-raised/20 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAnnouncementsOpen(false);
+                      openFeedback();
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-soft hover:text-ink-900 px-2 py-1 rounded-lg hover:bg-surface-raised transition cursor-pointer"
+                  >
+                    <MessageSquareText size={12} /> Feedback
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAnnouncementsOpen(false)}
+                    className="text-[11px] font-bold text-ink-900 hover:text-gold-dim px-2.5 py-1 rounded-lg bg-surface-raised hover:bg-dance/35 transition cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -785,17 +1006,111 @@ export default function CustomerSessionView() {
           >
             <Minimize2 size={14} /> <span className="hidden sm:inline">Compact</span>
           </button>
-          {!legacyBillingSession && (
+
+          {/* Unified Options & Power Menu */}
+          <div className="relative" ref={systemMenuRef}>
             <button
               type="button"
-              onClick={handleThisPc}
-              disabled={logoutBusy}
-              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-ember/25 bg-ember/8 px-2.5 text-[11px] font-semibold text-ember-dim transition-colors hover:bg-ember/15 disabled:opacity-50"
-              title="Log out of this PC"
+              onClick={() => setSystemMenuOpen((prev) => !prev)}
+              className={`inline-flex min-h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold transition-colors cursor-pointer ${
+                systemMenuOpen
+                  ? "border-ember/40 bg-ember/15 text-ember-dim"
+                  : "border-surface-line bg-surface text-ink-900 hover:bg-dance/35"
+              }`}
+              title="Station Options & Power Controls"
+              aria-expanded={systemMenuOpen}
             >
-              <LogOut size={14} /> <span>{logoutBusy ? "Logging out…" : "Log Out"}</span>
+              <Power size={14} className={systemMenuOpen ? "text-ember" : "text-slate-soft"} />
+              <span className="hidden sm:inline">Options</span>
             </button>
-          )}
+
+            {/* Dropdown Popover */}
+            {systemMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-surface-line bg-surface shadow-2xl z-50 overflow-hidden p-1.5 space-y-1">
+                {/* Station Info Header */}
+                <div className="px-2.5 py-1.5 border-b border-surface-line/50 mb-1">
+                  <p className="eyebrow">Station Options</p>
+                  <p className="font-bold text-ink-900 text-xs truncate">{user?.username || user?.name || "Customer"}</p>
+                  <p className="text-[10px] text-slate-soft">{pc?.label || "Station PC"}</p>
+                </div>
+
+                {/* Feedback */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSystemMenuOpen(false);
+                    openFeedback();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-ink-900 hover:bg-surface-raised transition cursor-pointer text-left"
+                >
+                  <MessageSquareText size={14} className="text-slate-soft" />
+                  <span>Feedback</span>
+                </button>
+
+                {/* Dark/Light Mode */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    toggleTheme();
+                  }}
+                  className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs font-semibold text-ink-900 hover:bg-surface-raised transition cursor-pointer text-left"
+                >
+                  <span className="flex items-center gap-2.5">
+                    {isDark ? <Moon size={14} className="text-slate-soft" /> : <Sun size={14} className="text-slate-soft" />}
+                    <span>{isDark ? "Dark Theme" : "Light Theme"}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-soft font-mono uppercase bg-midnight/8 px-1.5 py-0.5 rounded-md">
+                    {isDark ? "Dark" : "Light"}
+                  </span>
+                </button>
+
+                {/* Power Options */}
+                <div className="border-t border-surface-line/50 my-1 pt-1 space-y-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSystemMenuOpen(false);
+                      setPowerConfirm("restart");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-ink-900 hover:bg-dance/35 transition cursor-pointer text-left"
+                  >
+                    <Monitor size={14} className="text-slate-soft" />
+                    <span>Restart Station</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSystemMenuOpen(false);
+                      setPowerConfirm("shutdown");
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-ember-dim hover:bg-ember/15 transition cursor-pointer text-left"
+                  >
+                    <Power size={14} className="text-ember" />
+                    <span>Shut Down Station</span>
+                  </button>
+                </div>
+
+                {/* Logout */}
+                {!legacyBillingSession && (
+                  <div className="border-t border-surface-line/50 my-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSystemMenuOpen(false);
+                        handleThisPc();
+                      }}
+                      disabled={logoutBusy}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-ember-dim hover:bg-ember/15 transition cursor-pointer text-left disabled:opacity-50"
+                    >
+                      <LogOut size={14} />
+                      <span>{logoutBusy ? "Logging out…" : "Log Out"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -805,7 +1120,7 @@ export default function CustomerSessionView() {
         </div>
       )}
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-12 gap-3.5 p-3.5 overflow-hidden">
+      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-12 gap-3.5 overflow-hidden">
         {/* ======================================================== */}
         {/* LEFT COLUMN: FULL SCREEN APP & GAME LAUNCHER (MAJORITY) */}
         {/* ======================================================== */}
@@ -907,64 +1222,89 @@ export default function CustomerSessionView() {
         {/* RIGHT COLUMN: TIME, ORDERS, WALLET, SUPPORT (SIDEBAR) */}
         {/* ======================================================== */}
         <aside className="lg:col-span-4 xl:col-span-3 flex flex-col min-h-0 min-w-0 gap-3 overflow-y-auto pr-0.5">
-          {/* 1. SESSION TIMER & CLOCK CARD */}
-          {hasActiveSession ? (
-            <div className="customer-primary-card flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between gap-2 border-b border-surface-line px-3.5 py-2.5 bg-surface-raised/30">
-                <div>
-                  <p className="eyebrow">{isGuest ? (legacyBillingSession ? "Guest checkout" : "Guest prepaid session") : "Your Session"}</p>
-                  <p className="text-xs font-semibold text-ink-900">
-                    {legacyBillingSession ? "Staff checkout" : (ratePlan?.name || "Prepaid Rate")}
+          {/* 1. UNIFIED SESSION & WALLET CARD */}
+          <div className="customer-primary-card shrink-0 flex flex-col overflow-hidden shadow-sm">
+            {/* Card Header: Session Info & Status */}
+            <div className="flex items-center justify-between gap-2 border-b border-surface-line px-3.5 py-2.5 bg-surface-raised/30">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-midnight/8 text-teal-dim shrink-0">
+                  <Clock size={14} />
+                </span>
+                <div className="min-w-0">
+                  <p className="eyebrow truncate">{isGuest ? (legacyBillingSession ? "Guest checkout" : "Guest prepaid session") : "Your Session"}</p>
+                  <p className="text-xs font-semibold text-ink-900 truncate">
+                    {hasActiveSession
+                      ? (legacyBillingSession ? "Staff checkout" : (ratePlan?.name || "Prepaid Rate"))
+                      : "Station Ready"}
                   </p>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${session.isLocked ? "bg-ember/10 text-ember-dim" : "bg-teal/10 text-teal-dim"}`}>
+              </div>
+              {hasActiveSession ? (
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold shrink-0 ${session.isLocked ? "bg-ember/10 text-ember-dim" : "bg-teal/10 text-teal-dim"}`}>
                   <span className={`h-1.5 w-1.5 rounded-full ${session.isLocked ? "bg-ember" : "bg-teal"}`} />
                   {session.isLocked ? "Paused" : "Active"}
                 </span>
-              </div>
-
-              <div className="px-4 py-3.5 text-center">
-                <p className="eyebrow mb-1">
-                  {legacyBillingSession ? "Staff action required" : "Time Left"}
-                </p>
-                <p className={`font-mono text-3xl sm:text-4xl font-black tracking-tight ${lowTime ? "text-ember-dim animate-pulse" : "text-ink-900"}`}>
-                  {legacyBillingSession ? "--:--" : formatClock(remainingSeconds)}
-                </p>
-                <p className={`mt-1 text-[11px] ${lowTime || legacyBillingSession ? "font-semibold text-ember-dim" : "text-slate-soft"}`}>
-                  {legacyBillingSession
-                    ? "This session came from an older billing mode. Please call staff to close it safely."
-                    : lowTime
-                      ? `${Math.max(1, Math.ceil((remainingSeconds || 0) / 60))}m left. Add time to continue.`
-                      : "Active timer"}
-                </p>
-                {!legacyBillingSession && (
-                  <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-dance/65">
-                    <div
-                      className={`h-full rounded-full transition-[width] duration-150 ${lowTime ? "bg-ember" : "bg-teal"}`}
-                      style={{ width: `${(progress ?? 0) * 100}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-1.5 border-t border-surface-line p-2 text-center text-xs">
-                <div className="customer-neutral-surface rounded-xl p-2">
-                  <p className="text-[10px] text-slate-soft font-medium uppercase">Elapsed</p>
-                  <p className="font-mono font-bold text-ink-900 text-xs mt-0.5">{formatClock(elapsedSeconds)}</p>
-                </div>
-                <div className="customer-neutral-surface rounded-xl p-2">
-                  <p className="text-[10px] text-slate-soft font-medium uppercase">Amount Paid</p>
-                  <p className="font-mono font-bold text-ink-900 text-xs mt-0.5">{peso(cost)}</p>
-                </div>
-              </div>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold bg-slate-500/10 text-slate-soft shrink-0">
+                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                  Idle
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="customer-primary-card flex flex-col overflow-hidden p-3.5">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div>
-                  <p className="eyebrow">Station Ready</p>
-                  <h3 className="font-display text-sm font-bold text-ink-900">Start using this PC</h3>
-                  <p className="mt-0.5 text-[11px] text-slate-soft">
+
+            {/* Card Main: Digital Timer or Station Ready */}
+            <div className="px-4 py-3 text-center">
+              {hasActiveSession ? (
+                <>
+                  <p className="eyebrow mb-0.5">
+                    {legacyBillingSession ? "Staff action required" : "Time Left"}
+                  </p>
+                  <p className={`font-mono text-3xl sm:text-4xl font-black tracking-tight ${lowTime ? "text-ember-dim animate-pulse" : "text-ink-900"}`}>
+                    {legacyBillingSession ? "--:--" : formatClock(remainingSeconds)}
+                  </p>
+                  {(lowTime || legacyBillingSession) && (
+                    <p className="mt-1 text-[11px] font-semibold text-ember-dim">
+                      {legacyBillingSession
+                        ? "This session came from an older billing mode. Please call staff to close it safely."
+                        : `${Math.max(1, Math.ceil((remainingSeconds || 0) / 60))}m left. Add time to continue.`}
+                    </p>
+                  )}
+                  {!legacyBillingSession && (
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-dance/65">
+                      <div
+                        className={`h-full rounded-full transition-[width] duration-150 ${lowTime ? "bg-ember" : "bg-teal"}`}
+                        style={{ width: `${(progress ?? 0) * 100}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Quick Add Time Chips */}
+                  {canExtend && (
+                    <div className="mt-2 flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setExtendOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-teal/30 bg-teal/10 px-2.5 py-0.5 text-[11px] font-bold text-teal-dim hover:bg-teal/20 transition cursor-pointer"
+                        title="Add 1 Hour"
+                      >
+                        <PlusCircle size={11} /> +1 Hour
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setExtendOpen(true)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-teal/30 bg-teal/10 px-2.5 py-0.5 text-[11px] font-bold text-teal-dim hover:bg-teal/20 transition cursor-pointer"
+                        title="Add 3 Hours"
+                      >
+                        <PlusCircle size={11} /> +3 Hours
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="py-2">
+                  <p className="eyebrow mb-1">Start Station</p>
+                  <h3 className="font-display text-base font-bold text-ink-900">PC Available</h3>
+                  <p className="mt-1 text-xs text-slate-soft">
                     {isGuest
                       ? (loading ? "Reconnecting guest session…" : "Guest session reconnecting.")
                       : canStartImmediately
@@ -976,218 +1316,460 @@ export default function CustomerSessionView() {
                             : "Waiting for PC registration."}
                   </p>
                 </div>
-                <PlayCircle size={24} className="text-gold-dim shrink-0" />
-              </div>
-              {!isGuest && canSelfStart ? (
-                <Button variant="primary" icon={PlayCircle} onClick={() => setStartOpen(true)} className="w-full">
-                  Start Session
-                </Button>
-              ) : (
-                <Button variant="primary" icon={Bell} onClick={handleHelp} disabled={assistanceSent || assistanceBusy} className="w-full">
-                  {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
-                </Button>
               )}
             </div>
-          )}
 
-          {/* 2. QUICK ACTIONS & WALLET CARD */}
-          <div className="customer-primary-card p-3 space-y-2">
-            {!isGuest && (
-              <div className="flex items-center justify-between px-1 pb-1">
-                <div>
-                  <p className="text-[10px] uppercase font-semibold text-slate-soft">Wallet Balance</p>
-                  <p className="font-mono font-bold text-lg text-ink-900">{peso(wallet)}</p>
+            {/* Metrics Grid: Wallet Balance + Elapsed / Amount */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 border-t border-surface-line p-2 text-center text-xs bg-surface-raised/10">
+              {!isGuest && (
+                <div className="customer-neutral-surface rounded-xl p-2 flex flex-col justify-center">
+                  <p className="text-[10px] text-slate-soft font-semibold uppercase tracking-wider">Wallet</p>
+                  <p className="font-mono font-black text-ink-900 text-sm mt-0.5 text-gold-dim">{peso(wallet)}</p>
                 </div>
-                {savedSessionSeconds > 0 && (
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase font-semibold text-slate-soft">Saved Time</p>
-                    <p className="font-mono font-bold text-sm text-teal-dim">{formatClock(savedSessionSeconds)}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
-              {canExtend ? (
-                <Button variant="teal" icon={PlusCircle} onClick={() => setExtendOpen(true)} size="sm">
-                  Add Time
-                </Button>
-              ) : (
-                <Button variant="ghost" icon={Bell} onClick={handleHelp} disabled={assistanceSent || assistanceBusy} size="sm">
-                  {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
-                </Button>
               )}
-              {!isGuest ? (
-                <Button variant="primary" icon={Wallet} onClick={() => setTopUpOpen(true)} size="sm">
-                  Top Up
-                </Button>
+              {hasActiveSession ? (
+                <>
+                  <div className="customer-neutral-surface rounded-xl p-2 flex flex-col justify-center">
+                    <p className="text-[10px] text-slate-soft font-medium uppercase tracking-wider">Elapsed</p>
+                    <p className="font-mono font-bold text-ink-900 text-xs mt-0.5">{formatClock(elapsedSeconds)}</p>
+                  </div>
+                  <div className={`customer-neutral-surface rounded-xl p-2 flex flex-col justify-center ${isGuest ? "col-span-1" : ""}`}>
+                    <p className="text-[10px] text-slate-soft font-medium uppercase tracking-wider">Cost</p>
+                    <p className="font-mono font-bold text-ink-900 text-xs mt-0.5">{peso(cost)}</p>
+                  </div>
+                </>
               ) : (
-                <Button variant="ghost" icon={Ticket} onClick={() => setVoucherOpen(true)} size="sm">
-                  Voucher
-                </Button>
+                <>
+                  {savedSessionSeconds > 0 && (
+                    <div className="customer-neutral-surface rounded-xl p-2 flex flex-col justify-center">
+                      <p className="text-[10px] text-slate-soft font-medium uppercase tracking-wider">Saved Time</p>
+                      <p className="font-mono font-bold text-teal-dim text-xs mt-0.5">{formatClock(savedSessionSeconds)}</p>
+                    </div>
+                  )}
+                  <div className={`customer-neutral-surface rounded-xl p-2 flex flex-col justify-center ${isGuest ? "col-span-2" : savedSessionSeconds > 0 ? "" : "col-span-1"}`}>
+                    <p className="text-[10px] text-slate-soft font-medium uppercase tracking-wider">Rate Tier</p>
+                    <p className="font-semibold text-ink-900 text-xs mt-0.5">{user?.tier || "Regular"}</p>
+                  </div>
+                </>
               )}
             </div>
-            {!isGuest && (
-              <Button variant="ghost" icon={Ticket} onClick={() => setVoucherOpen(true)} size="sm" className="w-full">
-                Redeem Voucher
-              </Button>
-            )}
+
+            {/* Unified Action Controls */}
+            <div className="border-t border-surface-line p-2 bg-surface-raised/20">
+              {hasActiveSession ? (
+                <div className={`grid gap-1.5 ${isGuest ? "grid-cols-2" : "grid-cols-3"}`}>
+                  {canExtend ? (
+                    <Button
+                      variant="teal"
+                      icon={PlusCircle}
+                      onClick={() => setExtendOpen(true)}
+                      size="sm"
+                      className="w-full text-xs px-1"
+                    >
+                      Add Time
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      icon={Bell}
+                      onClick={handleHelp}
+                      disabled={assistanceSent || assistanceBusy}
+                      size="sm"
+                      className="w-full text-xs px-1"
+                    >
+                      {assistanceBusy ? "Calling…" : assistanceSent ? "Notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
+                    </Button>
+                  )}
+                  {!isGuest ? (
+                    <Button
+                      variant="primary"
+                      icon={Wallet}
+                      onClick={() => setTopUpOpen(true)}
+                      size="sm"
+                      className="w-full text-xs px-1"
+                    >
+                      Top Up
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      icon={Ticket}
+                      onClick={() => setVoucherOpen(true)}
+                      size="sm"
+                      className="w-full text-xs px-1"
+                    >
+                      Voucher
+                    </Button>
+                  )}
+                  {!isGuest && (
+                    <Button
+                      variant="ghost"
+                      icon={Ticket}
+                      onClick={() => setVoucherOpen(true)}
+                      size="sm"
+                      className="w-full text-xs px-1 border border-surface-line/70"
+                    >
+                      Voucher
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {!isGuest && canSelfStart ? (
+                    <Button
+                      variant="primary"
+                      icon={PlayCircle}
+                      onClick={() => setStartOpen(true)}
+                      className="w-full"
+                    >
+                      Start Session
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      icon={Bell}
+                      onClick={handleHelp}
+                      disabled={assistanceSent || assistanceBusy}
+                      className="w-full"
+                    >
+                      {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
+                    </Button>
+                  )}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {!isGuest && (
+                      <Button
+                        variant="outline"
+                        icon={Wallet}
+                        onClick={() => setTopUpOpen(true)}
+                        size="sm"
+                        className="w-full"
+                      >
+                        Top Up
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      icon={Ticket}
+                      onClick={() => setVoucherOpen(true)}
+                      size="sm"
+                      className={`w-full ${isGuest ? "col-span-2" : ""}`}
+                    >
+                      Redeem Voucher
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* 3. CAFE KITCHEN / FOOD & DRINKS ORDERING */}
+          {/* 2. CAFE KITCHEN / FOOD & DRINKS QUICK TRAY */}
           <div className="customer-primary-card flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between gap-2 border-b border-surface-line px-3.5 py-2.5 bg-surface-raised/30">
+            <div className="flex items-center justify-between gap-2 border-b border-surface-line px-3.5 py-2 bg-surface-raised/30">
               <div className="flex items-center gap-2">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
-                  <UtensilsCrossed size={14} />
+                <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                  <UtensilsCrossed size={13} />
                 </span>
                 <div>
                   <p className="eyebrow">Cafe Kitchen</p>
-                  <h3 className="font-display text-xs font-bold text-ink-900">Food & Drinks</h3>
+                  <h3 className="font-display text-xs font-bold text-ink-900">Food & Drinks Tray</h3>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setMenuOrderOpen(true)}
-                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-500 hover:bg-amber-500/20 transition"
-              >
-                <ShoppingBag size={12} /> Order Food
-              </button>
-            </div>
 
-            {/* Active Orders List */}
-            {myOrders.length > 0 ? (
-              <div className="divide-y divide-surface-line overflow-y-auto max-h-48 p-1">
-                {myOrders.slice(0, 4).map((order) => {
-                  const status = order.order_status || order.orderStatus || 'pending';
-                  const isPending = status === 'pending';
-                  const isPreparing = status === 'preparing';
-                  const isFulfilled = status === 'fulfilled';
-                  let parsedItems = [];
-                  try {
-                    parsedItems = typeof order.items_json === 'string' ? JSON.parse(order.items_json) : (order.items || []);
-                  } catch {
-                    parsedItems = [];
-                  }
-                  return (
-                    <div key={order.id} className="p-2.5 flex items-center justify-between gap-2 text-xs">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`px-1.5 py-0.2 rounded-md text-[9px] font-bold uppercase ${
-                              isPending
-                                ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                : isPreparing
-                                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                : isFulfilled
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-slate-800 text-slate-400'
-                            }`}
-                          >
-                            {status}
-                          </span>
-                          <span className="text-[11px] font-mono font-bold text-ink-900">₱{Number(order.total || 0).toFixed(2)}</span>
-                        </div>
-                        <p className="mt-0.5 text-[10px] text-slate-soft truncate">
-                          {parsedItems.map((i) => `${i.quantity}x ${i.name}`).join(', ') || 'Order items'}
-                        </p>
-                      </div>
-                      {isPending && (
-                        <button
-                          type="button"
-                          disabled={cancellingOrderId === order.id}
-                          onClick={() => handleCancelOrder(order.id)}
-                          className="shrink-0 px-2 py-1 rounded-lg border border-ember/30 bg-ember/10 text-ember-dim font-bold text-[10px] hover:bg-ember/20 transition disabled:opacity-50"
-                        >
-                          {cancellingOrderId === order.id ? '…' : 'Cancel'}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="p-3 text-center text-xs text-slate-soft">
-                <p className="text-[11px]">Noodles, snacks, and chilled drinks delivered straight to your station.</p>
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setMenuOrderOpen(true)}
-                  className="mt-2 text-gold-dim hover:underline font-bold text-xs"
+                  className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-500 hover:bg-amber-500/20 transition cursor-pointer h-7"
                 >
-                  Browse Menu & Order →
+                  <ShoppingBag size={12} /> Full Menu
                 </button>
+
+                {/* Orders Popover Button with Live Pending Dot (After Full Menu) */}
+                <div className="relative" ref={ordersDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setOrdersOpen((prev) => !prev)}
+                    className={`relative inline-flex items-center justify-center h-7 px-2 rounded-lg border transition cursor-pointer text-xs font-semibold gap-1 ${
+                      ordersOpen
+                        ? "border-amber-500 bg-amber-500/20 text-ink-900 shadow-sm"
+                        : pendingOrdersCount > 0
+                        ? "border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20"
+                        : "border-surface-line bg-surface-raised/40 text-slate-soft hover:text-ink-900"
+                    }`}
+                    title={pendingOrdersCount > 0 ? `${pendingOrdersCount} pending kitchen order${pendingOrdersCount === 1 ? '' : 's'}` : "View order queue"}
+                    aria-label="View Orders"
+                  >
+                    <ReceiptText size={13} className={pendingOrdersCount > 0 ? "text-amber-500" : ""} />
+                    {pendingOrdersCount > 0 && (
+                      <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-black text-midnight shadow-xs">
+                        {pendingOrdersCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Compact Orders Popover */}
+                  {ordersOpen && (
+                    <div className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 rounded-2xl border border-surface-line bg-surface shadow-2xl z-50 overflow-hidden flex flex-col">
+                      <div className="flex items-center justify-between border-b border-surface-line px-3.5 py-2 bg-surface-raised/40">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                            <ReceiptText size={12} />
+                          </span>
+                          <div>
+                            <p className="eyebrow">Queue</p>
+                            <h3 className="font-display text-xs font-bold text-ink-900">Kitchen Orders</h3>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-soft px-2 py-0.5 rounded-full bg-surface-raised">
+                          {pendingOrdersCount} active / {myOrders.length} total
+                        </span>
+                      </div>
+
+                      <div className="p-2 max-h-64 overflow-y-auto divide-y divide-surface-line">
+                        {myOrders.length === 0 ? (
+                          <div className="py-6 text-center text-xs text-slate-soft">
+                            No active or past orders yet.
+                          </div>
+                        ) : (
+                          myOrders.map((order) => {
+                            const status = order.order_status || order.orderStatus || "pending";
+                            const isPending = status === "pending";
+                            const isPreparing = status === "preparing";
+                            const isFulfilled = status === "fulfilled";
+                            let parsedItems = [];
+                            try {
+                              parsedItems = typeof order.items_json === "string" ? JSON.parse(order.items_json) : (order.items || []);
+                            } catch {
+                              parsedItems = [];
+                            }
+                            return (
+                              <div key={order.id} className="p-2 flex items-center justify-between gap-2 text-xs">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span
+                                      className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase ${
+                                        isPending
+                                          ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+                                          : isPreparing
+                                          ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                          : isFulfilled
+                                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                          : "bg-slate-800 text-slate-400"
+                                      }`}
+                                    >
+                                      {status}
+                                    </span>
+                                    <span className="text-[11px] font-mono font-bold text-ink-900">
+                                      ₱{Number(order.total || 0).toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-[10px] text-slate-soft truncate">
+                                    {parsedItems.map((i) => `${i.quantity}x ${i.name}`).join(", ") || "Order items"}
+                                  </p>
+                                </div>
+                                {isPending && (
+                                  <button
+                                    type="button"
+                                    disabled={cancellingOrderId === order.id}
+                                    onClick={() => handleCancelOrder(order.id)}
+                                    className="shrink-0 px-2 py-1 rounded-lg border border-ember/30 bg-ember/10 text-ember-dim font-bold text-[10px] hover:bg-ember/20 transition disabled:opacity-50"
+                                  >
+                                    {cancellingOrderId === order.id ? "…" : "Cancel"}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Snacks Tray Items */}
+            {menuItems.length > 0 && (
+              <div className="p-2.5 border-b border-surface-line/50 space-y-1.5 shrink-0">
+                {/* Header & Category Filters */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-slate-soft uppercase tracking-wider">Quick In-Game Snacks</p>
+                    <span className="text-[10px] text-slate-soft font-mono">{quickSnackItems.length} items</span>
+                  </div>
+                  {/* Category Filter Chips with mouse wheel support */}
+                  <div
+                    onWheel={(e) => {
+                      if (e.deltaY !== 0) {
+                        e.currentTarget.scrollLeft += e.deltaY;
+                      }
+                    }}
+                    className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none"
+                  >
+                    {quickSnackCategories.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setQuickCategory(cat)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition whitespace-nowrap cursor-pointer ${
+                          quickCategory === cat
+                            ? 'bg-gold text-midnight font-black shadow-xs'
+                            : 'bg-surface-raised/40 text-slate-soft hover:text-ink-900 border border-surface-line/50'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Horizontal Scrollable Quick Items Carousel with mouse wheel support */}
+                <div
+                  onWheel={(e) => {
+                    if (e.deltaY !== 0) {
+                      e.currentTarget.scrollLeft += e.deltaY;
+                    }
+                  }}
+                  className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-none"
+                >
+                  {quickSnackItems.length === 0 ? (
+                    <div className="w-full py-3 text-center text-[11px] text-slate-soft">
+                      No items in this category.
+                    </div>
+                  ) : (
+                    quickSnackItems.map((item) => {
+                      const stock = item.stock_quantity !== undefined ? item.stock_quantity : item.stockQuantity;
+                      const isOutOfStock = stock !== null && stock !== undefined && Number(stock) <= 0;
+                      const inCartQty = sidebarCart[item.id] || 0;
+                      return (
+                        <div
+                          key={item.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => !isOutOfStock && addToSidebarCart(item)}
+                          className={`w-28 shrink-0 customer-neutral-surface rounded-xl p-1.5 border border-surface-line/60 flex flex-col justify-between gap-1 text-left transition hover:border-gold/50 cursor-pointer select-none active:scale-[0.98] ${
+                            isOutOfStock ? 'opacity-60 cursor-not-allowed' : ''
+                          }`}
+                          title={isOutOfStock ? `${item.name} is out of stock` : `Click to add ${item.name} to tray`}
+                        >
+                          {/* Photo / Thumbnail */}
+                          <div className="relative h-14 w-full rounded-lg overflow-hidden bg-surface-raised/40 flex items-center justify-center border border-surface-line/40 group">
+                            {item.image_url || item.imageUrl ? (
+                              <img
+                                src={item.image_url || item.imageUrl}
+                                alt={item.name}
+                                loading="lazy"
+                                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            ) : (
+                              <UtensilsCrossed className="w-5 h-5 text-slate-soft/40 group-hover:scale-110 transition-transform" />
+                            )}
+                            {/* Hover Add Overlay */}
+                            {!isOutOfStock && (
+                              <div className="absolute inset-0 bg-midnight/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-bold">
+                                + Add
+                              </div>
+                            )}
+                            {/* In-Tray Quantity Badge */}
+                            {inCartQty > 0 && (
+                              <span className="absolute top-1 right-1 bg-gold text-midnight text-[9px] font-black px-1.5 py-0.2 rounded-full shadow-xs">
+                                {inCartQty}
+                              </span>
+                            )}
+                            {isOutOfStock && (
+                              <div className="absolute inset-0 bg-surface/80 flex items-center justify-center">
+                                <span className="text-[8px] font-bold text-ember-dim px-1 py-0.2 bg-ember/15 rounded border border-ember/25">
+                                  Out of Stock
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 px-0.5">
+                            <p className="font-bold text-ink-900 text-[11px] truncate" title={item.name}>{item.name}</p>
+                            <p className="font-mono text-gold-dim font-bold text-[10px]">₱{Number(item.price || 0).toFixed(2)}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* In-Game Tray Cart Bar */}
+            {sidebarCartItems.length > 0 && (
+              <div className="p-3 bg-gold/5 border-b border-gold/20 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-ink-900 flex items-center gap-1">
+                    <ShoppingBag size={12} className="text-gold-dim" /> Tray ({sidebarCartItems.reduce((acc, i) => acc + i.quantity, 0)})
+                  </span>
+                  <span className="font-mono text-xs font-bold text-ink-900">₱{sidebarCartTotal.toFixed(2)}</span>
+                </div>
+
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {sidebarCartItems.map(({ item, quantity }) => (
+                    <div key={item.id} className="flex items-center justify-between text-[11px]">
+                      <span className="text-ink-900 truncate">{quantity}x {item.name}</span>
+                      <div className="flex items-center gap-1 shrink-0 pl-1">
+                        <button
+                          type="button"
+                          onClick={() => removeFromSidebarCart(item.id)}
+                          className="h-4.5 w-4.5 rounded border border-surface-line bg-surface-raised hover:bg-surface-line flex items-center justify-center text-[10px] font-bold text-ink-900 transition-colors"
+                        >
+                          -
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addToSidebarCart(item)}
+                          className="h-4.5 w-4.5 rounded border border-surface-line bg-surface-raised hover:bg-surface-line flex items-center justify-center text-[10px] font-bold text-ink-900 transition-colors"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  {!isGuest && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={Wallet}
+                      disabled={sidebarOrdering || Number(wallet || 0) < sidebarCartTotal}
+                      onClick={() => handleSidebarOrder('wallet')}
+                      className="w-full text-xs font-semibold py-1.5 justify-center"
+                    >
+                      Wallet
+                    </Button>
+                  )}
+                  <Button
+                    variant="teal"
+                    size="sm"
+                    icon={Banknote}
+                    disabled={sidebarOrdering}
+                    onClick={() => handleSidebarOrder('cash')}
+                    className={`w-full text-xs font-semibold py-1.5 justify-center ${isGuest ? 'col-span-2' : ''}`}
+                  >
+                    Cash
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Helper Prompt when tray is empty */}
+            {sidebarCartItems.length === 0 && (
+              <div className="p-2 text-center text-xs text-slate-soft">
+                <p className="text-[10px]">Tap snacks to add to tray · Delivered to your station</p>
               </div>
             )}
           </div>
 
-          {/* 4. ANNOUNCEMENTS & SUPPORT */}
-          <AnnouncementBox
-            announcements={announcements}
-            onFeedback={openFeedback}
-            birthdayAnnouncement={birthdayAnnouncement}
-          />
-
-          {/* 5. PC CONTROLS */}
-          {(window.aezakmiClient?.restartClient || window.aezakmiClient?.shutdownClient) && (
-            <div className="customer-support-card">
-              <p className="eyebrow">PC controls</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {window.aezakmiClient?.restartClient && (
-                  <button
-                    type="button"
-                    onClick={() => setPowerConfirm("restart")}
-                    className="customer-action-tile customer-neutral-surface text-ink-900 hover:bg-dance/35 py-2 text-xs"
-                  >
-                    <span className="inline-flex items-center justify-center gap-1.5"><Monitor size={13} /> Restart</span>
-                  </button>
-                )}
-                {window.aezakmiClient?.shutdownClient && (
-                  <button
-                    type="button"
-                    onClick={() => setPowerConfirm("shutdown")}
-                    className="customer-action-tile border-ember/25 bg-ember/8 text-ember-dim hover:bg-ember/15 py-2 text-xs"
-                  >
-                    <span className="inline-flex items-center justify-center gap-1.5"><Power size={13} /> Shut Down</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
         </aside>
       </main>
 
-      <Modal
-        open={announcementsOpen}
-        onClose={() => setAnnouncementsOpen(false)}
-        eyebrow="Cafe updates"
-        title="Announcements"
-        description="News, promos, and reminders posted by cafe staff."
-        maxWidth="max-w-xl"
-        footer={
-          <Button variant="primary" onClick={() => setAnnouncementsOpen(false)}>
-            Close
-          </Button>
-        }
-      >
-        <div className="space-y-2">
-          {[...(birthdayAnnouncement ? [birthdayAnnouncement] : []), ...(announcements || [])]
-            .filter((item) => item.isActive !== false)
-            .map((announcement) => (
-              <article key={announcement.id} className="rounded-xl border border-surface-line customer-neutral-surface p-3.5">
-                <span className="rounded-full bg-midnight/8 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-ink-900">
-                  {announcement.kind || "Update"}
-                </span>
-                <h3 className="mt-2 text-sm font-semibold text-ink-900">{announcement.title}</h3>
-                <p className="mt-1 text-[13px] leading-5 text-slate-soft">{announcement.message}</p>
-              </article>
-            ))}
-          {!birthdayAnnouncement && announcements.filter((item) => item.isActive !== false).length === 0 && (
-            <p className="rounded-xl border border-dashed border-surface-line px-4 py-8 text-center text-[13px] text-slate-soft">
-              There are no new announcements right now.
-            </p>
-          )}
-        </div>
-      </Modal>
 
       <Modal
         open={feedbackOpen}
@@ -1399,6 +1981,8 @@ export default function CustomerSessionView() {
       <MenuOrderModal
         isOpen={menuOrderOpen}
         onClose={() => setMenuOrderOpen(false)}
+        cart={sidebarCart}
+        onCartChange={setSidebarCart}
       />
 
       <VoucherRedemptionModal

@@ -63,11 +63,10 @@ test('philippineMenuPresets and generated WebP assets exist and cover all reques
   const { PHILIPPINE_MENU_CATALOG, PHILIPPINE_MENU_CATEGORIES } = await import('../apps/admin/src/data/philippineMenuPresets.js')
 
   assert.ok(PHILIPPINE_MENU_CATALOG.length >= 50, 'Catalog must contain comprehensive Philippine items')
-  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Pancit Canton'), 'Catalog must include Pancit Canton category')
-  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Cup Noodles'), 'Catalog must include Cup Noodles category')
-  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Junk Food & Chips'), 'Catalog must include Junk Food & Chips category')
-  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Soft Drinks'), 'Catalog must include Soft Drinks category')
-  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Biscuits & Sweets'), 'Catalog must include Biscuits category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Beverages & Drinks'), 'Catalog must include Beverages & Drinks category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Chips, Nuts & Savory Snacks'), 'Catalog must include Chips, Nuts & Savory Snacks category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Biscuits, Chocolates & Sweets'), 'Catalog must include Biscuits, Chocolates & Sweets category')
+  assert.ok(PHILIPPINE_MENU_CATEGORIES.includes('Noodles & Quick Meals'), 'Catalog must include Noodles & Quick Meals category')
 
   // Verify public assets/menu directory exists
   const adminMenuAssets = path.join(repoRoot, 'apps', 'admin', 'public', 'assets', 'menu')

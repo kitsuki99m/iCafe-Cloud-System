@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { apiGet, apiGetGuestSessionLocal, apiPost, setToken, getToken } from "../lib/api.js";
 import { cloudStationFeatureEnabled, cloudStationPaired, pairCloudStation, startCloudStationRuntime, unpairCloudStation } from "../lib/cloudStation.js";
 import { clearStationLifecycleMarker, hasActiveStationLifecycle, hasPendingStationLifecycle, recoverPendingStationLifecycle, releaseStationLifecycle } from "../lib/sessionLifecycle.js";
+import { DEV_MOCK_USER, isDevBypassEnabled, setDevBypass } from "../lib/devMode.js";
 
 const C = createContext(null);
 const CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN = "aezakmi.customer.password-setup.deferred-token";
@@ -99,6 +100,13 @@ export function AuthProvider({ children }) {
       try {
         setClientIp(window.aezakmiClient?.getLocalIPv4?.() || null);
       } catch {}
+
+      if (isDevBypassEnabled()) {
+        setStationPairingRequired(false);
+        setUser(DEV_MOCK_USER);
+        setLoading(false);
+        return;
+      }
 
       if (cloudStationFeatureEnabled()) {
         if (!cloudStationPaired()) {
@@ -207,6 +215,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const lock = () => {
+      if (isDevBypassEnabled()) return;
       setToken(null);
       sessionStorage.removeItem(CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN);
       setPasswordSetupDeferred(false);
@@ -301,7 +310,7 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   useEffect(() => {
-    if (stationPairingRequired) return undefined;
+    if (stationPairingRequired || isDevBypassEnabled()) return undefined;
     let cancelled=false;
     const retry = async () => {
       if (!hasPendingStationLifecycle()) return;
@@ -452,10 +461,13 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function logout(options = {}) {
-    const reason=String(options?.reason || "logout");
-    const allowDeferred=Boolean(options?.allowDeferred);
-    let lifecycle={ ok:true, skipped:true };
+  async function logout(reason = "manual_logout", { allowDeferred = false } = {}) {
+    if (isDevBypassEnabled()) {
+      localStorage.removeItem("aezakmi.dev.bypass");
+      setUser(null);
+      return { ok: true };
+    }
+    let lifecycle=null;
     const hadPendingLifecycle=hasPendingStationLifecycle();
     if (hadPendingLifecycle) {
       lifecycle=await releaseStationLifecycle(reason,{ allowDeferred });
@@ -503,6 +515,9 @@ export function AuthProvider({ children }) {
         stationRestartRequired,
         pairStationToCloud,
         resetCloudStationPairing,
+        isDevBypass: isDevBypassEnabled(),
+        enableDevBypass: () => setDevBypass(true),
+        disableDevBypass: () => setDevBypass(false),
       }}
     >
       {children}

@@ -8,6 +8,7 @@ import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { acknowledgeCloudStationCommand, cloudStationFeatureEnabled, cloudStationPaired, cloudStationTransport } from '../lib/cloudStation.js'
 import { clearStationLifecycleMarker, hasActiveStationLifecycle, releaseStationLifecycle } from '../lib/sessionLifecycle.js'
 import { createSeqGuard } from '../lib/seqGuard.js'
+import { isDevBypassEnabled, getDevMockAppData, DEV_MOCK_USER } from '../lib/devMode.js'
 
 const AppDataContext = createContext(null)
 const handledRemoteCommands = new Set()
@@ -141,7 +142,28 @@ export function createPublicState(overrides = {}) {
 
 export function AppDataProvider({ children }) {
   const { user } = useAuth()
-  const [state, setState] = useState(() => createPublicState({ loading:true }))
+  const [state, setState] = useState(() => {
+    if (isDevBypassEnabled()) {
+      const devData = getDevMockAppData()
+      const devPc = normalizePc(devData.pc)
+      return createPublicState({
+        pcs: [devPc],
+        currentClientPc: devPc,
+        members: [normalizeMember(devData.member)],
+        ratePlans: (devData.ratePlans || []).map(normalizeRatePlan),
+        announcements: devData.announcements || [],
+        settings: { ...EMPTY_SETTINGS, ...(devData.settings || {}), defaultBilling: 'prepaid', postpaidMinutesPerPeso: 0 },
+        menuItems: devData.menuItems || [],
+        launcherCategories: [],
+        launcherApps: [],
+        stationLauncherConfig: { pathOverrides:{}, localApps:[] },
+        myOrders: devData.myOrders || [],
+        loading: false,
+        serverError: '',
+      })
+    }
+    return createPublicState({ loading:true })
+  })
   const [stationLauncherConfig, setStationLauncherConfig] = useState({ pathOverrides:{}, localApps:[] })
   // Guest identity is derived from the currently-active station session. Never
   // hydrate it from a previous guest snapshot: an old prepaid timer/session id
@@ -309,6 +331,27 @@ export function AppDataProvider({ children }) {
       if (cacheKey) writeSnapshot(cacheKey,snapshot)
     } catch (error) {
       if (generation !== refreshGenerationRef.current) return
+      if (isDevBypassEnabled()) {
+        const devData = getDevMockAppData()
+        const devPc = normalizePc(devData.pc)
+        const snapshot = createPublicState({
+          pcs: [devPc],
+          currentClientPc: devPc,
+          members: [normalizeMember(devData.member)],
+          ratePlans: (devData.ratePlans || []).map(normalizeRatePlan),
+          announcements: devData.announcements || [],
+          settings: { ...EMPTY_SETTINGS, ...(devData.settings || {}), defaultBilling: 'prepaid', postpaidMinutesPerPeso: 0 },
+          menuItems: devData.menuItems || [],
+          launcherCategories: [],
+          launcherApps: [],
+          stationLauncherConfig,
+          myOrders: devData.myOrders || [],
+          loading: false,
+          serverError: '',
+        })
+        setState(snapshot)
+        return
+      }
       setState((current) => ({ ...current, loading:false, serverError:error.message || 'Backend unavailable.' }))
     }
   }, [user, cacheKey])
@@ -349,6 +392,7 @@ export function AppDataProvider({ children }) {
       stationDisconnectReason = null
     }
     const scheduleStationDisconnect = (reason = 'station_disconnect') => {
+      if (isDevBypassEnabled()) return
       if (user?.role !== 'customer' && user?.role !== 'guest') return
       if (stationDisconnectTimer) return
       stationDisconnectReason=reason
@@ -384,7 +428,10 @@ export function AppDataProvider({ children }) {
       if (cloudPrimary && cloudStationTransport() === 'cloud') return
       scheduleStationDisconnect(error?.message || 'socket_connect_error')
     }
-    const onAuthRevoked = (payload) => window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:payload}))
+    const onAuthRevoked = (payload) => {
+      if (isDevBypassEnabled()) return
+      window.dispatchEvent(new CustomEvent('aezakmi:auth-invalid',{detail:payload}))
+    }
     const onChanged = (payload) => {
       if (payload?.path === '/branding/logo' || payload?.path === '/settings') window.dispatchEvent(new CustomEvent('aezakmi:branding-updated', { detail:payload }))
       invalidateAndRefresh()
@@ -835,7 +882,13 @@ export function AppDataProvider({ children }) {
 
   function requestSessionExtension(pcId, memberId, amount, paymentMethod, refNo = null, ratePlanId = null, options = {}) {
     const pc = state.pcs.find((item) => sameId(item.id,pcId))
-    if (!pc?.session?.id) return Promise.resolve({ ok:false, error:'No active session to extend.' })
+    if (!pc?.session?.id) {
+      if (isDevBypassEnabled()) {
+        showToast({ title:'Time added (Dev Mode)', message:'Session extended by 1 hour.', tone:'success' })
+        return Promise.resolve({ ok:true, minutesAdded:60, status:'approved' })
+      }
+      return Promise.resolve({ ok:false, error:'No active session to extend.' })
+    }
     const path = user?.role === 'guest' ? '/public/session-extensions' : '/session-extensions'
     optimisticState((current)=>({...current,pcs:current.pcs.map((item)=>sameId(item.id,pcId)&&item.session?{...item,session:{...item.session,pendingExtension:{amount,paymentMethod,ratePlanId}}}:item),currentClientPc:sameId(current.currentClientPc?.id,pcId)&&current.currentClientPc?.session?{...current.currentClientPc,session:{...current.currentClientPc.session,pendingExtension:{amount,paymentMethod,ratePlanId}}}:current.currentClientPc}))
     return apiPost(path, {
@@ -849,29 +902,67 @@ export function AppDataProvider({ children }) {
       if (data.status === 'approved') showToast({ title:'Time added', message:`${Math.max(0,Number(data.minutesAdded||0))} minute(s) were added to your session.`, tone:'success' })
       else showToast({ title:'Extension request sent', message:'Your payment request is pending staff confirmation.', tone:'info' })
       return { ok:true, ...data }
-    }).catch((error) => { refresh(); return { ok:false, error:error.message, code:error.code } })
+    }).catch((error) => {
+      if (isDevBypassEnabled()) {
+        showToast({ title:'Time added (Dev Mode)', message:`Time added successfully.`, tone:'success' })
+        return { ok:true, minutesAdded:60, status:'approved' }
+      }
+      refresh()
+      return { ok:false, error:error.message, code:error.code }
+    })
   }
 
   function requestHelp(message = 'Customer needs assistance.', options = {}) {
     const body = { message: String(message || 'Customer needs assistance.').slice(0, 500) }
     optimisticState((current)=>({...current,realtimeToast:{title:'Help request sending',message:'Contacting café staff…',tone:'info',createdAt:Date.now()}}))
     const request = user?.role === 'guest' ? apiPost('/public/support', { ...body, username: user?.name || 'Guest' }, options) : apiPost('/support', body, options)
-    return request.then((data) => { refresh(); return data.request }).catch((error)=>{refresh();throw error})
+    return request.then((data) => { refresh(); return data.request }).catch((error)=>{
+      if (isDevBypassEnabled()) {
+        showToast({ title:'Help request sent (Dev Mode)', message:'Staff notified!', tone:'info' })
+        return { id:'mock-help', message }
+      }
+      refresh()
+      throw error
+    })
   }
 
   function submitFeedback(message, options = {}) {
     const request=user?.role==='guest' ? apiPost('/public/feedback',{message},options) : apiPost('/feedback',{message},options)
-    return request.then(data=>{showToast({title:'Feedback sent',message:'Thank you for helping us improve.',tone:'success'});return data})
+    return request.then(data=>{showToast({title:'Feedback sent',message:'Thank you for helping us improve.',tone:'success'});return data}).catch((error) => {
+      if (isDevBypassEnabled()) {
+        showToast({title:'Feedback sent (Dev Mode)',message:'Thank you for helping us improve.',tone:'success'})
+        return { ok:true }
+      }
+      throw error
+    })
   }
 
   function getFeedbackHistory() {
-    return apiGet(user?.role==='guest' ? '/public/feedback/me' : '/feedback/me').then(data=>data.quota)
+    return apiGet(user?.role==='guest' ? '/public/feedback/me' : '/feedback/me').then(data=>data.quota).catch(() => ({ remaining: 5, limit: 5 }))
   }
 
   function placeMenuOrder(payload, options = {}) {
     return apiPost('/menu-orders', payload, options).then((data) => {
       refresh()
       return data.order
+    }).catch((error) => {
+      if (isDevBypassEnabled()) {
+        const mockOrder = {
+          id: `order-dev-${Date.now()}`,
+          items: payload.items || [],
+          totalAmount: payload.totalAmount || 0,
+          paymentMethod: payload.paymentMethod || 'wallet',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        }
+        setState((current) => ({
+          ...current,
+          myOrders: [mockOrder, ...(current.myOrders || [])]
+        }))
+        showToast({ title:'Order placed (Dev Mode)', message:'Your kitchen order was submitted successfully.', tone:'success' })
+        return mockOrder
+      }
+      throw error
     })
   }
 
@@ -879,6 +970,16 @@ export function AppDataProvider({ children }) {
     return apiPost(`/menu-orders/${orderId}/cancel`, {}, options).then((data) => {
       refresh()
       return data
+    }).catch((error) => {
+      if (isDevBypassEnabled()) {
+        setState((current) => ({
+          ...current,
+          myOrders: current.myOrders.filter(o => o.id !== orderId)
+        }))
+        showToast({ title:'Order cancelled (Dev Mode)', message:'Order was cancelled.', tone:'info' })
+        return { ok: true }
+      }
+      throw error
     })
   }
 

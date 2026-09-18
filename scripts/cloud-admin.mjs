@@ -7,8 +7,29 @@ if (!['dev', 'build', 'preview'].includes(command)) {
   process.exit(2)
 }
 
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return {}
+  const content = fs.readFileSync(filePath, 'utf8')
+  const envVars = {}
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#')) continue
+    const eqIdx = trimmed.indexOf('=')
+    if (eqIdx === -1) continue
+    const key = trimmed.slice(0, eqIdx).trim()
+    let val = trimmed.slice(eqIdx + 1).trim()
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1)
+    }
+    envVars[key] = val
+  }
+  return envVars
+}
+
 const workspaceArgs = ['--workspace', 'apps/admin', 'run', command]
-const env = { ...process.env, VITE_ADMIN_MODE: 'cloud' }
+const rootEnv = loadEnvFile('.env')
+const adminEnv = loadEnvFile('apps/admin/.env')
+const env = { ...rootEnv, ...adminEnv, ...process.env, VITE_ADMIN_MODE: 'cloud' }
 
 function npmInvocation(args) {
   const npmExecPath = String(process.env.npm_execpath || '').trim()

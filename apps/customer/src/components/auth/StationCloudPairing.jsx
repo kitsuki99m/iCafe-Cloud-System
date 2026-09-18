@@ -143,6 +143,20 @@ export default function StationCloudPairing() {
           </div>
           <Button type="submit" variant="teal" className="mt-5 min-h-12 w-full" disabled={busy||stationRestartRequired||!pairingComplete}>{busy?'Connecting…':<><Link2 size={16}/>Connect this PC</>}</Button>
           <div className="mt-5 flex gap-3 rounded-xl bg-surface-raised p-3"><Monitor size={16} className="mt-0.5 shrink-0 text-teal-dim"/><p className="text-xs leading-5 text-slate-soft">The pairing code identifies the branch and PC.</p></div>
+          {!import.meta.env.PROD && (
+            <div className="mt-4 pt-4 border-t border-surface-line/50 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('aezakmi.dev.bypass', 'true');
+                  window.location.reload();
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-sm"
+              >
+                ⚡ Dev Bypass: Skip Pairing & Login
+              </button>
+            </div>
+          )}
         </form>
       </section>
     </div>
