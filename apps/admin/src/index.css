@@ -144,75 +144,45 @@
   /* Esports Persona Theme Styling */
   html[data-theme-persona="esports"] {
     --font-display: "Space Grotesk", "Chakra Petch", sans-serif;
+    --font-mono: "JetBrains Mono", monospace;
     --app-dot: rgba(0, 245, 160, 0.08);
-    --color-midnight: #090D16;
-    --color-bluish: #1E293B;
-    --color-grape: #64748B;
+    --color-midnight: #070A13;
+    --color-bluish: #151F33;
+    --color-grape: #475569;
     --color-trillium: #94A3B8;
     --color-new-wool: #00F5A0;
     --color-dance: #00D2FF;
     --color-soft-white: #F8FAFC;
-    --color-ink: #090D16;
-    --color-ink-soft: #94A3B8;
-    --color-ink-900: #F8FAFC;
-    --color-surface: #111827;
-    --color-surface-raised: #1A2438;
-    --color-surface-line: #25354F;
+    --color-ink: #070A13;
+    --color-ink-soft: #CBD5E1;
+    --color-ink-900: #FFFFFF;
+    --color-surface: #0E1626;
+    --color-surface-raised: #141F36;
+    --color-surface-line: #1E2E4E;
     --color-gold: #00F5A0;
     --color-gold-soft: #00D2FF;
     --color-gold-dim: #38BDF8;
     --color-teal: #00F5A0;
-    --color-teal-soft: #10B981;
+    --color-teal-soft: rgba(0, 245, 160, 0.15);
     --color-teal-dim: #00F5A0;
     --color-orange: #FF9F1C;
-    --color-orange-soft: #7C3F12;
+    --color-orange-soft: rgba(255, 159, 28, 0.15);
     --color-orange-dim: #FFA726;
     --color-ember: #FF4655;
-    --color-ember-soft: #C86B6B;
+    --color-ember-soft: rgba(255, 70, 85, 0.15);
     --color-ember-dim: #FF7582;
-    --color-slate: #64748B;
-    --color-slate-soft: #94A3B8;
+    --color-slate: #94A3B8;
+    --color-slate-soft: #CBD5E1;
   }
   html[data-theme-persona="esports"] body {
-    background-color: #090D16;
+    background-color: #070A13;
     color: #F8FAFC;
     background-image: 
-      radial-gradient(circle at 50% -10%, rgba(0, 245, 160, 0.12) 0%, transparent 45%),
-      radial-gradient(circle at 100% 100%, rgba(245, 158, 11, 0.06) 0%, transparent 40%),
-      linear-gradient(to right, rgba(0, 245, 160, 0.02) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(0, 245, 160, 0.02) 1px, transparent 1px);
+      radial-gradient(circle at 50% -10%, rgba(0, 245, 160, 0.14) 0%, transparent 50%),
+      radial-gradient(circle at 100% 100%, rgba(0, 210, 255, 0.08) 0%, transparent 45%),
+      linear-gradient(to right, rgba(0, 245, 160, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 245, 160, 0.03) 1px, transparent 1px);
     background-size: auto, auto, 32px 32px, 32px 32px;
-  }
-  html[data-theme-persona="esports"][data-theme="light"] {
-    --app-dot: rgba(14, 165, 233, 0.12);
-    --color-midnight: #0F172A;
-    --color-bluish: #1E293B;
-    --color-grape: #475569;
-    --color-trillium: #64748B;
-    --color-new-wool: #0284C7;
-    --color-dance: #38BDF8;
-    --color-soft-white: #FFFFFF;
-    --color-ink: #F8FAFC;
-    --color-ink-900: #0F172A;
-    --color-ink-soft: #64748B;
-    --color-surface: #FFFFFF;
-    --color-surface-raised: #F1F5F9;
-    --color-surface-line: #CBD5E1;
-    --color-gold: #0284C7;
-    --color-gold-soft: #38BDF8;
-    --color-gold-dim: #0369A1;
-    --color-teal: #059669;
-    --color-teal-dim: #047857;
-    --color-slate-soft: #475569;
-  }
-  html[data-theme-persona="esports"][data-theme="light"] body {
-    background-color: #F8FAFC;
-    color: #0F172A;
-    background-image: 
-      radial-gradient(circle at 50% -10%, rgba(14, 165, 233, 0.08) 0%, transparent 45%),
-      linear-gradient(to right, rgba(14, 165, 233, 0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(14, 165, 233, 0.03) 1px, transparent 1px);
-    background-size: auto, 32px 32px, 32px 32px;
   }
   html, body, #root {
     width: 100%;
@@ -375,24 +345,14 @@
     --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.34);
   }
   html[data-theme-persona="esports"] {
-    --admin-canvas-bg: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 245, 160, 0.14), transparent 70%), linear-gradient(180deg, #070A10 0%, #0D1322 100%);
-    --admin-shell-bg: #090D16;
-    --admin-sidebar-bg: rgba(13, 18, 31, 0.99);
-    --admin-card-bg: #111827;
-    --admin-card-subtle: rgba(0, 245, 160, 0.05);
-    --admin-card-strong: rgba(0, 245, 160, 0.09);
-    --admin-ui-border: rgba(0, 245, 160, 0.18);
-    --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
-  }
-  html[data-theme-persona="esports"][data-theme="light"] {
-    --admin-canvas-bg: linear-gradient(135deg, #E2E8F0, #F1F5F9 50%, #E2E8F0);
-    --admin-shell-bg: #F8FAFC;
-    --admin-sidebar-bg: #FFFFFF;
-    --admin-card-bg: #FFFFFF;
-    --admin-card-subtle: rgba(14, 165, 233, 0.06);
-    --admin-card-strong: rgba(14, 165, 233, 0.12);
-    --admin-ui-border: rgba(14, 165, 233, 0.28);
-    --admin-shell-shadow: 0 24px 72px rgba(15, 23, 42, 0.12);
+    --admin-canvas-bg: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 245, 160, 0.14), transparent 70%), linear-gradient(180deg, #060911 0%, #0C1120 100%);
+    --admin-shell-bg: #070A13;
+    --admin-sidebar-bg: #0A0F1D;
+    --admin-card-bg: #0E1626;
+    --admin-card-subtle: rgba(0, 245, 160, 0.06);
+    --admin-card-strong: rgba(0, 245, 160, 0.12);
+    --admin-ui-border: rgba(0, 245, 160, 0.22);
+    --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.65);
   }
 }
 
@@ -1573,6 +1533,55 @@ html[data-theme-persona="esports"] {
     box-shadow: 0 0 12px rgba(0, 245, 160, 0.35);
   }
 
+  /* High-contrast typography & surface guarantees in Esports mode */
+  .text-ink-900 {
+    color: #FFFFFF !important;
+  }
+  .text-slate-soft {
+    color: #CBD5E1 !important;
+  }
+  .text-midnight {
+    color: #00F5A0 !important;
+  }
+  .bg-surface {
+    background-color: #0E1626 !important;
+  }
+  .bg-surface-raised {
+    background-color: #141F36 !important;
+  }
+  .border-surface-line {
+    border-color: rgba(0, 245, 160, 0.22) !important;
+  }
+  .customer-neutral-surface {
+    background-color: #0E1626 !important;
+    border-color: rgba(0, 245, 160, 0.22) !important;
+    color: #FFFFFF !important;
+  }
+  .overview-workspace,
+  .overview-main-column,
+  .admin-page-workspace,
+  .admin-page-main-column {
+    background-color: #070A13 !important;
+    border-color: rgba(0, 245, 160, 0.18) !important;
+  }
+  .overview-utility-rail,
+  .admin-page-utility-rail {
+    background-color: #0A0F1D !important;
+    border-color: rgba(0, 245, 160, 0.18) !important;
+  }
+
+  .admin-popover {
+    background-color: #0E1626 !important;
+    border-color: rgba(0, 245, 160, 0.25) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 245, 160, 0.2) !important;
+  }
+  .admin-side-panel {
+    background-color: #0E1626 !important;
+    border-color: rgba(0, 245, 160, 0.25) !important;
+    color: #FFFFFF !important;
+  }
+
   /* Esports Modals & Overlays */
   .admin-modal-shell {
     background: linear-gradient(165deg, #0E1626 0%, #080D18 100%);
@@ -1586,7 +1595,7 @@ html[data-theme-persona="esports"] {
 
   .admin-modal-title {
     font-family: var(--font-display);
-    color: #F8FAFC;
+    color: #FFFFFF !important;
     letter-spacing: -0.01em;
   }
 
