@@ -1345,11 +1345,57 @@
 }
 
 html[data-theme-persona="esports"] {
-  /* Esports Navigation & Sidebar */
+  /* Common Esports Fonts & Radii */
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  /* Smooth transitions */
+  * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  }
+}
+
+/* =========================================
+   ESPORTS MODE: DARK THEME (DEFAULT / DARK)
+   ========================================= */
+html[data-theme-persona="esports"].dark,
+html[data-theme-persona="esports"][data-theme="dark"],
+html[data-theme-persona="esports"]:not([data-theme="light"]):not(.light) {
+  --app-dot: rgba(0, 245, 160, 0.05);
+  --color-midnight: #00F5A0;
+  --color-ink: #060911;
+  --color-ink-soft: #94A3B8;
+  --color-ink-900: #FFFFFF;
+  --color-surface: #0E1626;
+  --color-surface-raised: #141F36;
+  --color-surface-line: rgba(0, 245, 160, 0.22);
+  --color-gold: #00F5A0;
+  --color-gold-soft: #CBD5E1;
+  --color-gold-dim: #00F5A0;
+  --color-teal: #00F5A0;
+  --color-teal-soft: #00F5A0;
+  --color-teal-dim: #00F5A0;
+  --color-slate: #94A3B8;
+  --color-slate-soft: #CBD5E1;
+
+  background-color: #060911;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(0, 245, 160, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 90% 10%, rgba(0, 216, 246, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 50% 85%, rgba(0, 245, 160, 0.04) 0%, transparent 50%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+
+  .admin-app-canvas {
+    background-color: transparent !important;
+  }
+
   .admin-sidebar {
-    background: linear-gradient(180deg, #0A0F1D 0%, #060912 100%);
+    background: linear-gradient(180deg, rgba(14, 22, 38, 0.95) 0%, rgba(8, 13, 24, 0.98) 100%);
     border-right: 1px solid rgba(0, 245, 160, 0.16);
     box-shadow: 4px 0 24px -4px rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(16px);
   }
 
   .admin-sidebar-brand {
@@ -1365,13 +1411,12 @@ html[data-theme-persona="esports"] {
     letter-spacing: 0.02em;
     border-radius: 10px;
     border: 1px solid transparent;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .nav-item:hover {
     background: rgba(0, 245, 160, 0.07);
     border-color: rgba(0, 245, 160, 0.18);
-    color: #F8FAFC;
+    color: #FFFFFF;
     transform: translateX(2px);
   }
 
@@ -1393,15 +1438,13 @@ html[data-theme-persona="esports"] {
     box-shadow: 0 0 12px -2px rgba(0, 245, 160, 0.15);
   }
 
-  /* Esports Command Headers */
   .admin-global-header,
   .overview-header {
-    background: rgba(9, 13, 23, 0.92);
-    backdrop-filter: blur(14px);
+    background: rgba(14, 22, 38, 0.85);
+    backdrop-filter: blur(16px);
     border-bottom: 1px solid rgba(0, 245, 160, 0.18);
   }
 
-  /* Esports Metric Cards & Stat Widgets */
   .overview-card,
   .admin-metric-card,
   .admin-rail-card {
@@ -1409,21 +1452,6 @@ html[data-theme-persona="esports"] {
     border: 1px solid rgba(0, 245, 160, 0.18);
     border-radius: 14px;
     box-shadow: 0 6px 24px -6px rgba(0, 0, 0, 0.65);
-    position: relative;
-    overflow: hidden;
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .overview-card::before,
-  .admin-metric-card::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(0, 245, 160, 0.7), transparent);
-    opacity: 0.85;
   }
 
   .overview-card:hover,
@@ -1436,7 +1464,7 @@ html[data-theme-persona="esports"] {
   .overview-card .stat-figure,
   .admin-metric-card .stat-figure {
     font-family: var(--font-mono);
-    color: #F8FAFC;
+    color: #FFFFFF;
     text-shadow: 0 0 14px rgba(0, 245, 160, 0.35);
   }
 
@@ -1444,7 +1472,6 @@ html[data-theme-persona="esports"] {
     background: rgba(14, 22, 38, 0.9);
     border: 1px solid rgba(0, 245, 160, 0.15);
     border-radius: 12px;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .overview-soft-card:hover {
@@ -1454,7 +1481,6 @@ html[data-theme-persona="esports"] {
     transform: translateY(-1.5px);
   }
 
-  /* Esports Panels, Tables, and Inputs */
   .panel {
     background: linear-gradient(160deg, #0E1626 0%, #080D18 100%);
     border: 1px solid rgba(0, 245, 160, 0.18);
@@ -1474,13 +1500,10 @@ html[data-theme-persona="esports"] {
     border-bottom: 1px solid rgba(0, 245, 160, 0.22);
     color: #00F5A0;
     font-family: var(--font-display);
-    font-size: 11px;
-    letter-spacing: 0.08em;
   }
 
   .admin-table-shell tbody tr {
     border-bottom: 1px solid rgba(0, 245, 160, 0.08);
-    transition: background-color 0.15s ease;
   }
 
   .admin-table-shell tbody tr:hover {
@@ -1491,7 +1514,7 @@ html[data-theme-persona="esports"] {
   .admin-quickfind-input {
     background: rgba(14, 22, 38, 0.9) !important;
     border: 1px solid rgba(0, 245, 160, 0.22) !important;
-    color: #F8FAFC !important;
+    color: #FFFFFF !important;
     border-radius: 10px;
   }
 
@@ -1501,19 +1524,11 @@ html[data-theme-persona="esports"] {
     box-shadow: 0 0 0 2px rgba(0, 245, 160, 0.25), 0 0 16px rgba(0, 245, 160, 0.2) !important;
   }
 
-  .admin-segmented-control {
-    background: rgba(10, 15, 28, 0.9);
-    border: 1px solid rgba(0, 245, 160, 0.2);
-    border-radius: 12px;
-  }
-
-  /* Esports UI Buttons & Pills */
   .admin-header-pill {
     background: rgba(14, 22, 38, 0.9);
     border: 1px solid rgba(0, 245, 160, 0.25);
     color: #F8FAFC;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    transition: all 0.2s ease;
   }
 
   .admin-header-pill:hover {
@@ -1524,7 +1539,6 @@ html[data-theme-persona="esports"] {
 
   .admin-icon-button {
     color: #94A3B8;
-    transition: all 0.2s ease;
   }
 
   .admin-icon-button:hover {
@@ -1533,7 +1547,6 @@ html[data-theme-persona="esports"] {
     box-shadow: 0 0 12px rgba(0, 245, 160, 0.35);
   }
 
-  /* High-contrast typography & surface guarantees in Esports mode */
   .text-ink-900 {
     color: #FFFFFF !important;
   }
@@ -1582,7 +1595,6 @@ html[data-theme-persona="esports"] {
     color: #FFFFFF !important;
   }
 
-  /* Esports Modals & Overlays */
   .admin-modal-shell {
     background: linear-gradient(165deg, #0E1626 0%, #080D18 100%);
     border: 1px solid rgba(0, 245, 160, 0.3);
@@ -1596,12 +1608,268 @@ html[data-theme-persona="esports"] {
   .admin-modal-title {
     font-family: var(--font-display);
     color: #FFFFFF !important;
-    letter-spacing: -0.01em;
   }
 
   .admin-modal-footer {
     border-top: 1px solid rgba(0, 245, 160, 0.18);
     background: rgba(10, 15, 28, 0.6);
+  }
+}
+
+/* =========================================
+   ESPORTS MODE: LIGHT THEME
+   ========================================= */
+html[data-theme-persona="esports"].light,
+html[data-theme-persona="esports"][data-theme="light"] {
+  --app-dot: rgba(5, 150, 105, 0.07);
+  --color-midnight: #059669;
+  --color-ink: #F8FAFC;
+  --color-ink-soft: #475569;
+  --color-ink-900: #0F172A;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #F1F5F9;
+  --color-surface-line: rgba(0, 0, 0, 0.08);
+  --color-gold: #059669;
+  --color-gold-soft: #475569;
+  --color-gold-dim: #059669;
+  --color-teal: #059669;
+  --color-teal-soft: #ECFDF5;
+  --color-teal-dim: #047857;
+  --color-slate: #475569;
+  --color-slate-soft: #64748B;
+
+  background-color: #F8FAFC;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(5, 150, 105, 0.06) 0%, transparent 45%),
+    radial-gradient(circle at 90% 10%, rgba(2, 132, 199, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 50% 85%, rgba(5, 150, 105, 0.04) 0%, transparent 50%),
+    linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+
+  .admin-app-canvas {
+    background-color: transparent !important;
+  }
+
+  .admin-sidebar {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
+    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 4px 0 24px -4px rgba(15, 23, 42, 0.05);
+    backdrop-filter: blur(16px);
+  }
+
+  .admin-sidebar-brand {
+    padding: 6px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(5, 150, 105, 0.06) 0%, rgba(2, 132, 199, 0.04) 100%);
+    border: 1px solid rgba(5, 150, 105, 0.15);
+  }
+
+  .nav-item {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: #475569;
+    border-radius: 10px;
+    border: 1px solid transparent;
+  }
+
+  .nav-item:hover {
+    background: rgba(5, 150, 105, 0.06);
+    border-color: rgba(5, 150, 105, 0.15);
+    color: #0F172A;
+    transform: translateX(2px);
+  }
+
+  .nav-item.active {
+    background: #ECFDF5;
+    border: 1px solid rgba(5, 150, 105, 0.3);
+    color: #059669;
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.1);
+  }
+
+  .nav-item.active::before {
+    background: #059669;
+  }
+
+  .admin-sidebar-status {
+    background: #FFFFFF;
+    border: 1px solid rgba(5, 150, 105, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  .admin-global-header,
+  .overview-header {
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  }
+
+  .overview-card,
+  .admin-metric-card,
+  .admin-rail-card {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.07);
+    border-radius: 14px;
+    box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.05);
+  }
+
+  .overview-card:hover,
+  .admin-metric-card:hover {
+    border-color: rgba(5, 150, 105, 0.3);
+    box-shadow: 0 12px 28px -6px rgba(5, 150, 105, 0.12);
+    transform: translateY(-2px);
+  }
+
+  .overview-card .stat-figure,
+  .admin-metric-card .stat-figure {
+    font-family: var(--font-mono);
+    color: #0F172A;
+  }
+
+  .overview-soft-card {
+    background: #F8FAFC;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 12px;
+  }
+
+  .overview-soft-card:hover {
+    border-color: rgba(5, 150, 105, 0.25);
+    background: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transform: translateY(-1.5px);
+  }
+
+  .panel {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.07);
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+    border-radius: 16px;
+  }
+
+  .admin-table-shell {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.07);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+    border-radius: 14px;
+  }
+
+  .admin-table-shell thead th {
+    background: #F8FAFC;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    color: #059669;
+    font-family: var(--font-display);
+  }
+
+  .admin-table-shell tbody tr {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .admin-table-shell tbody tr:hover {
+    background: #F1F5F9;
+  }
+
+  .admin-search-field,
+  .admin-quickfind-input {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(0, 0, 0, 0.12) !important;
+    color: #0F172A !important;
+    border-radius: 10px;
+  }
+
+  .admin-search-field:focus-within,
+  .admin-quickfind-input:focus {
+    border-color: #059669 !important;
+    box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2) !important;
+  }
+
+  .admin-header-pill {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    color: #0F172A;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  }
+
+  .admin-header-pill:hover {
+    border-color: #059669;
+    color: #059669;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.15);
+  }
+
+  .admin-icon-button {
+    color: #64748B;
+  }
+
+  .admin-icon-button:hover {
+    color: #059669;
+    background: #ECFDF5;
+  }
+
+  .text-ink-900 {
+    color: #0F172A !important;
+  }
+  .text-slate-soft {
+    color: #475569 !important;
+  }
+  .text-midnight {
+    color: #059669 !important;
+  }
+  .bg-surface {
+    background-color: #FFFFFF !important;
+  }
+  .bg-surface-raised {
+    background-color: #F1F5F9 !important;
+  }
+  .border-surface-line {
+    border-color: rgba(0, 0, 0, 0.08) !important;
+  }
+  .customer-neutral-surface {
+    background-color: #FFFFFF !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+    color: #0F172A !important;
+  }
+  .overview-workspace,
+  .overview-main-column,
+  .admin-page-workspace,
+  .admin-page-main-column {
+    background-color: #F8FAFC !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+  }
+  .overview-utility-rail,
+  .admin-page-utility-rail {
+    background-color: #FFFFFF !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+  }
+
+  .admin-popover {
+    background-color: #FFFFFF !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #0F172A !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+  }
+  .admin-side-panel {
+    background-color: #FFFFFF !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: #0F172A !important;
+  }
+
+  .admin-modal-shell {
+    background: #FFFFFF;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+  }
+
+  .admin-modal-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .admin-modal-title {
+    font-family: var(--font-display);
+    color: #0F172A !important;
+  }
+
+  .admin-modal-footer {
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    background: #F8FAFC;
   }
 }
 
