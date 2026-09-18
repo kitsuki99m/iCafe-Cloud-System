@@ -8,12 +8,18 @@ export default function ConfirmModal({
   onConfirm,
   title = 'Are you sure?',
   message,
+  description,
+  children,
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   variant = 'danger',
+  tone,
   busy = false,
   eyebrow,
 }) {
+  const content = message || description || children
+  const btnVariant = variant || (tone === 'danger' ? 'danger' : 'primary')
+
   return (
     <Modal
       open={open}
@@ -25,7 +31,7 @@ export default function ConfirmModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>{cancelLabel}</Button>
-          <Button variant={variant} onClick={onConfirm} disabled={busy}>
+          <Button variant={btnVariant} onClick={onConfirm} disabled={busy}>
             {busy ? 'Working…' : confirmLabel}
           </Button>
         </>
@@ -35,7 +41,7 @@ export default function ConfirmModal({
         <div className="mt-0.5 shrink-0 rounded-lg bg-gold/10 p-1.5 text-gold-dim">
           <AlertTriangle size={16} />
         </div>
-        <div className="min-w-0 text-xs leading-5 text-slate-soft">{message}</div>
+        <div className="min-w-0 text-xs leading-5 text-slate-soft">{content}</div>
       </div>
     </Modal>
   )

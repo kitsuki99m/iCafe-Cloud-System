@@ -1160,9 +1160,9 @@ export default function LauncherManagementPage() {
         onClose={() => setDeleteTargetApp(null)}
         onConfirm={handleDeleteApp}
         title="Remove Application?"
-        description={`Are you sure you want to remove "${deleteTargetApp?.name}" from the kiosk launcher? This will remove it from all customer stations.`}
+        message={`Are you sure you want to remove "${deleteTargetApp?.name}" from the kiosk launcher? This will remove it from all customer stations.`}
         confirmLabel="Remove Application"
-        tone="danger"
+        variant="danger"
         busy={actionBusy}
       />
 
@@ -1171,9 +1171,9 @@ export default function LauncherManagementPage() {
         onClose={() => setDeleteTargetCategory(null)}
         onConfirm={handleDeleteCategory}
         title="Delete Category?"
-        description={`Are you sure you want to delete category "${deleteTargetCategory?.name}"?`}
+        message={`Are you sure you want to delete category "${deleteTargetCategory?.name}"?`}
         confirmLabel="Delete Category"
-        tone="danger"
+        variant="danger"
         busy={actionBusy}
       />
     </AdminPageWorkspace>
