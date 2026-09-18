@@ -82,7 +82,7 @@ export default function AdminProfileMenu({
   }, [open])
 
   return (
-    <div className="relative shrink-0" ref={menuRef}>
+    <div className="relative shrink-0 z-[200]" ref={menuRef}>
       {/* Profile Trigger Button */}
       <button
         type="button"
@@ -109,7 +109,7 @@ export default function AdminProfileMenu({
       {/* Popover Menu */}
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 z-[200] w-72 origin-top-right rounded-2xl border border-surface-line bg-surface p-3 shadow-xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
+          className="absolute right-0 top-full mt-2 z-[999] w-72 origin-top-right rounded-2xl border border-surface-line bg-surface p-3 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150"
           role="menu"
         >
           {/* User Info Header */}

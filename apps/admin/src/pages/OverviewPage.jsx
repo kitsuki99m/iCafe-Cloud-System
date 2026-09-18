@@ -297,7 +297,7 @@ export default function OverviewPage(){
   return <div className="overview-workspace">
     <div className={`overview-workspace-grid grid min-h-full ${isSimpleMode ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
       <div className={`overview-main-column min-w-0 ${isSimpleMode ? '' : 'border-b border-[var(--admin-ui-border)] xl:border-b-0 xl:border-r'}`}>
-        <header className="overview-header flex min-h-[96px] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
+        <header className="overview-header flex min-h-[96px] relative z-[150] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}!</p>

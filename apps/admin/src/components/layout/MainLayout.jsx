@@ -288,7 +288,7 @@ export default function MainLayout({ children }) {
               />
             </div>
           </header>
-          {!isOverview && <header className="admin-global-header z-[110] hidden min-h-[96px] shrink-0 items-center gap-4 px-5 py-3.5 sm:px-6 lg:flex lg:px-7">
+          {!isOverview && <header className="admin-global-header relative z-[150] hidden min-h-[96px] shrink-0 items-center gap-4 px-5 py-3.5 sm:px-6 lg:flex lg:px-7">
             <div className="admin-header-identity min-w-[230px] flex-1">
               <div className="flex items-center gap-2"><p className="eyebrow">{currentLabel}</p><span className="hidden text-[10px] text-slate-soft 2xl:inline">· {localClock} PHT</span></div>
               <h1 className="mt-1 font-display text-[24px] font-semibold leading-tight tracking-[-0.03em] text-ink-900">{currentLabel}</h1>
