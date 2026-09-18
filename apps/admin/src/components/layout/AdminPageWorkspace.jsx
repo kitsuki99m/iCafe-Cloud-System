@@ -42,7 +42,7 @@ export function AdminMetricCard({ label, value, icon: Icon, tone = 'neutral', on
     <Wrapper type={onClick ? 'button' : undefined} onClick={onClick} className={`admin-metric-card ${onClick ? 'text-left transition-transform hover:-translate-y-0.5' : ''}`}>
       <div className="min-w-0">
         <p className="eyebrow">{label}</p>
-        <p className="stat-figure mt-2 text-[21px] font-bold tracking-[-0.03em] text-ink-900">{value}</p>
+        <p className="stat-figure mt-2 whitespace-nowrap text-[21px] font-bold tracking-[-0.03em] text-ink-900">{value}</p>
       </div>
       {Icon ? <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClass}`}><Icon size={17}/></span> : null}
     </Wrapper>

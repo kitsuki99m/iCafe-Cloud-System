@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { CircleDollarSign, Download, Plus, ReceiptText, RefreshCw, TriangleAlert, TrendingUp, WalletCards, Mail, Send } from 'lucide-react'
+import { CircleDollarSign, Download, Plus, ReceiptText, RefreshCw, TriangleAlert, TrendingUp, WalletCards, Mail, Send, PhilippinePeso } from 'lucide-react'
 import { apiDelete, apiGet, apiPost, apiPut } from '../lib/api.js'
 import { connectSocket } from '../lib/socket.js'
 import { cloudBranchId, isCloudAdmin } from '../lib/cloudClient.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
+import { formatAdminPeso } from '../lib/numeric.js'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { showToast } from '../lib/toast.js'
@@ -14,10 +15,11 @@ import Button from '../components/common/Button.jsx'
 import { AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
 import defaultAezakmiLogoSvg from '../assets/aktura-logo.svg?raw'
 
+const money = value => formatAdminPeso(value)
 // jsPDF's built-in Helvetica font maps ₱ to ±. Use the unambiguous Peso code
 // in exported reports until a Unicode PDF font is embedded.
-const money=value=>`PHP ${Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2})}`
-const inputClass='w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 outline-none focus:border-gold/50'
+const pdfMoney = value => `PHP ${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const inputClass = 'w-full rounded-lg border border-surface-line bg-ink px-3 py-2 text-sm text-ink-900 outline-none focus:border-gold/50'
 
 function svgFromDataUrl(dataUrl){const raw=String(dataUrl||''),body=raw.split(',').slice(1).join(',');return /;base64,/i.test(raw)?atob(body):decodeURIComponent(body)}
 async function addReportLogo(doc,logoDataUrl){
@@ -34,9 +36,9 @@ async function downloadReport(reportId){
   const [{jsPDF},{default:autoTable}]=await Promise.all([import('jspdf'),import('jspdf-autotable')]);const {report,branding}=await apiGet(`/earnings/reports/${reportId}/pdf-data`);const doc=new jsPDF({unit:'mm',format:'a4'});const width=doc.internal.pageSize.getWidth()
   await addReportLogo(doc,branding.logoDataUrl);doc.setFontSize(14);doc.setTextColor(20);doc.setFont('helvetica','bold');doc.text(branding.cafeName||'Aezakmi Cafe',30,17);doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(90);doc.text([branding.branch||'Davao Branch',branding.branchLocation||''].filter(Boolean).join(' · '),30,22)
   doc.setTextColor(20);doc.setFontSize(9);doc.text(`REPORT ${report.reportNumber}`,width-14,16,{align:'right'});doc.setTextColor(100);doc.text(dayjs(report.createdAt).format('MMM D, YYYY h:mm A [PHT]'),width-14,21,{align:'right'});doc.setDrawColor(225);doc.line(14,29,width-14,29);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.setTextColor(20);doc.text('Earnings report',14,39);doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(100);doc.text(`${report.bounds.label} · ${report.bounds.period.toUpperCase()}`,14,45)
-  const cards=[['Gross income',money(report.summary.gross)],['Expenses',money(report.summary.expenses)],['Net income',money(report.summary.net)]];cards.forEach((item,index)=>{const x=14+index*55;doc.setFontSize(7);doc.setTextColor(110);doc.text(item[0].toUpperCase(),x,57);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.setTextColor(20);doc.text(item[1],x,65);doc.setFont('helvetica','normal')})
-  autoTable(doc,{startY:76,head:[['Revenue source','Amount']],body:Object.entries(report.categories||{}).map(([key,value])=>[key.replaceAll('_',' '),money(value)]),theme:'plain',styles:{fontSize:8,cellPadding:2.2,lineColor:[220,220,220],lineWidth:{bottom:0.15}},headStyles:{textColor:[20,24,32],fontStyle:'bold',lineColor:[20,24,32],lineWidth:{bottom:0.3}}});autoTable(doc,{startY:doc.lastAutoTable.finalY+6,head:[['Expense','Note','Amount']],body:(report.expenses||[]).map(row=>[row.category,row.description||'—',money(row.amount)]),theme:'plain',styles:{fontSize:8,cellPadding:2.1,lineColor:[220,220,220],lineWidth:{bottom:0.15}},headStyles:{textColor:[20,24,32],fontStyle:'bold',lineColor:[20,24,32],lineWidth:{bottom:0.3}}})
-  const tax=report.taxEstimate;let y=doc.lastAutoTable.finalY+8;if(y>260){doc.addPage();y=18}doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(20);doc.text('Estimated tax provision — not a filed tax return',14,y);doc.setFont('helvetica','normal');doc.setTextColor(90);doc.setFontSize(8);doc.text(`Gross YTD ${money(tax.grossYtd)} · taxable base ${money(tax.taxableGross)} · rate ${tax.ratePercent}% · liability ${money(tax.estimatedLiability)}`,14,y+5)
+  const cards=[['Gross income',pdfMoney(report.summary.gross)],['Expenses',pdfMoney(report.summary.expenses)],['Net income',pdfMoney(report.summary.net)]];cards.forEach((item,index)=>{const x=14+index*55;doc.setFontSize(7);doc.setTextColor(110);doc.text(item[0].toUpperCase(),x,57);doc.setFontSize(11);doc.setFont('helvetica','bold');doc.setTextColor(20);doc.text(item[1],x,65);doc.setFont('helvetica','normal')})
+  autoTable(doc,{startY:76,head:[['Revenue source','Amount']],body:Object.entries(report.categories||{}).map(([key,value])=>[key.replaceAll('_',' '),pdfMoney(value)]),theme:'plain',styles:{fontSize:8,cellPadding:2.2,lineColor:[220,220,220],lineWidth:{bottom:0.15}},headStyles:{textColor:[20,24,32],fontStyle:'bold',lineColor:[20,24,32],lineWidth:{bottom:0.3}}});autoTable(doc,{startY:doc.lastAutoTable.finalY+6,head:[['Expense','Note','Amount']],body:(report.expenses||[]).map(row=>[row.category,row.description||'—',pdfMoney(row.amount)]),theme:'plain',styles:{fontSize:8,cellPadding:2.1,lineColor:[220,220,220],lineWidth:{bottom:0.15}},headStyles:{textColor:[20,24,32],fontStyle:'bold',lineColor:[20,24,32],lineWidth:{bottom:0.3}}})
+  const tax=report.taxEstimate;let y=doc.lastAutoTable.finalY+8;if(y>260){doc.addPage();y=18}doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(20);doc.text('Estimated tax provision — not a filed tax return',14,y);doc.setFont('helvetica','normal');doc.setTextColor(90);doc.setFontSize(8);doc.text(`Gross YTD ${pdfMoney(tax.grossYtd)} · taxable base ${pdfMoney(tax.taxableGross)} · rate ${tax.ratePercent}% · liability ${pdfMoney(tax.estimatedLiability)}`,14,y+5)
   const pages=doc.getNumberOfPages();for(let page=1;page<=pages;page++){doc.setPage(page);doc.setFontSize(7);doc.setTextColor(130);doc.text(`Generated by ${branding.cafeName||'Aezakmi Cafe'} · ${report.reportNumber}`,14,291);doc.text(`${page} / ${pages}`,width-14,291,{align:'right'})}doc.save(`${report.reportNumber}.pdf`)
 }
 
@@ -152,6 +154,7 @@ export default function EarningsPage(){
       <AdminMetricCard label="Gross income" value={money(data?.summary?.gross)} icon={CircleDollarSign} tone="success"/>
       <AdminMetricCard label="Expenses" value={money(data?.summary?.expenses)} icon={ReceiptText} tone="danger"/>
       <AdminMetricCard label="Net income" value={money(data?.summary?.net)} icon={TrendingUp} tone="success"/>
+      <AdminMetricCard label="Tax provision" value={money(data?.summary?.taxProvision)} icon={PhilippinePeso} tone="warning"/>
     </div>
 
     <section className="earnings-primary-actions mb-3.5 flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-surface-line bg-surface px-3 py-2 sm:px-4 sm:py-2.5 shadow-xs">
@@ -160,6 +163,11 @@ export default function EarningsPage(){
         <Button size="sm" variant="subtle" icon={RefreshCw} onClick={load} disabled={loading}>Refresh</Button>
         <Button size="sm" variant="subtle" icon={Mail} onClick={()=>setModal('email_summary')}>Email Summary</Button>
         <Button size="sm" variant="subtle" icon={Download} onClick={createReport} disabled={saving||loading}>{saving?'Working…':'Generate PDF'}</Button>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <div className="admin-segmented-control flex">
+          {[['daily','Daily'],['monthly','Monthly'],['yearly','Yearly'],['ytd','YTD']].map(([value,label])=><button key={value} onClick={()=>setPeriod(value)} className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${period===value?'bg-midnight text-soft-white':'text-slate-soft hover:text-ink-900'}`}>{label}</button>)}
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5" aria-label="Expense controls">
         <span className="sr-only">Expense controls</span>
