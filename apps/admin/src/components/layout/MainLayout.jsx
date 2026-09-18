@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LayoutDashboard, MonitorCog, Tags, Users, CircleDollarSign, ScrollText, Settings, LogOut, Moon, Sun, Clock3, ChartNoAxesCombined, LockKeyhole, UnlockKeyhole, MessageSquareText, UserRound, ShieldCheck, Menu, X, BookOpenText, UtensilsCrossed, Ticket, Clock, Gamepad2 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { useAppData } from '../../context/AppDataContext.jsx'
@@ -49,7 +49,7 @@ const PAGE_PURPOSE = {
 }
 export default function MainLayout({ children }) {
   const { user, logout } = useAuth()
-  const { serverError, settings, currentShift } = useAppData()
+  const { serverError, settings, currentShift, menuOrders = [] } = useAppData()
   const { isDark, toggleTheme } = useTheme()
   const branding = useBranding()
   const location = useLocation()
@@ -58,6 +58,9 @@ export default function MainLayout({ children }) {
   const navItems = user?.cloudDeveloper ? [...filteredNav, { to: '/developer', label: 'Developer', icon: ShieldCheck }] : filteredNav
   const currentLabel = PAGE_ALIASES[location.pathname] || navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to))?.label || 'Overview'
   const isOverview = location.pathname === '/'
+  const pendingOrdersCount = useMemo(() => {
+    return (menuOrders || []).filter((o) => (o.order_status || o.orderStatus || 'pending').toLowerCase() === 'pending').length
+  }, [menuOrders])
   const [clock, setClock] = useState(() => new Date())
   const [locked, setLocked] = useState(false)
   const [feedbackOpen,setFeedbackOpen]=useState(false)
@@ -185,17 +188,32 @@ export default function MainLayout({ children }) {
           <div className="admin-sidebar-branch mb-3"><CloudBranchPicker /></div>
 
           <nav className="admin-sidebar-nav min-h-0 flex flex-1 flex-col gap-1 overflow-y-auto py-1">
-            {navItems.map(({ to, label, icon: Icon, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-              >
-                <Icon size={17} strokeWidth={1.8} />
-                <span>{label}</span>
-              </NavLink>
-            ))}
+            {navItems.map(({ to, label, icon: Icon, end }) => {
+              const isMenu = to === '/menu'
+              const hasPending = isMenu && pendingOrdersCount > 0
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={end}
+                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                >
+                  <Icon size={17} strokeWidth={1.8} />
+                  <span>{label}</span>
+                  {hasPending && (
+                    <span className="ml-auto flex items-center gap-1.5" title={`${pendingOrdersCount} pending kitchen order${pendingOrdersCount > 1 ? 's' : ''}`}>
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
+                      </span>
+                      <span className="rounded-full bg-ember/15 px-1.5 py-0.5 text-[9px] font-black text-ember-dim leading-none">
+                        {pendingOrdersCount}
+                      </span>
+                    </span>
+                  )}
+                </NavLink>
+              )
+            })}
           </nav>
 
           <div className="admin-sidebar-footer mt-5 space-y-2.5">
@@ -254,7 +272,6 @@ export default function MainLayout({ children }) {
             <div className="admin-header-identity min-w-[230px] flex-1">
               <div className="flex items-center gap-2"><p className="eyebrow">{currentLabel}</p><span className="hidden text-[10px] text-slate-soft 2xl:inline">· {localClock} PHT</span></div>
               <h1 className="mt-1 font-display text-[24px] font-semibold leading-tight tracking-[-0.03em] text-ink-900">{currentLabel}</h1>
-              <p className="mt-1 max-w-[620px] text-[11px] leading-4 text-slate-soft">{PAGE_PURPOSE[currentLabel]}</p>
             </div>
             <AdminQuickFind />
             <div className="ml-auto flex items-center gap-1.5 text-slate-soft">
@@ -302,7 +319,33 @@ export default function MainLayout({ children }) {
           <div className="shrink-0 px-4 pb-2 pt-4"><CloudBranchPicker /></div>
           <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
             <div className="space-y-1">
-              {navItems.map(({to,label,icon:Icon,end})=><NavLink key={to} to={to} end={end} onClick={()=>setMobileNavOpen(false)} className={({isActive})=>`nav-item mobile-nav-item ${isActive?'active':''}`}><Icon size={18} strokeWidth={1.8}/><span>{label}</span></NavLink>)}
+              {navItems.map(({to,label,icon:Icon,end})=>{
+                const isMenu = to === '/menu'
+                const hasPending = isMenu && pendingOrdersCount > 0
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    onClick={()=>setMobileNavOpen(false)}
+                    className={({isActive})=>`nav-item mobile-nav-item ${isActive?'active':''}`}
+                  >
+                    <Icon size={18} strokeWidth={1.8}/>
+                    <span>{label}</span>
+                    {hasPending && (
+                      <span className="ml-auto flex items-center gap-1.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
+                        </span>
+                        <span className="rounded-full bg-ember/15 px-1.5 py-0.5 text-[9px] font-black text-ember-dim leading-none">
+                          {pendingOrdersCount}
+                        </span>
+                      </span>
+                    )}
+                  </NavLink>
+                )
+              })}
             </div>
           </nav>
           <div className="shrink-0 border-t border-[var(--admin-ui-border)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">

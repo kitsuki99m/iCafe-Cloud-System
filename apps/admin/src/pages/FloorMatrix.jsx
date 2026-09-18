@@ -11,13 +11,7 @@ import {
   Search,
   WifiOff,
   Wrench,
-  ChefHat,
-  ShoppingBag,
-  UtensilsCrossed,
-  CheckCircle2,
-  ArrowRight,
   Sparkles,
-  XCircle,
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PcCard from '../components/floor/PcCard.jsx'
@@ -59,25 +53,12 @@ function allowedRatePlansForSession(ratePlans, members, session) {
   ))
 }
 
-function formatOrderTimeAgo(dateStr, nowMs) {
-  if (!dateStr) return ''
-  const diffSec = Math.max(0, Math.floor((nowMs - new Date(dateStr).getTime()) / 1000))
-  if (diffSec < 60) return `${diffSec}s ago`
-  const min = Math.floor(diffSec / 60)
-  if (min < 60) return `${min}m ago`
-  const hr = Math.floor(min / 60)
-  return `${hr}h ago`
-}
-
 export default function FloorMatrix() {
   const {
     pcs,
     members,
     ratePlans,
     settings,
-    menuOrders = [],
-    updateOrderStatus,
-    cancelMenuOrder,
     getSessionPreview,
     startSession,
     endSession,
@@ -129,7 +110,6 @@ export default function FloorMatrix() {
   const [stationPairingResult,setStationPairingResult]=useState(null)
   const [stationPairingBusy,setStationPairingBusy]=useState(false)
   const [stationPairingError,setStationPairingError]=useState('')
-  const [orderActionBusy, setOrderActionBusy] = useState(null)
 
   useEffect(() => { const timer=setInterval(()=>setNow(Date.now()),1000); return ()=>clearInterval(timer) }, [])
   const requestedStatus=searchParams.get('status')
@@ -140,10 +120,6 @@ export default function FloorMatrix() {
   }, [requestedStatusFilter, filter])
   useEffect(() => { pcs.forEach(pc=>{const session=pc.session;if(effectivePcStatus(pc)!=='occupied'||session?.billing!=='prepaid')return;const remaining=remainingSessionSeconds(session,now);const key=`${pc.id}:${session.id}`;if(remaining>0&&remaining<=Number(settings.lowTimeWarningMinutes||5)*60&&!alerted.current.has(key)){alerted.current.add(key);playLowTimeAlert(key)}}) }, [now,pcs,settings.lowTimeWarningMinutes])
 
-  // While a pairing code is on screen, staff are actively watching this modal
-  // for the Customer Station to finish pairing. Poll a lot faster than the
-  // background refresh so "paired"/"available" reflects without a manual
-  // page refresh, and stop the moment the code stops being shown.
   useEffect(() => {
     if (!stationPairingOpen || !stationPairingResult?.pairingCode) return undefined
     const timer = setInterval(() => { void refresh() }, 3000)
@@ -174,14 +150,10 @@ export default function FloorMatrix() {
     }
     const order = (pc) => {
       const status = effectivePcStatus(pc)
-      // A live session is the primary operational priority. This also keeps a
-      // recovering/legacy station with a session from being mixed in with
-      // idle units before the next presence reconciliation.
       if (pc.session || ['occupied', 'in_use', 'in-use', 'busy'].includes(status)) return 0
       if (status === 'available') return 1
       if (status === 'reserved') return 2
       if (status === 'maintenance') return 3
-      // Offline and unknown/unreachable stations always remain at the end.
       return 4
     }
     return pcs.filter(pc => {
@@ -191,52 +163,6 @@ export default function FloorMatrix() {
       return [pc.label, pc.pcNumber, pc.ipAddress, pc.session?.username, pc.session?.customerName, pc.session?.memberName].some(v => String(v || '').toLowerCase().includes(term))
     }).sort((a, b) => order(a) - order(b) || pcNumber(a) - pcNumber(b) || String(a.label).localeCompare(String(b.label)))
   }, [pcs,query,filter])
-
-  // Live Kitchen Orders Pipeline
-  const activeKitchenOrders = useMemo(() => {
-    return (menuOrders || []).filter((o) => {
-      const st = (o.order_status || o.orderStatus || 'pending').toLowerCase()
-      return st === 'pending' || st === 'preparing'
-    }).sort((a, b) => {
-      const statusA = (a.order_status || a.orderStatus || 'pending').toLowerCase()
-      const statusB = (b.order_status || b.orderStatus || 'pending').toLowerCase()
-      if (statusA === 'pending' && statusB !== 'pending') return -1
-      if (statusA !== 'pending' && statusB === 'pending') return 1
-      return new Date(b.created_at || b.createdAt || 0).getTime() - new Date(a.created_at || a.createdAt || 0).getTime()
-    })
-  }, [menuOrders])
-
-  const pendingCount = activeKitchenOrders.filter(o => (o.order_status || o.orderStatus || 'pending').toLowerCase() === 'pending').length
-
-  async function handleKitchenStatusChange(orderId, newStatus) {
-    if (orderActionBusy || !updateOrderStatus) return
-    setOrderActionBusy(orderId)
-    try {
-      await updateOrderStatus(orderId, newStatus)
-      showToast({
-        title: newStatus === 'preparing' ? 'Kitchen: Preparing Order' : 'Kitchen: Order Fulfilled',
-        message: `Order marked as ${newStatus}.`,
-        tone: 'success',
-      })
-    } catch (err) {
-      showToast({ title: 'Update Failed', message: err?.message || 'Unable to update status.', tone: 'error' })
-    } finally {
-      setOrderActionBusy(null)
-    }
-  }
-
-  async function handleKitchenCancel(orderId) {
-    if (orderActionBusy || !cancelMenuOrder) return
-    setOrderActionBusy(orderId)
-    try {
-      await cancelMenuOrder(orderId)
-      showToast({ title: 'Order Cancelled', message: 'Order was refunded and cancelled.', tone: 'warning' })
-    } catch (err) {
-      showToast({ title: 'Cancel Failed', message: err?.message || 'Unable to cancel order.', tone: 'error' })
-    } finally {
-      setOrderActionBusy(null)
-    }
-  }
 
   function setClientSearchParam(key, value) {
     const next = new URLSearchParams(searchParams)
@@ -523,234 +449,70 @@ export default function FloorMatrix() {
       )}
 
       {/* 2-COLUMN LIVE CYBERCAFE WORKSPACE */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 2xl:gap-5 items-start">
-        {/* ======================================================== */}
-        {/* LEFT COLUMN: LIVE FLOOR PLAN MATRIX (PC 01 — PC 30+)     */}
-        {/* ======================================================== */}
-        <section className="clients-floor-workspace xl:col-span-8 2xl:col-span-9 min-w-0 space-y-3.5">
-          <div className="admin-page-toolbar flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <div className="admin-search-field min-w-[200px] flex-1 sm:max-w-sm">
-                <Search size={14} />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search PC, IP, or customer…"
-                  className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-slate-soft"
-                />
-              </div>
-              <div className="admin-segmented-control">
-                {CLIENT_STATUS_FILTERS.map((value) => (
-                  <button
-                    type="button"
-                    key={value}
-                    onClick={()=>setClientStatusFilter(value)}
-                    className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold capitalize transition-colors ${
-                      filter === value ? 'bg-midnight text-soft-white' : 'text-slate-soft hover:text-ink-900'
-                    }`}
-                  >
-                    {value === 'occupied' ? 'In use' : value}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
-              <span className="stat-figure text-xs text-slate-soft">
-                <b className="text-ink-900">{stats.available}</b> of {stats.total} free
-              </span>
-              {toolbarActions}
-            </div>
-          </div>
-
-          <div>
-            {pcs.length ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 min-[1850px]:grid-cols-5">
-                {sortedPcs.map((pc) => (
-                  <PcCard
-                    key={pc.id}
-                    pc={pc}
-                    now={now}
-                    lowTimeWarningMinutes={settings.lowTimeWarningMinutes}
-                    onSelect={openPopover}
-                    onControls={openControls}
-                  />
-                ))}
-              </div>
-            ) : (
-              <AdminEmptyState
-                icon={Monitor}
-                title="No PC clients registered"
-                description="Add a PC to begin."
-                action={
-                  <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
-                    Add PC
-                  </Button>
-                }
+      {/* FULL-WIDTH LIVE ESPORTS FLOOR MATRIX */}
+      <section className="clients-floor-workspace w-full space-y-4">
+        <div className="admin-page-toolbar flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <div className="admin-search-field min-w-[200px] flex-1 sm:max-w-sm">
+              <Search size={14} />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search PC, IP, or customer…"
+                className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-slate-soft"
               />
-            )}
-          </div>
-        </section>
-
-        {/* ======================================================== */}
-        {/* RIGHT COLUMN: LIVE KITCHEN QUEUE PIPELINE                */}
-        {/* ======================================================== */}
-        <aside className="xl:col-span-4 2xl:col-span-3 min-w-0">
-          <div className="rounded-2xl border border-surface-line bg-surface p-4 shadow-sm flex flex-col min-h-[480px] max-h-[calc(100vh-120px)] xl:sticky xl:top-4">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-2 border-b border-surface-line pb-3 mb-3 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-midnight/8 text-gold-dim">
-                  <ChefHat size={16} />
-                </span>
-                <div>
-                  <h2 className="font-display text-sm font-bold text-ink-900 flex items-center gap-1.5">
-                    Live Kitchen Queue
-                    {pendingCount > 0 && (
-                      <span className="rounded-full bg-ember/15 text-ember-dim px-1.5 py-0.2 text-[10px] font-black animate-pulse">
-                        {pendingCount} new
-                      </span>
-                    )}
-                  </h2>
-                  <p className="text-[10px] text-slate-soft">Station snack & drink tickets</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/menu')}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-gold-dim hover:text-ink-900 transition-colors"
-                title="Open Full Menu Management"
-              >
-                Menu <ArrowRight size={12} />
-              </button>
             </div>
-
-            {/* Orders Feed */}
-            <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5 min-h-0">
-              {activeKitchenOrders.length === 0 ? (
-                <div className="h-full min-h-[200px] flex flex-col items-center justify-center p-6 text-center text-xs text-slate-soft border border-dashed border-surface-line rounded-xl">
-                  <UtensilsCrossed size={28} className="text-slate-soft/40 mb-2" />
-                  <p className="font-semibold text-ink-900 text-xs">Kitchen Queue Clear</p>
-                  <p className="mt-0.5 text-[10px] text-slate-soft">Orders placed from stations will appear here in real-time.</p>
-                </div>
-              ) : (
-                activeKitchenOrders.map((order) => {
-                  const status = (order.order_status || order.orderStatus || 'pending').toLowerCase()
-                  const isPending = status === 'pending'
-                  const isPreparing = status === 'preparing'
-                  const items = typeof order.items === 'string' ? JSON.parse(order.items || '[]') : order.items || []
-                  const stationPc = pcs.find((p) => String(p.id) === String(order.pc_id || order.pcId))
-                  const stationLabel = stationPc
-                    ? stationPc.pcNumber
-                      ? `PC ${stationPc.pcNumber}`
-                      : stationPc.label
-                    : order.station_label || order.stationLabel || 'Station'
-                  const orderTimeAgo = formatOrderTimeAgo(order.created_at || order.createdAt, now)
-
-                  return (
-                    <div
-                      key={order.id}
-                      className={`rounded-xl border p-3 transition flex flex-col justify-between gap-2.5 ${
-                        isPending
-                          ? 'border-ember/40 bg-ember/[0.03] ring-1 ring-ember/20'
-                          : 'border-teal/30 bg-teal/[0.02]'
-                      }`}
-                    >
-                      {/* Top row: Station + Status + Time */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-display text-xs font-bold text-ink-900">
-                              {stationLabel}
-                            </span>
-                            <span className="text-[10px] text-slate-soft font-medium truncate">
-                              · {order.customer_name || order.customerName || order.username || 'Guest'}
-                            </span>
-                          </div>
-                          {orderTimeAgo && (
-                            <p className="text-[10px] text-slate-soft mt-0.5 flex items-center gap-1">
-                              <Clock3 size={10} /> {orderTimeAgo}
-                            </p>
-                          )}
-                        </div>
-
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
-                            isPending
-                              ? 'bg-ember/15 text-ember-dim animate-pulse'
-                              : 'bg-teal/15 text-teal-dim'
-                          }`}
-                        >
-                          {status}
-                        </span>
-                      </div>
-
-                      {/* Items List */}
-                      <div className="rounded-lg bg-surface-raised/60 p-2 text-xs space-y-1">
-                        {items.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-[11px]">
-                            <span className="font-medium text-ink-900 truncate">
-                              • {item.quantity}x {item.name}
-                            </span>
-                            <span className="font-mono text-slate-soft shrink-0 pl-2">
-                              ₱{Number(item.price * item.quantity).toFixed(2)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Bottom row: Total + 1-Click Status Actions */}
-                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-surface-line/40">
-                        <div>
-                          <p className="text-[9px] uppercase font-semibold text-slate-soft">Total</p>
-                          <p className="font-mono text-xs font-bold text-ink-900">
-                            ₱{Number(order.total_amount || order.totalAmount || 0).toFixed(2)}
-                          </p>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleKitchenCancel(order.id)}
-                            disabled={orderActionBusy === order.id}
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-surface-line bg-surface text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition disabled:opacity-50"
-                            title="Cancel Order"
-                          >
-                            <XCircle size={13} />
-                          </button>
-
-                          {isPending && (
-                            <Button
-                              variant="teal"
-                              size="sm"
-                              disabled={orderActionBusy === order.id}
-                              onClick={() => handleKitchenStatusChange(order.id, 'preparing')}
-                              className="!text-[11px] !py-1 !px-2.5"
-                            >
-                              👨‍🍳 Prep
-                            </Button>
-                          )}
-
-                          {isPreparing && (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              disabled={orderActionBusy === order.id}
-                              onClick={() => handleKitchenStatusChange(order.id, 'fulfilled')}
-                              className="!text-[11px] !py-1 !px-2.5"
-                            >
-                              ✓ Served
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
+            <div className="admin-segmented-control">
+              {CLIENT_STATUS_FILTERS.map((value) => (
+                <button
+                  type="button"
+                  key={value}
+                  onClick={()=>setClientStatusFilter(value)}
+                  className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold capitalize transition-colors ${
+                    filter === value ? 'bg-midnight text-soft-white' : 'text-slate-soft hover:text-ink-900'
+                  }`}
+                >
+                  {value === 'occupied' ? 'In use' : value}
+                </button>
+              ))}
             </div>
           </div>
-        </aside>
-      </div>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5">
+            <span className="stat-figure text-xs text-slate-soft">
+              <b className="text-ink-900">{stats.available}</b> of {stats.total} free
+            </span>
+            {toolbarActions}
+          </div>
+        </div>
+
+        <div>
+          {pcs.length ? (
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7">
+              {sortedPcs.map((pc) => (
+                <PcCard
+                  key={pc.id}
+                  pc={pc}
+                  now={now}
+                  lowTimeWarningMinutes={settings.lowTimeWarningMinutes}
+                  onSelect={openPopover}
+                  onControls={openControls}
+                />
+              ))}
+            </div>
+          ) : (
+            <AdminEmptyState
+              icon={Monitor}
+              title="No PC clients registered"
+              description="Add a PC to begin."
+              action={
+                <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
+                  Add PC
+                </Button>
+              }
+            />
+          )}
+        </div>
+      </section>
 
 
       <AnchoredPopover

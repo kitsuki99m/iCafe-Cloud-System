@@ -602,7 +602,7 @@ export default function LauncherManagementPage() {
         eyebrow="Kiosk Application"
         title={editingApp ? 'Edit Application' : 'Add Custom Application'}
         description="Configure executable paths, launch arguments, and category for customer kiosks."
-        maxWidth="max-w-lg"
+        maxWidth="max-w-2xl"
         busy={actionBusy}
         footer={
           <>
@@ -623,35 +623,53 @@ export default function LauncherManagementPage() {
           </>
         }
       >
-        <form onSubmit={handleSaveApp} className="space-y-3.5">
-          <div>
-            <label className="block">
-              <span className="eyebrow mb-1 block">Application Name *</span>
-              <input
-                type="text"
-                required
-                value={appForm.name}
-                onChange={(e) => setAppForm({ ...appForm, name: e.target.value })}
-                placeholder="e.g. Valorant, Chrome, Roblox"
-                className={inputClass}
-              />
-            </label>
+        <form onSubmit={handleSaveApp} className="space-y-4.5 py-1">
+          {/* Row 1: App Name + Category */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block">
+                <span className="eyebrow mb-1.5 block">Application Name *</span>
+                <input
+                  type="text"
+                  required
+                  value={appForm.name}
+                  onChange={(e) => setAppForm({ ...appForm, name: e.target.value })}
+                  placeholder="e.g. Valorant, Chrome, Roblox"
+                  className={inputClass}
+                />
+              </label>
+            </div>
+            <div>
+              <label className="block">
+                <span className="eyebrow mb-1.5 block">Category</span>
+                <select
+                  value={appForm.categoryName}
+                  onChange={(e) => setAppForm({ ...appForm, categoryName: e.target.value })}
+                  className={inputClass}
+                >
+                  {categoryNames.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
 
+          {/* Row 2: Icon & Artwork Preview Card */}
           <div>
             <span className="eyebrow mb-1.5 block">Application Icon / Artwork</span>
-            <div className="flex items-center gap-3 p-3 rounded-xl border border-surface-line bg-surface-raised/30">
-              <AppIcon icon={appForm.icon} name={appForm.name} className="h-14 w-14 rounded-2xl shadow-sm" iconClass="text-2xl" />
-              <div className="flex-1 space-y-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3.5 p-3.5 rounded-2xl border border-surface-line bg-surface-raised/40">
+              <AppIcon icon={appForm.icon} name={appForm.name} className="h-16 w-16 rounded-2xl shadow-sm border border-surface-line/70" iconClass="text-3xl" />
+              <div className="flex-1 w-full space-y-2.5">
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={appForm.icon}
                     onChange={(e) => setAppForm({ ...appForm, icon: e.target.value })}
                     placeholder="/assets/launcher/valorant.webp or https://..."
-                    className="flex-1 rounded-xl border border-surface-line customer-neutral-surface px-3 py-1.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50 font-mono"
+                    className="flex-1 rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-xs text-ink-900 focus:outline-none focus:border-gold/50 font-mono"
                   />
-                  <label className="cursor-pointer shrink-0 rounded-xl border border-surface-line customer-neutral-surface px-3 py-1.5 text-xs font-semibold text-ink-900 hover:bg-dance/35 transition">
+                  <label className="cursor-pointer shrink-0 rounded-xl border border-surface-line customer-neutral-surface px-3.5 py-2 text-xs font-semibold text-ink-900 hover:bg-dance/35 transition shadow-xs">
                     Upload
                     <input
                       type="file"
@@ -674,13 +692,13 @@ export default function LauncherManagementPage() {
                   </label>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] text-slate-soft">Presets:</span>
-                  {PRESET_CATALOG.slice(0, 8).map((p) => (
+                  <span className="text-[10px] font-semibold text-slate-soft uppercase tracking-wider">Presets:</span>
+                  {PRESET_CATALOG.slice(0, 10).map((p) => (
                     <button
                       key={p.name}
                       type="button"
                       onClick={() => setAppForm((prev) => ({ ...prev, icon: p.icon }))}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-surface-line text-[10px] text-slate-soft hover:text-ink-900 hover:border-gold/40"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border border-surface-line text-[10px] text-slate-soft hover:text-ink-900 hover:border-gold/40 transition"
                     >
                       {p.name.split(' ')[0]}
                     </button>
@@ -690,66 +708,54 @@ export default function LauncherManagementPage() {
             </div>
           </div>
 
+          {/* Row 3: Remote Path */}
           <div>
             <label className="block">
-              <span className="eyebrow mb-1 block">Category</span>
-              <select
-                value={appForm.categoryName}
-                onChange={(e) => setAppForm({ ...appForm, categoryName: e.target.value })}
-                className={inputClass}
-              >
-                {categoryNames.map((cat) => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div>
-            <label className="block">
-              <span className="eyebrow mb-1 block">Remote Executable Path / Game Disk</span>
+              <span className="eyebrow mb-1.5 block">Remote Executable Path / Game Disk</span>
               <input
                 type="text"
                 value={appForm.executablePath}
                 onChange={(e) => setAppForm({ ...appForm, executablePath: e.target.value })}
-                placeholder="e.g. D:\Games\Valorant\RiotClientServices.exe or \\GAMEDISK\..."
+                placeholder="e.g. D:\Games\Valorant\RiotClientServices.exe or \\GAMEDISK\Games\..."
                 className={inputClass}
               />
-              <span className="mt-1 block text-[11px] text-slate-soft">
-                Full path on client PC or Game Disk. Leave empty if launching via Protocol URL.
+              <span className="mt-1.5 block text-[11px] text-slate-soft">
+                Full executable path on client PCs or central Game Disk. Leave blank if launching via Protocol URL.
               </span>
             </label>
           </div>
 
+          {/* Row 4: Protocol URL */}
           <div>
             <label className="block">
-              <span className="eyebrow mb-1 block">Protocol URL (Optional)</span>
+              <span className="eyebrow mb-1.5 block">Protocol URL (Optional)</span>
               <input
                 type="text"
                 value={appForm.protocolUrl}
                 onChange={(e) => setAppForm({ ...appForm, protocolUrl: e.target.value })}
-                placeholder="e.g. steam://rungameid/570 or discord://"
+                placeholder="e.g. steam://rungameid/570, riotclient://launch/league_of_legends, discord://"
                 className={inputClass}
               />
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Row 5: Launch Arguments + Working Directory */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block">
-                <span className="eyebrow mb-1 block">Launch Arguments</span>
+                <span className="eyebrow mb-1.5 block">Launch Arguments</span>
                 <input
                   type="text"
                   value={appForm.launchArguments}
                   onChange={(e) => setAppForm({ ...appForm, launchArguments: e.target.value })}
-                  placeholder="e.g. -novid -high"
+                  placeholder="e.g. -novid -high -threads 8"
                   className={inputClass}
                 />
               </label>
             </div>
             <div>
               <label className="block">
-                <span className="eyebrow mb-1 block">Working Directory</span>
+                <span className="eyebrow mb-1.5 block">Working Directory</span>
                 <input
                   type="text"
                   value={appForm.workingDirectory}
@@ -761,15 +767,16 @@ export default function LauncherManagementPage() {
             </div>
           </div>
 
+          {/* Row 6: Enabled checkbox card */}
           <div className="pt-2">
-            <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-ink-900">
+            <label className="flex items-center gap-3 p-3 rounded-xl border border-surface-line bg-surface-raised/20 cursor-pointer text-sm font-semibold text-ink-900 hover:bg-surface-raised/50 transition">
               <input
                 type="checkbox"
                 checked={appForm.isEnabled}
                 onChange={(e) => setAppForm({ ...appForm, isEnabled: e.target.checked })}
-                className="h-4 w-4 rounded text-gold focus:ring-gold/30"
+                className="h-4.5 w-4.5 rounded text-gold focus:ring-gold/30 cursor-pointer"
               />
-              Enable on Customer Station Launchers
+              <span>Enable and display on Customer Station Launchers</span>
             </label>
           </div>
         </form>
@@ -782,17 +789,17 @@ export default function LauncherManagementPage() {
         eyebrow="Catalog Presets"
         title="Batch Add Games & Applications"
         description="Select multiple popular games and office tools to add them instantly to your cafe launcher."
-        maxWidth="max-w-2xl"
+        maxWidth="max-w-3xl"
         busy={actionBusy}
         footer={
           <>
             <div className="flex-1 flex items-center justify-between text-xs text-slate-soft">
-              <span>{selectedPresets.size} selected</span>
-              <div className="flex gap-2">
+              <span className="font-semibold text-ink-900">{selectedPresets.size} selected</span>
+              <div className="flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => selectAllFilteredPresets(filteredPresets)}
-                  className="text-gold-dim hover:underline font-semibold"
+                  className="text-gold-dim hover:underline font-semibold cursor-pointer"
                 >
                   Select All Filtered
                 </button>
@@ -800,7 +807,7 @@ export default function LauncherManagementPage() {
                 <button
                   type="button"
                   onClick={deselectAllPresets}
-                  className="hover:underline"
+                  className="hover:underline cursor-pointer"
                 >
                   Clear Selection
                 </button>
@@ -823,22 +830,22 @@ export default function LauncherManagementPage() {
           </>
         }
       >
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-2">
+        <div className="space-y-3.5 py-1">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-soft" size={14} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-soft" size={15} />
               <input
                 type="text"
-                placeholder="Search presets…"
+                placeholder="Search presets by name or exe…"
                 value={presetSearch}
                 onChange={(e) => setPresetSearch(e.target.value)}
-                className="w-full rounded-xl border border-surface-line customer-neutral-surface py-1.5 pl-8 pr-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
+                className="w-full rounded-xl border border-surface-line customer-neutral-surface py-2 pl-9 pr-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
               />
             </div>
             <select
               value={presetCategory}
               onChange={(e) => setPresetCategory(e.target.value)}
-              className="rounded-xl border border-surface-line customer-neutral-surface px-3 py-1.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
+              className="rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-xs text-ink-900 focus:outline-none focus:border-gold/50 font-medium"
             >
               <option value="All">All Categories</option>
               <option value="Online Games">Online Games</option>
@@ -850,7 +857,7 @@ export default function LauncherManagementPage() {
             </select>
           </div>
 
-          <div className="max-h-[380px] overflow-y-auto space-y-1.5 pr-1">
+          <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1.5">
             {filteredPresets.map((preset) => {
               const isChecked = selectedPresets.has(preset.name)
               const alreadyExists = launcherApps.some(a => a.name.toLowerCase() === preset.name.toLowerCase())
@@ -859,36 +866,36 @@ export default function LauncherManagementPage() {
                 <div
                   key={preset.name}
                   onClick={() => !alreadyExists && togglePreset(preset.name)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border transition cursor-pointer ${
+                  className={`flex items-center justify-between p-3 rounded-xl border transition cursor-pointer ${
                     alreadyExists
                       ? 'border-surface-line bg-surface-raised/40 opacity-60 cursor-not-allowed'
                       : isChecked
-                      ? 'border-gold/50 bg-gold/5'
-                      : 'border-surface-line customer-neutral-surface hover:border-gold/30'
+                      ? 'border-gold/60 bg-gold/[0.07] shadow-xs'
+                      : 'border-surface-line customer-neutral-surface hover:border-gold/30 hover:bg-surface-raised/30'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3.5">
                     <input
                       type="checkbox"
                       checked={isChecked || alreadyExists}
                       disabled={alreadyExists}
                       onChange={() => {}}
-                      className="h-4 w-4 rounded text-gold focus:ring-gold/30"
+                      className="h-4.5 w-4.5 rounded text-gold focus:ring-gold/30"
                     />
-                    <AppIcon icon={preset.icon} name={preset.name} className="h-9 w-9" />
+                    <AppIcon icon={preset.icon} name={preset.name} className="h-10 w-10 rounded-xl" />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-ink-900">{preset.name}</span>
                         {alreadyExists && (
-                          <span className="text-[10px] text-teal-dim font-semibold bg-teal/10 px-1.5 py-0.2 rounded">
+                          <span className="text-[10px] text-teal-dim font-semibold bg-teal/10 px-2 py-0.2 rounded-full">
                             Already Added
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-soft flex gap-2 mt-0.5">
-                        <span className="font-semibold uppercase">{preset.category}</span>
-                        {preset.exe && <span>• {preset.exe}</span>}
-                        {preset.protocol && <span>• {preset.protocol}</span>}
+                      <div className="text-[11px] text-slate-soft flex flex-wrap gap-2 mt-0.5">
+                        <span className="font-semibold uppercase tracking-wider text-[10px] text-gold-dim">{preset.category}</span>
+                        {preset.exe && <span className="font-mono">• {preset.exe}</span>}
+                        {preset.protocol && <span className="font-mono">• {preset.protocol}</span>}
                       </div>
                     </div>
                   </div>
@@ -906,15 +913,15 @@ export default function LauncherManagementPage() {
         eyebrow="Launcher Categories"
         title="Manage Filter Categories"
         description="Create and organize custom filter categories (e.g. Online Games, Offline Games, Surfing) for the customer kiosk grid."
-        maxWidth="max-w-md"
+        maxWidth="max-w-lg"
         footer={
           <Button variant="primary" onClick={() => setCategoryModalOpen(false)}>
             Done
           </Button>
         }
       >
-        <div className="space-y-4">
-          <div className="flex gap-2">
+        <div className="space-y-4 py-1">
+          <div className="flex gap-2.5">
             <input
               type="text"
               placeholder="New category name…"
@@ -928,15 +935,15 @@ export default function LauncherManagementPage() {
               onClick={handleAddCategory}
               className="shrink-0"
             >
-              Add
+              Add Category
             </Button>
           </div>
 
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
             {launcherCategories.map((cat) => (
               <div
                 key={cat.id}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-surface-line customer-neutral-surface"
+                className="flex items-center justify-between p-3 rounded-xl border border-surface-line customer-neutral-surface shadow-xs"
               >
                 {editingCatId === cat.id ? (
                   <div className="flex-1 flex gap-2 mr-2">
@@ -945,7 +952,7 @@ export default function LauncherManagementPage() {
                       autoFocus
                       value={editingCatName}
                       onChange={(e) => setEditingCatName(e.target.value)}
-                      className="w-full rounded-lg border border-surface-line customer-neutral-surface px-2 py-1 text-xs text-ink-900 focus:outline-none"
+                      className="w-full rounded-lg border border-surface-line customer-neutral-surface px-2.5 py-1.5 text-xs text-ink-900 focus:outline-none"
                     />
                     <Button
                       variant="primary"
@@ -958,13 +965,13 @@ export default function LauncherManagementPage() {
                 ) : (
                   <div>
                     <span className="text-xs font-bold text-ink-900">{cat.name}</span>
-                    <span className="block text-[10px] text-slate-soft">
+                    <span className="block text-[11px] text-slate-soft mt-0.5">
                       {launcherApps.filter(a => (a.categoryName || a.category) === cat.name).length} applications
                     </span>
                   </div>
                 )}
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   {editingCatId !== cat.id && (
                     <button
                       type="button"
@@ -972,18 +979,20 @@ export default function LauncherManagementPage() {
                         setEditingCatId(cat.id)
                         setEditingCatName(cat.name)
                       }}
-                      className="p-1 rounded text-slate-soft hover:text-ink-900"
+                      className="p-1.5 rounded-lg text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition"
+                      title="Rename Category"
                     >
-                      <Pencil size={13} />
+                      <Pencil size={14} />
                     </button>
                   )}
                   {!isCashier && (
                     <button
                       type="button"
                       onClick={() => setDeleteTargetCategory(cat)}
-                      className="p-1 rounded text-slate-soft hover:text-ember-dim"
+                      className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition"
+                      title="Delete Category"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>
@@ -1000,7 +1009,7 @@ export default function LauncherManagementPage() {
         eyebrow="Game Disk Path"
         title={`Remote Path for ${pathTargetApp?.name || 'App'}`}
         description="Update the executable path remotely for all customer stations without going to each PC."
-        maxWidth="max-w-md"
+        maxWidth="max-w-lg"
         busy={actionBusy}
         footer={
           <>
@@ -1021,9 +1030,9 @@ export default function LauncherManagementPage() {
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-3.5 py-1">
           <label className="block">
-            <span className="eyebrow mb-1 block">Executable Path</span>
+            <span className="eyebrow mb-1.5 block">Executable Path</span>
             <input
               type="text"
               autoFocus
@@ -1033,8 +1042,8 @@ export default function LauncherManagementPage() {
               className={inputClass}
             />
           </label>
-          <div className="rounded-xl border border-surface-line bg-surface-raised/50 p-3 text-xs text-slate-soft">
-            <p className="font-semibold text-ink-900 mb-1">Station Resolution Priority:</p>
+          <div className="rounded-xl border border-surface-line bg-surface-raised/50 p-3.5 text-xs text-slate-soft space-y-1.5">
+            <p className="font-semibold text-ink-900">Station Resolution Priority:</p>
             <ol className="list-decimal pl-4 space-y-1">
               <li>Station Local Override (Set via Master PIN on that PC).</li>
               <li>This Remote Executable Path (Central Game Disk).</li>
