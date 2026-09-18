@@ -353,20 +353,10 @@ export default function MenuManagementPage() {
         </>
       }
     >
-      <div className="space-y-5">
-        {/* Page Topbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight text-ink-900 flex items-center gap-2.5">
-              <UtensilsCrossed className="w-5 h-5 text-gold-dim shrink-0" />
-              <span>Food & Beverage Management</span>
-            </h1>
-            <p className="text-xs text-slate-soft mt-0.5 leading-relaxed">
-              Live in-session customer orders, kitchen fulfillment, and menu item pricing.
-            </p>
-          </div>
-
-          <div className="inline-flex shrink-0 rounded-xl border border-surface-line bg-surface-raised p-1 self-start sm:self-auto shadow-2xs">
+      <div className="space-y-4">
+        {/* Page Topbar with Tab Switcher */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="inline-flex rounded-xl border border-surface-line bg-surface-raised p-1 shadow-2xs">
             <button
               type="button"
               onClick={() => setActiveTab('orders')}

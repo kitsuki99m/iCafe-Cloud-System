@@ -487,7 +487,7 @@ export default function FloorMatrix() {
 
         <div>
           {pcs.length ? (
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6">
               {sortedPcs.map((pc) => (
                 <PcCard
                   key={pc.id}

@@ -276,6 +276,39 @@ export default function LauncherManagementPage() {
     }
   }
 
+  const DEFAULT_PRESET_CATEGORIES = [
+    'Online Games',
+    'Offline Games',
+    'Surfing & Browsers',
+    'Office & Productivity',
+    'Utilities & Chat',
+    'Emulators',
+  ]
+
+  async function handleMapPresetCategories() {
+    setActionBusy(true)
+    try {
+      let addedCount = 0
+      const existingNames = new Set(launcherCategories.map(c => c.name.toLowerCase().trim()))
+      for (let i = 0; i < DEFAULT_PRESET_CATEGORIES.length; i++) {
+        const catName = DEFAULT_PRESET_CATEGORIES[i]
+        if (!existingNames.has(catName.toLowerCase())) {
+          await createLauncherCategory({ name: catName, sortOrder: (launcherCategories.length + i + 1) * 10 })
+          addedCount++
+        }
+      }
+      if (addedCount > 0) {
+        showToast({ title: 'Preset Categories Mapped', message: `Added ${addedCount} standard categories.`, tone: 'success' })
+      } else {
+        showToast({ title: 'Categories Ready', message: 'All standard preset categories already exist.', tone: 'info' })
+      }
+    } catch (err) {
+      showToast({ title: 'Preset Mapping Failed', message: err.message || 'Unable to map preset categories.', tone: 'error' })
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
   async function handleAddCategory() {
     if (!newCatName.trim()) return
     setActionBusy(true)
@@ -470,6 +503,15 @@ export default function LauncherManagementPage() {
                 </button>
               )
             })}
+            <button
+              type="button"
+              onClick={() => setCategoryModalOpen(true)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-gold-dim hover:text-ink-900 border border-dashed border-gold/40 hover:border-gold transition flex items-center gap-1 shrink-0 cursor-pointer ml-1"
+              title="Manage Categories (Add, Edit, Delete, Map Presets)"
+            >
+              <FolderPlus size={13} />
+              <span>Categories</span>
+            </button>
           </div>
 
           <div className="relative min-w-[220px]">
@@ -912,7 +954,7 @@ export default function LauncherManagementPage() {
         onClose={() => setCategoryModalOpen(false)}
         eyebrow="Launcher Categories"
         title="Manage Filter Categories"
-        description="Create and organize custom filter categories (e.g. Online Games, Offline Games, Surfing) for the customer kiosk grid."
+        description="Create, rename, delete, or auto-map standard categories (Online Games, Offline Games, Surfing, etc.) for the kiosk launcher."
         maxWidth="max-w-lg"
         footer={
           <Button variant="primary" onClick={() => setCategoryModalOpen(false)}>
@@ -921,12 +963,35 @@ export default function LauncherManagementPage() {
         }
       >
         <div className="space-y-4 py-1">
+          <div className="flex items-center justify-between p-3 rounded-xl border border-surface-line customer-neutral-surface">
+            <div>
+              <p className="text-xs font-bold text-ink-900">Standard Presets</p>
+              <p className="text-[11px] text-slate-soft">Map default gaming & utility categories in 1-click.</p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={actionBusy}
+              onClick={handleMapPresetCategories}
+              className="flex items-center gap-1.5 text-xs shrink-0"
+            >
+              <Sparkles size={13} className="text-gold-dim" />
+              Map Preset Categories
+            </Button>
+          </div>
+
           <div className="flex gap-2.5">
             <input
               type="text"
-              placeholder="New category name…"
+              placeholder="Add new category (e.g. Esports, Emulators)…"
               value={newCatName}
               onChange={(e) => setNewCatName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleAddCategory()
+                }
+              }}
               className={inputClass}
             />
             <Button
@@ -939,66 +1004,79 @@ export default function LauncherManagementPage() {
             </Button>
           </div>
 
-          <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
-            {launcherCategories.map((cat) => (
-              <div
-                key={cat.id}
-                className="flex items-center justify-between p-3 rounded-xl border border-surface-line customer-neutral-surface shadow-xs"
-              >
-                {editingCatId === cat.id ? (
-                  <div className="flex-1 flex gap-2 mr-2">
-                    <input
-                      type="text"
-                      autoFocus
-                      value={editingCatName}
-                      onChange={(e) => setEditingCatName(e.target.value)}
-                      className="w-full rounded-lg border border-surface-line customer-neutral-surface px-2.5 py-1.5 text-xs text-ink-900 focus:outline-none"
-                    />
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleRenameCategory(cat.id)}
-                    >
-                      Save
-                    </Button>
-                  </div>
-                ) : (
-                  <div>
-                    <span className="text-xs font-bold text-ink-900">{cat.name}</span>
-                    <span className="block text-[11px] text-slate-soft mt-0.5">
-                      {launcherApps.filter(a => (a.categoryName || a.category) === cat.name).length} applications
-                    </span>
-                  </div>
-                )}
+          {launcherCategories.length === 0 ? (
+            <div className="py-6 text-center text-xs text-slate-soft border border-dashed border-surface-line rounded-xl p-4">
+              <p className="font-semibold text-ink-900">No custom categories yet</p>
+              <p className="mt-1">Click "Map Preset Categories" above or type a custom category name to begin.</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5 max-h-[320px] overflow-y-auto pr-1">
+              {launcherCategories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="flex items-center justify-between p-3 rounded-xl border border-surface-line customer-neutral-surface shadow-xs"
+                >
+                  {editingCatId === cat.id ? (
+                    <div className="flex-1 flex gap-2 mr-2">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={editingCatName}
+                        onChange={(e) => setEditingCatName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleRenameCategory(cat.id)
+                          }
+                        }}
+                        className="w-full rounded-lg border border-surface-line customer-neutral-surface px-2.5 py-1.5 text-xs text-ink-900 focus:outline-none"
+                      />
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => handleRenameCategory(cat.id)}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="text-xs font-bold text-ink-900">{cat.name}</span>
+                      <span className="block text-[11px] text-slate-soft mt-0.5">
+                        {launcherApps.filter(a => (a.categoryName || a.category) === cat.name).length} applications
+                      </span>
+                    </div>
+                  )}
 
-                <div className="flex items-center gap-1.5">
-                  {editingCatId !== cat.id && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingCatId(cat.id)
-                        setEditingCatName(cat.name)
-                      }}
-                      className="p-1.5 rounded-lg text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition"
-                      title="Rename Category"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  )}
-                  {!isCashier && (
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTargetCategory(cat)}
-                      className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition"
-                      title="Delete Category"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {editingCatId !== cat.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingCatId(cat.id)
+                          setEditingCatName(cat.name)
+                        }}
+                        className="p-1.5 rounded-lg text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition cursor-pointer"
+                        title="Rename Category"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    {!isCashier && (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTargetCategory(cat)}
+                        className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition cursor-pointer"
+                        title="Delete Category"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </Modal>
 

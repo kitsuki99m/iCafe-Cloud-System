@@ -56,16 +56,16 @@ export default function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5
 
       {/* TOP HEADER: Esports Station Badge + Status Pill + Controls */}
       <div className="relative z-10 flex items-start justify-between gap-2 pointer-events-none">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-soft/80">STATION</span>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <h3 className="font-display text-lg font-black tracking-tight text-ink-900">
+          <div className="flex items-baseline gap-1.5 min-w-0 flex-nowrap overflow-hidden">
+            <h3 className="font-display text-base sm:text-lg font-black tracking-tight text-ink-900 whitespace-nowrap shrink-0">
               {stationTitle}
             </h3>
             {pc.label && pc.label !== stationTitle && pc.label !== `PC ${pc.pcNumber}` && (
-              <span className="truncate text-[10px] font-medium text-slate-soft">
+              <span className="truncate text-[10px] font-medium text-slate-soft shrink min-w-0" title={pc.label}>
                 ({pc.label})
               </span>
             )}

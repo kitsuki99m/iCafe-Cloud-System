@@ -71,13 +71,13 @@ const DEFAULT_FALLBACK_APPS = [
   { id: "notepad", name: "Notepad", categoryName: "Utilities & Chat", icon: "/assets/launcher/notepad.webp", executablePath: "notepad.exe" },
 ];
 
-function CustomerAppIcon({ icon, name, className = "h-16 w-16", iconClass = "text-2xl" }) {
+function CustomerAppIcon({ icon, name, className = "h-12 w-12", iconClass = "text-xl" }) {
   const isImage = icon && (icon.startsWith('/') || icon.startsWith('http') || icon.startsWith('data:') || /\.(webp|png|jpg|jpeg|svg)$/i.test(icon));
   const [imgError, setImgError] = useState(false);
 
   if (isImage && !imgError) {
     return (
-      <span className={`inline-flex items-center justify-center rounded-2xl bg-surface-raised/80 border border-surface-line/50 p-2 overflow-hidden shrink-0 shadow-sm ${className}`}>
+      <span className={`inline-flex items-center justify-center rounded-xl bg-surface-raised/80 border border-surface-line/50 p-1.5 overflow-hidden shrink-0 shadow-xs ${className}`}>
         <img
           src={icon}
           alt={name || "App Icon"}
@@ -90,7 +90,7 @@ function CustomerAppIcon({ icon, name, className = "h-16 w-16", iconClass = "tex
   }
 
   return (
-    <span className={`inline-flex items-center justify-center rounded-2xl bg-midnight/8 ${iconClass} shrink-0 ${className}`}>
+    <span className={`inline-flex items-center justify-center rounded-xl bg-midnight/8 ${iconClass} shrink-0 ${className}`}>
       {icon || "🎮"}
     </span>
   );
@@ -1188,28 +1188,28 @@ export default function CustomerSessionView() {
                 <p className="mt-1">No games or apps match your search filter.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-2 sm:gap-2.5">
                 {activeAppsList.map((app) => (
                   <button
                     key={app.id || app.name}
                     type="button"
                     onClick={() => handleLaunchApp(app)}
-                    className="customer-neutral-surface border border-surface-line rounded-2xl p-3 flex flex-col items-center justify-between text-center gap-1.5 hover:bg-surface-raised/80 hover:border-gold/50 hover:shadow-md transition-all duration-200 group relative cursor-pointer active:scale-[0.98]"
+                    className="customer-neutral-surface border border-surface-line rounded-xl p-2 sm:p-2.5 flex flex-col items-center justify-between text-center gap-1 hover:bg-surface-raised/80 hover:border-gold/50 hover:shadow-md transition-all duration-200 group relative cursor-pointer active:scale-[0.98]"
                   >
                     <CustomerAppIcon
                       icon={app.icon}
                       name={app.name}
-                      className="h-16 w-16 group-hover:scale-105 transition-transform duration-200 rounded-2xl shadow-sm"
-                      iconClass="text-3xl"
+                      className="h-11 w-11 sm:h-12 sm:w-12 group-hover:scale-105 transition-transform duration-200 rounded-xl shadow-xs"
+                      iconClass="text-xl"
                     />
-                    <div className="min-w-0 w-full mt-1.5">
-                      <span className="font-display text-xs font-bold text-ink-900 truncate block w-full">{app.name}</span>
-                      <span className="text-[9px] uppercase font-semibold text-slate-soft tracking-wider truncate block w-full">
+                    <div className="min-w-0 w-full mt-0.5">
+                      <span className="font-display text-[11px] font-bold text-ink-900 truncate block w-full leading-tight">{app.name}</span>
+                      <span className="text-[8.5px] uppercase font-semibold text-slate-soft tracking-wider truncate block w-full mt-0.5">
                         {app.categoryName || app.category || "Online Games"}
                       </span>
                     </div>
-                    <span className="mt-1.5 w-full py-1 px-2 rounded-lg text-[11px] font-bold bg-midnight/8 text-ink-900 group-hover:bg-gold group-hover:text-midnight transition flex items-center justify-center gap-1">
-                      <PlayCircle size={12} /> Launch
+                    <span className="mt-1 w-full py-0.5 px-1.5 rounded-md text-[10px] font-bold bg-midnight/8 text-ink-900 group-hover:bg-gold group-hover:text-midnight transition flex items-center justify-center gap-1">
+                      <PlayCircle size={10} /> Launch
                     </span>
                   </button>
                 ))}

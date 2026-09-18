@@ -939,6 +939,13 @@ async function launchDesktopApp(appTarget) {
   const appId = isObj ? (appTarget.id || appTarget.command || appTarget.name) : String(appTarget || '')
   const appKey = String(appId).toLowerCase()
 
+  const onLaunched = () => {
+    setWindowsKeyLocked(false)
+    if (isActive()) {
+      applyCompactSessionMode()
+    }
+  }
+
   // 1. Check local station override path
   const stationConfig = readStationLauncherConfig()
   const localOverride = stationConfig.pathOverrides?.[appId] || stationConfig.pathOverrides?.[appKey]
@@ -947,6 +954,7 @@ async function launchDesktopApp(appTarget) {
     try {
       const { exec } = require('node:child_process')
       exec(`start "" "${localOverride}"`, { windowsHide: true })
+      onLaunched()
       return true
     } catch {}
   }
@@ -959,6 +967,7 @@ async function launchDesktopApp(appTarget) {
       const options = { windowsHide: true }
       if (appTarget.workingDirectory) options.cwd = appTarget.workingDirectory
       exec(`start "" "${appTarget.executablePath}"${args}`, options)
+      onLaunched()
       return true
     } catch {}
   }
@@ -968,6 +977,7 @@ async function launchDesktopApp(appTarget) {
     try {
       const { shell } = require('electron')
       await shell.openExternal(appTarget.protocolUrl)
+      onLaunched()
       return true
     } catch {}
   }
@@ -979,6 +989,7 @@ async function launchDesktopApp(appTarget) {
       try {
         const { shell } = require('electron')
         await shell.openExternal(target.protocol)
+        onLaunched()
         return true
       } catch {}
     }
@@ -986,6 +997,7 @@ async function launchDesktopApp(appTarget) {
       try {
         const { exec } = require('node:child_process')
         exec(`start "" "${target.exe}"`, { windowsHide: true })
+        onLaunched()
         return true
       } catch {}
     }
@@ -996,6 +1008,7 @@ async function launchDesktopApp(appTarget) {
     try {
       const { exec } = require('node:child_process')
       exec(`start "" "${appTarget}"`, { windowsHide: true })
+      onLaunched()
       return true
     } catch {}
   }

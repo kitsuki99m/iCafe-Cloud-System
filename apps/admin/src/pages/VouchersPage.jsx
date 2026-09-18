@@ -149,18 +149,9 @@ export default function VouchersPage() {
         </>
       }
     >
-      <div className="space-y-5">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[20px] font-bold tracking-tight text-ink-900 flex items-center gap-2.5">
-              <Ticket className="w-5 h-5 text-gold-dim" />
-              Promo Vouchers & Gift Codes
-            </h1>
-            <p className="text-xs text-slate-soft mt-0.5">
-              Issue promotional wallet credits or bonus session time for events, social promos, and tournaments.
-            </p>
-          </div>
+      <div className="space-y-4">
+        {/* Top Action Bar */}
+        <div className="flex items-center justify-end gap-3">
           <Button
             variant="primary"
             icon={Plus}
