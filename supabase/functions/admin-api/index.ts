@@ -543,7 +543,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   const voucherMatch=route.match(/^\/vouchers\/([^/]+)$/);
   if(voucherMatch&&method==='DELETE'){
     const localId=decodeURIComponent(voucherMatch[1]);
-    const{error}=await admin.from('branch_promo_vouchers').update({is_active:false}).eq('branch_id',branchId).eq('local_id',localId);
+    const{error}=await admin.from('branch_promo_vouchers').update({is_active:false}).eq('branch_id',branchId).or(`local_id.eq.${localId},id.eq.${localId}`);
     if(error)throw error;
     return result({success:true});
   }

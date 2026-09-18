@@ -355,58 +355,45 @@ export default function MenuManagementPage() {
     >
       <div className="space-y-5">
         {/* Page Topbar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-[20px] font-bold tracking-tight text-ink-900 flex items-center gap-2.5">
-              <UtensilsCrossed className="w-5 h-5 text-gold-dim" />
-              Food & Beverage Management
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight text-ink-900 flex items-center gap-2.5">
+              <UtensilsCrossed className="w-5 h-5 text-gold-dim shrink-0" />
+              <span>Food & Beverage Management</span>
             </h1>
-            <p className="text-xs text-slate-soft mt-0.5">
+            <p className="text-xs text-slate-soft mt-0.5 leading-relaxed">
               Live in-session customer orders, kitchen fulfillment, and menu item pricing.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="inline-flex rounded-xl border border-surface-line bg-surface-raised p-1">
-              <button
-                type="button"
-                onClick={() => setActiveTab('orders')}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  activeTab === 'orders'
-                    ? 'bg-surface text-ink-900 shadow-sm'
-                    : 'text-slate-soft hover:text-ink-900'
-                }`}
-              >
-                <ShoppingBag size={14} /> Live Orders
-                {pendingOrders.length > 0 && (
-                  <span className="rounded-full bg-ember/15 text-ember-dim px-1.5 py-0.2 text-[10px] font-bold">
-                    {pendingOrders.length}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('items')}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  activeTab === 'items'
-                    ? 'bg-surface text-ink-900 shadow-sm'
-                    : 'text-slate-soft hover:text-ink-900'
-                }`}
-              >
-                <Pizza size={14} /> Menu Catalog ({menuItems.length})
-              </button>
-            </div>
-
-            {activeTab === 'items' && !isCashier && (
-              <div className="flex items-center gap-2">
-                <Button variant="secondary" icon={Layers} onClick={openBatchModal}>
-                  Presets & Batch Add
-                </Button>
-                <Button variant="primary" icon={Plus} onClick={openCreateModal}>
-                  Add Item
-                </Button>
-              </div>
-            )}
+          <div className="inline-flex shrink-0 rounded-xl border border-surface-line bg-surface-raised p-1 self-start sm:self-auto shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab('orders')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                activeTab === 'orders'
+                  ? 'bg-surface text-ink-900 shadow-sm'
+                  : 'text-slate-soft hover:text-ink-900'
+              }`}
+            >
+              <ShoppingBag size={14} /> Live Orders
+              {pendingOrders.length > 0 && (
+                <span className="rounded-full bg-ember/15 text-ember-dim px-1.5 py-0.2 text-[10px] font-bold">
+                  {pendingOrders.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('items')}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                activeTab === 'items'
+                  ? 'bg-surface text-ink-900 shadow-sm'
+                  : 'text-slate-soft hover:text-ink-900'
+              }`}
+            >
+              <Pizza size={14} /> Menu Catalog ({menuItems.length})
+            </button>
           </div>
         </div>
 
@@ -569,17 +556,17 @@ export default function MenuManagementPage() {
         {/* MENU CATALOG TAB */}
         {activeTab === 'items' && (
           <div className="space-y-4">
-            {/* Toolbar: Category Chips & Search */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {/* Toolbar: Category Chips, Search & Actions */}
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 bg-surface-raised/30 p-2.5 rounded-2xl border border-surface-line">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 min-w-0">
                 {CATEGORIES.map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1 rounded-xl text-xs font-semibold transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
                       selectedCategory === cat
-                        ? 'bg-gold/15 text-gold-dim border border-gold/30'
+                        ? 'bg-gold/15 text-gold-dim border border-gold/30 shadow-2xs'
                         : 'border border-surface-line customer-neutral-surface text-slate-soft hover:text-ink-900'
                     }`}
                   >
@@ -588,15 +575,28 @@ export default function MenuManagementPage() {
                 ))}
               </div>
 
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 text-slate-soft absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Search items…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-xl border border-surface-line customer-neutral-surface pl-8 pr-3 py-1.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
-                />
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 shrink-0">
+                <div className="relative w-full sm:w-60">
+                  <Search className="w-3.5 h-3.5 text-slate-soft absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Search items…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full rounded-xl border border-surface-line customer-neutral-surface pl-8 pr-3 py-1.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
+                  />
+                </div>
+
+                {!isCashier && (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button variant="secondary" icon={Layers} onClick={openBatchModal} size="sm">
+                      Presets & Batch Add
+                    </Button>
+                    <Button variant="primary" icon={Plus} onClick={openCreateModal} size="sm">
+                      Add Item
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -634,12 +634,15 @@ export default function MenuManagementPage() {
                       }`}
                     >
                       <div>
-                        {/* Image */}
-                        <div className={`h-32 rounded-xl relative overflow-hidden flex items-center justify-center p-2 m-2 mb-0 transition ${item.image_url || item.imageUrl ? 'bg-white' : 'bg-surface-raised'}`}>
+                        {/* Image Container with fixed height and contain */}
+                        <div className={`h-32 min-h-[128px] w-full rounded-xl relative overflow-hidden flex items-center justify-center p-2 m-2 mb-0 transition shrink-0 ${item.image_url || item.imageUrl ? 'bg-white' : 'bg-surface-raised'}`}>
                           {item.image_url || item.imageUrl ? (
                             <img
                               src={item.image_url || item.imageUrl}
                               alt={item.name}
+                              loading="lazy"
+                              width="128"
+                              height="128"
                               className="w-full h-full object-contain"
                               onError={(e) => { e.target.style.display = 'none' }}
                             />

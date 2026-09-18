@@ -47,21 +47,52 @@ import { useBranding } from "../hooks/useBranding.js";
 import { elapsedSessionSeconds, remainingSessionSeconds, sessionWarningMinute } from "../lib/sessionTime.js";
 
 const DEFAULT_FALLBACK_APPS = [
-  { id: "steam", name: "Steam", categoryName: "Online Games", icon: "🎮", protocolUrl: "steam://", executablePath: "steam.exe" },
-  { id: "riot", name: "Riot / Valorant", categoryName: "Online Games", icon: "⚔️", protocolUrl: "riotclient://", executablePath: "RiotClientServices.exe" },
-  { id: "epic", name: "Epic Games", categoryName: "Online Games", icon: "⚡", protocolUrl: "com.epicgames.launcher://", executablePath: "EpicGamesLauncher.exe" },
-  { id: "roblox", name: "Roblox", categoryName: "Online Games", icon: "🧱", protocolUrl: "roblox://", executablePath: "RobloxPlayerLauncher.exe" },
-  { id: "minecraft", name: "Minecraft", categoryName: "Offline Games", icon: "⛏️", executablePath: "Minecraft.exe" },
-  { id: "chrome", name: "Google Chrome", categoryName: "Surfing & Browsers", icon: "🌐", executablePath: "chrome.exe" },
-  { id: "edge", name: "Microsoft Edge", categoryName: "Surfing & Browsers", icon: "🌊", executablePath: "msedge.exe" },
-  { id: "discord", name: "Discord", categoryName: "Utilities & Chat", icon: "💬", protocolUrl: "discord://", executablePath: "Discord.exe" },
-  { id: "spotify", name: "Spotify", categoryName: "Utilities & Chat", icon: "🎵", protocolUrl: "spotify://", executablePath: "Spotify.exe" },
-  { id: "word", name: "Word", categoryName: "Office & Productivity", icon: "📝", executablePath: "WINWORD.EXE" },
-  { id: "excel", name: "Excel", categoryName: "Office & Productivity", icon: "📊", executablePath: "EXCEL.EXE" },
-  { id: "powerpoint", name: "PowerPoint", categoryName: "Office & Productivity", icon: "📑", executablePath: "POWERPNT.EXE" },
-  { id: "calc", name: "Calculator", categoryName: "Utilities & Chat", icon: "🧮", executablePath: "calc.exe" },
-  { id: "notepad", name: "Notepad", categoryName: "Utilities & Chat", icon: "📄", executablePath: "notepad.exe" },
+  { id: "steam", name: "Steam", categoryName: "Online Games", icon: "/assets/launcher/steam.webp", protocolUrl: "steam://", executablePath: "steam.exe" },
+  { id: "riot", name: "Riot / Valorant", categoryName: "Online Games", icon: "/assets/launcher/valorant.webp", protocolUrl: "riotclient://", executablePath: "RiotClientServices.exe" },
+  { id: "epic", name: "Epic Games", categoryName: "Online Games", icon: "/assets/launcher/epicgames.webp", protocolUrl: "com.epicgames.launcher://", executablePath: "EpicGamesLauncher.exe" },
+  { id: "roblox", name: "Roblox", categoryName: "Online Games", icon: "/assets/launcher/roblox.webp", protocolUrl: "roblox://", executablePath: "RobloxPlayerLauncher.exe" },
+  { id: "dota2", name: "Dota 2", categoryName: "Online Games", icon: "/assets/launcher/dota2.webp", protocolUrl: "steam://rungameid/570", executablePath: "dota2.exe" },
+  { id: "lol", name: "League of Legends", categoryName: "Online Games", icon: "/assets/launcher/lol.webp", protocolUrl: "riotclient://launch/league_of_legends", executablePath: "LeagueClient.exe" },
+  { id: "cs2", name: "Counter-Strike 2", categoryName: "Online Games", icon: "/assets/launcher/cs2.webp", protocolUrl: "steam://rungameid/730", executablePath: "cs2.exe" },
+  { id: "genshin", name: "Genshin Impact", categoryName: "Online Games", icon: "/assets/launcher/genshin.webp", executablePath: "GenshinImpact.exe" },
+  { id: "minecraft", name: "Minecraft", categoryName: "Offline Games", icon: "/assets/launcher/minecraft.webp", executablePath: "Minecraft.exe" },
+  { id: "chrome", name: "Google Chrome", categoryName: "Surfing & Browsers", icon: "/assets/launcher/chrome.webp", executablePath: "chrome.exe" },
+  { id: "edge", name: "Microsoft Edge", categoryName: "Surfing & Browsers", icon: "/assets/launcher/edge.webp", executablePath: "msedge.exe" },
+  { id: "brave", name: "Brave Browser", categoryName: "Surfing & Browsers", icon: "/assets/launcher/brave.webp", executablePath: "brave.exe" },
+  { id: "discord", name: "Discord", categoryName: "Utilities & Chat", icon: "/assets/launcher/discord.webp", protocolUrl: "discord://", executablePath: "Discord.exe" },
+  { id: "spotify", name: "Spotify", categoryName: "Utilities & Chat", icon: "/assets/launcher/spotify.webp", protocolUrl: "spotify://", executablePath: "Spotify.exe" },
+  { id: "obs", name: "OBS Studio", categoryName: "Utilities & Chat", icon: "/assets/launcher/obs.webp", executablePath: "obs64.exe" },
+  { id: "word", name: "Word", categoryName: "Office & Productivity", icon: "/assets/launcher/word.webp", executablePath: "WINWORD.EXE" },
+  { id: "excel", name: "Excel", categoryName: "Office & Productivity", icon: "/assets/launcher/excel.webp", executablePath: "EXCEL.EXE" },
+  { id: "powerpoint", name: "PowerPoint", categoryName: "Office & Productivity", icon: "/assets/launcher/powerpoint.webp", executablePath: "POWERPNT.EXE" },
+  { id: "calc", name: "Calculator", categoryName: "Utilities & Chat", icon: "/assets/launcher/calculator.webp", executablePath: "calc.exe" },
+  { id: "notepad", name: "Notepad", categoryName: "Utilities & Chat", icon: "/assets/launcher/notepad.webp", executablePath: "notepad.exe" },
 ];
+
+function CustomerAppIcon({ icon, name, className = "h-16 w-16", iconClass = "text-2xl" }) {
+  const isImage = icon && (icon.startsWith('/') || icon.startsWith('http') || icon.startsWith('data:') || /\.(webp|png|jpg|jpeg|svg)$/i.test(icon));
+  const [imgError, setImgError] = useState(false);
+
+  if (isImage && !imgError) {
+    return (
+      <span className={`inline-flex items-center justify-center rounded-2xl bg-surface-raised/80 border border-surface-line/50 p-2 overflow-hidden shrink-0 shadow-sm ${className}`}>
+        <img
+          src={icon}
+          alt={name || "App Icon"}
+          className="h-full w-full object-contain"
+          onError={() => setImgError(true)}
+          loading="lazy"
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span className={`inline-flex items-center justify-center rounded-2xl bg-midnight/8 ${iconClass} shrink-0 ${className}`}>
+      {icon || "🎮"}
+    </span>
+  );
+}
 
 function formatClock(totalSeconds) {
   const sign = totalSeconds < 0 ? "-" : "";
@@ -89,47 +120,45 @@ function AnnouncementBox({ announcements, onFeedback, birthdayAnnouncement = nul
   ].filter((item) => item.isActive !== false);
 
   return (
-    <aside id="customer-announcements" className="customer-support-card flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <aside id="customer-announcements" className="customer-support-card flex min-h-0 flex-col overflow-hidden">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-midnight/8 text-ink-900">
-            <Megaphone size={16} />
+          <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-midnight/8 text-ink-900">
+            <Megaphone size={14} />
           </span>
           <div>
             <p className="eyebrow">Cafe updates</p>
-            <h2 className="font-display text-[16px] font-semibold tracking-tight text-ink-900">Announcements</h2>
+            <h2 className="font-display text-[14px] font-semibold tracking-tight text-ink-900">Announcements</h2>
           </div>
         </div>
         <button
           type="button"
           onClick={onFeedback}
-          className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line customer-neutral-surface px-3 text-xs font-semibold text-ink-900 transition-colors hover:bg-dance/35"
+          className="inline-flex min-h-8 items-center gap-1 rounded-xl border border-surface-line customer-neutral-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
         >
-          <MessageSquareText size={14} />
+          <MessageSquareText size={12} />
           Feedback
         </button>
       </div>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto max-h-36 pr-1">
         {visible.length ? (
           visible.map((announcement) => (
-            <article key={announcement.id} className="rounded-xl border border-surface-line customer-neutral-surface p-3">
+            <article key={announcement.id} className="rounded-xl border border-surface-line customer-neutral-surface p-2.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="rounded-full bg-midnight/8 px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-ink-900">
+                <span className="rounded-full bg-midnight/8 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-ink-900">
                   {announcement.kind || "Update"}
                 </span>
                 <span className="text-[10px] text-slate-soft">
                   {announcement.createdAt ? new Date(announcement.createdAt).toLocaleDateString() : ""}
                 </span>
               </div>
-              <h3 className="mt-2 font-display text-sm font-semibold text-ink-900">{announcement.title}</h3>
-              <p className="mt-1 text-[12px] leading-5 text-slate-soft">{announcement.message}</p>
+              <h3 className="mt-1.5 font-display text-xs font-semibold text-ink-900">{announcement.title}</h3>
+              <p className="mt-0.5 text-[11px] leading-4 text-slate-soft">{announcement.message}</p>
             </article>
           ))
         ) : (
-          <div className="flex min-h-[150px] items-center justify-center rounded-xl border border-dashed border-surface-line customer-neutral-surface px-4 text-center">
-            <div>
-              <p className="text-sm font-semibold text-ink-900">No new announcements</p>
-            </div>
+          <div className="flex min-h-[70px] items-center justify-center rounded-xl border border-dashed border-surface-line customer-neutral-surface px-4 text-center">
+            <p className="text-[11px] text-slate-soft">No new announcements right now.</p>
           </div>
         )}
       </div>
@@ -666,8 +695,8 @@ export default function CustomerSessionView() {
   }
 
   return (
-    <div className={`customer-dashboard-shell${hasActiveSession ? " customer-dashboard-windowed" : ""}`}>
-      <header className="customer-topbar">
+    <div className={`customer-dashboard-shell h-screen w-full flex flex-col overflow-hidden bg-surface-deep text-ink-900 select-none`}>
+      <header className="customer-topbar flex shrink-0 items-center justify-between border-b border-surface-line px-4 py-2.5 customer-glass z-20">
         <div className="flex min-w-0 items-center gap-3">
           <img
             src={branding.logoUrl || logo}
@@ -675,45 +704,72 @@ export default function CustomerSessionView() {
               event.currentTarget.src = logo;
             }}
             alt=""
-            className="h-9 w-9 shrink-0 rounded-xl"
+            className="h-8 w-8 shrink-0 rounded-xl"
           />
           <div className="min-w-0">
             <p className="truncate font-display text-[15px] font-semibold tracking-tight text-ink-900">
               {branding.cafeName || settings?.cafeName || "Aezakmi Cafe"}
             </p>
-            <p className="truncate text-[11px] font-medium text-slate-soft">
-              {pc?.label || "Customer Station"} {pc?.ipAddress ? `· ${pc.ipAddress}` : ""}
-            </p>
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-soft">
+              <span className="font-semibold text-ink-900">{pc?.label || (isGuest ? "Guest Station" : "Customer Station")}</span>
+              {pc?.ipAddress && <span>· {pc.ipAddress}</span>}
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${serverError ? "border border-ember/30 bg-ember/10 text-ember-dim" : "border border-teal/25 bg-teal/10 text-teal-dim"}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${serverError ? "bg-ember" : "bg-teal"}`} />
+                {serverError ? "Offline" : "Online"}
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span className={`hidden min-h-10 items-center gap-1.5 rounded-xl border px-2.5 text-[11px] font-semibold sm:flex ${serverError ? "border-ember/30 bg-ember/10 text-ember-dim" : "border-teal/25 bg-teal/10 text-teal-dim"}`}>
-            <span className={`h-2 w-2 rounded-full ${serverError ? "bg-ember" : "bg-teal"}`} />
-            {serverError ? "Offline" : "Online"}
+        {/* User Badge / Balance */}
+        <div className="hidden md:flex items-center gap-2.5 customer-neutral-surface border border-surface-line px-3.5 py-1.5 rounded-xl text-xs">
+          <UserRound size={14} className="text-gold-dim" />
+          <span className="font-bold text-ink-900">{user.username || user.name}</span>
+          <span className="text-slate-soft text-[11px] hidden lg:inline">{isGuest ? "Guest access" : "Signed in"}</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isGuest ? "bg-midnight/8 text-ink-900" : (TIER_STYLE[user.tier] ?? TIER_STYLE.Regular)}`}>
+            {isGuest ? (legacyBillingSession ? "Guest · Staff checkout" : "Guest · Prepaid") : (user.tier ?? "Regular")}
           </span>
+          {!isGuest && (
+            <span className="border-l border-surface-line pl-2.5 font-mono font-bold text-ink-900">
+              {peso(wallet)}
+            </span>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleHelp}
+            disabled={assistanceSent || assistanceBusy}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35 disabled:opacity-50"
+            title="Ask staff for assistance"
+          >
+            <Bell size={14} /> <span className="hidden sm:inline">{assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}</span>
+          </button>
           <button
             type="button"
             onClick={() => setAnnouncementsOpen(true)}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
+            title="Cafe Announcements"
           >
-            <Megaphone size={14} /> Announcements
+            <Megaphone size={14} /> <span className="hidden sm:inline">Announcements</span>
           </button>
           <button
             type="button"
             onClick={openFeedback}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
+            title="Send Feedback to Staff"
           >
-            <MessageSquareText size={14} /> Feedback
+            <MessageSquareText size={14} /> <span className="hidden sm:inline">Feedback</span>
           </button>
           <button
             type="button"
             onClick={toggleTheme}
-            className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border border-surface-line bg-surface text-slate-soft transition-colors hover:bg-dance/35 hover:text-ink-900"
+            className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-xl border border-surface-line bg-surface text-slate-soft transition-colors hover:bg-dance/35 hover:text-ink-900"
             title={isDark ? "Use light theme" : "Use dark theme"}
             aria-label={isDark ? "Use light theme" : "Use dark theme"}
           >
-            {isDark ? <Sun size={15} /> : <Moon size={15} />}
+            {isDark ? <Sun size={14} /> : <Moon size={14} />}
           </button>
           <button
             type="button"
@@ -724,88 +780,165 @@ export default function CustomerSessionView() {
                 setCompactView(true);
               }
             }}
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
-            title="Compact to the session timer"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
+            title="Compact to floating session timer"
           >
-            <Minimize2 size={14} /> Compact
+            <Minimize2 size={14} /> <span className="hidden sm:inline">Compact</span>
           </button>
           {!legacyBillingSession && (
             <button
               type="button"
               onClick={handleThisPc}
               disabled={logoutBusy}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-ember/25 bg-ember/8 px-2.5 text-[11px] font-semibold text-ember-dim transition-colors hover:bg-ember/15 disabled:opacity-50"
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-ember/25 bg-ember/8 px-2.5 text-[11px] font-semibold text-ember-dim transition-colors hover:bg-ember/15 disabled:opacity-50"
               title="Log out of this PC"
             >
-              <LogOut size={14} /> {logoutBusy ? "Logging out…" : "Log Out"}
+              <LogOut size={14} /> <span>{logoutBusy ? "Logging out…" : "Log Out"}</span>
             </button>
           )}
         </div>
       </header>
 
       {serverError && (
-        <div className="mx-3 mt-3 shrink-0 rounded-xl border border-ember/30 bg-ember/10 px-3 py-2 text-[12px] font-medium text-ember-dim">
+        <div className="mx-3.5 mt-2 shrink-0 rounded-xl border border-ember/30 bg-ember/10 px-3 py-1.5 text-xs font-medium text-ember-dim">
           We cannot reach the cafe server right now. Some actions may not work until the connection returns.
         </div>
       )}
 
-      <main className="customer-content-grid">
-        <section className="min-h-0 min-w-0 space-y-3 overflow-hidden">
-          <div className="customer-primary-card px-4 py-3.5">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="eyebrow">{isGuest ? "Guest access" : "Signed in"}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <h1 className="truncate font-display text-[20px] font-semibold tracking-tight text-ink-900">
-                    {user.username || user.name}
-                  </h1>
-                  <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${isGuest ? "bg-midnight/8 text-ink-900" : (TIER_STYLE[user.tier] ?? TIER_STYLE.Regular)}`}>
-                    {isGuest ? (legacyBillingSession ? "Guest · Staff checkout" : "Guest · Prepaid") : (user.tier ?? "Regular")}
-                  </span>
-                </div>
+      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-12 gap-3.5 p-3.5 overflow-hidden">
+        {/* ======================================================== */}
+        {/* LEFT COLUMN: FULL SCREEN APP & GAME LAUNCHER (MAJORITY) */}
+        {/* ======================================================== */}
+        <section className="lg:col-span-8 xl:col-span-9 flex flex-col min-h-0 min-w-0 customer-primary-card overflow-hidden shadow-lg border border-surface-line">
+          {/* Launcher Toolbar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-surface-line px-4 py-3 bg-surface-raised/40 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-midnight/8 text-gold-dim">
+                <Gamepad2 size={18} />
+              </span>
+              <div>
+                <p className="eyebrow">Station Launcher</p>
+                <h2 className="font-display text-[16px] font-bold tracking-tight text-ink-900">Games & Applications</h2>
               </div>
-              {!isGuest && (
-                <div className="text-right">
-                  <p className="text-[11px] font-medium text-slate-soft">Wallet Balance</p>
-                  <p className="stat-figure text-[22px] font-semibold text-ink-900">{peso(wallet)}</p>
-                </div>
-              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-[140px] sm:min-w-[200px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-soft" size={13} />
+                <input
+                  type="text"
+                  placeholder="Search games, apps..."
+                  value={launcherSearchQuery}
+                  onChange={(e) => setLauncherSearchQuery(e.target.value)}
+                  className="w-full rounded-xl border border-surface-line customer-neutral-surface py-1.5 pl-7 pr-2.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setStationPinGateOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-soft hover:text-gold-dim px-2.5 py-1.5 rounded-xl border border-surface-line customer-neutral-surface transition shrink-0"
+                title="Configure Local Game Paths (Requires Master PIN)"
+              >
+                <SlidersHorizontal size={13} />
+                <span className="hidden sm:inline">Paths</span>
+              </button>
             </div>
           </div>
 
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto px-4 py-2 border-b border-surface-line/50 bg-surface-raised/20 shrink-0">
+            {activeCategories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setAppCategory(cat)}
+                className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                  appCategory === cat
+                    ? "bg-midnight/10 text-ink-900 border border-gold/40 shadow-xs"
+                    : "text-slate-soft hover:text-ink-900 border border-transparent hover:bg-surface-raised/50"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* Launcher Grid */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-4">
+            {activeAppsList.length === 0 ? (
+              <div className="h-full min-h-[220px] flex flex-col items-center justify-center p-8 text-center text-xs text-slate-soft border border-dashed border-surface-line rounded-2xl">
+                <Gamepad2 size={32} className="text-slate-soft/50 mb-2" />
+                <p className="font-semibold text-ink-900 text-sm">No applications found</p>
+                <p className="mt-1">No games or apps match your search filter.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+                {activeAppsList.map((app) => (
+                  <button
+                    key={app.id || app.name}
+                    type="button"
+                    onClick={() => handleLaunchApp(app)}
+                    className="customer-neutral-surface border border-surface-line rounded-2xl p-3 flex flex-col items-center justify-between text-center gap-1.5 hover:bg-surface-raised/80 hover:border-gold/50 hover:shadow-md transition-all duration-200 group relative cursor-pointer active:scale-[0.98]"
+                  >
+                    <CustomerAppIcon
+                      icon={app.icon}
+                      name={app.name}
+                      className="h-16 w-16 group-hover:scale-105 transition-transform duration-200 rounded-2xl shadow-sm"
+                      iconClass="text-3xl"
+                    />
+                    <div className="min-w-0 w-full mt-1.5">
+                      <span className="font-display text-xs font-bold text-ink-900 truncate block w-full">{app.name}</span>
+                      <span className="text-[9px] uppercase font-semibold text-slate-soft tracking-wider truncate block w-full">
+                        {app.categoryName || app.category || "Online Games"}
+                      </span>
+                    </div>
+                    <span className="mt-1.5 w-full py-1 px-2 rounded-lg text-[11px] font-bold bg-midnight/8 text-ink-900 group-hover:bg-gold group-hover:text-midnight transition flex items-center justify-center gap-1">
+                      <PlayCircle size={12} /> Launch
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ======================================================== */}
+        {/* RIGHT COLUMN: TIME, ORDERS, WALLET, SUPPORT (SIDEBAR) */}
+        {/* ======================================================== */}
+        <aside className="lg:col-span-4 xl:col-span-3 flex flex-col min-h-0 min-w-0 gap-3 overflow-y-auto pr-0.5">
+          {/* 1. SESSION TIMER & CLOCK CARD */}
           {hasActiveSession ? (
-            <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
-              <div className="flex items-center justify-between gap-3 border-b border-surface-line px-4 py-3">
+            <div className="customer-primary-card flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between gap-2 border-b border-surface-line px-3.5 py-2.5 bg-surface-raised/30">
                 <div>
-                  <p className="eyebrow">{isGuest ? "Guest session" : "Your session"}</p>
-                  <p className="mt-0.5 text-[13px] font-semibold text-ink-900">
-                    {legacyBillingSession
-                      ? "Legacy session requires staff"
-                      : (isGuest ? "Guest prepaid session" : "Prepaid session")}
+                  <p className="eyebrow">{isGuest ? (legacyBillingSession ? "Guest checkout" : "Guest prepaid session") : "Your Session"}</p>
+                  <p className="text-xs font-semibold text-ink-900">
+                    {legacyBillingSession ? "Staff checkout" : (ratePlan?.name || "Prepaid Rate")}
                   </p>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${session.isLocked ? "bg-ember/10 text-ember-dim" : "bg-teal/10 text-teal-dim"}`}>
-                  <span className={`h-2 w-2 rounded-full ${session.isLocked ? "bg-ember" : "bg-teal"}`} />
-                  {session.isLocked ? "Paused by staff" : "Session active"}
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${session.isLocked ? "bg-ember/10 text-ember-dim" : "bg-teal/10 text-teal-dim"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${session.isLocked ? "bg-ember" : "bg-teal"}`} />
+                  {session.isLocked ? "Paused" : "Active"}
                 </span>
               </div>
 
-              <div className="px-4 py-4 text-center">
-                <p className="eyebrow mb-2">
+              <div className="px-4 py-3.5 text-center">
+                <p className="eyebrow mb-1">
                   {legacyBillingSession ? "Staff action required" : "Time Left"}
                 </p>
-                <p className={`customer-timer-value ${lowTime ? "!text-ember-dim" : ""}`}>
+                <p className={`font-mono text-3xl sm:text-4xl font-black tracking-tight ${lowTime ? "text-ember-dim animate-pulse" : "text-ink-900"}`}>
                   {legacyBillingSession ? "--:--" : formatClock(remainingSeconds)}
                 </p>
-                <p className={`mx-auto mt-2 max-w-lg text-[12px] leading-5 ${lowTime ? "font-semibold text-ember-dim" : "text-slate-soft"}`}>
+                <p className={`mt-1 text-[11px] ${lowTime || legacyBillingSession ? "font-semibold text-ember-dim" : "text-slate-soft"}`}>
                   {legacyBillingSession
                     ? "This session came from an older billing mode. Please call staff to close it safely."
                     : lowTime
-                      ? `${Math.max(1, Math.ceil((remainingSeconds || 0) / 60))} min left. Add more time now if you want to keep using this PC.`
-                      : "Your timer continues while this session is active."}
+                      ? `${Math.max(1, Math.ceil((remainingSeconds || 0) / 60))}m left. Add time to continue.`
+                      : "Active timer"}
                 </p>
                 {!legacyBillingSession && (
-                  <div className="mx-auto mt-3 h-2.5 w-full max-w-2xl overflow-hidden rounded-full bg-dance/65">
+                  <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-dance/65">
                     <div
                       className={`h-full rounded-full transition-[width] duration-150 ${lowTime ? "bg-ember" : "bg-teal"}`}
                       style={{ width: `${(progress ?? 0) * 100}%` }}
@@ -814,134 +947,24 @@ export default function CustomerSessionView() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2 border-t border-surface-line px-3 py-3 sm:grid-cols-4">
-                {!isGuest && (
-                  <div className="customer-info-card">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Wallet Balance</p>
-                    <p className="mt-1 stat-figure text-[16px] font-semibold text-ink-900">{peso(wallet)}</p>
-                  </div>
-                )}
-                {isGuest && (
-                  <div className="customer-info-card">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Guest Station</p>
-                    <p className="mt-1 truncate text-[13px] font-semibold text-ink-900">{pc?.label || "This PC"}</p>
-                  </div>
-                )}
-                <div className="customer-info-card">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Current Rate</p>
-                  <p className="mt-1 truncate text-[13px] font-semibold text-ink-900">
-                    {legacyBillingSession ? "Staff checkout" : (ratePlan?.name ?? "Standard rate")}
-                  </p>
+              <div className="grid grid-cols-2 gap-1.5 border-t border-surface-line p-2 text-center text-xs">
+                <div className="customer-neutral-surface rounded-xl p-2">
+                  <p className="text-[10px] text-slate-soft font-medium uppercase">Elapsed</p>
+                  <p className="font-mono font-bold text-ink-900 text-xs mt-0.5">{formatClock(elapsedSeconds)}</p>
                 </div>
-                <div className="customer-info-card">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Session Type</p>
-                  <p className="mt-1 text-[13px] font-semibold text-ink-900">{legacyBillingSession ? "Legacy" : "Prepaid"}</p>
-                </div>
-                <div className="customer-info-card">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">
-                    {legacyBillingSession ? "Status" : "Amount Paid"}
-                  </p>
-                  <p className="mt-1 stat-figure text-[16px] font-semibold text-ink-900">{legacyBillingSession ? "Ask staff" : peso(cost)}</p>
+                <div className="customer-neutral-surface rounded-xl p-2">
+                  <p className="text-[10px] text-slate-soft font-medium uppercase">Amount Paid</p>
+                  <p className="font-mono font-bold text-ink-900 text-xs mt-0.5">{peso(cost)}</p>
                 </div>
               </div>
-
-              {assistanceError && (
-                <p className="mx-3 mb-2 rounded-xl border border-ember/25 bg-ember/10 px-3 py-2 text-center text-[12px] font-medium text-ember-dim">
-                  {assistanceError}
-                </p>
-              )}
-
-              {isGuest ? (
-                <div className="space-y-2 border-t border-surface-line p-3">
-                  <div className={`grid ${canExtend ? "grid-cols-2" : "grid-cols-1"} gap-2`}>
-                    {canExtend && (
-                      <Button
-                        variant="teal"
-                        icon={PlusCircle}
-                        onClick={() => setExtendOpen(true)}
-                        title="Add more prepaid time"
-                      >
-                        Add Time
-                      </Button>
-                    )}
-                    <Button
-                      variant="primary"
-                      icon={Bell}
-                      onClick={handleHelp}
-                      disabled={assistanceSent || assistanceBusy}
-                    >
-                      {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="ghost"
-                      icon={UtensilsCrossed}
-                      onClick={() => setMenuOrderOpen(true)}
-                    >
-                      Order Food & Drinks
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      icon={Ticket}
-                      onClick={() => setVoucherOpen(true)}
-                    >
-                      Redeem Voucher
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2 border-t border-surface-line p-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button variant="primary" icon={Wallet} onClick={() => setTopUpOpen(true)}>
-                      Top Up
-                    </Button>
-                    <Button
-                      variant={canExtend ? "teal" : "ghost"}
-                      icon={PlusCircle}
-                      onClick={() => canExtend && setExtendOpen(true)}
-                      disabled={!canExtend}
-                      title={canExtend ? "Add more prepaid time" : "Add Time is available during prepaid sessions"}
-                    >
-                      Add Time
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      icon={assistanceSent ? CheckCircle2 : Bell}
-                      onClick={handleHelp}
-                      disabled={assistanceSent || assistanceBusy}
-                    >
-                      {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
-                    </Button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="teal"
-                      icon={UtensilsCrossed}
-                      onClick={() => setMenuOrderOpen(true)}
-                    >
-                      Order Food & Drinks
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      icon={Ticket}
-                      onClick={() => setVoucherOpen(true)}
-                    >
-                      Redeem Voucher
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           ) : (
-            <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
-              <div className="flex items-center justify-between gap-4 border-b border-surface-line px-4 py-3.5">
+            <div className="customer-primary-card flex flex-col overflow-hidden p-3.5">
+              <div className="flex items-center justify-between gap-2 mb-2">
                 <div>
-                  <p className="eyebrow">Ready when you are</p>
-                  <h2 className="mt-1 font-display text-[22px] font-semibold tracking-tight text-ink-900">
-                    Start using this PC
-                  </h2>
-                  <p className="mt-1 text-[12px] text-slate-soft">
+                  <p className="eyebrow">Station Ready</p>
+                  <h3 className="font-display text-sm font-bold text-ink-900">Start using this PC</h3>
+                  <p className="mt-0.5 text-[11px] text-slate-soft">
                     {isGuest
                       ? (loading ? "Reconnecting guest session…" : "Guest session reconnecting.")
                       : canStartImmediately
@@ -953,140 +976,93 @@ export default function CustomerSessionView() {
                             : "Waiting for PC registration."}
                   </p>
                 </div>
-                <div className="hidden rounded-2xl bg-midnight/8 p-3 text-ink-900 sm:block">
-                  <PlayCircle size={28} />
-                </div>
+                <PlayCircle size={24} className="text-gold-dim shrink-0" />
               </div>
-
-              <div className="grid grid-cols-2 gap-2 px-3 py-3 sm:grid-cols-3">
-                {!isGuest && (
-                  <div className="customer-info-card">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Wallet Balance</p>
-                    <p className="mt-1 stat-figure text-[18px] font-semibold text-ink-900">{peso(wallet)}</p>
-                  </div>
-                )}
-                <div className="customer-info-card">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Saved Time</p>
-                  <p className="mt-1 stat-figure text-[16px] font-semibold text-ink-900">
-                    {savedSessionSeconds > 0 ? formatClock(savedSessionSeconds) : "None"}
-                  </p>
-                </div>
-                <div className="customer-info-card">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-soft">Current PC</p>
-                  <p className="mt-1 truncate text-[13px] font-semibold text-ink-900">{pc?.label || "Not detected"}</p>
-                </div>
-              </div>
-
-              {assistanceError && (
-                <p className="mx-3 rounded-xl border border-ember/25 bg-ember/10 px-3 py-2 text-center text-[12px] font-medium text-ember-dim">
-                  {assistanceError}
-                </p>
-              )}
-
-              <div className="space-y-2 px-3 py-3">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {!isGuest && canSelfStart ? (
-                    <Button variant="primary" icon={PlayCircle} onClick={() => setStartOpen(true)}>
-                      Start Session
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="primary"
-                      icon={Bell}
-                      onClick={handleHelp}
-                      disabled={assistanceSent || assistanceBusy}
-                    >
-                      {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
-                    </Button>
-                  )}
-                  {!isGuest && (
-                    <Button variant="teal" icon={Wallet} onClick={() => setTopUpOpen(true)}>
-                      Top Up
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    icon={Bell}
-                    onClick={handleHelp}
-                    disabled={assistanceSent || assistanceBusy}
-                  >
-                    {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : "Ask for Help"}
-                  </Button>
-                </div>
-                {!isGuest && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="ghost"
-                      icon={UtensilsCrossed}
-                      onClick={() => setMenuOrderOpen(true)}
-                    >
-                      Order Food & Drinks
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      icon={Ticket}
-                      onClick={() => setVoucherOpen(true)}
-                    >
-                      Redeem Voucher
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {!isGuest && selfServicePlans.length > 0 && (
-                <div className="min-h-0 border-t border-surface-line px-3 py-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div>
-                      <p className="eyebrow">Rates you can use</p>
-                    </div>
-                    <span className="text-[11px] font-semibold text-slate-soft">{selfServicePlans.length} available</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {selfServicePlans.slice(0, 4).map((plan) => (
-                      <div key={plan.id} className="rounded-xl border border-surface-line customer-neutral-surface px-3 py-2.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-[13px] font-semibold text-ink-900">{plan.name}</p>
-                          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${TIER_STYLE[plan.customerTier || plan.customer_tier || "Regular"] || TIER_STYLE.Regular}`}>
-                            {plan.customerTier || plan.customer_tier || "Regular"}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] leading-4 text-slate-soft">{plan.description || "Available for this account."}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              {!isGuest && canSelfStart ? (
+                <Button variant="primary" icon={PlayCircle} onClick={() => setStartOpen(true)} className="w-full">
+                  Start Session
+                </Button>
+              ) : (
+                <Button variant="primary" icon={Bell} onClick={handleHelp} disabled={assistanceSent || assistanceBusy} className="w-full">
+                  {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
+                </Button>
               )}
             </div>
           )}
 
-          {/* Active Food & Drink Orders Tracker */}
-          {myOrders.length > 0 && (
-            <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
-              <div className="flex items-center justify-between gap-2 border-b border-surface-line px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
-                    <ShoppingBag size={16} />
-                  </span>
-                  <div>
-                    <p className="eyebrow">Cafe Kitchen</p>
-                    <h3 className="font-display text-[15px] font-semibold tracking-tight text-ink-900">Your Recent Orders</h3>
-                  </div>
+          {/* 2. QUICK ACTIONS & WALLET CARD */}
+          <div className="customer-primary-card p-3 space-y-2">
+            {!isGuest && (
+              <div className="flex items-center justify-between px-1 pb-1">
+                <div>
+                  <p className="text-[10px] uppercase font-semibold text-slate-soft">Wallet Balance</p>
+                  <p className="font-mono font-bold text-lg text-ink-900">{peso(wallet)}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMenuOrderOpen(true)}
-                  className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-surface-line customer-neutral-surface px-2.5 text-xs font-semibold text-ink-900 hover:bg-dance/35"
-                >
-                  <PlusCircle size={13} /> Order More
-                </button>
+                {savedSessionSeconds > 0 && (
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase font-semibold text-slate-soft">Saved Time</p>
+                    <p className="font-mono font-bold text-sm text-teal-dim">{formatClock(savedSessionSeconds)}</p>
+                  </div>
+                )}
               </div>
-              <div className="divide-y divide-surface-line overflow-y-auto max-h-56">
-                {myOrders.slice(0, 5).map((order) => {
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              {canExtend ? (
+                <Button variant="teal" icon={PlusCircle} onClick={() => setExtendOpen(true)} size="sm">
+                  Add Time
+                </Button>
+              ) : (
+                <Button variant="ghost" icon={Bell} onClick={handleHelp} disabled={assistanceSent || assistanceBusy} size="sm">
+                  {assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}
+                </Button>
+              )}
+              {!isGuest ? (
+                <Button variant="primary" icon={Wallet} onClick={() => setTopUpOpen(true)} size="sm">
+                  Top Up
+                </Button>
+              ) : (
+                <Button variant="ghost" icon={Ticket} onClick={() => setVoucherOpen(true)} size="sm">
+                  Voucher
+                </Button>
+              )}
+            </div>
+            {!isGuest && (
+              <Button variant="ghost" icon={Ticket} onClick={() => setVoucherOpen(true)} size="sm" className="w-full">
+                Redeem Voucher
+              </Button>
+            )}
+          </div>
+
+          {/* 3. CAFE KITCHEN / FOOD & DRINKS ORDERING */}
+          <div className="customer-primary-card flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between gap-2 border-b border-surface-line px-3.5 py-2.5 bg-surface-raised/30">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+                  <UtensilsCrossed size={14} />
+                </span>
+                <div>
+                  <p className="eyebrow">Cafe Kitchen</p>
+                  <h3 className="font-display text-xs font-bold text-ink-900">Food & Drinks</h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMenuOrderOpen(true)}
+                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-500 hover:bg-amber-500/20 transition"
+              >
+                <ShoppingBag size={12} /> Order Food
+              </button>
+            </div>
+
+            {/* Active Orders List */}
+            {myOrders.length > 0 ? (
+              <div className="divide-y divide-surface-line overflow-y-auto max-h-48 p-1">
+                {myOrders.slice(0, 4).map((order) => {
                   const status = order.order_status || order.orderStatus || 'pending';
                   const isPending = status === 'pending';
                   const isPreparing = status === 'preparing';
                   const isFulfilled = status === 'fulfilled';
-                  const isCancelled = status === 'cancelled';
                   let parsedItems = [];
                   try {
                     parsedItems = typeof order.items_json === 'string' ? JSON.parse(order.items_json) : (order.items || []);
@@ -1094,11 +1070,11 @@ export default function CustomerSessionView() {
                     parsedItems = [];
                   }
                   return (
-                    <div key={order.id} className="p-3.5 flex items-center justify-between gap-3 text-xs">
+                    <div key={order.id} className="p-2.5 flex items-center justify-between gap-2 text-xs">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            className={`px-1.5 py-0.2 rounded-md text-[9px] font-bold uppercase ${
                               isPending
                                 ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                                 : isPreparing
@@ -1111,10 +1087,9 @@ export default function CustomerSessionView() {
                             {status}
                           </span>
                           <span className="text-[11px] font-mono font-bold text-ink-900">₱{Number(order.total || 0).toFixed(2)}</span>
-                          <span className="text-[10px] text-slate-soft">· {order.payment_method || order.paymentMethod}</span>
                         </div>
-                        <p className="mt-1 text-[11px] text-slate-soft truncate">
-                          {parsedItems.map(i => `${i.quantity}x ${i.name}`).join(', ') || 'Order items'}
+                        <p className="mt-0.5 text-[10px] text-slate-soft truncate">
+                          {parsedItems.map((i) => `${i.quantity}x ${i.name}`).join(', ') || 'Order items'}
                         </p>
                       </div>
                       {isPending && (
@@ -1122,141 +1097,57 @@ export default function CustomerSessionView() {
                           type="button"
                           disabled={cancellingOrderId === order.id}
                           onClick={() => handleCancelOrder(order.id)}
-                          className="shrink-0 px-2.5 py-1.5 rounded-xl border border-ember/30 bg-ember/10 text-ember-dim font-bold text-xs hover:bg-ember/20 transition disabled:opacity-50"
+                          className="shrink-0 px-2 py-1 rounded-lg border border-ember/30 bg-ember/10 text-ember-dim font-bold text-[10px] hover:bg-ember/20 transition disabled:opacity-50"
                         >
-                          {cancellingOrderId === order.id ? 'Cancelling…' : 'Cancel / Undo'}
+                          {cancellingOrderId === order.id ? '…' : 'Cancel'}
                         </button>
                       )}
                     </div>
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {/* Games & Applications Launcher Grid */}
-          <div className="customer-primary-card flex min-h-0 flex-col overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-surface-line px-4 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-midnight/8 text-ink-900">
-                    <Gamepad2 size={16} />
-                  </span>
-                  <div>
-                    <p className="eyebrow">Station Programs</p>
-                    <h3 className="font-display text-[15px] font-semibold tracking-tight text-ink-900">Games & Applications</h3>
-                  </div>
-                </div>
-
-                {/* Technician Station Setup Button (Master PIN Protected) */}
+            ) : (
+              <div className="p-3 text-center text-xs text-slate-soft">
+                <p className="text-[11px]">Noodles, snacks, and chilled drinks delivered straight to your station.</p>
                 <button
                   type="button"
-                  onClick={() => setStationPinGateOpen(true)}
-                  className="sm:hidden inline-flex items-center gap-1 text-[11px] font-semibold text-slate-soft hover:text-gold-dim p-1.5 rounded-lg border border-surface-line customer-neutral-surface"
-                  title="Configure Local Game Paths (Requires Master PIN)"
+                  onClick={() => setMenuOrderOpen(true)}
+                  className="mt-2 text-gold-dim hover:underline font-bold text-xs"
                 >
-                  <SlidersHorizontal size={13} />
+                  Browse Menu & Order →
                 </button>
               </div>
-
-              <div className="flex items-center gap-2">
-                {/* Search */}
-                <div className="relative min-w-[130px] sm:min-w-[170px]">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-soft" size={13} />
-                  <input
-                    type="text"
-                    placeholder="Search games…"
-                    value={launcherSearchQuery}
-                    onChange={(e) => setLauncherSearchQuery(e.target.value)}
-                    className="w-full rounded-xl border border-surface-line customer-neutral-surface py-1 pl-7 pr-2.5 text-[11px] text-ink-900 focus:outline-none focus:border-gold/50"
-                  />
-                </div>
-
-                {/* Technician Station Setup Button on desktop */}
-                <button
-                  type="button"
-                  onClick={() => setStationPinGateOpen(true)}
-                  className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-soft hover:text-gold-dim px-2.5 py-1 rounded-xl border border-surface-line customer-neutral-surface transition"
-                  title="Configure Local Game Paths (Requires Master PIN)"
-                >
-                  <SlidersHorizontal size={13} />
-                  <span>Station Paths</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Category Filter Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto px-4 py-2 border-b border-surface-line/50 bg-surface-raised/30">
-              {activeCategories.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setAppCategory(cat)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition ${
-                    appCategory === cat
-                      ? "bg-midnight/10 text-ink-900 border border-gold/30 shadow-xs"
-                      : "text-slate-soft hover:text-ink-900 border border-transparent"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {/* Apps Grid */}
-            <div className="p-3">
-              {activeAppsList.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-soft border border-dashed border-surface-line rounded-2xl">
-                  No games or applications match your filter.
-                </div>
-              ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2">
-                  {activeAppsList.map((app) => (
-                    <button
-                      key={app.id}
-                      type="button"
-                      onClick={() => handleLaunchApp(app)}
-                      className="customer-neutral-surface border border-surface-line rounded-2xl p-2.5 flex flex-col items-center justify-center text-center gap-1.5 hover:bg-dance/40 hover:border-gold/40 transition group relative"
-                    >
-                      <span className="text-2xl group-hover:scale-110 transition transform">{app.icon || "🎮"}</span>
-                      <span className="text-[11px] font-bold text-ink-900 truncate w-full">{app.name}</span>
-                      <span className="text-[9px] uppercase font-semibold text-slate-soft tracking-wider truncate w-full">
-                        {app.categoryName || app.category || "General"}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        </section>
 
-        <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-hidden">
+          {/* 4. ANNOUNCEMENTS & SUPPORT */}
           <AnnouncementBox
             announcements={announcements}
             onFeedback={openFeedback}
             birthdayAnnouncement={birthdayAnnouncement}
           />
+
+          {/* 5. PC CONTROLS */}
           {(window.aezakmiClient?.restartClient || window.aezakmiClient?.shutdownClient) && (
             <div className="customer-support-card">
               <p className="eyebrow">PC controls</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-2">
                 {window.aezakmiClient?.restartClient && (
                   <button
                     type="button"
                     onClick={() => setPowerConfirm("restart")}
-                    className="customer-action-tile customer-neutral-surface text-ink-900 hover:bg-dance/35"
+                    className="customer-action-tile customer-neutral-surface text-ink-900 hover:bg-dance/35 py-2 text-xs"
                   >
-                    <span className="inline-flex items-center justify-center gap-1.5"><Monitor size={14} /> Restart</span>
+                    <span className="inline-flex items-center justify-center gap-1.5"><Monitor size={13} /> Restart</span>
                   </button>
                 )}
                 {window.aezakmiClient?.shutdownClient && (
                   <button
                     type="button"
                     onClick={() => setPowerConfirm("shutdown")}
-                    className="customer-action-tile border-ember/25 bg-ember/8 text-ember-dim hover:bg-ember/15"
+                    className="customer-action-tile border-ember/25 bg-ember/8 text-ember-dim hover:bg-ember/15 py-2 text-xs"
                   >
-                    <span className="inline-flex items-center justify-center gap-1.5"><Power size={14} /> Shut Down</span>
+                    <span className="inline-flex items-center justify-center gap-1.5"><Power size={13} /> Shut Down</span>
                   </button>
                 )}
               </div>

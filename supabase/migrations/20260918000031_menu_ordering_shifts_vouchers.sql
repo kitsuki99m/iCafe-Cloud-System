@@ -68,6 +68,7 @@ grant select, insert, update, delete on public.branch_user_shifts to service_rol
 create table if not exists public.branch_promo_vouchers (
   id uuid primary key default gen_random_uuid(),
   branch_id uuid not null references public.branches(id) on delete cascade,
+  local_id text,
   code text not null,
   benefit_type text not null default 'wallet_credit', -- 'wallet_credit', 'session_time'
   value_amount numeric not null default 0, -- pesos or seconds
@@ -76,9 +77,11 @@ create table if not exists public.branch_promo_vouchers (
   expires_at timestamptz default null,
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
-  unique(branch_id, code)
+  unique(branch_id, code),
+  unique(branch_id, local_id)
 );
 create index if not exists branch_promo_vouchers_branch_idx on public.branch_promo_vouchers(branch_id, code);
+create index if not exists branch_promo_vouchers_local_idx on public.branch_promo_vouchers(branch_id, local_id);
 alter table public.branch_promo_vouchers enable row level security;
 revoke all on public.branch_promo_vouchers from public, anon, authenticated;
 grant select, insert, update, delete on public.branch_promo_vouchers to service_role;

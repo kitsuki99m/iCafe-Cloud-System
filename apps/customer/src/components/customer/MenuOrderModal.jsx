@@ -179,9 +179,9 @@ export default function MenuOrderModal({ isOpen, onClose }) {
                     }`}
                   >
                     <div>
-                      <div className={`h-24 rounded-xl overflow-hidden relative mb-2 flex items-center justify-center p-1.5 transition ${item.image_url || item.imageUrl ? 'bg-white' : 'bg-surface-raised'}`}>
+                      <div className={`h-24 min-h-[96px] w-full rounded-xl overflow-hidden relative mb-2 flex items-center justify-center p-1.5 transition shrink-0 ${item.image_url || item.imageUrl ? 'bg-white' : 'bg-surface-raised'}`}>
                         {item.image_url || item.imageUrl ? (
-                          <img src={item.image_url || item.imageUrl} alt={item.name} className="w-full h-full object-contain" onError={(e) => { e.target.style.display = 'none' }} />
+                          <img src={item.image_url || item.imageUrl} alt={item.name} loading="lazy" width="96" height="96" className="w-full h-full object-contain" onError={(e) => { e.target.style.display = 'none' }} />
                         ) : (
                           <UtensilsCrossed className="w-7 h-7 text-slate-soft/50" />
                         )}

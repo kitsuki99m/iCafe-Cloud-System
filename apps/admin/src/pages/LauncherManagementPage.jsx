@@ -26,46 +26,71 @@ import { AdminEmptyState, AdminMetricCard, AdminPageWorkspace, AdminRailCard } f
 
 const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
+function AppIcon({ icon, name, className = 'h-10 w-10', iconClass = 'text-xl' }) {
+  const isImage = icon && (icon.startsWith('/') || icon.startsWith('http') || icon.startsWith('data:') || /\.(webp|png|jpg|jpeg|svg)$/i.test(icon))
+  const [imgError, setImgError] = useState(false)
+
+  if (isImage && !imgError) {
+    return (
+      <span className={`inline-flex items-center justify-center rounded-xl bg-surface-raised/80 border border-surface-line/50 overflow-hidden p-1 shrink-0 ${className}`}>
+        <img
+          src={icon}
+          alt={name || 'App Icon'}
+          className="h-full w-full object-contain"
+          onError={() => setImgError(true)}
+          loading="lazy"
+        />
+      </span>
+    )
+  }
+
+  return (
+    <span className={`inline-flex items-center justify-center rounded-xl bg-midnight/8 ${iconClass} shrink-0 ${className}`}>
+      {icon || '🎮'}
+    </span>
+  )
+}
+
 const PRESET_CATALOG = [
-  { name: 'Steam', category: 'Online Games', icon: '🎮', protocol: 'steam://', exe: 'steam.exe' },
-  { name: 'Riot / Valorant', category: 'Online Games', icon: '⚔️', protocol: 'riotclient://', exe: 'RiotClientServices.exe' },
-  { name: 'Epic Games Launcher', category: 'Online Games', icon: '⚡', protocol: 'com.epicgames.launcher://', exe: 'EpicGamesLauncher.exe' },
-  { name: 'Roblox', category: 'Online Games', icon: '🧱', protocol: 'roblox://', exe: 'RobloxPlayerLauncher.exe' },
-  { name: 'Dota 2', category: 'Online Games', icon: '🛡️', protocol: 'steam://rungameid/570', exe: 'dota2.exe' },
-  { name: 'League of Legends', category: 'Online Games', icon: '🏆', protocol: 'riotclient://launch/league_of_legends', exe: 'LeagueClient.exe' },
-  { name: 'Counter-Strike 2', category: 'Online Games', icon: '🎯', protocol: 'steam://rungameid/730', exe: 'cs2.exe' },
-  { name: 'Genshin Impact', category: 'Online Games', icon: '✨', protocol: null, exe: 'GenshinImpact.exe' },
-  { name: 'Honkai: Star Rail', category: 'Online Games', icon: '🚂', protocol: null, exe: 'StarRail.exe' },
-  { name: 'Call of Duty: Warzone', category: 'Online Games', icon: '💥', protocol: 'battlenet://', exe: 'Battle.net.exe' },
-  { name: 'Apex Legends', category: 'Online Games', icon: '🔥', protocol: 'origin://', exe: 'r5apex.exe' },
-  { name: 'Minecraft', category: 'Offline Games', icon: '⛏️', protocol: null, exe: 'Minecraft.exe' },
-  { name: 'Grand Theft Auto V', category: 'Offline Games', icon: '🚗', protocol: null, exe: 'GTA5.exe' },
-  { name: 'Cyberpunk 2077', category: 'Offline Games', icon: '🌆', protocol: null, exe: 'Cyberpunk2077.exe' },
-  { name: 'Left 4 Dead 2', category: 'Offline Games', icon: '🧟', protocol: 'steam://rungameid/550', exe: 'left4dead2.exe' },
-  { name: 'Need for Speed', category: 'Offline Games', icon: '🏎️', protocol: null, exe: 'NFS.exe' },
-  { name: 'Street Fighter 6', category: 'Offline Games', icon: '🥊', protocol: 'steam://rungameid/1364780', exe: 'StreetFighter6.exe' },
-  { name: 'Tekken 8', category: 'Offline Games', icon: '🥋', protocol: 'steam://rungameid/1778820', exe: 'Polaris-Win64-Shipping.exe' },
-  { name: 'Google Chrome', category: 'Surfing & Browsers', icon: '🌐', protocol: null, exe: 'chrome.exe' },
-  { name: 'Microsoft Edge', category: 'Surfing & Browsers', icon: '🌊', protocol: null, exe: 'msedge.exe' },
-  { name: 'Brave Browser', category: 'Surfing & Browsers', icon: '🦁', protocol: null, exe: 'brave.exe' },
-  { name: 'Mozilla Firefox', category: 'Surfing & Browsers', icon: '🦊', protocol: null, exe: 'firefox.exe' },
-  { name: 'Opera GX', category: 'Surfing & Browsers', icon: '🕹️', protocol: null, exe: 'opera.exe' },
-  { name: 'Microsoft Word', category: 'Office & Productivity', icon: '📝', protocol: null, exe: 'WINWORD.EXE' },
-  { name: 'Microsoft Excel', category: 'Office & Productivity', icon: '📊', protocol: null, exe: 'EXCEL.EXE' },
-  { name: 'Microsoft PowerPoint', category: 'Office & Productivity', icon: '📑', protocol: null, exe: 'POWERPNT.EXE' },
-  { name: 'Discord', category: 'Utilities & Chat', icon: '💬', protocol: 'discord://', exe: 'Discord.exe' },
-  { name: 'Spotify', category: 'Utilities & Chat', icon: '🎵', protocol: 'spotify://', exe: 'Spotify.exe' },
-  { name: 'OBS Studio', category: 'Utilities & Chat', icon: '📹', protocol: null, exe: 'obs64.exe' },
-  { name: 'Calculator', category: 'Utilities & Chat', icon: '🧮', protocol: null, exe: 'calc.exe' },
-  { name: 'Notepad', category: 'Utilities & Chat', icon: '📄', protocol: null, exe: 'notepad.exe' },
-  { name: 'VLC Media Player', category: 'Utilities & Chat', icon: '🎬', protocol: null, exe: 'vlc.exe' },
-  { name: '7-Zip', category: 'Utilities & Chat', icon: '📦', protocol: null, exe: '7zFM.exe' },
-  { name: 'LDPlayer 9', category: 'Emulators', icon: '📱', protocol: null, exe: 'dnplayer.exe' },
-  { name: 'BlueStacks 5', category: 'Emulators', icon: '📱', protocol: null, exe: 'HD-Player.exe' },
-  { name: 'NoxPlayer', category: 'Emulators', icon: '📱', protocol: null, exe: 'Nox.exe' },
-  { name: 'PCSX2 PlayStation 2', category: 'Emulators', icon: '🎮', protocol: null, exe: 'pcsx2-qtx64.exe' },
-  { name: 'RPCS3 PlayStation 3', category: 'Emulators', icon: '🕹️', protocol: null, exe: 'rpcs3.exe' },
-  { name: 'PPSSPP PSP', category: 'Emulators', icon: '🎮', protocol: null, exe: 'PPSSPPWindows64.exe' },
+  { name: 'Steam', category: 'Online Games', icon: '/assets/launcher/steam.webp', protocol: 'steam://', exe: 'steam.exe' },
+  { name: 'Riot / Valorant', category: 'Online Games', icon: '/assets/launcher/valorant.webp', protocol: 'riotclient://', exe: 'RiotClientServices.exe' },
+  { name: 'Epic Games Launcher', category: 'Online Games', icon: '/assets/launcher/epicgames.webp', protocol: 'com.epicgames.launcher://', exe: 'EpicGamesLauncher.exe' },
+  { name: 'Roblox', category: 'Online Games', icon: '/assets/launcher/roblox.webp', protocol: 'roblox://', exe: 'RobloxPlayerLauncher.exe' },
+  { name: 'Dota 2', category: 'Online Games', icon: '/assets/launcher/dota2.webp', protocol: 'steam://rungameid/570', exe: 'dota2.exe' },
+  { name: 'League of Legends', category: 'Online Games', icon: '/assets/launcher/lol.webp', protocol: 'riotclient://launch/league_of_legends', exe: 'LeagueClient.exe' },
+  { name: 'Counter-Strike 2', category: 'Online Games', icon: '/assets/launcher/cs2.webp', protocol: 'steam://rungameid/730', exe: 'cs2.exe' },
+  { name: 'Genshin Impact', category: 'Online Games', icon: '/assets/launcher/genshin.webp', protocol: null, exe: 'GenshinImpact.exe' },
+  { name: 'Honkai: Star Rail', category: 'Online Games', icon: '/assets/launcher/starrail.webp', protocol: null, exe: 'StarRail.exe' },
+  { name: 'Call of Duty: Warzone', category: 'Online Games', icon: '/assets/launcher/warzone.webp', protocol: 'battlenet://', exe: 'Battle.net.exe' },
+  { name: 'Apex Legends', category: 'Online Games', icon: '/assets/launcher/apex.webp', protocol: 'origin://', exe: 'r5apex.exe' },
+  { name: 'Minecraft', category: 'Offline Games', icon: '/assets/launcher/minecraft.webp', protocol: null, exe: 'Minecraft.exe' },
+  { name: 'Grand Theft Auto V', category: 'Offline Games', icon: '/assets/launcher/gta5.webp', protocol: null, exe: 'GTA5.exe' },
+  { name: 'Cyberpunk 2077', category: 'Offline Games', icon: '/assets/launcher/cyberpunk2077.webp', protocol: null, exe: 'Cyberpunk2077.exe' },
+  { name: 'Left 4 Dead 2', category: 'Offline Games', icon: '/assets/launcher/l4d2.webp', protocol: 'steam://rungameid/550', exe: 'left4dead2.exe' },
+  { name: 'Need for Speed', category: 'Offline Games', icon: '/assets/launcher/nfs.webp', protocol: null, exe: 'NFS.exe' },
+  { name: 'Street Fighter 6', category: 'Offline Games', icon: '/assets/launcher/sf6.webp', protocol: 'steam://rungameid/1364780', exe: 'StreetFighter6.exe' },
+  { name: 'Tekken 8', category: 'Offline Games', icon: '/assets/launcher/tekken8.webp', protocol: 'steam://rungameid/1778820', exe: 'Polaris-Win64-Shipping.exe' },
+  { name: 'Google Chrome', category: 'Surfing & Browsers', icon: '/assets/launcher/chrome.webp', protocol: null, exe: 'chrome.exe' },
+  { name: 'Microsoft Edge', category: 'Surfing & Browsers', icon: '/assets/launcher/edge.webp', protocol: null, exe: 'msedge.exe' },
+  { name: 'Brave Browser', category: 'Surfing & Browsers', icon: '/assets/launcher/brave.webp', protocol: null, exe: 'brave.exe' },
+  { name: 'Mozilla Firefox', category: 'Surfing & Browsers', icon: '/assets/launcher/firefox.webp', protocol: null, exe: 'firefox.exe' },
+  { name: 'Opera GX', category: 'Surfing & Browsers', icon: '/assets/launcher/operagx.webp', protocol: null, exe: 'opera.exe' },
+  { name: 'Microsoft Word', category: 'Office & Productivity', icon: '/assets/launcher/word.webp', protocol: null, exe: 'WINWORD.EXE' },
+  { name: 'Microsoft Excel', category: 'Office & Productivity', icon: '/assets/launcher/excel.webp', protocol: null, exe: 'EXCEL.EXE' },
+  { name: 'Microsoft PowerPoint', category: 'Office & Productivity', icon: '/assets/launcher/powerpoint.webp', protocol: null, exe: 'POWERPNT.EXE' },
+  { name: 'Discord', category: 'Utilities & Chat', icon: '/assets/launcher/discord.webp', protocol: 'discord://', exe: 'Discord.exe' },
+  { name: 'Spotify', category: 'Utilities & Chat', icon: '/assets/launcher/spotify.webp', protocol: 'spotify://', exe: 'Spotify.exe' },
+  { name: 'OBS Studio', category: 'Utilities & Chat', icon: '/assets/launcher/obs.webp', protocol: null, exe: 'obs64.exe' },
+  { name: 'Calculator', category: 'Utilities & Chat', icon: '/assets/launcher/calculator.webp', protocol: null, exe: 'calc.exe' },
+  { name: 'Notepad', category: 'Utilities & Chat', icon: '/assets/launcher/notepad.webp', protocol: null, exe: 'notepad.exe' },
+  { name: 'VLC Media Player', category: 'Utilities & Chat', icon: '/assets/launcher/vlc.webp', protocol: null, exe: 'vlc.exe' },
+  { name: '7-Zip', category: 'Utilities & Chat', icon: '/assets/launcher/7zip.webp', protocol: null, exe: '7zFM.exe' },
+  { name: 'LDPlayer 9', category: 'Emulators', icon: '/assets/launcher/ldplayer.webp', protocol: null, exe: 'dnplayer.exe' },
+  { name: 'BlueStacks 5', category: 'Emulators', icon: '/assets/launcher/bluestacks.webp', protocol: null, exe: 'HD-Player.exe' },
+  { name: 'NoxPlayer', category: 'Emulators', icon: '/assets/launcher/nox.webp', protocol: null, exe: 'Nox.exe' },
+  { name: 'PCSX2 PlayStation 2', category: 'Emulators', icon: '/assets/launcher/pcsx2.webp', protocol: null, exe: 'pcsx2-qtx64.exe' },
+  { name: 'RPCS3 PlayStation 3', category: 'Emulators', icon: '/assets/launcher/rpcs3.webp', protocol: null, exe: 'rpcs3.exe' },
+  { name: 'PPSSPP PSP', category: 'Emulators', icon: '/assets/launcher/ppsspp.webp', protocol: null, exe: 'PPSSPPWindows64.exe' },
 ]
 
 export default function LauncherManagementPage() {
@@ -495,9 +520,7 @@ export default function LauncherManagementPage() {
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-midnight/8 text-2xl group-hover:scale-105 transition transform">
-                      {app.icon || '🎮'}
-                    </span>
+                    <AppIcon icon={app.icon} name={app.name} className="h-11 w-11" />
                     <div>
                       <h4 className="font-display text-sm font-bold text-ink-900 leading-snug line-clamp-1">
                         {app.name}
@@ -601,31 +624,69 @@ export default function LauncherManagementPage() {
         }
       >
         <form onSubmit={handleSaveApp} className="space-y-3.5">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="block">
-                <span className="eyebrow mb-1 block">Application Name *</span>
-                <input
-                  type="text"
-                  required
-                  value={appForm.name}
-                  onChange={(e) => setAppForm({ ...appForm, name: e.target.value })}
-                  placeholder="e.g. Valorant, Chrome, Roblox"
-                  className={inputClass}
-                />
-              </label>
-            </div>
-            <div>
-              <label className="block">
-                <span className="eyebrow mb-1 block">Icon (Emoji)</span>
-                <input
-                  type="text"
-                  value={appForm.icon}
-                  onChange={(e) => setAppForm({ ...appForm, icon: e.target.value })}
-                  placeholder="🎮"
-                  className={`${inputClass} text-center text-lg`}
-                />
-              </label>
+          <div>
+            <label className="block">
+              <span className="eyebrow mb-1 block">Application Name *</span>
+              <input
+                type="text"
+                required
+                value={appForm.name}
+                onChange={(e) => setAppForm({ ...appForm, name: e.target.value })}
+                placeholder="e.g. Valorant, Chrome, Roblox"
+                className={inputClass}
+              />
+            </label>
+          </div>
+
+          <div>
+            <span className="eyebrow mb-1.5 block">Application Icon / Artwork</span>
+            <div className="flex items-center gap-3 p-3 rounded-xl border border-surface-line bg-surface-raised/30">
+              <AppIcon icon={appForm.icon} name={appForm.name} className="h-14 w-14 rounded-2xl shadow-sm" iconClass="text-2xl" />
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={appForm.icon}
+                    onChange={(e) => setAppForm({ ...appForm, icon: e.target.value })}
+                    placeholder="/assets/launcher/valorant.webp or https://..."
+                    className="flex-1 rounded-xl border border-surface-line customer-neutral-surface px-3 py-1.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50 font-mono"
+                  />
+                  <label className="cursor-pointer shrink-0 rounded-xl border border-surface-line customer-neutral-surface px-3 py-1.5 text-xs font-semibold text-ink-900 hover:bg-dance/35 transition">
+                    Upload
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          showToast({ title: 'Image Too Large', message: 'Image size must be under 2MB.', tone: 'warning' });
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setAppForm((prev) => ({ ...prev, icon: ev.target?.result || '' }));
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] text-slate-soft">Presets:</span>
+                  {PRESET_CATALOG.slice(0, 8).map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => setAppForm((prev) => ({ ...prev, icon: p.icon }))}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-surface-line text-[10px] text-slate-soft hover:text-ink-900 hover:border-gold/40"
+                    >
+                      {p.name.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -814,7 +875,7 @@ export default function LauncherManagementPage() {
                       onChange={() => {}}
                       className="h-4 w-4 rounded text-gold focus:ring-gold/30"
                     />
-                    <span className="text-xl">{preset.icon}</span>
+                    <AppIcon icon={preset.icon} name={preset.name} className="h-9 w-9" />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-ink-900">{preset.name}</span>

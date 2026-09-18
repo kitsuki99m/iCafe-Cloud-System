@@ -7272,7 +7272,7 @@ router.get("/vouchers", auth, requireRole("admin", "cashier"), (req, res) => {
   res.json({ success: true, vouchers: rows });
 });
 
-router.post("/vouchers", auth, requireRole("admin"), (req, res) => {
+router.post("/vouchers", auth, requireRole("admin", "cashier"), (req, res) => {
   const { code, benefitType = 'wallet_credit', valueAmount = 0, maxRedemptions = null, expiresAt = null } = req.body || {};
   if (!code || typeof code !== 'string') return res.status(400).json({ success: false, error: "Voucher code is required." });
   const cleanCode = code.trim().toUpperCase();
@@ -7284,6 +7284,11 @@ router.post("/vouchers", auth, requireRole("admin"), (req, res) => {
     INSERT INTO promo_vouchers (id, code, benefit_type, value_amount, max_redemptions, current_redemptions, expires_at, is_active, created_at)
     VALUES (?, ?, ?, ?, ?, 0, ?, 1, ?)
   `).run(voucherId, cleanCode, benefitType === 'session_time' ? 'session_time' : 'wallet_credit', Math.max(0, Number(valueAmount) || 0), maxRedemptions != null ? Math.max(1, Number(maxRedemptions)) : null, expiresAt || null, nowIso());
+
+  try {
+    emitVouchersUpdated({ id: voucherId, code: cleanCode });
+    emitDataChanged({ entity: 'vouchers' });
+  } catch {}
 
   res.status(201).json({ success: true, voucher: { id: voucherId, code: cleanCode, benefitType, valueAmount: Number(valueAmount) } });
 });
@@ -7342,9 +7347,12 @@ router.post("/vouchers/redeem", auth, (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-router.delete("/vouchers/:id", auth, requireRole("admin"), (req, res) => {
+router.delete("/vouchers/:id", auth, requireRole("admin", "cashier"), (req, res) => {
   db.prepare("UPDATE promo_vouchers SET is_active=0 WHERE id=?").run(req.params.id);
-  emitVouchersUpdated({ id: req.params.id, deleted: true });
+  try {
+    emitVouchersUpdated({ id: req.params.id, deleted: true });
+    emitDataChanged({ entity: 'vouchers' });
+  } catch {}
   res.json({ success: true });
 });
 

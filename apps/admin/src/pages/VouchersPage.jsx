@@ -26,14 +26,13 @@ const inputClass = 'w-full rounded-xl border border-surface-line customer-neutra
 export default function VouchersPage() {
   const { vouchers, createVoucher, deleteVoucher } = useAppData()
   const { user } = useAuth()
-  const isCashier = user?.role === 'cashier'
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteTargetVoucher, setDeleteTargetVoucher] = useState(null)
   const [actionBusy, setActionBusy] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [code, setCode] = useState('')
   const [benefitType, setBenefitType] = useState('wallet_credit') // 'wallet_credit' | 'session_time'
-  const [valueAmount, setValueAmount] = useState('')
+  const [valueAmount, setValueAmount] = useState('50')
   const [maxRedemptions, setMaxRedemptions] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -49,23 +48,39 @@ export default function VouchersPage() {
   function generateRandomCode() {
     const prefix = 'PROMO'
     const random = Math.random().toString(36).substring(2, 7).toUpperCase()
-    setCode(`${prefix}-${random}`)
+    const generated = `${prefix}-${random}`
+    setCode(generated)
+    return generated
+  }
+
+  function openCreateModal() {
+    generateRandomCode()
+    setValueAmount(benefitType === 'wallet_credit' ? '50' : '60')
+    setMaxRedemptions('')
+    setExpiresAt('')
+    setModalOpen(true)
   }
 
   async function handleCreateVoucher(e) {
     if (e && e.preventDefault) e.preventDefault()
+    if (!code.trim() || !(Number(valueAmount) > 0)) {
+      showToast({ title: 'Invalid Input', message: 'Please enter a voucher code and value amount greater than 0.', tone: 'error' })
+      return
+    }
     setSubmitting(true)
     try {
+      // If benefitType is session_time, convert minutes input to seconds for backend storage
+      const finalValue = benefitType === 'session_time' ? Math.round(Number(valueAmount) * 60) : Number(valueAmount)
       await createVoucher({
         code: code.trim().toUpperCase(),
         benefitType,
-        valueAmount: Number(valueAmount),
+        valueAmount: finalValue,
         maxRedemptions: maxRedemptions ? Number(maxRedemptions) : null,
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       })
       showToast({ title: 'Voucher Created', message: `Code ${code.toUpperCase()} is active.` })
       setCode('')
-      setValueAmount('')
+      setValueAmount('50')
       setMaxRedemptions('')
       setExpiresAt('')
       setModalOpen(false)
@@ -77,10 +92,6 @@ export default function VouchersPage() {
   }
 
   function promptDeleteVoucher(v) {
-    if (isCashier) {
-      showToast({ title: 'Restricted Action', message: 'Cashiers cannot delete promo vouchers.', tone: 'error' })
-      return
-    }
     setDeleteTargetVoucher(v)
   }
 
@@ -150,18 +161,13 @@ export default function VouchersPage() {
               Issue promotional wallet credits or bonus session time for events, social promos, and tournaments.
             </p>
           </div>
-          {!isCashier && (
-            <Button
-              variant="primary"
-              icon={Plus}
-              onClick={() => {
-                generateRandomCode()
-                setModalOpen(true)
-              }}
-            >
-              Create Voucher
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            icon={Plus}
+            onClick={openCreateModal}
+          >
+            Create Voucher
+          </Button>
         </div>
 
         {/* Metric Cards */}
@@ -208,18 +214,15 @@ export default function VouchersPage() {
             icon={Ticket}
             title="No Promo Vouchers Found"
             description="Create promo codes that customers can enter on their station kiosk to claim free credits or time."
-            action={!isCashier ? (
+            action={
               <Button
                 variant="primary"
                 icon={Plus}
-                onClick={() => {
-                  generateRandomCode()
-                  setModalOpen(true)
-                }}
+                onClick={openCreateModal}
               >
                 Create First Voucher
               </Button>
-            ) : null}
+            }
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -294,18 +297,16 @@ export default function VouchersPage() {
                     </div>
                   </div>
 
-                  {!isCashier && (
-                    <div className="pt-2.5 border-t border-surface-line/60 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => promptDeleteVoucher(v)}
-                        className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition"
-                        title="Deactivate Voucher"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  )}
+                  <div className="pt-2.5 border-t border-surface-line/60 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => promptDeleteVoucher(v)}
+                      className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition"
+                      title="Deactivate Voucher"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -359,7 +360,10 @@ export default function VouchersPage() {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setBenefitType('wallet_credit')}
+                onClick={() => {
+                  setBenefitType('wallet_credit')
+                  if (valueAmount === '60') setValueAmount('50')
+                }}
                 className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
                   benefitType === 'wallet_credit'
                     ? 'bg-gold/15 border-gold/35 text-gold-dim'
@@ -370,31 +374,77 @@ export default function VouchersPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setBenefitType('session_time')}
+                onClick={() => {
+                  setBenefitType('session_time')
+                  if (valueAmount === '50') setValueAmount('60')
+                }}
                 className={`py-2 px-3 rounded-xl text-xs font-semibold border transition ${
                   benefitType === 'session_time'
                     ? 'bg-gold/15 border-gold/35 text-gold-dim'
                     : 'border-surface-line customer-neutral-surface text-slate-soft hover:text-ink-900'
                 }`}
               >
-                Session Time (Secs)
+                Session Time (Minutes)
               </button>
             </div>
           </div>
 
           <div>
-            <label className="eyebrow mb-1.5 block">
-              {benefitType === 'wallet_credit' ? 'Wallet Credit Amount (₱) *' : 'Session Time (Seconds, e.g. 3600 for 1h) *'}
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="eyebrow block">
+                {benefitType === 'wallet_credit' ? 'Wallet Credit Amount (₱) *' : 'Session Time (Minutes) *'}
+              </label>
+            </div>
             <NumericInput
               min="1"
               step={benefitType === 'wallet_credit' ? '0.01' : '1'}
               required
               value={valueAmount}
               onChange={(e) => setValueAmount(e.target.value)}
-              placeholder={benefitType === 'wallet_credit' ? '50.00' : '3600'}
+              placeholder={benefitType === 'wallet_credit' ? '50.00' : '60'}
               className={inputClass}
             />
+
+            {/* Quick Presets */}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {benefitType === 'wallet_credit' ? (
+                ['20', '50', '100', '200', '500'].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setValueAmount(amt)}
+                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border transition ${
+                      valueAmount === amt
+                        ? 'bg-gold/20 border-gold/40 text-gold-dim'
+                        : 'border-surface-line customer-neutral-surface text-slate-soft hover:text-ink-900'
+                    }`}
+                  >
+                    +₱{amt}
+                  </button>
+                ))
+              ) : (
+                [
+                  { label: '30m', mins: '30' },
+                  { label: '1 hour (60m)', mins: '60' },
+                  { label: '2 hours (120m)', mins: '120' },
+                  { label: '3 hours (180m)', mins: '180' },
+                  { label: '5 hours (300m)', mins: '300' },
+                ].map((item) => (
+                  <button
+                    key={item.mins}
+                    type="button"
+                    onClick={() => setValueAmount(item.mins)}
+                    className={`px-2.5 py-0.5 rounded-lg text-[11px] font-semibold border transition ${
+                      valueAmount === item.mins
+                        ? 'bg-gold/20 border-gold/40 text-gold-dim'
+                        : 'border-surface-line customer-neutral-surface text-slate-soft hover:text-ink-900'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

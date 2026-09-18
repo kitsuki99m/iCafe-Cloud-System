@@ -144,12 +144,40 @@
     background-color: #202937;
   }
 
+  /* Fluid responsive typography */
+  .text-h1 {
+    font-size: clamp(1.15rem, 1rem + 0.75vw, 1.5rem);
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+    font-weight: 700;
+  }
+  .text-h2 {
+    font-size: clamp(1rem, 0.92rem + 0.4vw, 1.25rem);
+    line-height: 1.3;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+  }
+  .text-h3 {
+    font-size: clamp(0.875rem, 0.825rem + 0.25vw, 1.05rem);
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+  .text-h4 {
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    font-weight: 600;
+  }
   .eyebrow {
-    @apply text-[11px] font-semibold tracking-[0.16em] uppercase text-slate-soft;
+    @apply font-semibold uppercase text-slate-soft;
+    font-size: clamp(0.65rem, 0.62rem + 0.1vw, 0.72rem);
+    letter-spacing: 0.14em;
+    line-height: 1.2;
   }
 
   .stat-figure {
     @apply font-mono tabular-nums;
+    letter-spacing: -0.025em;
   }
 
   .nav-item {
