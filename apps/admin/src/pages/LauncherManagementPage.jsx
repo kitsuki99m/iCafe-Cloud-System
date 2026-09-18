@@ -604,30 +604,32 @@ export default function LauncherManagementPage() {
                 <button
                   type="button"
                   onClick={() => openRemotePathModal(app)}
-                  className="inline-flex items-center gap-1 text-slate-soft hover:text-gold-dim font-medium transition"
+                  className="inline-flex items-center gap-1 text-slate-soft hover:text-gold-dim font-medium transition cursor-pointer"
                   title="Edit Remote Executable Path"
                 >
                   <HardDrive size={13} />
-                  Remote Path
+                  <span>Remote Path</span>
                 </button>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => openEditAppModal(app)}
-                    className="p-1.5 rounded-lg text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition"
+                    className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition flex items-center gap-1 cursor-pointer"
                     title="Edit App"
                   >
-                    <Pencil size={14} />
+                    <Pencil size={13} />
+                    <span>Edit</span>
                   </button>
                   {!isCashier && (
                     <button
                       type="button"
                       onClick={() => setDeleteTargetApp(app)}
-                      className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition"
+                      className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition flex items-center gap-1 cursor-pointer"
                       title="Delete App"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={13} />
+                      <span>Delete</span>
                     </button>
                   )}
                 </div>
@@ -647,22 +649,41 @@ export default function LauncherManagementPage() {
         maxWidth="max-w-2xl"
         busy={actionBusy}
         footer={
-          <>
-            <Button
-              variant="ghost"
-              disabled={actionBusy}
-              onClick={() => setAddAppModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              disabled={actionBusy || !appForm.name.trim()}
-              onClick={handleSaveApp}
-            >
-              {actionBusy ? 'Saving…' : editingApp ? 'Save Changes' : 'Add Application'}
-            </Button>
-          </>
+          <div className="flex items-center justify-between w-full">
+            <div>
+              {editingApp && !isCashier && (
+                <Button
+                  variant="ghost"
+                  disabled={actionBusy}
+                  onClick={() => {
+                    const target = editingApp
+                    setAddAppModalOpen(false)
+                    setDeleteTargetApp(target)
+                  }}
+                  className="flex items-center gap-1.5 text-xs text-ember-dim hover:bg-ember/10 border border-ember/20"
+                >
+                  <Trash2 size={13} />
+                  Delete Application
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                disabled={actionBusy}
+                onClick={() => setAddAppModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                disabled={actionBusy || !appForm.name.trim()}
+                onClick={handleSaveApp}
+              >
+                {actionBusy ? 'Saving…' : editingApp ? 'Save Changes' : 'Add Application'}
+              </Button>
+            </div>
+          </div>
         }
       >
         <form onSubmit={handleSaveApp} className="space-y-4.5 py-1">
@@ -1056,20 +1077,22 @@ export default function LauncherManagementPage() {
                           setEditingCatId(cat.id)
                           setEditingCatName(cat.name)
                         }}
-                        className="p-1.5 rounded-lg text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition cursor-pointer"
+                        className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition flex items-center gap-1 cursor-pointer"
                         title="Rename Category"
                       >
-                        <Pencil size={14} />
+                        <Pencil size={13} />
+                        <span>Edit</span>
                       </button>
                     )}
                     {!isCashier && (
                       <button
                         type="button"
                         onClick={() => setDeleteTargetCategory(cat)}
-                        className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition cursor-pointer"
+                        className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition flex items-center gap-1 cursor-pointer"
                         title="Delete Category"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={13} />
+                        <span>Delete</span>
                       </button>
                     )}
                   </div>
