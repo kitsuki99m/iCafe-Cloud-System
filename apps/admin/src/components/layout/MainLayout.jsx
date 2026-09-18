@@ -12,12 +12,14 @@ import logo from '../../assets/aktura-logo.svg'
 import { apiPost } from '../../lib/api.js'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import { useAdminMode } from '../../context/AdminModeContext.jsx'
+import { useEsportsTheme } from '../../context/EsportsThemeContext.jsx'
 import { useBranding } from '../../hooks/useBranding.js'
 import Button from '../common/Button.jsx'
 import CloudBranchPicker from '../cloud/CloudBranchPicker.jsx'
 import { isCloudAdmin, cloudVerifyPassword } from '../../lib/cloudClient.js'
 import AdminSectionManual, { hasSectionManual } from '../admin/AdminSectionManual.jsx'
 import PwaInstallButton from '../common/PwaInstallButton.jsx'
+import AdminProfileMenu from './AdminProfileMenu.jsx'
 
 const BASE_NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -49,11 +51,13 @@ const PAGE_PURPOSE = {
   Settings:'Update cafe branding, payment details, and account security.',
   Developer:'Review and approve new Aezakmi Cloud business registrations.',
 }
+
 export default function MainLayout({ children }) {
   const { user, logout } = useAuth()
   const { serverError, settings, currentShift, menuOrders = [] } = useAppData()
   const { isDark, toggleTheme } = useTheme()
   const { uiMode, isSimpleMode, isAdvanceMode, canToggleMode, setUiMode, toggleUiMode } = useAdminMode()
+  const { themeMode, isEsportsMode, isDashboardMode, setThemeMode } = useEsportsTheme()
   const branding = useBranding()
   const location = useLocation()
   const isCashier = user?.role === 'cashier' || user?.role === 'staff'
@@ -237,13 +241,6 @@ export default function MainLayout({ children }) {
             <div className="flex items-center justify-between gap-2 rounded-xl px-2 py-2">
               <div className="min-w-0 leading-tight">
                 <p className="truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</p>
-                <div className="mt-0.5 flex items-center gap-1">
-                  <span className={`inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
-                    isSimpleMode ? 'bg-teal/10 text-teal-dim' : 'bg-gold/10 text-gold-dim'
-                  }`}>
-                    {isSimpleMode ? '⚡ Simple' : '🛠️ Advance'}
-                  </span>
-                </div>
               </div>
               <div className="flex items-center gap-0.5">
                 <button type="button" className="admin-icon-button" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Light mode' : 'Dark mode'}>
@@ -274,7 +271,7 @@ export default function MainLayout({ children }) {
                   className="admin-header-pill text-[11px] font-bold"
                   title={`Switch to ${isSimpleMode ? 'Advance' : 'Simple'} Mode (F8)`}
                 >
-                  <span>{isSimpleMode ? '⚡ Simple' : '🛠️ Advance'}</span>
+                  <span>{isSimpleMode ? 'Simple' : 'Advance'}</span>
                 </button>
               )}
               <button
@@ -298,31 +295,55 @@ export default function MainLayout({ children }) {
             </div>
             <AdminQuickFind />
             <div className="ml-auto flex items-center gap-1.5 text-slate-soft">
+              {/* Dashboard vs Esports Persona Switcher */}
+              <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Dashboard vs Esports Persona (F9)">
+                <button
+                  type="button"
+                  onClick={() => setThemeMode('dashboard')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    isDashboardMode
+                      ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
+                      : 'text-slate-soft hover:text-ink-900'
+                  }`}
+                >
+                  Dashboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThemeMode('esports')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    isEsportsMode
+                      ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/30 text-teal-dim shadow-sm border border-teal/40'
+                      : 'text-slate-soft hover:text-ink-900'
+                  }`}
+                >
+                  Esports
+                </button>
+              </div>
+
               {canToggleMode && (
                 <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Simple vs Advance UI Mode (F8)">
                   <button
                     type="button"
                     onClick={() => setUiMode('simple')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                       isSimpleMode
                         ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
                         : 'text-slate-soft hover:text-ink-900'
                     }`}
                   >
-                    <span>⚡</span>
-                    <span className="hidden xl:inline">Simple</span>
+                    Simple
                   </button>
                   <button
                     type="button"
                     onClick={() => setUiMode('advance')}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                       isAdvanceMode
                         ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
                         : 'text-slate-soft hover:text-ink-900'
                     }`}
                   >
-                    <span>🛠️</span>
-                    <span className="hidden xl:inline">Advance</span>
+                    Advance
                   </button>
                 </div>
               )}
@@ -345,10 +366,13 @@ export default function MainLayout({ children }) {
               <AnnouncementCenter />
               <button type="button" onClick={toggleTheme} className="admin-icon-button shrink-0" title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>{isDark ? <Sun size={16}/> : <Moon size={16}/>}</button>
               <button type="button" onClick={openLock} className="admin-icon-button shrink-0" aria-label="Lock admin console" title="Lock admin console"><LockKeyhole size={16}/></button>
-              <div className="ml-1 hidden items-center gap-2 rounded-full border border-surface-line bg-surface py-1 pl-1 pr-3 sm:flex shrink-0">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-midnight text-soft-white"><UserRound size={15}/></span>
-                <span className="max-w-[110px] truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</span>
-              </div>
+              <AdminProfileMenu
+                currentLabel={currentLabel}
+                onOpenManual={() => setManualOpen(true)}
+                onOpenShiftModal={() => setShiftModalOpen(true)}
+                onOpenFeedback={() => setFeedbackOpen(true)}
+                onOpenLock={openLock}
+              />
             </div>
           </header>}
           <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>

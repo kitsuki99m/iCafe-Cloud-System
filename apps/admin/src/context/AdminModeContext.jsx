@@ -11,12 +11,23 @@ export function AdminModeProvider({ children }) {
   
   const [savedMode, setSavedMode] = useState(() => {
     try {
-      const stored = localStorage.getItem(UI_MODE_STORAGE_KEY)
-      return stored === 'simple' || stored === 'advance' ? stored : 'advance'
+      const stored = sessionStorage.getItem(UI_MODE_STORAGE_KEY)
+      return stored === 'simple' || stored === 'advance' ? stored : 'simple'
     } catch {
-      return 'advance'
+      return 'simple'
     }
   })
+
+  // When user logs out (user is null or changes), reset to simple mode and clean temp storage
+  useEffect(() => {
+    if (!user) {
+      setSavedMode('simple')
+      try {
+        sessionStorage.removeItem(UI_MODE_STORAGE_KEY)
+        localStorage.removeItem(UI_MODE_STORAGE_KEY)
+      } catch {}
+    }
+  }, [user])
 
   // Staff and Cashier roles are strictly locked to Simple Mode
   const uiMode = isRestrictedRole ? 'simple' : savedMode
@@ -27,7 +38,8 @@ export function AdminModeProvider({ children }) {
     const targetMode = mode === 'simple' ? 'simple' : 'advance'
     setSavedMode(targetMode)
     try {
-      localStorage.setItem(UI_MODE_STORAGE_KEY, targetMode)
+      sessionStorage.setItem(UI_MODE_STORAGE_KEY, targetMode)
+      localStorage.removeItem(UI_MODE_STORAGE_KEY)
     } catch {}
   }
 
@@ -69,9 +81,9 @@ export function useAdminMode() {
   const context = useContext(AdminModeContext)
   if (!context) {
     return {
-      uiMode: 'advance',
-      isSimpleMode: false,
-      isAdvanceMode: true,
+      uiMode: 'simple',
+      isSimpleMode: true,
+      isAdvanceMode: false,
       canToggleMode: false,
       setUiMode: () => {},
       toggleUiMode: () => {},

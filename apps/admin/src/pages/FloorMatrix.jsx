@@ -7,6 +7,7 @@ import {
   Monitor,
   MonitorCheck,
   MonitorPlay,
+  Play,
   Plus,
   Search,
   WifiOff,
@@ -26,6 +27,7 @@ import PcCard from '../components/floor/PcCard.jsx'
 import FloorMap2D from '../components/floor/FloorMap2D.jsx'
 
 import SessionModal from '../components/floor/SessionModal.jsx'
+import StartSessionModal from '../components/floor/StartSessionModal.jsx'
 import PcFormModal from '../components/floor/PcFormModal.jsx'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
@@ -36,6 +38,8 @@ import StationActions from '../components/floor/StationActions.jsx'
 import NumericInput from '../components/common/NumericInput.jsx'
 import DurationInput from '../components/common/DurationInput.jsx'
 import { useAppData } from '../context/AppDataContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
+import { useEsportsTheme } from '../context/EsportsThemeContext.jsx'
 import { playLowTimeAlert } from '../lib/sound.js'
 import BulkActionsDropdown from '../components/bulk/BulkActionsDropdown.jsx'
 import BulkTopUpWalletModal from '../components/bulk/BulkTopUpWalletModal.jsx'
@@ -84,9 +88,13 @@ export default function FloorMatrix() {
     adjustSessionTime,
     refresh,
   } = useAppData()
+  const { user } = useAuth()
+  const { isEsportsMode } = useEsportsTheme()
+  const isStaffOrCashier = user?.role === 'cashier' || user?.role === 'staff' || user?.cloudRole === 'cashier' || user?.cloudRole === 'staff'
   const navigate = useNavigate()
   const [selectedId, setSelectedId] = useState(null)
   const [pcFormOpen, setPcFormOpen] = useState(false)
+  const [startSessionModalOpen, setStartSessionModalOpen] = useState(false)
   const [editingPcId, setEditingPcId] = useState(null)
   const [actionError, setActionError] = useState('')
   const [bulkWalletOpen, setBulkWalletOpen] = useState(false)
@@ -321,6 +329,27 @@ export default function FloorMatrix() {
       throw error
     }
   }
+
+  async function handleBulkStartSessions(targetPcs, sessionPayload) {
+    if (!targetPcs?.length) return
+    const count = targetPcs.length
+    for (const pc of targetPcs) {
+      const pcPayload = {
+        ...sessionPayload,
+        customerName: count > 1 && sessionPayload.customerMode === 'walkin' && sessionPayload.customerName
+          ? `${sessionPayload.customerName} (${pc.label})`
+          : sessionPayload.customerName
+      }
+      await startSession(pc, pcPayload)
+    }
+    showToast({
+      title: count === 1 ? 'Session Started' : 'Sessions Started',
+      message: count === 1 ? `${targetPcs[0].label} is now in use.` : `Started sessions on ${count} stations.`,
+      tone: 'success',
+    })
+    refresh()
+  }
+
   async function forfeitOfflineSession() {
     if (!forfeitTarget?.session || forfeitBusy) return
     setForfeitBusy(true)
@@ -459,7 +488,56 @@ export default function FloorMatrix() {
     setTimeAction(null)
     closePopover()
   }
-  const toolbarActions=<div className="flex flex-wrap items-center gap-2">{isCloudAdmin()&&<Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>Pair Customer PC</Button>}<BulkActionsDropdown items={[{id:'wallet',icon:'wallet',label:'Top up wallets',hint:'Select multiple members'},{id:'session',icon:'session',label:'Add session time',hint:`${bulkSessionTargets.length} active session${bulkSessionTargets.length===1?'':'s'}`},{id:'lock',icon:'lock',label:'Lock stations',hint:'Pause active sessions'},{id:'unlock',icon:'unlock',label:'Unlock stations',hint:'Resume locked sessions'},{id:'restart',icon:'restart',label:'Restart stations',hint:'Shows a 5-second station warning'},{id:'shutdown',icon:'shutdown',label:'Shutdown stations',hint:'Shows a 5-second station warning'},{id:'remove',icon:'remove',label:'Remove PCs',hint:`${removablePcTargets.length} removable station${removablePcTargets.length===1?'':'s'}`}]} onAction={(id)=>{if(id==='wallet'){setBulkWalletOperationKey(createOperationKey());setBulkWalletOpen(true)}else if(id==='session'){setBulkSessionOperationKey(createOperationKey());setBulkSessionOpen(true)}else setBulkPower(id)}} /><Button icon={Monitor} variant="ghost" size="sm" onClick={() => setBulkAddOpen(true)}>Bulk add</Button><Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>Add PC</Button></div>
+  const availableCount = (pcs || []).filter((pc) => effectivePcStatus(pc) === 'available').length
+
+  const bulkDropdownItems = [
+    { id: 'start', icon: 'start', label: 'Start sessions', hint: `${availableCount} available station${availableCount === 1 ? '' : 's'}` },
+    { id: 'wallet', icon: 'wallet', label: 'Top up wallets', hint: 'Select multiple members' },
+    { id: 'session', icon: 'session', label: 'Add session time', hint: `${bulkSessionTargets.length} active session${bulkSessionTargets.length === 1 ? '' : 's'}` },
+    { id: 'lock', icon: 'lock', label: 'Lock stations', hint: 'Pause active sessions' },
+    { id: 'unlock', icon: 'unlock', label: 'Unlock stations', hint: 'Resume locked sessions' },
+    { id: 'restart', icon: 'restart', label: 'Restart stations', hint: 'Shows a 5-second station warning' },
+    { id: 'shutdown', icon: 'shutdown', label: 'Shutdown stations', hint: 'Shows a 5-second station warning' },
+    ...(!isStaffOrCashier ? [{ id: 'remove', icon: 'remove', label: 'Remove PCs', hint: `${removablePcTargets.length} removable station${removablePcTargets.length === 1 ? '' : 's'}` }] : []),
+  ]
+
+  const handleBulkAction = (id) => {
+    if (id === 'start') {
+      setStartSessionModalOpen(true)
+    } else if (id === 'wallet') {
+      setBulkWalletOperationKey(createOperationKey())
+      setBulkWalletOpen(true)
+    } else if (id === 'session') {
+      setBulkSessionOperationKey(createOperationKey())
+      setBulkSessionOpen(true)
+    } else {
+      setBulkPower(id)
+    }
+  }
+
+  const toolbarActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <BulkActionsDropdown items={bulkDropdownItems} onAction={handleBulkAction} />
+      <Button icon={Play} variant="primary" size="sm" onClick={() => setStartSessionModalOpen(true)}>
+        Start Session
+      </Button>
+      {!isStaffOrCashier && isCloudAdmin() && (
+        <Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>
+          Pair Customer PC
+        </Button>
+      )}
+      {!isStaffOrCashier && (
+        <Button icon={Monitor} variant="ghost" size="sm" onClick={() => setBulkAddOpen(true)}>
+          Bulk add
+        </Button>
+      )}
+      {!isStaffOrCashier && (
+        <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
+          Add PC
+        </Button>
+      )}
+    </div>
+  )
 
 
 
@@ -475,6 +553,39 @@ export default function FloorMatrix() {
       {/* 2-COLUMN LIVE CYBERCAFE WORKSPACE */}
       {/* FULL-WIDTH LIVE ESPORTS FLOOR MATRIX */}
       <section className="clients-floor-workspace w-full space-y-4">
+        {isEsportsMode && (
+          <div className="relative overflow-hidden rounded-2xl border border-teal/30 bg-gradient-to-r from-surface-raised via-surface to-teal/5 p-4 sm:p-5 shadow-lg backdrop-blur-xl transition-all duration-300">
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-widest bg-teal/20 text-teal-dim border border-teal/40">
+                    LIVE ARENA TELEMETRY
+                  </span>
+                  <span className="text-xs text-slate-soft">· {settings.cafeName || 'Aezakmi Cyber Arena'}</span>
+                </div>
+                <h2 className="font-display text-lg sm:text-xl font-black tracking-tight text-ink-900 flex items-center gap-2">
+                  TOURNAMENT STAGE <span className="text-xs font-sans font-bold text-gold-dim bg-gold/15 px-2 py-0.5 rounded-full border border-gold/30">STAGE ACTIVE</span>
+                </h2>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 font-mono text-xs">
+                <div className="rounded-xl border border-surface-line bg-surface/80 px-3.5 py-1.5 text-center shadow-xs">
+                  <div className="text-[10px] text-slate-soft uppercase tracking-wider">Stations In Match</div>
+                  <div className="text-base font-bold text-teal-dim">{stats.occupied} <span className="text-xs text-slate-soft">/ {stats.total}</span></div>
+                </div>
+                <div className="rounded-xl border border-surface-line bg-surface/80 px-3.5 py-1.5 text-center shadow-xs">
+                  <div className="text-[10px] text-slate-soft uppercase tracking-wider">Arena Occupancy</div>
+                  <div className="text-base font-bold text-gold-dim">{stats.total > 0 ? ((stats.occupied / stats.total) * 100).toFixed(1) : 0}%</div>
+                </div>
+                <div className="rounded-xl border border-surface-line bg-surface/80 px-3.5 py-1.5 text-center shadow-xs">
+                  <div className="text-[10px] text-slate-soft uppercase tracking-wider">Ready Podiums</div>
+                  <div className="text-base font-bold text-teal-dim">{stats.available}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="admin-page-toolbar space-y-2.5">
           {/* Row 1: View Switcher, Search Bar, and Action Controls */}
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -591,9 +702,14 @@ export default function FloorMatrix() {
                     <span>Save Layout</span>
                   </button>
 
-                  <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
-                    Add PC
+                  <Button icon={Play} variant="primary" size="sm" onClick={() => setStartSessionModalOpen(true)}>
+                    Start Session
                   </Button>
+                  {!isStaffOrCashier && (
+                    <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
+                      Add PC
+                    </Button>
+                  )}
                 </div>
               ) : (
                 toolbarActions
@@ -618,30 +734,16 @@ export default function FloorMatrix() {
               ))}
             </div>
 
-            {viewMode === 'map' && isCloudAdmin() && (
+            {viewMode === 'map' && (
               <div className="hidden lg:flex items-center gap-2">
-                <Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>
-                  Pair Customer PC
-                </Button>
+                {!isStaffOrCashier && isCloudAdmin() && (
+                  <Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>
+                    Pair Customer PC
+                  </Button>
+                )}
                 <BulkActionsDropdown
-                  items={[
-                    { id: 'wallet', icon: 'wallet', label: 'Top up wallets', hint: 'Select multiple members' },
-                    { id: 'session', icon: 'session', label: 'Add session time', hint: `${bulkSessionTargets.length} active session${bulkSessionTargets.length === 1 ? '' : 's'}` },
-                    { id: 'lock', icon: 'lock', label: 'Lock stations', hint: 'Pause active sessions' },
-                    { id: 'unlock', icon: 'unlock', label: 'Unlock stations', hint: 'Resume locked sessions' },
-                    { id: 'restart', icon: 'restart', label: 'Restart stations', hint: 'Shows a 5-second station warning' },
-                    { id: 'shutdown', icon: 'shutdown', label: 'Shutdown stations', hint: 'Shows a 5-second station warning' },
-                    { id: 'remove', icon: 'remove', label: 'Remove PCs', hint: `${removablePcTargets.length} removable station${removablePcTargets.length === 1 ? '' : 's'}` },
-                  ]}
-                  onAction={(id) => {
-                    if (id === 'wallet') {
-                      setBulkWalletOperationKey(createOperationKey())
-                      setBulkWalletOpen(true)
-                    } else if (id === 'session') {
-                      setBulkSessionOperationKey(createOperationKey())
-                      setBulkSessionOpen(true)
-                    } else setBulkPower(id)
-                  }}
+                  items={bulkDropdownItems}
+                  onAction={handleBulkAction}
                 />
               </div>
             )}
@@ -794,6 +896,15 @@ export default function FloorMatrix() {
         onRemove={removePc}
         existingPcs={pcs}
         cloudManaged={isCloudAdmin()}
+      />
+
+      <StartSessionModal
+        open={startSessionModalOpen}
+        pcs={pcs}
+        ratePlans={ratePlans}
+        members={members}
+        onClose={() => setStartSessionModalOpen(false)}
+        onStartSessions={handleBulkStartSessions}
       />
 
       <SessionModal

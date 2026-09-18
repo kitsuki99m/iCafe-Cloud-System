@@ -54,7 +54,7 @@ export default function StationActions({
   onMaintenance,
   onEdit,
 }) {
-  const ids = getStationActionIds(pc)
+  const ids = getStationActionIds(pc).filter((id) => id !== 'edit' || Boolean(onEdit))
   const groups = {
     session: ids.filter((id) => ACTION_META[id]?.group === 'session'),
     station: ids.filter((id) => ACTION_META[id]?.group === 'station'),

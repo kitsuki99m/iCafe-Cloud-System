@@ -7486,6 +7486,151 @@ router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), asyn
   } catch (error) { next(error); }
 });
 
+router.post("/team/invite", auth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { name, email, role = 'cashier', branch } = req.body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanName = String(name || '').trim();
+    if (!cleanEmail || !cleanName) {
+      return res.status(400).json({ success: false, error: 'Name and email are required.' });
+    }
+
+    const cafeSettings = db.prepare("SELECT * FROM settings WHERE id=1").get() || {};
+    const cafeName = cafeSettings.cafe_name || "Aezakmi Cafe";
+    const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
+    const branchLabel = branch || cafeSettings.branch || 'Main Branch';
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
+        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
+          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Employee Invitation</h1>
+        </div>
+        <div style="padding: 28px;">
+          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName}</strong>,</p>
+          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">You have been invited to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}).</p>
+          <div style="background: #111C28; border-radius: 10px; padding: 18px; margin-bottom: 24px; border: 1px solid #1E293B;">
+            <table style="width: 100%; font-size: 13px;">
+              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Role:</td><td style="color: #38BDF8; font-weight: 600; text-align: right;">${roleLabel}</td></tr>
+              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Branch:</td><td style="color: #F8FAFC; text-align: right;">${branchLabel}</td></tr>
+              <tr><td style="color: #64748B; padding: 4px 0;">Authorized Email:</td><td style="color: #E8A33D; text-align: right; font-family: monospace;">${cleanEmail}</td></tr>
+            </table>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your initial PIN or login access to start your shift on the Aezakmi Admin Terminal.</p>
+          <div style="font-size: 11px; color: #475569; text-align: center; margin-top: 28px; border-top: 1px solid #1E293B; padding-top: 18px;">
+            Sent by Aezakmi Cafe Management on behalf of ${cafeName}
+          </div>
+        </div>
+      </div>
+    `;
+
+    let emailSent = false;
+    let providerMessage = '';
+    if (env.brevoApiKey) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': env.brevoApiKey,
+            'accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: env.brevoSenderName, email: env.brevoSenderEmail },
+            to: [{ email: cleanEmail, name: cleanName }],
+            subject: `[${cafeName}] Staff Invitation: Join as ${roleLabel}`,
+            htmlContent: html,
+            tags: ['employee-invite', role]
+          })
+        });
+        if (response.ok) {
+          emailSent = true;
+          providerMessage = `Invitation delivered to ${cleanEmail} via Brevo.`;
+        } else {
+          const data = await response.json().catch(() => ({}));
+          providerMessage = data?.message || `Brevo returned HTTP ${response.status}`;
+        }
+      } catch (err) {
+        providerMessage = err.message || 'Email delivery failed';
+      }
+    } else {
+      providerMessage = 'Brevo API key not configured; invite registered locally.';
+    }
+
+    res.json({
+      success: true,
+      emailSent,
+      targetEmail: cleanEmail,
+      message: providerMessage,
+    });
+  } catch (error) { next(error); }
+});
+
+router.post("/team/resend-invite", auth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { name, email, role = 'cashier', branch } = req.body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanName = String(name || '').trim();
+    if (!cleanEmail) {
+      return res.status(400).json({ success: false, error: 'Email is required.' });
+    }
+
+    const cafeSettings = db.prepare("SELECT * FROM settings WHERE id=1").get() || {};
+    const cafeName = cafeSettings.cafe_name || "Aezakmi Cafe";
+    const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
+    const branchLabel = branch || cafeSettings.branch || 'Main Branch';
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
+        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
+          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Staff Invitation Reminder</h1>
+        </div>
+        <div style="padding: 28px;">
+          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName || 'Team Member'}</strong>,</p>
+          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">This is a reminder of your invitation to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}) as <strong style="color: #38BDF8;">${roleLabel}</strong>.</p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your login credentials to start your shift.</p>
+        </div>
+      </div>
+    `;
+
+    let emailSent = false;
+    let providerMessage = '';
+    if (env.brevoApiKey) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': env.brevoApiKey,
+            'accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: env.brevoSenderName, email: env.brevoSenderEmail },
+            to: [{ email: cleanEmail, name: cleanName || cleanEmail }],
+            subject: `[${cafeName}] Staff Invitation Reminder: ${roleLabel}`,
+            htmlContent: html,
+            tags: ['employee-invite-reminder', role]
+          })
+        });
+        if (response.ok) {
+          emailSent = true;
+          providerMessage = `Reminder delivered to ${cleanEmail} via Brevo.`;
+        }
+      } catch (err) {
+        providerMessage = err.message || 'Email delivery failed';
+      }
+    }
+
+    res.json({
+      success: true,
+      emailSent,
+      targetEmail: cleanEmail,
+      message: providerMessage || `Invitation reminder sent to ${cleanEmail}`,
+    });
+  } catch (error) { next(error); }
+});
+
 // ==========================================
 // DYNAMIC GAME & APP LAUNCHER MANAGEMENT
 // ==========================================

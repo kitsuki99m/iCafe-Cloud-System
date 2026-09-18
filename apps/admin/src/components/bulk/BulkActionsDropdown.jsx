@@ -1,9 +1,9 @@
-import { ChevronDown, Wallet, Banknote, Lock, Unlock, RotateCcw, Power, Trash2 } from 'lucide-react'
+import { ChevronDown, Wallet, Banknote, Lock, Unlock, RotateCcw, Power, Trash2, Play } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import AnchoredPopover from '../common/AnchoredPopover.jsx'
 
-const ICONS = { wallet: Wallet, session: Banknote, lock: Lock, unlock: Unlock, restart: RotateCcw, shutdown: Power, remove: Trash2 }
+const ICONS = { wallet: Wallet, session: Banknote, start: Play, lock: Lock, unlock: Unlock, restart: RotateCcw, shutdown: Power, remove: Trash2 }
 
 export default function BulkActionsDropdown({ items = [], onAction, className = '' }) {
   const [open, setOpen] = useState(false)

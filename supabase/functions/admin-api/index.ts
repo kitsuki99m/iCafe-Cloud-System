@@ -15,7 +15,7 @@ async function broadcastWakeup(topicKey:string,payload:Record<string,unknown>={}
 async function wakeBranchEdge(admin:SupabaseClient,branchId:string,payload:Record<string,unknown>={}){try{const{data:edge}=await admin.from('edge_servers').select('realtime_topic_key').eq('branch_id',branchId).is('revoked_at',null).order('last_seen_at',{ascending:false}).limit(1).maybeSingle();if(edge?.realtime_topic_key)await broadcastWakeup(edge.realtime_topic_key,payload)}catch{}}
 async function broadcastStationWakeup(admin:SupabaseClient,branchId:string,stationId:string,payload:Record<string,unknown>={}){if(!stationId)return;try{const{data:station}=await admin.from('branch_stations').select('station_device_id').eq('branch_id',branchId).eq('local_id',stationId).maybeSingle();if(!station?.station_device_id)return;const{data:device}=await admin.from('station_devices').select('realtime_topic_key').eq('id',station.station_device_id).maybeSingle();const topicKey=String(device?.realtime_topic_key||'');if(!topicKey)return;await fetch(`${projectUrl()}/realtime/v1/api/broadcast/${encodeURIComponent(`station-wakeup:${topicKey}`)}/events/sync`,{method:'POST',headers:{apikey:secretKey(),'Content-Type':'application/json'},body:JSON.stringify(payload)})}catch{}}
 const METHODS=new Set(['GET','POST','PATCH','PUT','DELETE'])
-const ALLOWED_ROOTS=new Set(['pcs','members','rate-plans','announcements','feedback','support','top-ups','sessions','session-extensions','transfer-requests','promos','logs','analytics','billing-policy','settings','wallet','expenses','tax-estimate','branding','remote-commands','dashboard','earnings','guest','client','launcher','menu-items','menu-orders','shifts','vouchers','reports','health','tax-policy','public'])
+const ALLOWED_ROOTS=new Set(['pcs','members','rate-plans','announcements','feedback','support','top-ups','sessions','session-extensions','transfer-requests','promos','logs','analytics','billing-policy','settings','wallet','expenses','tax-estimate','branding','remote-commands','dashboard','earnings','guest','client','launcher','menu-items','menu-orders','shifts','vouchers','reports','health','tax-policy','public','team'])
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms))
 function normalizePath(input:unknown){const path=String(input||'').trim();if(!path.startsWith('/')||path.startsWith('//')||path.includes('..')||/^https?:/i.test(path))throw Object.assign(new Error('Invalid Admin API path.'),{status:400,code:'INVALID_PATH'});const root=path.split('?')[0].split('/').filter(Boolean)[0]||'';if(!ALLOWED_ROOTS.has(root))throw Object.assign(new Error('This Admin API path is not cloud-enabled.'),{status:403,code:'PATH_NOT_ALLOWED'});return path}
 function asUrl(path:string){return new URL(path,'https://aezakmi.local')}
@@ -701,6 +701,164 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
         shiftsLogged:shiftsCount,
         shiftsVariance
       }
+    });
+  }
+
+  if(method==='POST'&&route==='/team/invite'){
+    const { name, email, role = 'cashier', branch: targetBranch } = body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanName = String(name || '').trim();
+    if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return json({ success: false, status: 400, code: 'INVALID_EMAIL', error: 'Valid email address is required.' }, 200);
+    }
+    if (!cleanName) {
+      return json({ success: false, status: 400, code: 'NAME_REQUIRED', error: 'Full name is required.' }, 200);
+    }
+
+    const cafeName = branch.name || 'Aezakmi Cafe';
+    const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
+    const branchLabel = targetBranch || cafeName;
+
+    const brevoApiKey = String(Deno.env.get('BREVO_API_KEY') || '').trim();
+    const brevoSenderEmail = String(Deno.env.get('BREVO_SENDER_EMAIL') || 'kyle.serina05@gmail.com').trim();
+    const brevoSenderName = String(Deno.env.get('BREVO_SENDER_NAME') || 'Aezakmi Cafe Management').trim();
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
+        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
+          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Employee Invitation</h1>
+        </div>
+        <div style="padding: 28px;">
+          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName}</strong>,</p>
+          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">You have been invited to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}).</p>
+          <div style="background: #111C28; border-radius: 10px; padding: 18px; margin-bottom: 24px; border: 1px solid #1E293B;">
+            <table style="width: 100%; font-size: 13px;">
+              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Role:</td><td style="color: #38BDF8; font-weight: 600; text-align: right;">${roleLabel}</td></tr>
+              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Branch:</td><td style="color: #F8FAFC; text-align: right;">${branchLabel}</td></tr>
+              <tr><td style="color: #64748B; padding: 4px 0;">Authorized Email:</td><td style="color: #E8A33D; text-align: right; font-family: monospace;">${cleanEmail}</td></tr>
+            </table>
+          </div>
+          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your initial PIN or login access to start your shift on the Aezakmi Admin Terminal.</p>
+          <div style="font-size: 11px; color: #475569; text-align: center; margin-top: 28px; border-top: 1px solid #1E293B; padding-top: 18px;">
+            Sent by Aezakmi Cafe Management on behalf of ${cafeName}
+          </div>
+        </div>
+      </div>
+    `;
+
+    let emailSent = false;
+    let message = '';
+    if (brevoApiKey) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': brevoApiKey,
+            'accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: brevoSenderName, email: brevoSenderEmail },
+            to: [{ email: cleanEmail, name: cleanName }],
+            subject: `[${cafeName}] Staff Invitation: Join as ${roleLabel}`,
+            htmlContent: html,
+            tags: ['employee-invite', role]
+          })
+        });
+        if (response.ok) {
+          emailSent = true;
+          message = `Invitation delivered to ${cleanEmail} via Brevo.`;
+        } else {
+          const data = await response.json().catch(() => ({}));
+          message = data?.message || `Brevo returned HTTP ${response.status}`;
+        }
+      } catch (err: any) {
+        message = err?.message || 'Email delivery failed';
+      }
+    } else {
+      message = 'Brevo API key not configured; invite registered in system.';
+    }
+
+    await audit(admin, branch, user.id, 'cloud.team.invite', 'team_member', null, { email: cleanEmail, name: cleanName, role, emailSent });
+
+    return result({
+      success: true,
+      emailSent,
+      targetEmail: cleanEmail,
+      message,
+    }, 201);
+  }
+
+  if(method==='POST'&&route==='/team/resend-invite'){
+    const { name, email, role = 'cashier', branch: targetBranch } = body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanName = String(name || '').trim();
+    if (!cleanEmail) {
+      return json({ success: false, status: 400, code: 'INVALID_EMAIL', error: 'Email is required.' }, 200);
+    }
+
+    const cafeName = branch.name || 'Aezakmi Cafe';
+    const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
+    const branchLabel = targetBranch || cafeName;
+
+    const brevoApiKey = String(Deno.env.get('BREVO_API_KEY') || '').trim();
+    const brevoSenderEmail = String(Deno.env.get('BREVO_SENDER_EMAIL') || 'kyle.serina05@gmail.com').trim();
+    const brevoSenderName = String(Deno.env.get('BREVO_SENDER_NAME') || 'Aezakmi Cafe Management').trim();
+
+    const html = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
+        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
+          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
+          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Staff Invitation Reminder</h1>
+        </div>
+        <div style="padding: 28px;">
+          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName || 'Team Member'}</strong>,</p>
+          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">This is a reminder of your invitation to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}) as <strong style="color: #38BDF8;">${roleLabel}</strong>.</p>
+          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your login credentials to start your shift.</p>
+          <div style="font-size: 11px; color: #475569; text-align: center; margin-top: 28px; border-top: 1px solid #1E293B; padding-top: 18px;">
+            Sent by Aezakmi Cafe Management on behalf of ${cafeName}
+          </div>
+        </div>
+      </div>
+    `;
+
+    let emailSent = false;
+    let message = '';
+    if (brevoApiKey) {
+      try {
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': brevoApiKey,
+            'accept': 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: brevoSenderName, email: brevoSenderEmail },
+            to: [{ email: cleanEmail, name: cleanName || cleanEmail }],
+            subject: `[${cafeName}] Staff Invitation Reminder: ${roleLabel}`,
+            htmlContent: html,
+            tags: ['employee-invite-reminder', role]
+          })
+        });
+        if (response.ok) {
+          emailSent = true;
+          message = `Reminder delivered to ${cleanEmail} via Brevo.`;
+        } else {
+          const data = await response.json().catch(() => ({}));
+          message = data?.message || `Brevo returned HTTP ${response.status}`;
+        }
+      } catch (err: any) {
+        message = err?.message || 'Email delivery failed';
+      }
+    }
+
+    return result({
+      success: true,
+      emailSent,
+      targetEmail: cleanEmail,
+      message: message || `Invitation reminder sent to ${cleanEmail}`,
     });
   }
 

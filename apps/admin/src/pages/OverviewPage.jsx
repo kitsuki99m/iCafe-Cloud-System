@@ -40,10 +40,12 @@ import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { useAdminMode } from '../context/AdminModeContext.jsx'
+import { useEsportsTheme } from '../context/EsportsThemeContext.jsx'
 import { formatAdminPeso } from '../lib/numeric.js'
 import { effectivePcStatus } from '../lib/pcStatus.js'
 import { buildRevenueScale, formatRevenueDay, normalizeSevenDayRevenue } from '../lib/revenueChart.js'
 import AdminSectionManual from '../components/admin/AdminSectionManual.jsx'
+import AdminProfileMenu from '../components/layout/AdminProfileMenu.jsx'
 
 const STATUS_META = {
   available: { label:'Available', icon:MonitorCheck, tone:'text-teal-dim bg-teal/10', dot:'bg-teal' },
@@ -140,6 +142,7 @@ export default function OverviewPage(){
   const { user }=useAuth()
   const { isDark, toggleTheme }=useTheme()
   const { uiMode, isSimpleMode, isAdvanceMode, canToggleMode, setUiMode }=useAdminMode()
+  const { themeMode, isEsportsMode, isDashboardMode, setThemeMode }=useEsportsTheme()
   const { settings, pcs, topUpRequests, supportRequests, serverError, sendEmailSummary }=useAppData()
   const [data,setData]=useState(null)
   const [error,setError]=useState('')
@@ -299,31 +302,55 @@ export default function OverviewPage(){
             <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}!</p>
           </div>
           <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
+            {/* Dashboard vs Esports Persona Switcher */}
+            <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Dashboard vs Esports Persona (F9)">
+              <button
+                type="button"
+                onClick={() => setThemeMode('dashboard')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  isDashboardMode
+                    ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
+                    : 'text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                Dashboard
+              </button>
+              <button
+                type="button"
+                onClick={() => setThemeMode('esports')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  isEsportsMode
+                    ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/30 text-teal-dim shadow-sm border border-teal/40'
+                    : 'text-slate-soft hover:text-ink-900'
+                }`}
+              >
+                Esports
+              </button>
+            </div>
+
             {canToggleMode && (
               <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0" title="Toggle Simple vs Advance UI Mode (F8)">
                 <button
                   type="button"
                   onClick={() => setUiMode('simple')}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                     isSimpleMode
                       ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
                       : 'text-slate-soft hover:text-ink-900'
                   }`}
                 >
-                  <span>⚡</span>
-                  <span className="hidden sm:inline">Simple</span>
+                  Simple
                 </button>
                 <button
                   type="button"
                   onClick={() => setUiMode('advance')}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
                     isAdvanceMode
                       ? 'bg-surface text-ink-900 shadow-sm border border-surface-line'
                       : 'text-slate-soft hover:text-ink-900'
                   }`}
                 >
-                  <span>🛠️</span>
-                  <span className="hidden sm:inline">Advance</span>
+                  Advance
                 </button>
               </div>
             )}
@@ -336,7 +363,13 @@ export default function OverviewPage(){
             <button type="button" onClick={toggleTheme} className="admin-icon-button" title={isDark?'Switch to light mode':'Switch to dark mode'} aria-label={isDark?'Switch to light mode':'Switch to dark mode'}>{isDark?<Sun size={16}/>:<Moon size={16}/>}</button>
             <AdminNotificationCenter />
             <AnnouncementCenter />
-            <div className="ml-1 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full bg-midnight text-[11px] font-bold tracking-wide text-soft-white shrink-0" title={displayName}>{initials(displayName)}</div>
+            <AdminProfileMenu
+              currentLabel="Overview"
+              onOpenManual={() => setManualOpen(true)}
+              onOpenShiftModal={() => window.dispatchEvent(new CustomEvent('aezakmi:open-shift-modal'))}
+              onOpenFeedback={() => setFeedbackOpen(true)}
+              onOpenLock={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', altKey: true, shiftKey: true }))}
+            />
           </div>
         </header>
 
