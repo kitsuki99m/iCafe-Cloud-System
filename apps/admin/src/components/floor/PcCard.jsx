@@ -20,7 +20,7 @@ function formatClock(total) {
   return `${h ? `${String(h).padStart(2, '0')}:` : ''}${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onControls }) {
+function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onControls, className = '' }) {
 
   const session = pc.session
   const rawStatus = String(pc.status || '').trim().toLowerCase().replaceAll('_', '-')
@@ -93,7 +93,7 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
           : lowTime
           ? 'border-ember bg-ember/10 shadow-[0_0_20px_rgba(239,68,68,0.25)] ring-1 ring-ember animate-pulse'
           : 'border-[var(--line)] bg-[var(--surface)]/90 hover:border-[var(--brand)]'
-      }`}
+      } ${className}`}
     >
       {/* Click target for full card selection */}
       <button

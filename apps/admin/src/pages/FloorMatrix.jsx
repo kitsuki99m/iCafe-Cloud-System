@@ -817,7 +817,7 @@ export default function FloorMatrix() {
           ) : (
             <>
               {pcs.length ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1920px]:grid-cols-6">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:flex md:flex-nowrap md:overflow-x-auto md:gap-4 md:pb-2">
                   {sortedPcs.map((pc) => (
                     <PcCard
                       key={pc.id}
@@ -826,6 +826,7 @@ export default function FloorMatrix() {
                       lowTimeWarningMinutes={settings.lowTimeWarningMinutes}
                       onSelect={openPopover}
                       onControls={openControls}
+                      className="md:min-w-[260px] md:max-w-[320px] md:flex-shrink-0"
                     />
                   ))}
                 </div>
