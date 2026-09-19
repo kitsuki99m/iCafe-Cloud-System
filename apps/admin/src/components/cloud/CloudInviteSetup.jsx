@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import PasswordInput from '../common/PasswordInput.jsx'
 import Button from '../common/Button.jsx'
 
-const inputClass='w-full min-h-11 rounded-xl border border-surface-line bg-soft-white px-3.5 text-sm text-midnight placeholder:text-slate-soft focus:border-midnight/45 focus:outline-none focus:ring-2 focus:ring-midnight/10'
+const inputClass='admin-login-input w-full min-h-11 rounded-xl px-3.5 text-sm'
 
 export default function CloudInviteSetup(){
   const{user,completeCloudInvitation,logout}=useAuth()
@@ -21,7 +21,7 @@ export default function CloudInviteSetup(){
       <label className="block"><span className="eyebrow mb-2 block">New password</span><PasswordInput autoFocus value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" placeholder="At least 8 characters" inputClassName={inputClass}/></label>
       <label className="block"><span className="eyebrow mb-2 block">Confirm password</span><PasswordInput value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password" placeholder="Repeat password" inputClassName={`${inputClass} ${confirm&&password!==confirm?'border-ember/60':''}`}/></label>
       <div className="rounded-xl border border-surface-line bg-surface-raised/45 p-3 text-[11px] leading-5 text-slate-soft"><KeyRound className="mr-1.5 inline" size={13}/>This invitation is tied to the business approved by the Aezakmi developer. It cannot create a different organization.</div>
-      <Button type="submit" variant="primary" className="w-full" disabled={!valid||busy}>{busy?'Activating…':<>Activate account <ArrowRight size={16}/></>}</Button>
+      <Button type="submit" variant="primary" className="admin-login-submit-btn w-full" disabled={!valid||busy}>{busy?'Activating…':<>Activate account <ArrowRight size={16}/></>}</Button>
     </form>
     <button className="mt-4 w-full text-center text-xs text-slate-soft underline" type="button" onClick={logout}>Sign out</button>
   </section></div></main>

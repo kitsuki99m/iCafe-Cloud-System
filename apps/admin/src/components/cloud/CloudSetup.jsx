@@ -17,9 +17,9 @@ export default function CloudSetup(){
     <p className="mt-2 text-sm leading-6 text-slate-soft">This creates the cloud tenant and its first branch. You can pair the local Edge server from Settings afterward.</p>
     {error&&<p className="mt-4 flex gap-2 rounded-xl border border-ember/25 bg-ember/10 px-3 py-2.5 text-xs text-ember-dim"><AlertCircle size={14}/>{error}</p>}
     <form className="mt-5 space-y-4" onSubmit={submit}>
-      <label className="block"><span className="eyebrow mb-2 block">Business / organization</span><input autoFocus value={organization} onChange={e=>setOrganization(e.target.value)} className="w-full min-h-11 rounded-xl border border-surface-line bg-soft-white px-3.5 text-sm text-midnight" placeholder="Kai Gaming Lounge"/></label>
-      <label className="block"><span className="eyebrow mb-2 block">First branch</span><input value={branch} onChange={e=>setBranch(e.target.value)} className="w-full min-h-11 rounded-xl border border-surface-line bg-soft-white px-3.5 text-sm text-midnight" placeholder="Main Branch"/></label>
-      <Button type="submit" variant="primary" className="w-full" disabled={busy||!organization.trim()||!branch.trim()}>{busy?'Creating…':<>Create workspace <ArrowRight size={16}/></>}</Button>
+      <label className="block"><span className="eyebrow mb-2 block">Business / organization</span><input autoFocus value={organization} onChange={e=>setOrganization(e.target.value)} className="admin-login-input w-full min-h-11 rounded-xl px-3.5 text-sm" placeholder="Kai Gaming Lounge"/></label>
+      <label className="block"><span className="eyebrow mb-2 block">First branch</span><input value={branch} onChange={e=>setBranch(e.target.value)} className="admin-login-input w-full min-h-11 rounded-xl px-3.5 text-sm" placeholder="Main Branch"/></label>
+      <Button type="submit" variant="primary" className="admin-login-submit-btn w-full" disabled={busy||!organization.trim()||!branch.trim()}>{busy?'Creating…':<>Create workspace <ArrowRight size={16}/></>}</Button>
     </form>
     <button className="mt-4 w-full text-center text-xs text-slate-soft underline" type="button" onClick={logout}>Sign out</button>
   </section></div></main>

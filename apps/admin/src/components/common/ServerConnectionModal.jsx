@@ -127,7 +127,7 @@ export default function ServerConnectionModal({ open, onClose }) {
               placeholder="192.168.254.126"
               autoComplete="off"
               spellCheck="false"
-              className="min-h-11 w-full rounded-xl border border-surface-line bg-soft-white px-3.5 text-sm text-midnight placeholder:text-slate-soft focus:border-midnight/45 focus:outline-none focus:ring-2 focus:ring-midnight/10"
+              className="min-h-11 w-full rounded-xl border border-surface-line bg-surface px-3.5 text-sm text-ink-900 placeholder:text-slate-soft focus:border-gold/50 focus:outline-none focus:ring-2 focus:ring-gold/10"
             />
           </div>
           <div>
@@ -137,7 +137,7 @@ export default function ServerConnectionModal({ open, onClose }) {
               onChange={(event) => { setPort(event.target.value.replace(/\D/g, '').slice(0, 5)); clearVerification() }}
               placeholder="3000"
               inputMode="numeric"
-              className="min-h-11 w-full rounded-xl border border-surface-line bg-soft-white px-3.5 text-sm text-midnight placeholder:text-slate-soft focus:border-midnight/45 focus:outline-none focus:ring-2 focus:ring-midnight/10"
+              className="min-h-11 w-full rounded-xl border border-surface-line bg-surface px-3.5 text-sm text-ink-900 placeholder:text-slate-soft focus:border-gold/50 focus:outline-none focus:ring-2 focus:ring-gold/10"
             />
           </div>
         </div>

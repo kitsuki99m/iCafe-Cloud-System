@@ -1104,7 +1104,7 @@ export default function SettingsPage() {
                                 <div
                                   key={pkg.id}
                                   className={`rounded-lg border px-2 py-2 ${
-                                    subscription.plan === pkg.id ? 'border-gold/45 bg-gold/8' : 'border-surface-line bg-soft-white'
+                                    subscription.plan === pkg.id ? 'border-gold/45 bg-gold/8' : 'border-surface-line bg-surface'
                                   }`}
                                 >
                                   <p className={`text-[10px] font-semibold ${subscription.plan === pkg.id ? 'text-gold-dim' : 'text-ink-900'}`}>{pkg.label}</p>
