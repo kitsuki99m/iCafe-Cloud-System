@@ -7,25 +7,29 @@ const THEME_STORAGE_KEY = 'aezakmi.esports_theme_mode'
 
 export function EsportsThemeProvider({ children }) {
   const { user } = useAuth()
-  const isStaff = user?.role === 'cashier' || user?.role === 'staff' || user?.cloudRole === 'cashier' || user?.cloudRole === 'staff'
 
   const [themeMode, setThemeModeState] = useState(() => {
     try {
       const saved = sessionStorage.getItem(THEME_STORAGE_KEY) || localStorage.getItem(THEME_STORAGE_KEY)
       if (saved === 'esports' || saved === 'dashboard') return saved
-      return isStaff ? 'esports' : 'dashboard'
+      return 'esports'
     } catch {
-      return isStaff ? 'esports' : 'dashboard'
+      return 'esports'
     }
   })
 
-  // Whenever staff logs in, if no explicit user override is stored in sessionStorage, default to esports mode
-  useEffect(() => {
-    if (isStaff && !sessionStorage.getItem(THEME_STORAGE_KEY)) {
-      setThemeModeState('esports')
-      document.documentElement.setAttribute('data-theme-persona', 'esports')
-    }
-  }, [isStaff])
+  const syncSkinDataset = (mode) => {
+    try {
+      const activeSkinId = localStorage.getItem('aezakmi.skin') || 'nexus'
+      if (mode === 'esports') {
+        document.documentElement.setAttribute('data-theme-persona', 'esports')
+        document.documentElement.dataset.skin = activeSkinId
+      } else {
+        document.documentElement.setAttribute('data-theme-persona', 'dashboard')
+        document.documentElement.dataset.skin = 'default'
+      }
+    } catch {}
+  }
 
   const setThemeMode = (mode) => {
     const target = mode === 'esports' ? 'esports' : 'dashboard'
@@ -34,7 +38,7 @@ export function EsportsThemeProvider({ children }) {
       sessionStorage.setItem(THEME_STORAGE_KEY, target)
       localStorage.setItem(THEME_STORAGE_KEY, target)
     } catch {}
-    document.documentElement.setAttribute('data-theme-persona', target)
+    syncSkinDataset(target)
     window.dispatchEvent(new CustomEvent('aezakmi:persona-changed', { detail: { mode: target } }))
   }
 
@@ -42,9 +46,9 @@ export function EsportsThemeProvider({ children }) {
     setThemeMode(themeMode === 'esports' ? 'dashboard' : 'esports')
   }
 
-  // Keep data-theme-persona synchronized on document root
+  // Keep data-theme-persona and data-skin synchronized on document root
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme-persona', themeMode)
+    syncSkinDataset(themeMode)
   }, [themeMode])
 
   // Keyboard shortcut: F9 to toggle Dashboard vs Esports mode
