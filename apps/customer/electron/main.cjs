@@ -553,7 +553,7 @@ function applyCompactSessionMode() {
   notifyDashboardMode()
   // Remove the previous mode's size locks before leaving fullscreen/maximized
   // state. This makes the transition deterministic when coming from kiosk mode
-  // or from the fixed 960x680 active dashboard.
+  // or from the fullscreen active dashboard.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
   applyAfterLeavingFullScreen(() => {
@@ -593,35 +593,30 @@ function applyActiveWindowMode({ show = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const wasVisible = mainWindow.isVisible()
   // Do not expose the compact window while its native bounds and renderer
-  // layout transition to the centered dashboard.
+  // layout transition to the fullscreen dashboard.
   mainWindow.setOpacity(0)
   if (show && wasVisible) mainWindow.hide()
   activeDashboardMode = 'expanded'
   notifyDashboardMode()
   // Compact mode is fixed at 84x22, so clear both constraints before growing
-  // back to the active dashboard. Otherwise Windows/Electron can preserve the
-  // old maximum and refuse the 960x680 resize.
+  // back to fullscreen. Otherwise Windows/Electron can preserve the
+  // old maximum and refuse the resize.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
   applyAfterLeavingFullScreen(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return
-    // A signed-in/no-session dashboard is fullscreen and topmost. Clear any
-    // maximized restore state before applying the active-session 960x680 bounds.
+    // Clear any maximized restore state before applying fullscreen.
     if (mainWindow.isMaximized()) mainWindow.unmaximize()
     mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
-    mainWindow.setMaximumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
-    // ACTIVE sessions (member or Guest) use a normal 960x680 desktop window.
-    // Never force the dashboard above the customer's other applications.
-    mainWindow.setAlwaysOnTop(false)
+    mainWindow.setMaximumSize(0, 0)
+    // ACTIVE sessions (member or Guest) now use fullscreen kiosk mode
+    // so the dashboard fills the entire display — matching the idle/login
+    // experience and giving the launcher + session panel full room.
+    mainWindow.setAlwaysOnTop(true, 'screen-saver')
     mainWindow.setSkipTaskbar(true)
     mainWindow.setResizable(false)
-    // Resize and center atomically. Separate setSize/center calls briefly
-    // expose the dashboard at the compact timer's old right-edge position.
-    const display=screen.getDisplayMatching(mainWindow.getBounds()) || screen.getPrimaryDisplay()
-    const workArea=display?.workArea || { x:0, y:0, width:ACTIVE_WIDTH, height:ACTIVE_HEIGHT }
-    const x = Math.round(workArea.x + (workArea.width - ACTIVE_WIDTH) / 2)
-    const y = Math.round(workArea.y + (workArea.height - ACTIVE_HEIGHT) / 2)
-    mainWindow.setBounds({ x, y, width:ACTIVE_WIDTH, height:ACTIVE_HEIGHT }, false)
+    mainWindow.setKiosk(true)
+    mainWindow.setFullScreen(true)
     if (show) {
       mainWindow.show()
       mainWindow.focus()
