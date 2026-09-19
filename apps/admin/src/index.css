@@ -97,21 +97,21 @@
     color-scheme: light;
 
     /* Light mode palette tokens */
-    --bg: #F4F6FB;
+    --bg: #F8FAFC;
     --surface: #FFFFFF;
-    --surface-2: #EAEFF7;
-    --line: #D8E0EE;
-    --line-soft: #E6ECF5;
+    --surface-2: #F1F5F9;
+    --line: #E2E8F0;
+    --line-soft: #F1F5F9;
     --text: #0F172A;
     --muted: #475569;
-    --faint: #8B9BB4;
+    --faint: #94A3B8;
     --free: #059669;
     --live: #D97706;
     --hold: #0284C7;
     --down: #64748B;
-    --brand: #6366F1;
+    --brand: #0F172A;
     --brand-ink: #FFFFFF;
-    --glow: rgba(99, 102, 241, 0.18);
+    --glow: rgba(15, 23, 42, 0.12);
     --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 10px 25px -5px rgba(15, 23, 42, 0.05);
     --r: 14px;
     --display: 'Archivo';
@@ -120,54 +120,54 @@
     --panel-r: 14px;
     --art: none;
     --ring: 0 0 0 1px transparent;
-    --fx: rgba(99, 102, 241, 0.12);
+    --fx: rgba(15, 23, 42, 0.08);
     --lift: 0.5px;
 
     /* Semantic variable bindings */
-    --color-midnight: var(--brand);
-    --color-bluish: var(--muted);
-    --color-grape: var(--muted);
-    --color-trillium: var(--faint);
-    --color-new-wool: var(--line);
-    --color-dance: var(--surface-2);
-    --color-soft-white: var(--surface);
+    --color-midnight: #202937;
+    --color-bluish: #475569;
+    --color-grape: #64748B;
+    --color-trillium: #94A3B8;
+    --color-new-wool: #CBD5E1;
+    --color-dance: #E2E8F0;
+    --color-soft-white: #FFFFFF;
 
-    --color-ink: var(--bg);
-    --color-ink-soft: var(--surface-2);
-    --color-ink-900: var(--text);
+    --color-ink: #F8FAFC;
+    --color-ink-soft: #F1F5F9;
+    --color-ink-900: #0F172A;
 
-    --color-surface: var(--surface);
-    --color-surface-raised: var(--surface-2);
-    --color-surface-line: var(--line);
+    --color-surface: #FFFFFF;
+    --color-surface-raised: #F1F5F9;
+    --color-surface-line: #E2E8F0;
 
-    --color-gold: var(--brand);
-    --color-gold-soft: var(--surface-2);
-    --color-gold-dim: var(--brand);
+    --color-gold: #202937;
+    --color-gold-soft: #E2E8F0;
+    --color-gold-dim: #475569;
 
-    --color-teal: var(--free);
-    --color-teal-soft: color-mix(in srgb, var(--free) 15%, var(--surface));
-    --color-teal-dim: var(--free);
+    --color-teal: #059669;
+    --color-teal-soft: #ECFDF5;
+    --color-teal-dim: #047857;
 
-    --color-orange: var(--live);
-    --color-orange-soft: color-mix(in srgb, var(--live) 15%, var(--surface));
-    --color-orange-dim: var(--live);
+    --color-orange: #D97706;
+    --color-orange-soft: #FFFBEB;
+    --color-orange-dim: #B45309;
 
-    --color-ember: #EF4444;
-    --color-ember-soft: color-mix(in srgb, #EF4444 15%, var(--surface));
-    --color-ember-dim: #DC2626;
+    --color-ember: #DC2626;
+    --color-ember-soft: #FEF2F2;
+    --color-ember-dim: #B91C1C;
 
-    --color-slate: var(--faint);
-    --color-slate-soft: var(--muted);
+    --color-slate: #64748B;
+    --color-slate-soft: #475569;
 
     --app-dot: rgba(15, 23, 42, 0.08);
 
-    --admin-canvas-bg: var(--bg);
-    --admin-shell-bg: var(--bg);
-    --admin-sidebar-bg: var(--surface);
-    --admin-card-bg: var(--surface);
-    --admin-card-subtle: var(--surface-2);
-    --admin-card-strong: var(--surface-2);
-    --admin-ui-border: var(--line);
+    --admin-canvas-bg: #F8FAFC;
+    --admin-shell-bg: #F8FAFC;
+    --admin-sidebar-bg: #FFFFFF;
+    --admin-card-bg: #FFFFFF;
+    --admin-card-subtle: #F8FAFC;
+    --admin-card-strong: #F1F5F9;
+    --admin-ui-border: #E2E8F0;
     --admin-shell-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
   }
 
@@ -188,9 +188,9 @@
     --live: #F59E0B;
     --hold: #38BDF8;
     --down: #64748B;
-    --brand: #7B61FF;
+    --brand: #38BDF8;
     --brand-ink: #0C111B;
-    --glow: rgba(123, 97, 255, 0.22);
+    --glow: rgba(56, 189, 248, 0.2);
     --shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 40px -24px rgba(0, 0, 0, 0.8);
     --r: 14px;
     --display: 'Archivo';
@@ -199,54 +199,54 @@
     --panel-r: 14px;
     --art: none;
     --ring: 0 0 0 1px transparent;
-    --fx: rgba(123, 97, 255, 0.16);
+    --fx: rgba(56, 189, 248, 0.12);
     --lift: 0.5px;
 
     /* Semantic variable bindings */
-    --color-midnight: var(--brand);
-    --color-bluish: var(--muted);
-    --color-grape: var(--muted);
-    --color-trillium: var(--faint);
-    --color-new-wool: var(--line);
-    --color-dance: var(--surface-2);
-    --color-soft-white: var(--surface);
+    --color-midnight: #0F172A;
+    --color-bluish: #8E9DB5;
+    --color-grape: #64748B;
+    --color-trillium: #5E6D84;
+    --color-new-wool: #222E42;
+    --color-dance: #1A2232;
+    --color-soft-white: #FFFFFF;
 
-    --color-ink: var(--bg);
-    --color-ink-soft: var(--surface-2);
-    --color-ink-900: var(--text);
+    --color-ink: #0B0F17;
+    --color-ink-soft: #1A2232;
+    --color-ink-900: #F1F5F9;
 
-    --color-surface: var(--surface);
-    --color-surface-raised: var(--surface-2);
-    --color-surface-line: var(--line);
+    --color-surface: #121824;
+    --color-surface-raised: #1A2232;
+    --color-surface-line: #222E42;
 
-    --color-gold: var(--brand);
-    --color-gold-soft: var(--surface-2);
-    --color-gold-dim: var(--brand);
+    --color-gold: #F59E0B;
+    --color-gold-soft: rgba(245, 158, 11, 0.15);
+    --color-gold-dim: #FBBF24;
 
-    --color-teal: var(--free);
-    --color-teal-soft: color-mix(in srgb, var(--free) 18%, var(--surface));
-    --color-teal-dim: var(--free);
+    --color-teal: #10B981;
+    --color-teal-soft: rgba(16, 185, 129, 0.15);
+    --color-teal-dim: #34D399;
 
-    --color-orange: var(--live);
-    --color-orange-soft: color-mix(in srgb, var(--live) 18%, var(--surface));
-    --color-orange-dim: var(--live);
+    --color-orange: #F59E0B;
+    --color-orange-soft: rgba(245, 158, 11, 0.15);
+    --color-orange-dim: #FBBF24;
 
     --color-ember: #F87171;
-    --color-ember-soft: color-mix(in srgb, #F87171 18%, var(--surface));
+    --color-ember-soft: rgba(248, 113, 113, 0.15);
     --color-ember-dim: #EF4444;
 
-    --color-slate: var(--faint);
-    --color-slate-soft: var(--muted);
+    --color-slate: #8E9DB5;
+    --color-slate-soft: #5E6D84;
 
     --app-dot: rgba(241, 245, 249, 0.055);
 
-    --admin-canvas-bg: var(--bg);
-    --admin-shell-bg: var(--bg);
-    --admin-sidebar-bg: var(--surface);
-    --admin-card-bg: var(--surface);
-    --admin-card-subtle: var(--surface-2);
-    --admin-card-strong: var(--surface-2);
-    --admin-ui-border: var(--line);
+    --admin-canvas-bg: #0B0F17;
+    --admin-shell-bg: #0B0F17;
+    --admin-sidebar-bg: #121824;
+    --admin-card-bg: #121824;
+    --admin-card-subtle: #161E2E;
+    --admin-card-strong: #1A2232;
+    --admin-ui-border: #222E42;
     --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
   }
 
