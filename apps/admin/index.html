@@ -18,6 +18,19 @@
       href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Chakra+Petch:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Rajdhani:wght@500;600;700&family=Saira:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        try {
+          var savedTheme = localStorage.getItem('aezakmi.theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+          document.documentElement.dataset.theme = savedTheme;
+          document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+          document.documentElement.classList.toggle('light', savedTheme === 'light');
+          document.documentElement.style.colorScheme = savedTheme;
+          var savedSkin = localStorage.getItem('aezakmi.skin') || 'nexus';
+          document.documentElement.dataset.skin = savedSkin;
+        } catch (e) {}
+      })();
+    </script>
     <!--
       Critical, framework-free CSS for the very first paint. The compiled
       Tailwind bundle only arrives with the JS module below, so without this
@@ -147,7 +160,7 @@
       }
     </style>
   </head>
-  <body class="bg-ink text-slate-100">
+  <body>
     <!--
       Static markup so the branded splash is on-screen the instant HTML
       parses — before React, before the Tailwind bundle. React's
