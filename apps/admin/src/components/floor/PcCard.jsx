@@ -35,6 +35,7 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
   const guestOfflinePause = disconnected && session?.pauseReason === 'station_offline'
   const timer = session ? formatClock(session.billing === 'prepaid' ? remaining : elapsed) : null
   const isOccupied = statusKey === 'occupied'
+  const isHold = statusKey === 'reserved'
 
   // Format station display name
   const stationNumber = pc.pcNumber != null && String(pc.pcNumber).trim() !== '' ? String(pc.pcNumber).padStart(2, '0') : null
