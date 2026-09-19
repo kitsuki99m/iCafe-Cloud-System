@@ -506,13 +506,182 @@
     background: transparent !important;
   }
   [data-skin] .admin-sidebar,
+  [data-skin] .admin-rail-shell,
   [data-skin] .admin-global-header,
-  [data-skin] .admin-mobile-header {
+  [data-skin] .admin-mobile-header,
+  [data-skin] .nexus-topbar {
     background: color-mix(in srgb, var(--surface) 86%, transparent) !important;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-color: var(--line) !important;
   }
+
+  /* Nexus console rail & topbar styles for Simple Mode */
+  .admin-rail-shell {
+    width: 76px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 14px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    z-index: 120;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .admin-rail-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: var(--brand);
+    color: var(--brand-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    padding: 6px;
+    box-shadow: 0 4px 14px -3px var(--glow);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .admin-rail-mark:hover {
+    transform: scale(1.06);
+  }
+  .admin-rail-nav-btn {
+    width: 58px;
+    padding: 8px 0 6px;
+    border-radius: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--faint);
+    font-size: 10px;
+    font-weight: 500;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    text-decoration: none;
+    position: relative;
+  }
+  .admin-rail-nav-btn:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
+  .admin-rail-nav-btn.active,
+  .admin-rail-nav-btn[aria-current="true"] {
+    color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+    font-weight: 600;
+  }
+  .admin-rail-nav-btn.active::before {
+    content: '';
+    position: absolute;
+    left: -9px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--brand);
+  }
+
+  .nexus-topbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--line);
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    flex-wrap: wrap;
+    min-height: 60px;
+  }
+  .nexus-topbar .shift {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    text-align: left;
+  }
+  .nexus-topbar .shift b {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .nexus-topbar .shift span {
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .nexus-topbar .clock {
+    font-family: 'DM Mono', ui-monospace, monospace;
+    font-size: 12.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .nexus-topbar .swatches {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .nexus-topbar .sw {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+    cursor: pointer;
+  }
+  .nexus-topbar .sw:hover {
+    transform: scale(1.15);
+  }
+  .nexus-topbar .sw[aria-pressed="true"] {
+    border-color: var(--text);
+    transform: scale(1.2);
+    box-shadow: 0 0 8px var(--glow);
+  }
+  .nexus-topbar .icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    background: transparent;
+    transition: color 0.14s, background 0.14s, border-color 0.14s;
+    cursor: pointer;
+  }
+  .nexus-topbar .icon-btn:hover {
+    color: var(--text);
+    background: var(--surface-2);
+    border-color: color-mix(in srgb, var(--brand) 30%, var(--line));
+  }
+
+  /* 2D Floor Plan Station Node */
+  .floor-2d-node {
+    border-radius: var(--tile-r, 12px);
+    clip-path: var(--tile-clip, none);
+    transition: transform 0.12s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .floor-2d-node:hover {
+    filter: brightness(1.06);
+  }
+  .floor-2d-node.occupied {
+    animation: ringPulse 3.4s ease-in-out infinite;
+  }
+
   [data-skin] .overview-card,
   [data-skin] .overview-soft-card,
   [data-skin] .admin-panel-card {

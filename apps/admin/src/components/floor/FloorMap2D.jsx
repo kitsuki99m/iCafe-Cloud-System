@@ -1,48 +1,44 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, forwardRef, useImperativeHandle, memo } from 'react'
 import { effectivePcStatus, isPcStationOnline } from '../../lib/pcStatus.js'
 import { showToast } from '../../lib/toast.js'
+import { remainingSessionSeconds } from '../../lib/sessionTime.js'
+import { Lock, Wrench, WifiOff, MoreHorizontal, Sparkles } from 'lucide-react'
 
 const STORAGE_KEY_POSITIONS = 'aezakmi:floor_plan_positions'
-const CELL_SIZE = 68 // Grid snapping cell size
-const PC_SIZE = 60 // Visual size of the square PC block
+const CELL_SIZE = 80 // Grid snapping cell size
+const PC_SIZE = 72 // Visual size of station block
 
-// Memoized Station Node for 120 FPS rendering
+function formatNodeTime(seconds) {
+  if (seconds == null || !Number.isFinite(seconds)) return '--:--'
+  if (seconds <= 0) return '00:00'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+// Memoized Esports Rig Station Node for high-framerate rendering
 const FloorStationNode = memo(function FloorStationNode({
   pc,
   pos,
   zoom,
+  now,
   matchesFilter,
   onMouseDown,
   onTouchStart,
   onClick,
+  onControls,
 }) {
   const effectiveStatus = effectivePcStatus(pc)
   const isOnline = isPcStationOnline(pc)
   const session = pc.session
   const isOccupied = effectiveStatus === 'occupied'
-  const isLocked = session?.isLocked
+  const isLocked = session?.isLocked || session?.isPaused
   const isOffline = effectiveStatus === 'offline' || !isOnline
   const isMaintenance = effectiveStatus === 'maintenance'
 
   const pcNum = String(pc.pcNumber ?? pc.label ?? pc.id ?? '').replace(/\D+/g, '') || pc.id
-
-  let blockBg = 'bg-[#10b981] text-white shadow-[#10b981]/25'
-  if (isOccupied) {
-    blockBg = isLocked
-      ? 'bg-[#d97706] text-white shadow-amber-500/25'
-      : 'bg-[#ef4444] text-white shadow-rose-500/30 ring-1 ring-rose-400/40'
-  } else if (isMaintenance) {
-    blockBg = 'bg-[#f59e0b] text-white shadow-amber-500/25'
-  } else if (isOffline) {
-    blockBg = 'bg-[#334155] text-slate-300 shadow-slate-900/30'
-  }
-
-  let initialBadge = null
-  if (isOccupied && session?.customerName) {
-    initialBadge = session.customerName.charAt(0).toUpperCase()
-  } else if (isOccupied) {
-    initialBadge = 'G'
-  }
 
   const isVip = Boolean(
     pc.isVip ||
@@ -55,12 +51,48 @@ const FloorStationNode = memo(function FloorStationNode({
     String(pc.category || '').toLowerCase().includes('vip')
   )
 
+  const remainingSec = isOccupied && session?.billing === 'prepaid'
+    ? remainingSessionSeconds(session, now)
+    : null
+
+  // Status-driven styling variables
+  let borderStyle = 'border-[var(--line,#26314A)]'
+  let bgStyle = 'bg-[var(--surface,#131A28)]/90 text-[var(--text,#E6EAF2)]'
+  let glowShadow = 'shadow-md'
+  let statusDotColor = 'bg-[var(--free,#2ED3A0)]'
+
+  if (isOccupied) {
+    borderStyle = isLocked
+      ? 'border-[var(--live,#FFB020)]/80'
+      : 'border-[var(--live,#FFB020)] ring-1 ring-[var(--live,#FFB020)]/40'
+    bgStyle = 'bg-[var(--surface-2,#1A2233)] text-[var(--text,#E6EAF2)]'
+    glowShadow = 'shadow-[0_0_18px_-4px_var(--glow,rgba(255,176,32,0.35))]'
+    statusDotColor = 'bg-[var(--live,#FFB020)]'
+  } else if (isMaintenance) {
+    borderStyle = 'border-[var(--down,#6B7688)]'
+    bgStyle = 'bg-[var(--surface-2,#1A2233)]/80 text-[var(--muted,#8D9AB5)]'
+    statusDotColor = 'bg-[var(--down,#6B7688)]'
+  } else if (isOffline) {
+    borderStyle = 'border-[var(--line-soft,#1E273B)] opacity-60'
+    bgStyle = 'bg-[var(--surface,#131A28)]/50 text-[var(--faint,#6B7891)]'
+    statusDotColor = 'bg-slate-500'
+  } else {
+    // Available
+    borderStyle = 'border-[var(--free,#2ED3A0)]/50 hover:border-[var(--free,#2ED3A0)]'
+    bgStyle = 'bg-[var(--surface,#131A28)]/90 text-[var(--text,#E6EAF2)]'
+    glowShadow = 'hover:shadow-[0_0_14px_-2px_rgba(46,211,160,0.35)]'
+  }
+
   return (
     <div
       data-pc-node={pc.id}
       onMouseDown={(e) => onMouseDown(e, pc.id)}
       onTouchStart={(e) => onTouchStart(e, pc.id)}
       onClick={(e) => onClick(e, pc)}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onControls?.(e, pc)
+      }}
       style={{
         position: 'absolute',
         left: `${pos.x * zoom}px`,
@@ -71,27 +103,71 @@ const FloorStationNode = memo(function FloorStationNode({
         zIndex: 20,
         touchAction: 'none',
       }}
-      className={`group rounded-xl flex flex-col items-center justify-center relative cursor-grab select-none shadow-md transition-shadow duration-100 hover:scale-105 active:scale-95 ${blockBg} ${
-        !matchesFilter ? 'opacity-20' : 'opacity-100'
-      }`}
-      title={`${pc.label || `PC ${pcNum}`}${isVip ? ' (VIP)' : ''} · ${effectiveStatus} · Click for controls`}
+      className={`floor-2d-node group flex flex-col justify-between p-1.5 border cursor-grab select-none transition-all duration-100 hover:scale-105 active:scale-95 ${borderStyle} ${bgStyle} ${glowShadow} ${
+        isOccupied ? 'occupied' : ''
+      } ${!matchesFilter ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}
+      title={`${pc.label || `PC ${pcNum}`}${isVip ? ' (VIP)' : ''} · ${effectiveStatus} · Click to inspect session drawer`}
     >
-      {isVip && (
-        <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-amber-400 text-slate-950 font-black text-[9px] flex items-center justify-center shadow-md border border-amber-200 select-none" title="VIP Station">
-          ★
+      {/* Top Header: Rig Label + VIP + Status Pill */}
+      <div className="flex items-center justify-between gap-1 pointer-events-none">
+        <div className="flex items-center gap-1">
+          <span className="font-display text-[11px] font-bold tracking-tight text-[var(--text,#E6EAF2)] leading-none">
+            {pc.label ? pc.label.replace(/^pc[-\s]*/i, '') : `PC${pcNum}`}
+          </span>
+          {isVip && (
+            <span className="text-[8px] font-black text-amber-400 leading-none" title="VIP Station">
+              ★
+            </span>
+          )}
+        </div>
+        <span className={`h-1.5 w-1.5 rounded-full ${statusDotColor} ${isOccupied ? 'animate-pulse' : ''}`} />
+      </div>
+
+      {/* Middle Readout: Timer / Status */}
+      <div className="flex flex-col items-center justify-center my-auto pointer-events-none">
+        {isOccupied ? (
+          <>
+            <span className="font-mono text-[11px] font-bold tracking-tight text-[var(--live,#FFB020)] leading-none">
+              {remainingSec != null ? formatNodeTime(remainingSec) : 'OPEN'}
+            </span>
+            <span className="mt-0.5 max-w-[58px] truncate text-[9px] font-medium text-[var(--muted,#8D9AB5)] leading-none">
+              {session?.customerName || session?.username || 'Guest'}
+            </span>
+          </>
+        ) : isMaintenance ? (
+          <div className="flex items-center gap-0.5 text-[9px] font-bold text-[var(--down,#6B7688)]">
+            <Wrench size={10} />
+            <span>REPAIR</span>
+          </div>
+        ) : isOffline ? (
+          <div className="flex items-center gap-0.5 text-[9px] text-[var(--faint,#6B7891)]">
+            <WifiOff size={9} />
+            <span>OFFLINE</span>
+          </div>
+        ) : (
+          <span className="rounded px-1 py-0.2 text-[9px] font-bold text-[var(--free,#2ED3A0)] bg-[var(--free,#2ED3A0)]/10">
+            OPEN
+          </span>
+        )}
+      </div>
+
+      {/* Bottom Footer: Quick Controls Trigger button */}
+      <div className="flex items-center justify-between pt-0.5 border-t border-white/5">
+        <span className="text-[8px] font-mono uppercase text-[var(--faint,#6B7891)]">
+          {pc.rate || pc.hourlyRate ? `₱${pc.rate || pc.hourlyRate}` : 'RIG'}
         </span>
-      )}
-      <span className="text-[9px] font-black uppercase tracking-wider leading-none opacity-90">
-        PC
-      </span>
-      <span className="text-sm font-black tracking-tight leading-none mt-1">
-        {pcNum}
-      </span>
-      {initialBadge && (
-        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-white text-black font-black text-[9px] flex items-center justify-center shadow-md border border-black/10">
-          {initialBadge}
-        </span>
-      )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onControls?.(e, pc)
+          }}
+          className="rounded p-0.5 text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)] hover:bg-white/10 transition-colors cursor-pointer"
+          title="Station Controls Menu"
+        >
+          <MoreHorizontal size={11} />
+        </button>
+      </div>
     </div>
   )
 })
@@ -425,12 +501,12 @@ const FloorMap2D = forwardRef(function FloorMap2D({
 
   const handleStationClick = useCallback((e, pc) => {
     if (activeDragRef.current?.moved) return
-    if (onControls) onControls(e, pc)
-    else if (onSelect) onSelect(pc)
-  }, [onControls, onSelect])
+    // Primary click opens the StationDetailDrawer right beside the 2D layout
+    if (onSelect) onSelect(pc)
+  }, [onSelect])
 
   return (
-    <div className="relative w-full h-[clamp(400px,calc(100dvh-295px),720px)] rounded-2xl border border-surface-line bg-surface/60 overflow-auto select-none shadow-card">
+    <div className="relative w-full h-[clamp(420px,calc(100dvh-295px),740px)] rounded-2xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/75 backdrop-blur-md overflow-auto select-none shadow-card">
       <div
         ref={canvasRef}
         style={{
@@ -442,22 +518,29 @@ const FloorMap2D = forwardRef(function FloorMap2D({
         }}
         className="relative transition-all duration-75"
       >
-        {/* Subtle Blueprint Grid Pattern matching theme */}
-        <svg className="absolute inset-0 w-full h-full opacity-15 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+        {/* Esports Blueprint Grid matching skin */}
+        <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="floorGridSmall" width={CELL_SIZE * zoom} height={CELL_SIZE * zoom} patternUnits="userSpaceOnUse">
-              <path d={`M ${CELL_SIZE * zoom} 0 L 0 0 0 ${CELL_SIZE * zoom}`} fill="none" stroke="currentColor" strokeWidth="0.75" className="text-slate-500" />
+              <path
+                d={`M ${CELL_SIZE * zoom} 0 L 0 0 0 ${CELL_SIZE * zoom}`}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="0.75"
+                className="text-[var(--brand,#7B61FF)]"
+              />
+              <circle cx={CELL_SIZE * zoom} cy={CELL_SIZE * zoom} r="1" fill="currentColor" className="text-[var(--brand,#7B61FF)]" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#floorGridSmall)" />
         </svg>
 
-        {/* Station Building Block Nodes */}
+        {/* Station Rig Nodes */}
         {pcs.map((pc) => {
-          const pos = computedPositions[pc.id] || { x: 36, y: 36 }
+          const pos = computedPositions[pc.id] || { x: 40, y: 40 }
           const effectiveStatus = effectivePcStatus(pc)
           const isOccupied = effectiveStatus === 'occupied'
-          const isLocked = pc.session?.isLocked
+          const isLocked = pc.session?.isLocked || pc.session?.isPaused
           const isOffline = effectiveStatus === 'offline' || !isPcStationOnline(pc)
           const isMaintenance = effectiveStatus === 'maintenance'
 
@@ -475,10 +558,12 @@ const FloorMap2D = forwardRef(function FloorMap2D({
               pc={pc}
               pos={pos}
               zoom={zoom}
+              now={now}
               matchesFilter={matchesFilter}
               onMouseDown={handleMouseDown}
               onTouchStart={handleTouchStart}
               onClick={handleStationClick}
+              onControls={onControls}
             />
           )
         })}

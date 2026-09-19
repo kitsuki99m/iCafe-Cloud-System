@@ -299,10 +299,10 @@ export default function OverviewPage(){
   return <div className="overview-workspace">
     <div className={`overview-workspace-grid grid min-h-full ${isSimpleMode ? 'grid-cols-1' : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
       <div className={`overview-main-column min-w-0 ${isSimpleMode ? '' : 'border-b border-[var(--admin-ui-border)] xl:border-b-0 xl:border-r'}`}>
-        <header className="overview-header flex min-h-[96px] relative z-[150] items-center justify-between gap-4 px-5 py-3.5 sm:px-6 lg:px-7">
+        <header className={`overview-header flex ${isSimpleMode ? 'min-h-[52px] py-2' : 'min-h-[96px] py-3.5'} relative z-[150] items-center justify-between gap-4 px-5 sm:px-6 lg:px-7`}>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <p className="max-w-[min(46vw,520px)] truncate text-[24px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}!</p>
+              <p className="max-w-[min(46vw,520px)] truncate text-[22px] font-semibold tracking-[-0.03em] text-ink-900" title={displayName}>Hi, {displayName}!</p>
               {isEsportsMode && (
                 <span className="hidden sm:inline-flex items-center gap-1.5 rounded-md bg-teal/15 border border-teal/30 px-2 py-0.5 text-[9px] font-bold text-teal-dim uppercase tracking-wider">
                   <span className="relative flex h-2 w-2">
@@ -314,34 +314,36 @@ export default function OverviewPage(){
               )}
             </div>
           </div>
-          <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
-            <AdminQuickFind />
-            <button
-              type="button"
-              onClick={openGallery}
-              className="overview-header-control cursor-pointer"
-              title="Switch Console Skin"
-            >
-              <span className="flex h-4 w-4 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
-                {activeSkin?.mark || 'N'}
-              </span>
-              <span className="hidden xl:inline font-display">{activeSkin?.name || 'Skins'}</span>
-            </button>
-            <button type="button" onClick={()=>setFeedbackOpen(true)} className="overview-header-control relative" title="Open customer feedback">
-              <MessageSquareText size={15}/><span className="hidden xl:inline">Feedback</span>
-              {feedbackCount>0&&<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-midnight px-1 text-[9px] font-bold text-soft-white">{feedbackCount>=3?'3+':feedbackCount}</span>}
-            </button>
-            <AdminNotificationCenter />
-            <AnnouncementCenter />
-            <AdminProfileMenu
-              currentLabel="Overview"
-              manualTitle="Open Overview owner manual"
-              onOpenManual={() => setManualOpen(true)}
-              onOpenShiftModal={() => window.dispatchEvent(new CustomEvent('aezakmi:open-shift-modal'))}
-              onOpenFeedback={() => setFeedbackOpen(true)}
-              onOpenLock={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', altKey: true, shiftKey: true }))}
-            />
-          </div>
+          {!isSimpleMode && (
+            <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
+              <AdminQuickFind />
+              <button
+                type="button"
+                onClick={openGallery}
+                className="overview-header-control cursor-pointer"
+                title="Switch Console Skin"
+              >
+                <span className="flex h-4 w-4 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
+                  {activeSkin?.mark || 'N'}
+                </span>
+                <span className="hidden xl:inline font-display">{activeSkin?.name || 'Skins'}</span>
+              </button>
+              <button type="button" onClick={()=>setFeedbackOpen(true)} className="overview-header-control relative" title="Open customer feedback">
+                <MessageSquareText size={15}/><span className="hidden xl:inline">Feedback</span>
+                {feedbackCount>0&&<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-midnight px-1 text-[9px] font-bold text-soft-white">{feedbackCount>=3?'3+':feedbackCount}</span>}
+              </button>
+              <AdminNotificationCenter />
+              <AnnouncementCenter />
+              <AdminProfileMenu
+                currentLabel="Overview"
+                manualTitle="Open Overview owner manual"
+                onOpenManual={() => setManualOpen(true)}
+                onOpenShiftModal={() => window.dispatchEvent(new CustomEvent('aezakmi:open-shift-modal'))}
+                onOpenFeedback={() => setFeedbackOpen(true)}
+                onOpenLock={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l', altKey: true, shiftKey: true }))}
+              />
+            </div>
+          )}
         </header>
 
         <div className="px-4 pb-5 sm:px-6 lg:px-7 lg:pb-6 space-y-4">

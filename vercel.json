@@ -3,6 +3,9 @@
   "buildCommand": "npm --prefix apps/admin run build",
   "outputDirectory": "apps/admin/dist",
   "framework": "vite",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/assets/(.*)",

@@ -23,22 +23,39 @@ import AdminProfileMenu from './AdminProfileMenu.jsx'
 import { useSkin } from '../../context/SkinContext.jsx'
 import SkinGalleryModal from '../admin/SkinGalleryModal.jsx'
 
+import { formatAdminPeso } from '../../lib/numeric.js'
+
 const BASE_NAV = [
-  { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/clients', label: 'Clients', icon: MonitorCog },
-  { to: '/launcher', label: 'Games & Apps', icon: Gamepad2 },
-  { to: '/menu', label: 'Menu & Orders', icon: UtensilsCrossed },
-  { to: '/tariffs', label: 'Rates', icon: Tags, adminOnly: true },
-  { to: '/members', label: 'Members', icon: Users },
-  { to: '/vouchers', label: 'Vouchers', icon: Ticket },
-  { to: '/earnings', label: 'Earnings', icon: CircleDollarSign },
-  { to: '/analytics', label: 'Analytics', icon: ChartNoAxesCombined },
-  { to: '/logs', label: 'Logs', icon: ScrollText },
-  { to: '/settings', label: 'Settings', icon: Settings, adminOnly: true },
+  { to: '/clients', label: 'Floor Matrix', shortLabel: 'Floor', icon: MonitorCog },
+  { to: '/menu', label: 'Menu & Orders', shortLabel: 'Shop', icon: UtensilsCrossed },
+  { to: '/vouchers', label: 'Vouchers', shortLabel: 'Vouchers', icon: Ticket },
+  { to: '/launcher', label: 'Games & Apps', shortLabel: 'Games', icon: Gamepad2 },
+  { to: '/members', label: 'Members', shortLabel: 'Members', icon: Users },
+  { to: '/tariffs', label: 'Rates', shortLabel: 'Rates', icon: Tags, adminOnly: true },
+  { to: '/analytics', label: 'Analytics', shortLabel: 'Analytics', icon: ChartNoAxesCombined, adminOnly: true },
+  { to: '/', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/earnings', label: 'Earnings', shortLabel: 'Earnings', icon: CircleDollarSign, adminOnly: true },
+  { to: '/logs', label: 'Logs', shortLabel: 'Logs', icon: ScrollText, adminOnly: true },
+  { to: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, adminOnly: true },
 ]
-const SIMPLE_NAV_PATHS = new Set(['/', '/clients', '/menu', '/members', '/vouchers'])
+const SIMPLE_NAV_PATHS = new Set(['/clients', '/menu', '/vouchers', '/launcher', '/members', '/tariffs', '/analytics', '/earnings', '/logs', '/', '/settings'])
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-const PAGE_ALIASES = { '/expenses':'Earnings', '/expense':'Earnings' }
+const PAGE_ALIASES = {
+  '/': 'Overview',
+  '/clients': 'Floor Matrix',
+  '/launcher': 'Games & Launcher',
+  '/menu': 'Menu & Kitchen Orders',
+  '/tariffs': 'Rates & Pricing Plans',
+  '/members': 'Member Directory',
+  '/vouchers': 'Vouchers & Promo Codes',
+  '/earnings': 'Earnings & Reports',
+  '/expenses': 'Earnings & Reports',
+  '/expense': 'Earnings & Reports',
+  '/analytics': 'Performance Analytics',
+  '/logs': 'Shift & Audit Logs',
+  '/settings': 'System Settings',
+  '/developer': 'Developer Console',
+}
 const PAGE_PURPOSE = {
   Overview:'Live operations, customer signals, and today’s business health.',
   Clients:'Manage stations, active sessions, and remote actions.',
@@ -60,7 +77,7 @@ export default function MainLayout({ children }) {
   const { isDark, toggleTheme } = useTheme()
   const { uiMode, isSimpleMode, isAdvanceMode, canToggleMode, setUiMode, toggleUiMode } = useAdminMode()
   const { themeMode, isEsportsMode, isDashboardMode, setThemeMode } = useEsportsTheme()
-  const { activeSkin, openGallery } = useSkin()
+  const { activeSkin, openGallery, skins, setSkin, skinId } = useSkin()
   const branding = useBranding()
   const location = useLocation()
   const isCashier = user?.role === 'cashier' || user?.role === 'staff'
@@ -70,7 +87,8 @@ export default function MainLayout({ children }) {
     return true
   })
   const navItems = (user?.cloudDeveloper && isAdvanceMode) ? [...filteredNav, { to: '/developer', label: 'Developer', icon: ShieldCheck }] : filteredNav
-  const currentLabel = PAGE_ALIASES[location.pathname] || navItems.find((item) => item.to !== '/' && location.pathname.startsWith(item.to))?.label || 'Overview'
+  const currentNav = BASE_NAV.find((item) => (item.end ? location.pathname === item.to : (item.to !== '/' && location.pathname.startsWith(item.to))))
+  const currentLabel = PAGE_ALIASES[location.pathname] || currentNav?.label || (location.pathname === '/' ? 'Overview' : 'Console')
   const isOverview = location.pathname === '/'
   const pendingOrdersCount = useMemo(() => {
     return (menuOrders || []).filter((o) => (o.order_status || o.orderStatus || 'pending').toLowerCase() === 'pending').length
@@ -191,9 +209,15 @@ export default function MainLayout({ children }) {
       <div className="backdrop" aria-hidden="true" />
       <div className="chroma" aria-hidden="true" />
       <div className="admin-shell-frame flex h-full min-h-0 overflow-hidden relative z-10">
-        <aside className="admin-sidebar sticky top-0 z-[120] hidden h-full w-[220px] shrink-0 flex-col overflow-hidden px-4 py-5 lg:flex lg:w-[232px] lg:px-5 lg:py-6">
-          <div className="admin-sidebar-brand mb-6 flex items-center gap-3 px-1 pt-0.5">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-[var(--brand,#7B61FF)]/40 bg-[var(--surface,#131A28)] shadow-[0_0_14px_var(--glow,rgba(123,97,255,0.25))] p-1 overflow-hidden transition-all duration-300">
+        {isSimpleMode ? (
+          /* ===== SIMPLE MODE: Console Rail Navigation matching nexus-floor.html ===== */
+          <aside className="admin-rail-shell hidden lg:flex">
+            {/* Brand Logo Mark */}
+            <NavLink
+              to="/clients"
+              className="admin-rail-mark"
+              title={`${branding.cafeName || 'Aezakmi'} · Go to Floor`}
+            >
               <img
                 key={branding.logoUrl || 'default-logo'}
                 src={branding.logoUrl || logo}
@@ -201,88 +225,156 @@ export default function MainLayout({ children }) {
                 alt="Aezakmi"
                 className="h-full w-full object-contain"
               />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <p className="truncate font-display text-[15px] font-bold uppercase leading-tight tracking-[0.045em] text-ink-900">
-                  {branding.cafeName || settings?.cafeName || 'Aezakmi Cafe'}
-                </p>
-              </div>
-              <div className="mt-0.5 flex items-center justify-between gap-1">
-                <p className="max-w-[120px] truncate text-[10px] font-medium uppercase tracking-[0.13em] text-slate-soft" title={branding.branchLocation || settings?.branchLocation || ''}>{branding.branch || settings?.branch || 'Davao Branch'}</p>
-                <button
-                  type="button"
-                  onClick={openGallery}
-                  className="rounded px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] border border-[var(--brand,#7B61FF)]/30 hover:bg-[var(--brand,#7B61FF)]/15 transition-colors"
-                  title="Switch Console Skin"
-                >
+            </NavLink>
+
+            {/* Rail Navigation Stack */}
+            <nav className="flex flex-col items-center gap-1.5 w-full px-2 py-1 min-h-0 flex-1 overflow-y-auto">
+              {navItems.map(({ to, label, shortLabel, icon: Icon, end }) => {
+                const isMenu = to === '/menu'
+                const hasPending = isMenu && pendingOrdersCount > 0
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    className={({ isActive }) => `admin-rail-nav-btn ${isActive ? 'active' : ''}`}
+                    title={label}
+                  >
+                    <div className="relative">
+                      <Icon size={20} strokeWidth={1.8} />
+                      {hasPending && (
+                        <span className="absolute -top-1 -right-1.5 flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10.5px] leading-tight">{shortLabel || label}</span>
+                  </NavLink>
+                )
+              })}
+            </nav>
+
+            {/* Bottom Controls */}
+            <div className="flex flex-col items-center gap-2 mt-auto pt-2 pb-1 border-t border-white/5">
+              <button
+                type="button"
+                onClick={openGallery}
+                className="w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)] hover:bg-[var(--surface-2,#1A2233)] transition-colors cursor-pointer"
+                title="Switch Hardware Console Skin"
+              >
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white shadow-xs">
                   {activeSkin?.mark || 'HUD'}
-                </button>
+                </span>
+                <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)]">Skin</span>
+              </button>
+              <button
+                type="button"
+                onClick={openLock}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)] hover:bg-[var(--surface-2,#1A2233)] transition-colors cursor-pointer"
+                title="Lock Console"
+                aria-label="Lock Console"
+              >
+                <LockKeyhole size={15} />
+              </button>
+            </div>
+          </aside>
+        ) : (
+          /* ===== ADVANCE MODE: Full 232px Enterprise Sidebar ===== */
+          <aside className="admin-sidebar sticky top-0 z-[120] hidden h-full w-[220px] shrink-0 flex-col overflow-hidden px-4 py-5 lg:flex lg:w-[232px] lg:px-5 lg:py-6">
+            <div className="admin-sidebar-brand mb-6 flex items-center gap-3 px-1 pt-0.5">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-[var(--brand,#7B61FF)]/40 bg-[var(--surface,#131A28)] shadow-[0_0_14px_var(--glow,rgba(123,97,255,0.25))] p-1 overflow-hidden transition-all duration-300">
+                <img
+                  key={branding.logoUrl || 'default-logo'}
+                  src={branding.logoUrl || logo}
+                  onError={(event) => { event.currentTarget.src = logo }}
+                  alt="Aezakmi"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate font-display text-[15px] font-bold uppercase leading-tight tracking-[0.045em] text-ink-900">
+                    {branding.cafeName || settings?.cafeName || 'Aezakmi Cafe'}
+                  </p>
+                </div>
+                <div className="mt-0.5 flex items-center justify-between gap-1">
+                  <p className="max-w-[120px] truncate text-[10px] font-medium uppercase tracking-[0.13em] text-slate-soft" title={branding.branchLocation || settings?.branchLocation || ''}>{branding.branch || settings?.branch || 'Davao Branch'}</p>
+                  <button
+                    type="button"
+                    onClick={openGallery}
+                    className="rounded px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] border border-[var(--brand,#7B61FF)]/30 hover:bg-[var(--brand,#7B61FF)]/15 transition-colors cursor-pointer"
+                    title="Switch Console Skin"
+                  >
+                    {activeSkin?.mark || 'HUD'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="admin-sidebar-branch mb-3"><CloudBranchPicker /></div>
+            <div className="admin-sidebar-branch mb-3"><CloudBranchPicker /></div>
 
-          <nav className="admin-sidebar-nav min-h-0 flex flex-1 flex-col gap-1 overflow-y-auto py-1">
-            {navItems.map(({ to, label, icon: Icon, end }) => {
-              const isMenu = to === '/menu'
-              const hasPending = isMenu && pendingOrdersCount > 0
-              return (
-                <NavLink
-                  key={to}
-                  to={to}
-                  end={end}
-                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                >
-                  <Icon size={17} strokeWidth={1.8} />
-                  <span>{label}</span>
-                  {hasPending && (
-                    <span className="ml-auto flex items-center gap-1.5" title={`${pendingOrdersCount} pending kitchen order${pendingOrdersCount > 1 ? 's' : ''}`}>
-                      <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
+            <nav className="admin-sidebar-nav min-h-0 flex flex-1 flex-col gap-1 overflow-y-auto py-1">
+              {navItems.map(({ to, label, icon: Icon, end }) => {
+                const isMenu = to === '/menu'
+                const hasPending = isMenu && pendingOrdersCount > 0
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                  >
+                    <Icon size={17} strokeWidth={1.8} />
+                    <span>{label}</span>
+                    {hasPending && (
+                      <span className="ml-auto flex items-center gap-1.5" title={`${pendingOrdersCount} pending kitchen order${pendingOrdersCount > 1 ? 's' : ''}`}>
+                        <span className="relative flex h-2 w-2">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
+                        </span>
+                        <span className="rounded-full bg-ember/15 px-1.5 py-0.5 text-[9px] font-black text-ember-dim leading-none">
+                          {pendingOrdersCount}
+                        </span>
                       </span>
-                      <span className="rounded-full bg-ember/15 px-1.5 py-0.5 text-[9px] font-black text-ember-dim leading-none">
-                        {pendingOrdersCount}
-                      </span>
-                    </span>
-                  )}
-                </NavLink>
-              )
-            })}
-          </nav>
+                    )}
+                  </NavLink>
+                )
+              })}
+            </nav>
 
-          <div className="admin-sidebar-footer mt-5 space-y-2.5">
-            <div className="admin-sidebar-status flex items-center gap-2.5 rounded-xl px-3 py-2.5">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className={`absolute inline-flex h-full w-full animate-led rounded-full ${serverError ? 'bg-ember' : 'bg-teal'}`} />
-              </span>
-              <div className="min-w-0 leading-tight">
-                <p className="text-[11px] font-semibold text-ink-900">
-                  {isEsportsMode ? (serverError ? 'ARENA // OFFLINE' : 'ARENA // ONLINE') : (serverError ? (cloud ? 'Edge Offline' : 'Server Offline') : (cloud ? 'Edge Online' : 'Server Online'))}
-                </p>
-                <p className="admin-sidebar-status-subtitle mt-0.5 truncate text-[9px] text-slate-soft">
-                  {isEsportsMode ? (serverError ? 'Cloud Cache Active' : 'Synced · Latency <1ms') : (serverError ? (cloud ? 'Cloud cache available' : 'Check local network') : (cloud ? 'Supabase ↔ Edge synced' : 'Local network synced'))}
-                </p>
+            <div className="admin-sidebar-footer mt-5 space-y-2.5">
+              <div className="admin-sidebar-status flex items-center gap-2.5 rounded-xl px-3 py-2.5">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  <span className={`absolute inline-flex h-full w-full animate-led rounded-full ${serverError ? 'bg-ember' : 'bg-teal'}`} />
+                </span>
+                <div className="min-w-0 leading-tight">
+                  <p className="text-[11px] font-semibold text-ink-900">
+                    {isEsportsMode ? (serverError ? 'ARENA // OFFLINE' : 'ARENA // ONLINE') : (serverError ? (cloud ? 'Edge Offline' : 'Server Offline') : (cloud ? 'Edge Online' : 'Server Online'))}
+                  </p>
+                  <p className="admin-sidebar-status-subtitle mt-0.5 truncate text-[9px] text-slate-soft">
+                    {isEsportsMode ? (serverError ? 'Cloud Cache Active' : 'Synced · Latency <1ms') : (serverError ? (cloud ? 'Cloud cache available' : 'Check local network') : (cloud ? 'Supabase ↔ Edge synced' : 'Local network synced'))}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 rounded-xl px-2 py-2">
+                <div className="min-w-0 leading-tight">
+                  <p className="truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</p>
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <button type="button" className="admin-icon-button" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Light mode' : 'Dark mode'}>
+                    {isDark ? <Sun size={14} /> : <Moon size={14} />}
+                  </button>
+                  <button type="button" onClick={openLock} className="admin-icon-button" aria-label="Lock admin console" title="Lock admin console"><LockKeyhole size={14}/></button>
+                  <button type="button" onClick={logout} className="admin-icon-button" aria-label="Log out" title="Log out"><LogOut size={14} /></button>
+                </div>
               </div>
             </div>
-
-            <div className="flex items-center justify-between gap-2 rounded-xl px-2 py-2">
-              <div className="min-w-0 leading-tight">
-                <p className="truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</p>
-              </div>
-              <div className="flex items-center gap-0.5">
-                <button type="button" className="admin-icon-button" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Light mode' : 'Dark mode'}>
-                  {isDark ? <Sun size={14} /> : <Moon size={14} />}
-                </button>
-                <button type="button" onClick={openLock} className="admin-icon-button" aria-label="Lock admin console" title="Lock admin console"><LockKeyhole size={14}/></button>
-                <button type="button" onClick={logout} className="admin-icon-button" aria-label="Log out" title="Log out"><LogOut size={14} /></button>
-              </div>
-            </div>
-          </div>
-        </aside>
+          </aside>
+        )}
 
         <main className="admin-main relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {/* Mobile Header */}
           <header className="admin-mobile-header z-[130] flex min-h-[58px] shrink-0 items-center gap-3 border-b border-[var(--admin-ui-border)] px-3 sm:px-4 lg:hidden">
             <button type="button" onClick={()=>setMobileNavOpen(true)} className="admin-mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen}>
               <Menu size={19}/>
@@ -296,7 +388,7 @@ export default function MainLayout({ children }) {
               <button
                 type="button"
                 onClick={openGallery}
-                className="flex items-center gap-1 rounded-lg border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-2 py-1 text-xs font-semibold text-[var(--text,#E6EAF2)] shadow-xs"
+                className="flex items-center gap-1 rounded-lg border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-2 py-1 text-xs font-semibold text-[var(--text,#E6EAF2)] shadow-xs cursor-pointer"
                 title="Switch Console Skin"
               >
                 <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white">
@@ -315,37 +407,125 @@ export default function MainLayout({ children }) {
               />
             </div>
           </header>
-          {!isOverview && <header className="admin-global-header relative z-[150] hidden min-h-[96px] shrink-0 items-center gap-4 px-5 py-3.5 sm:px-6 lg:flex lg:px-7">
-            <div className="admin-header-identity min-w-[230px] flex-1">
-              <div className="flex items-center gap-2"><p className="eyebrow">{currentLabel}</p><span className="hidden text-[10px] text-slate-soft 2xl:inline">· {localClock} PHT</span></div>
-              <h1 className="mt-1 font-display text-[24px] font-semibold leading-tight tracking-[-0.03em] text-ink-900">{currentLabel}</h1>
-            </div>
-            <AdminQuickFind />
-            <div className="ml-auto flex items-center gap-2 text-slate-soft">
+
+          {/* Desktop Header: Simple Mode Nexus Topbar vs Advance Mode Global Header */}
+          {isSimpleMode ? (
+            <header className="nexus-topbar z-[150] hidden min-h-[60px] shrink-0 items-center gap-4 px-5 py-2.5 lg:flex">
+              {/* Shift info pill */}
+              <div
+                className="shift cursor-pointer rounded-lg px-2.5 py-1 transition-colors hover:bg-[var(--surface-2,#1A2233)]"
+                onClick={() => setShiftModalOpen(true)}
+                title="Click to reconcile or manage shift"
+              >
+                <div className="flex items-center gap-1.5">
+                  <b>Shift #{currentShift?.id || 'Active'} · {adminDisplayName}</b>
+                  <span className="h-1.5 w-1.5 rounded-full bg-[var(--free,#2ED3A0)] animate-pulse" />
+                </div>
+                <span>
+                  {currentShift ? `Drawer: ${formatAdminPeso(currentShift.totalRevenue || currentShift.cashRevenue || 0)}` : 'Shift Active · Tap to reconcile'}
+                </span>
+              </div>
+
+              {/* Live Monospace Clock */}
+              <div className="clock select-none">{localClock} PHT</div>
+
+              <div className="spacer flex-1" />
+
+              {/* QuickFind Search */}
+              <AdminQuickFind />
+
+              {/* 6 Hardware Skins Swatches */}
+              <div className="swatches flex items-center gap-1.5 px-2 py-1 rounded-full bg-[var(--surface-2,#1A2233)]/80 border border-[var(--line,#26314A)]">
+                {skins.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setSkin(s.id)}
+                    className="sw"
+                    style={{ backgroundColor: s.chips?.[0] || s.accent || '#7B61FF' }}
+                    aria-pressed={s.id === skinId}
+                    title={`${s.name} Skin`}
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={openGallery}
+                  className="ml-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] hover:underline cursor-pointer"
+                  title="Open Skins Gallery"
+                >
+                  {activeSkin?.mark || 'HUD'}
+                </button>
+              </div>
+
+              {/* Quick Theme Toggle */}
               <button
                 type="button"
-                onClick={openGallery}
-                className="flex items-center gap-1.5 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-3 py-1.5 text-xs font-semibold text-[var(--text,#E6EAF2)] transition-all hover:border-[var(--brand,#7B61FF)] hover:bg-[var(--surface,#131A28)] shadow-xs cursor-pointer"
-                title="Switch Console Skin"
+                className="icon-btn"
+                onClick={toggleTheme}
+                aria-label={isDark ? 'Light mode' : 'Dark mode'}
+                title={isDark ? 'Light mode' : 'Dark mode'}
               >
-                <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
-                  {activeSkin?.mark || 'N'}
-                </span>
-                <span className="font-display tracking-tight">{activeSkin?.name || 'Skins'}</span>
+                {isDark ? <Sun size={16} /> : <Moon size={16} />}
               </button>
+
+              {/* Lock Console */}
+              <button
+                type="button"
+                onClick={openLock}
+                className="icon-btn"
+                aria-label="Lock console"
+                title="Lock console"
+              >
+                <LockKeyhole size={15} />
+              </button>
+
               <AdminNotificationCenter />
               <AnnouncementCenter />
               <AdminProfileMenu
                 triggerClassName="admin-header-pill"
                 currentLabel={currentLabel}
-                manualTitle={`Open ${currentLabel} owner manual`}
+                manualTitle={`Open ${currentLabel} manual`}
                 onOpenManual={() => setManualOpen(true)}
                 onOpenShiftModal={() => setShiftModalOpen(true)}
                 onOpenFeedback={() => setFeedbackOpen(true)}
                 onOpenLock={openLock}
               />
-            </div>
-          </header>}
+            </header>
+          ) : (
+            !isOverview && (
+              <header className="admin-global-header relative z-[150] hidden min-h-[96px] shrink-0 items-center gap-4 px-5 py-3.5 sm:px-6 lg:flex lg:px-7">
+                <div className="admin-header-identity min-w-[230px] flex-1">
+                  <div className="flex items-center gap-2"><p className="eyebrow">{currentLabel}</p><span className="hidden text-[10px] text-slate-soft 2xl:inline">· {localClock} PHT</span></div>
+                  <h1 className="mt-1 font-display text-[24px] font-semibold leading-tight tracking-[-0.03em] text-ink-900">{currentLabel}</h1>
+                </div>
+                <AdminQuickFind />
+                <div className="ml-auto flex items-center gap-2 text-slate-soft">
+                  <button
+                    type="button"
+                    onClick={openGallery}
+                    className="flex items-center gap-1.5 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-3 py-1.5 text-xs font-semibold text-[var(--text,#E6EAF2)] transition-all hover:border-[var(--brand,#7B61FF)] hover:bg-[var(--surface,#131A28)] shadow-xs cursor-pointer"
+                    title="Switch Console Skin"
+                  >
+                    <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
+                      {activeSkin?.mark || 'N'}
+                    </span>
+                    <span className="font-display tracking-tight">{activeSkin?.name || 'Skins'}</span>
+                  </button>
+                  <AdminNotificationCenter />
+                  <AnnouncementCenter />
+                  <AdminProfileMenu
+                    triggerClassName="admin-header-pill"
+                    currentLabel={currentLabel}
+                    manualTitle={`Open ${currentLabel} owner manual`}
+                    onOpenManual={() => setManualOpen(true)}
+                    onOpenShiftModal={() => setShiftModalOpen(true)}
+                    onOpenFeedback={() => setFeedbackOpen(true)}
+                    onOpenLock={openLock}
+                  />
+                </div>
+              </header>
+            )
+          )}
           <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
           <ShiftManagementModal isOpen={shiftModalOpen} onClose={() => setShiftModalOpen(false)} />
           <SkinGalleryModal />
