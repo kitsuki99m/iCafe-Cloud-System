@@ -189,7 +189,7 @@ export default function DeveloperConsolePage({standalone=false}){
     </div>
     <div className="grid min-h-[520px] items-start gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,.85fr)]">
       <section className="min-w-0 rounded-2xl border border-surface-line bg-surface p-3 sm:p-4 lg:sticky lg:top-4 lg:self-start lg:flex lg:max-h-[calc(100dvh-120px)] lg:flex-col lg:overflow-hidden">
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1.5 pt-1 px-1">{FILTERS.map(key=>{
+        <div className="mt-3 flex flex-wrap gap-2.5 pt-2.5 pb-1 px-1.5">{FILTERS.map(key=>{
           const count = key !== 'all' ? (counts[key] || 0) : 0
           const isActive = filter === key
           return (
@@ -197,7 +197,7 @@ export default function DeveloperConsolePage({standalone=false}){
               key={key}
               type="button"
               onClick={() => setFilter(key)}
-              className={`relative inline-flex min-h-9 shrink-0 items-center rounded-full px-3.5 py-1.5 text-[11px] font-semibold transition-colors ${
+              className={`relative inline-flex min-h-8 shrink-0 items-center rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
                 isActive
                   ? 'bg-midnight text-soft-white shadow-xs'
                   : 'bg-surface-raised/80 text-slate-soft border border-surface-line/70 hover:bg-surface-raised hover:text-ink-900'

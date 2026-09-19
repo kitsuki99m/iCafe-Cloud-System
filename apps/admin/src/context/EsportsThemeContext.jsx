@@ -19,9 +19,14 @@ export function EsportsThemeProvider({ children }) {
 
   const syncSkinDataset = (mode) => {
     try {
-      const activeSkinId = localStorage.getItem(SKIN_STORAGE_KEY) || 'nexus'
       document.documentElement.setAttribute('data-theme-persona', mode)
-      document.documentElement.dataset.skin = activeSkinId
+      if (mode === 'esports') {
+        const activeSkinId = localStorage.getItem(SKIN_STORAGE_KEY) || 'nexus'
+        document.documentElement.dataset.skin = activeSkinId
+      } else {
+        delete document.documentElement.dataset.skin
+        document.documentElement.removeAttribute('data-skin')
+      }
     } catch {}
   }
 
@@ -49,11 +54,17 @@ export function EsportsThemeProvider({ children }) {
     syncSkinDataset(themeMode)
   }, [themeMode])
 
-  // Synchronize when skin changes
+  // Synchronize when skin changes (only if in esports mode)
   useEffect(() => {
     const handleSkinChange = (e) => {
-      const nextSkin = e.detail?.skin || 'nexus'
-      document.documentElement.dataset.skin = nextSkin
+      const persona = document.documentElement.getAttribute('data-theme-persona')
+      if (persona === 'esports') {
+        const nextSkin = e.detail?.skin || 'nexus'
+        document.documentElement.dataset.skin = nextSkin
+      } else {
+        delete document.documentElement.dataset.skin
+        document.documentElement.removeAttribute('data-skin')
+      }
     }
     window.addEventListener('aezakmi:skin-changed', handleSkinChange)
     return () => window.removeEventListener('aezakmi:skin-changed', handleSkinChange)

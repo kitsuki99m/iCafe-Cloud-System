@@ -75,9 +75,15 @@ export function SkinProvider({ children }) {
     return SKINS.find((s) => s.id === skinId) || SKINS[0]
   }, [skinId])
 
-  // Ensure document root dataset.skin is always synchronized with active skin state
+  // Ensure document root dataset.skin is synchronized with active skin state only when in esports mode
   useEffect(() => {
-    document.documentElement.dataset.skin = skinId
+    const persona = document.documentElement.getAttribute('data-theme-persona')
+    if (persona === 'esports') {
+      document.documentElement.dataset.skin = skinId
+    } else {
+      delete document.documentElement.dataset.skin
+      document.documentElement.removeAttribute('data-skin')
+    }
     try {
       localStorage.setItem(SKIN_STORAGE_KEY, skinId)
       sessionStorage.setItem(SKIN_STORAGE_KEY, skinId)
@@ -92,7 +98,13 @@ export function SkinProvider({ children }) {
       sessionStorage.setItem(SKIN_STORAGE_KEY, valid)
     } catch {}
 
-    document.documentElement.dataset.skin = valid
+    const persona = document.documentElement.getAttribute('data-theme-persona')
+    if (persona === 'esports') {
+      document.documentElement.dataset.skin = valid
+    } else {
+      delete document.documentElement.dataset.skin
+      document.documentElement.removeAttribute('data-skin')
+    }
 
     // Trigger booting effect
     document.body.classList.add('booting')
@@ -102,8 +114,7 @@ export function SkinProvider({ children }) {
 
     window.dispatchEvent(new CustomEvent('aezakmi:skin-changed', { detail: { skin: valid } }))
     try {
-      const persona = document.documentElement.getAttribute('data-theme-persona') || 'dashboard'
-      apiPatch('/settings', { themePersona: persona, skinId: valid }).catch(() => {})
+      apiPatch('/settings', { themePersona: persona || 'dashboard', skinId: valid }).catch(() => {})
     } catch {}
   }
 

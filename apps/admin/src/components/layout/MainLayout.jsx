@@ -264,17 +264,19 @@ export default function MainLayout({ children }) {
 
             {/* Bottom Controls */}
             <div className="flex flex-col items-center gap-2 mt-auto pt-2 pb-1 border-t border-white/5">
-              <button
-                type="button"
-                onClick={openGallery}
-                className="w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)] hover:bg-[var(--surface-2,#1A2233)] transition-colors cursor-pointer"
-                title="Switch Hardware Console Skin"
-              >
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white shadow-xs">
-                  {activeSkin?.mark || 'HUD'}
-                </span>
-                <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)]">Skin</span>
-              </button>
+              {isEsportsMode && (
+                <button
+                  type="button"
+                  onClick={openGallery}
+                  className="w-10 h-10 rounded-xl flex flex-col items-center justify-center gap-0.5 text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)] hover:bg-[var(--surface-2,#1A2233)] transition-colors cursor-pointer"
+                  title="Switch Hardware Console Skin"
+                >
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white shadow-xs">
+                    {activeSkin?.mark || 'HUD'}
+                  </span>
+                  <span className="text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)]">Skin</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={openLock}
@@ -307,14 +309,16 @@ export default function MainLayout({ children }) {
                 </div>
                 <div className="mt-0.5 flex items-center justify-between gap-1">
                   <p className="max-w-[120px] truncate text-[10px] font-medium uppercase tracking-[0.13em] text-slate-soft" title={branding.branchLocation || settings?.branchLocation || ''}>{branding.branch || settings?.branch || 'Davao Branch'}</p>
-                  <button
-                    type="button"
-                    onClick={openGallery}
-                    className="rounded px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] border border-[var(--brand,#7B61FF)]/30 hover:bg-[var(--brand,#7B61FF)]/15 transition-colors cursor-pointer"
-                    title="Switch Console Skin"
-                  >
-                    {activeSkin?.mark || 'HUD'}
-                  </button>
+                  {isEsportsMode && (
+                    <button
+                      type="button"
+                      onClick={openGallery}
+                      className="rounded px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] border border-[var(--brand,#7B61FF)]/30 hover:bg-[var(--brand,#7B61FF)]/15 transition-colors cursor-pointer"
+                      title="Switch Console Skin"
+                    >
+                      {activeSkin?.mark || 'HUD'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -390,17 +394,19 @@ export default function MainLayout({ children }) {
               <p className="truncate font-display text-[15px] font-semibold leading-tight text-ink-900">{currentLabel}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <button
-                type="button"
-                onClick={openGallery}
-                className="flex items-center gap-1 rounded-lg border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-2 py-1 text-xs font-semibold text-[var(--text,#E6EAF2)] shadow-xs cursor-pointer"
-                title="Switch Console Skin"
-              >
-                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white">
-                  {activeSkin?.mark || 'N'}
-                </span>
-                <span className="text-[10px] font-display">{activeSkin?.name?.split(' ')[0]}</span>
-              </button>
+              {isEsportsMode && (
+                <button
+                  type="button"
+                  onClick={openGallery}
+                  className="flex items-center gap-1 rounded-lg border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-2 py-1 text-xs font-semibold text-[var(--text,#E6EAF2)] shadow-xs cursor-pointer"
+                  title="Switch Console Skin"
+                >
+                  <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white">
+                    {activeSkin?.mark || 'N'}
+                  </span>
+                  <span className="text-[10px] font-display">{activeSkin?.name?.split(' ')[0]}</span>
+                </button>
+              )}
               <AdminNotificationCenter />
               <AnnouncementCenter />
               <AdminProfileMenu
@@ -439,31 +445,33 @@ export default function MainLayout({ children }) {
               {/* QuickFind Search */}
               <AdminQuickFind />
 
-              {/* 6 Hardware Skins Swatches */}
-              <div className="swatches flex items-center gap-1.5 px-2 py-1 rounded-full bg-[var(--surface-2,#1A2233)]/80 border border-[var(--line,#26314A)]">
-                {skins.map((s) => (
+              {/* 6 Hardware Skins Swatches (Esports Mode Only) */}
+              {isEsportsMode && (
+                <div className="swatches flex items-center gap-1.5 px-2 py-1 rounded-full bg-[var(--surface-2,#1A2233)]/80 border border-[var(--line,#26314A)]">
+                  {skins.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setSkin(s.id)
+                        if (!isEsportsMode) setThemeMode('esports')
+                      }}
+                      className="sw"
+                      style={{ backgroundColor: s.chips?.[0] || s.accent || s.brand || '#7B61FF' }}
+                      aria-pressed={s.id === skinId}
+                      title={`${s.name} Skin`}
+                    />
+                  ))}
                   <button
-                    key={s.id}
                     type="button"
-                    onClick={() => {
-                      setSkin(s.id)
-                      if (!isEsportsMode) setThemeMode('esports')
-                    }}
-                    className="sw"
-                    style={{ backgroundColor: s.chips?.[0] || s.accent || s.brand || '#7B61FF' }}
-                    aria-pressed={s.id === skinId}
-                    title={`${s.name} Skin`}
-                  />
-                ))}
-                <button
-                  type="button"
-                  onClick={openGallery}
-                  className="ml-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] hover:underline cursor-pointer"
-                  title="Open Skins Gallery"
-                >
-                  {activeSkin?.mark || 'HUD'}
-                </button>
-              </div>
+                    onClick={openGallery}
+                    className="ml-1 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] hover:underline cursor-pointer"
+                    title="Open Skins Gallery"
+                  >
+                    {activeSkin?.mark || 'HUD'}
+                  </button>
+                </div>
+              )}
 
               {/* Quick Theme Toggle */}
               <button
@@ -508,17 +516,19 @@ export default function MainLayout({ children }) {
                 </div>
                 <AdminQuickFind />
                 <div className="ml-auto flex items-center gap-2 text-slate-soft">
-                  <button
-                    type="button"
-                    onClick={openGallery}
-                    className="flex items-center gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--text)] transition-all hover:border-[var(--brand)] hover:bg-[var(--surface)] shadow-xs cursor-pointer"
-                    title="Switch Console Skin"
-                  >
-                    <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--brand)] text-[9px] font-bold text-white shadow-xs">
-                      {activeSkin?.mark || 'N'}
-                    </span>
-                    <span className="font-display tracking-tight">{activeSkin?.name || 'Skins'}</span>
-                  </button>
+                  {isEsportsMode && (
+                    <button
+                      type="button"
+                      onClick={openGallery}
+                      className="flex items-center gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--text)] transition-all hover:border-[var(--brand)] hover:bg-[var(--surface)] shadow-xs cursor-pointer"
+                      title="Switch Console Skin"
+                    >
+                      <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--brand)] text-[9px] font-bold text-white shadow-xs">
+                        {activeSkin?.mark || 'N'}
+                      </span>
+                      <span className="font-display tracking-tight">{activeSkin?.name || 'Skins'}</span>
+                    </button>
+                  )}
                   <AdminNotificationCenter />
                   <AnnouncementCenter />
                   <AdminProfileMenu
@@ -707,20 +717,22 @@ export default function MainLayout({ children }) {
               {/* Quick Tools Line Strip */}
               <div className="mt-3 pt-3 border-t border-[var(--admin-ui-border)] space-y-2">
                 <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-soft">Tools & Controls</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMobileNavOpen(false)
-                      openGallery()
-                    }}
-                    className="flex flex-col items-center justify-center gap-1 rounded-xl border border-[var(--admin-ui-border)] bg-[var(--admin-card-subtle)] py-2 px-1 text-center transition hover:bg-surface-raised cursor-pointer"
-                  >
-                    <span className="flex h-5 w-5 items-center justify-center rounded bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
-                      {activeSkin?.mark || 'N'}
-                    </span>
-                    <span className="text-[10px] font-semibold text-ink-900">Skins</span>
-                  </button>
+                <div className={`grid ${isEsportsMode ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
+                  {isEsportsMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMobileNavOpen(false)
+                        openGallery()
+                      }}
+                      className="flex flex-col items-center justify-center gap-1 rounded-xl border border-[var(--admin-ui-border)] bg-[var(--admin-card-subtle)] py-2 px-1 text-center transition hover:bg-surface-raised cursor-pointer"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
+                        {activeSkin?.mark || 'N'}
+                      </span>
+                      <span className="text-[10px] font-semibold text-ink-900">Skins</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
