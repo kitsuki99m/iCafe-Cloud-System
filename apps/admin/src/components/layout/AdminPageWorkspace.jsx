@@ -1,7 +1,7 @@
 export function AdminPageWorkspace({ children, aside, className = '' }) {
   return (
-    <div className={`admin-page-workspace grid ${aside ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : 'grid-cols-1'} ${className}`}>
-      <div className="admin-page-main-column min-w-0 px-5 py-4 sm:px-6 sm:py-5 lg:px-7 lg:py-5">
+    <div className={`admin-page-workspace min-h-full flex-1 grid ${aside ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : 'grid-cols-1'} ${className}`}>
+      <div className="admin-page-main-column min-w-0 min-h-full flex-1 px-5 py-4 sm:px-6 sm:py-5 lg:px-7 lg:py-5">
         {children}
       </div>
       {aside ? (

@@ -124,21 +124,21 @@
     --lift: 0.5px;
 
     /* Semantic variable bindings */
-    --color-midnight: #202937;
-    --color-bluish: #475569;
-    --color-grape: #64748B;
-    --color-trillium: #94A3B8;
-    --color-new-wool: #CBD5E1;
-    --color-dance: #E2E8F0;
-    --color-soft-white: #FFFFFF;
+    --color-midnight: var(--surface-2);
+    --color-bluish: var(--muted);
+    --color-grape: var(--faint);
+    --color-trillium: var(--faint);
+    --color-new-wool: var(--line);
+    --color-dance: var(--surface-2);
+    --color-soft-white: var(--text);
 
-    --color-ink: #F8FAFC;
-    --color-ink-soft: #F1F5F9;
-    --color-ink-900: #0F172A;
+    --color-ink: var(--bg);
+    --color-ink-soft: var(--surface-2);
+    --color-ink-900: var(--text);
 
-    --color-surface: #FFFFFF;
-    --color-surface-raised: #F1F5F9;
-    --color-surface-line: #E2E8F0;
+    --color-surface: var(--surface);
+    --color-surface-raised: var(--surface-2);
+    --color-surface-line: var(--line);
 
     --color-gold: #202937;
     --color-gold-soft: #E2E8F0;
@@ -156,18 +156,18 @@
     --color-ember-soft: #FEF2F2;
     --color-ember-dim: #B91C1C;
 
-    --color-slate: #64748B;
-    --color-slate-soft: #475569;
+    --color-slate: var(--muted);
+    --color-slate-soft: var(--muted);
 
     --app-dot: rgba(15, 23, 42, 0.08);
 
-    --admin-canvas-bg: #F8FAFC;
-    --admin-shell-bg: #F8FAFC;
-    --admin-sidebar-bg: #FFFFFF;
-    --admin-card-bg: #FFFFFF;
-    --admin-card-subtle: #F8FAFC;
-    --admin-card-strong: #F1F5F9;
-    --admin-ui-border: #E2E8F0;
+    --admin-canvas-bg: var(--bg);
+    --admin-shell-bg: var(--bg);
+    --admin-sidebar-bg: var(--surface);
+    --admin-card-bg: var(--surface);
+    --admin-card-subtle: var(--surface);
+    --admin-card-strong: var(--surface-2);
+    --admin-ui-border: var(--line);
     --admin-shell-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
   }
 
@@ -203,21 +203,21 @@
     --lift: 0.5px;
 
     /* Semantic variable bindings */
-    --color-midnight: #0F172A;
-    --color-bluish: #8E9DB5;
-    --color-grape: #64748B;
-    --color-trillium: #5E6D84;
-    --color-new-wool: #222E42;
-    --color-dance: #1A2232;
-    --color-soft-white: #FFFFFF;
+    --color-midnight: var(--surface-2);
+    --color-bluish: var(--muted);
+    --color-grape: var(--faint);
+    --color-trillium: var(--faint);
+    --color-new-wool: var(--line);
+    --color-dance: var(--surface-2);
+    --color-soft-white: var(--text);
 
-    --color-ink: #0B0F17;
-    --color-ink-soft: #1A2232;
-    --color-ink-900: #F1F5F9;
+    --color-ink: var(--bg);
+    --color-ink-soft: var(--surface-2);
+    --color-ink-900: var(--text);
 
-    --color-surface: #121824;
-    --color-surface-raised: #1A2232;
-    --color-surface-line: #222E42;
+    --color-surface: var(--surface);
+    --color-surface-raised: var(--surface-2);
+    --color-surface-line: var(--line);
 
     --color-gold: #F59E0B;
     --color-gold-soft: rgba(245, 158, 11, 0.15);
@@ -235,18 +235,18 @@
     --color-ember-soft: rgba(248, 113, 113, 0.15);
     --color-ember-dim: #EF4444;
 
-    --color-slate: #8E9DB5;
-    --color-slate-soft: #5E6D84;
+    --color-slate: var(--muted);
+    --color-slate-soft: var(--muted);
 
     --app-dot: rgba(241, 245, 249, 0.055);
 
-    --admin-canvas-bg: #0B0F17;
-    --admin-shell-bg: #0B0F17;
-    --admin-sidebar-bg: #121824;
-    --admin-card-bg: #121824;
-    --admin-card-subtle: #161E2E;
-    --admin-card-strong: #1A2232;
-    --admin-ui-border: #222E42;
+    --admin-canvas-bg: var(--bg);
+    --admin-shell-bg: var(--bg);
+    --admin-sidebar-bg: var(--surface);
+    --admin-card-bg: var(--surface);
+    --admin-card-subtle: var(--surface-2);
+    --admin-card-strong: var(--surface-2);
+    --admin-ui-border: var(--line);
     --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
   }
 
@@ -732,7 +732,12 @@
     box-shadow: 0 4px 14px var(--glow);
     transform: translateY(-1.5px);
   }
-  [data-skin] {
+  [data-skin],
+  html[data-skin],
+  html.dark[data-skin],
+  html.light[data-skin],
+  html[data-theme="dark"][data-skin],
+  html[data-theme="light"][data-skin] {
     background-color: var(--bg);
     color: var(--text);
 
