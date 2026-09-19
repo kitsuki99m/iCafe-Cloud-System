@@ -174,6 +174,21 @@ export function AppDataProvider({ children }) {
   if (!seqGuardRef.current) seqGuardRef.current = createSeqGuard()
   const guestAbsentConfirmationsRef=useRef(0)
 
+  // Synchronize customer client theme and hardware skin with Admin Esports settings
+  useEffect(() => {
+    const s = state.settings || {}
+    const themePersona = s.themePersona || s.themeMode || 'dashboard'
+    const skinId = s.skinId || s.activeSkin || 'default'
+
+    if (themePersona === 'esports') {
+      document.documentElement.setAttribute('data-theme-persona', 'esports')
+      document.documentElement.dataset.skin = skinId
+    } else {
+      document.documentElement.setAttribute('data-theme-persona', 'dashboard')
+      document.documentElement.dataset.skin = 'default'
+    }
+  }, [state.settings])
+
   const reloadStationLauncherConfig = useCallback(async () => {
     try {
       if (window.aezakmiClient?.getStationLauncherConfig) {

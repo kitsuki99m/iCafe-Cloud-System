@@ -366,7 +366,7 @@ export default function OverviewPage(){
                 title="Live Station Floor"
                 subtitle="Live status of all gaming rigs and consoles in the cafe."
                 action={
-                  <button onClick={()=>navigate('/clients')} className="flex items-center gap-1 text-[11px] font-bold text-gold hover:underline">
+                  <button onClick={()=>navigate('/clients')} className="flex items-center gap-1 text-[11px] font-bold text-gold hover:underline cursor-pointer">
                     Floor Map & Controls <ArrowUpRight size={13}/>
                   </button>
                 }
@@ -381,21 +381,21 @@ export default function OverviewPage(){
                         <button
                           key={pc.id}
                           onClick={() => navigate(`/clients?pc=${encodeURIComponent(pc.id)}`)}
-                          className="overview-soft-card group p-3 text-left transition-all hover:-translate-y-0.5 flex flex-col justify-between min-h-[90px]"
+                          className="overview-soft-card group p-3 text-left transition-all hover:-translate-y-0.5 flex flex-col justify-between min-h-[96px] border border-surface-line/80 bg-surface-raised/70 hover:bg-surface hover:border-gold/60 shadow-xs cursor-pointer rounded-xl"
                         >
                           <div className="flex items-center justify-between gap-1.5">
-                            <span className={`flex h-6 w-6 items-center justify-center rounded-full ${meta.tone}`}>
-                              <Icon size={12}/>
+                            <span className={`flex h-7 w-7 items-center justify-center rounded-xl border border-surface-line ${meta.tone} shadow-xs`}>
+                              <Icon size={14}/>
                             </span>
                             {isVip && (
-                              <span className="flex items-center gap-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 px-1 py-0.2 text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                              <span className="flex items-center gap-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-600 dark:text-amber-400">
                                 👑 VIP
                               </span>
                             )}
                           </div>
                           <div className="mt-2 min-w-0">
-                            <p className="truncate text-[12px] font-bold text-ink-900">{pc.label || pc.name || `PC-${pc.id}`}</p>
-                            <p className="mt-0.5 truncate text-[9px] text-slate-soft">
+                            <p className="truncate text-xs font-bold text-ink-900 tracking-tight">{pc.label || pc.name || `PC-${pc.id}`}</p>
+                            <p className="mt-0.5 truncate text-[10px] font-medium text-slate-soft">
                               {meta.label}{pc.session?.customerName ? ` · ${pc.session.customerName}` : ''}
                             </p>
                           </div>
@@ -413,72 +413,84 @@ export default function OverviewPage(){
                   <button
                     type="button"
                     onClick={() => navigate('/clients')}
-                    className="overview-soft-card flex min-h-[76px] flex-col justify-between p-3 text-left transition-all hover:-translate-y-0.5"
+                    className="overview-soft-card group flex min-h-[84px] flex-col justify-between p-3.5 text-left transition-all hover:-translate-y-0.5 border border-surface-line/80 bg-surface-raised/70 hover:bg-surface hover:border-gold/60 shadow-xs cursor-pointer rounded-xl"
                   >
-                    <MonitorCog size={17} className="text-gold"/>
-                    <div>
-                      <span className="block text-[11px] font-bold text-ink-900">Station Matrix</span>
-                      <span className="block text-[9px] text-slate-soft">Start / Lock PCs</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface border border-surface-line/70 text-gold shadow-xs group-hover:scale-105 transition-transform">
+                      <MonitorCog size={17}/>
+                    </span>
+                    <div className="mt-2">
+                      <span className="block text-xs font-bold text-ink-900 tracking-tight">Station Matrix</span>
+                      <span className="block text-[10px] font-medium text-slate-soft">Start / Lock PCs</span>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => navigate('/members')}
-                    className="overview-soft-card flex min-h-[76px] flex-col justify-between p-3 text-left transition-all hover:-translate-y-0.5"
+                    className="overview-soft-card group flex min-h-[84px] flex-col justify-between p-3.5 text-left transition-all hover:-translate-y-0.5 border border-surface-line/80 bg-surface-raised/70 hover:bg-surface hover:border-gold/60 shadow-xs cursor-pointer rounded-xl"
                   >
-                    <Users size={17} className="text-gold"/>
-                    <div>
-                      <span className="block text-[11px] font-bold text-ink-900">Members & Top-up</span>
-                      <span className="block text-[9px] text-slate-soft">Add wallet credit</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface border border-surface-line/70 text-gold shadow-xs group-hover:scale-105 transition-transform">
+                      <Users size={17}/>
+                    </span>
+                    <div className="mt-2">
+                      <span className="block text-xs font-bold text-ink-900 tracking-tight">Members & Top-up</span>
+                      <span className="block text-[10px] font-medium text-slate-soft">Add wallet credit</span>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => navigate('/menu')}
-                    className="overview-soft-card flex min-h-[76px] flex-col justify-between p-3 text-left transition-all hover:-translate-y-0.5"
+                    className="overview-soft-card group flex min-h-[84px] flex-col justify-between p-3.5 text-left transition-all hover:-translate-y-0.5 border border-surface-line/80 bg-surface-raised/70 hover:bg-surface hover:border-gold/60 shadow-xs cursor-pointer rounded-xl"
                   >
-                    <UtensilsCrossed size={17} className="text-gold"/>
-                    <div>
-                      <span className="block text-[11px] font-bold text-ink-900">Menu & Kitchen</span>
-                      <span className="block text-[9px] text-slate-soft">Snacks & orders</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface border border-surface-line/70 text-gold shadow-xs group-hover:scale-105 transition-transform">
+                      <UtensilsCrossed size={17}/>
+                    </span>
+                    <div className="mt-2">
+                      <span className="block text-xs font-bold text-ink-900 tracking-tight">Menu & Kitchen</span>
+                      <span className="block text-[10px] font-medium text-slate-soft">Snacks & orders</span>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => navigate('/vouchers')}
-                    className="overview-soft-card flex min-h-[76px] flex-col justify-between p-3 text-left transition-all hover:-translate-y-0.5"
+                    className="overview-soft-card group flex min-h-[84px] flex-col justify-between p-3.5 text-left transition-all hover:-translate-y-0.5 border border-surface-line/80 bg-surface-raised/70 hover:bg-surface hover:border-gold/60 shadow-xs cursor-pointer rounded-xl"
                   >
-                    <WalletCards size={17} className="text-gold"/>
-                    <div>
-                      <span className="block text-[11px] font-bold text-ink-900">Promo Vouchers</span>
-                      <span className="block text-[9px] text-slate-soft">Issue & redeem</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface border border-surface-line/70 text-gold shadow-xs group-hover:scale-105 transition-transform">
+                      <WalletCards size={17}/>
+                    </span>
+                    <div className="mt-2">
+                      <span className="block text-xs font-bold text-ink-900 tracking-tight">Promo Vouchers</span>
+                      <span className="block text-[10px] font-medium text-slate-soft">Issue & redeem</span>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => window.dispatchEvent(new CustomEvent('aezakmi:open-shift-modal'))}
-                    className="overview-soft-card flex min-h-[76px] flex-col justify-between p-3 text-left transition-all hover:-translate-y-0.5"
+                    className="overview-soft-card group flex min-h-[84px] flex-col justify-between p-3.5 text-left transition-all hover:-translate-y-0.5 border border-surface-line/80 bg-surface-raised/70 hover:bg-surface hover:border-teal/60 shadow-xs cursor-pointer rounded-xl"
                   >
-                    <Clock3 size={17} className="text-teal-dim"/>
-                    <div>
-                      <span className="block text-[11px] font-bold text-ink-900">Cashier Shift</span>
-                      <span className="block text-[9px] text-slate-soft">Reconcile drawer</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface border border-surface-line/70 text-teal-dim shadow-xs group-hover:scale-105 transition-transform">
+                      <Clock3 size={17}/>
+                    </span>
+                    <div className="mt-2">
+                      <span className="block text-xs font-bold text-ink-900 tracking-tight">Cashier Shift</span>
+                      <span className="block text-[10px] font-medium text-slate-soft">Reconcile drawer</span>
                     </div>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setEmailModalOpen(true)}
-                    className="overview-soft-card flex min-h-[76px] flex-col justify-between p-3 text-left transition-all hover:-translate-y-0.5 border-teal/30 bg-teal/5"
+                    className="overview-soft-card group flex min-h-[84px] flex-col justify-between p-3.5 text-left transition-all hover:-translate-y-0.5 border border-teal/40 bg-teal/10 hover:bg-teal/15 shadow-xs cursor-pointer rounded-xl"
                   >
-                    <Mail size={17} className="text-teal-dim"/>
-                    <div>
-                      <span className="block text-[11px] font-bold text-ink-900">Email Summary</span>
-                      <span className="block text-[9px] text-slate-soft">Send owner report</span>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface border border-teal/30 text-teal-dim shadow-xs group-hover:scale-105 transition-transform">
+                      <Mail size={17}/>
+                    </span>
+                    <div className="mt-2">
+                      <span className="block text-xs font-bold text-ink-900 tracking-tight">Email Summary</span>
+                      <span className="block text-[10px] font-medium text-slate-soft">Send owner report</span>
                     </div>
                   </button>
                 </div>

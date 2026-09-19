@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from './AuthContext.jsx'
+import { apiPatch } from '../lib/api.js'
 
 const EsportsThemeContext = createContext(null)
 
@@ -52,6 +53,10 @@ export function EsportsThemeProvider({ children }) {
     } catch {}
     syncSkinDataset(target)
     window.dispatchEvent(new CustomEvent('aezakmi:persona-changed', { detail: { mode: target } }))
+    try {
+      const activeSkinId = localStorage.getItem('aezakmi.skin') || 'nexus'
+      apiPatch('/settings', { themePersona: target, skinId: activeSkinId }).catch(() => {})
+    } catch {}
   }
 
   const toggleThemeMode = () => {

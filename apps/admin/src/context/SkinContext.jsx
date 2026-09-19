@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
+import { apiPatch } from '../lib/api.js'
 
 export const SKINS = [
   {
@@ -92,6 +93,10 @@ export function SkinProvider({ children }) {
     }, 420)
 
     window.dispatchEvent(new CustomEvent('aezakmi:skin-changed', { detail: { skin: valid } }))
+    try {
+      const isEsports = document.documentElement.getAttribute('data-theme-persona') === 'esports'
+      apiPatch('/settings', { themePersona: isEsports ? 'esports' : 'dashboard', skinId: valid }).catch(() => {})
+    } catch {}
   }
 
   const value = useMemo(() => ({

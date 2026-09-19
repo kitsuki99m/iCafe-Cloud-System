@@ -106,23 +106,158 @@
     outline-offset: 2px;
     border-radius: 2px;
   }
-  ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+  /* Universal sleek adaptive scrollbars across all skins & themes */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--color-gold, #C9A85D) 35%, var(--color-surface-line, rgba(255, 255, 255, 0.15))) transparent;
   }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
   ::-webkit-scrollbar-track {
     background: transparent;
   }
+
   ::-webkit-scrollbar-thumb {
-    background: rgba(169, 152, 152, 0.45);
+    background: color-mix(in srgb, var(--color-gold, #C9A85D) 35%, var(--color-surface-line, rgba(255, 255, 255, 0.15)));
     border-radius: 999px;
   }
+
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(118, 102, 100, 0.75);
+    background: color-mix(in srgb, var(--color-gold, #C9A85D) 65%, var(--color-surface-line, rgba(255, 255, 255, 0.25)));
   }
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(169, 152, 152, 0.45) transparent;
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* ==========================================================================
+     CONSOLE HARDWARE SKINS (NEXUS, VICTUS, ALIENWARE, ROG, RAZER, PREDATOR)
+     Synchronized with Admin Esports Console
+     ========================================================================== */
+
+  /* 1. NEXUS HOUSE — Signature Aezakmi Look */
+  [data-skin="nexus"],
+  html.dark[data-skin="nexus"],
+  html[data-theme="dark"][data-skin="nexus"] {
+    --color-ink: #0B0F17;
+    --color-surface: #121824;
+    --color-surface-raised: #1A2232;
+    --color-surface-line: #222E42;
+    --color-ink-900: #F1F5F9;
+    --color-slate-soft: #8E9DB5;
+    --color-gold: #7B61FF;
+    --color-gold-soft: rgba(123, 97, 255, 0.18);
+    --color-gold-dim: #9B86FF;
+    --color-teal: #10B981;
+    --color-teal-soft: rgba(16, 185, 129, 0.18);
+    --color-teal-dim: #34D399;
+    --shadow-glow: 0 0 0 1px #222E42, 0 0 24px -6px rgba(123, 97, 255, 0.25);
+  }
+
+  /* 2. VICTUS — HP Mica & Performance Blue */
+  [data-skin="victus"],
+  html.dark[data-skin="victus"],
+  html[data-theme="dark"][data-skin="victus"] {
+    --color-ink: #060B12;
+    --color-surface: #0E1724;
+    --color-surface-raised: #142133;
+    --color-surface-line: #1F334E;
+    --color-ink-900: #EDF4FC;
+    --color-slate-soft: #88A1BF;
+    --color-gold: #0096D6;
+    --color-gold-soft: rgba(0, 150, 214, 0.18);
+    --color-gold-dim: #38BDF8;
+    --color-teal: #3FD6B0;
+    --color-teal-soft: rgba(63, 214, 176, 0.18);
+    --color-teal-dim: #3FD6B0;
+    --shadow-glow: 0 0 0 1px #1F334E, 0 0 24px -6px rgba(0, 150, 214, 0.25);
+  }
+
+  /* 3. ALIENWARE — Space Black & AlienFX Cyan */
+  [data-skin="alien"],
+  html.dark[data-skin="alien"],
+  html[data-theme="dark"][data-skin="alien"] {
+    --color-ink: #050608;
+    --color-surface: #0D0F14;
+    --color-surface-raised: #141720;
+    --color-surface-line: #222736;
+    --color-ink-900: #EBF1F5;
+    --color-slate-soft: #7C879C;
+    --color-gold: #00CFE5;
+    --color-gold-soft: rgba(0, 207, 229, 0.18);
+    --color-gold-dim: #22D3EE;
+    --color-teal: #3BE8C0;
+    --color-teal-soft: rgba(59, 232, 192, 0.18);
+    --color-teal-dim: #3BE8C0;
+    --shadow-glow: 0 0 0 1px #222736, 0 0 24px -6px rgba(0, 207, 229, 0.25);
+  }
+
+  /* 4. ROG STRIX — Republic of Gamers Crimson */
+  [data-skin="rog"],
+  html.dark[data-skin="rog"],
+  html[data-theme="dark"][data-skin="rog"] {
+    --color-ink: #0A0A0C;
+    --color-surface: #121318;
+    --color-surface-raised: #1B1C24;
+    --color-surface-line: #302A32;
+    --color-ink-900: #FAF5F5;
+    --color-slate-soft: #9F939A;
+    --color-gold: #DE272C;
+    --color-gold-soft: rgba(222, 39, 44, 0.18);
+    --color-gold-dim: #FF4D4F;
+    --color-teal: #D4A33A;
+    --color-teal-soft: rgba(212, 163, 58, 0.18);
+    --color-teal-dim: #FBBF24;
+    --shadow-glow: 0 0 0 1px #302A32, 0 0 24px -6px rgba(222, 39, 44, 0.25);
+  }
+
+  /* 5. RAZER CHROMA — Deep Black & Snake Green */
+  [data-skin="razer"],
+  html.dark[data-skin="razer"],
+  html[data-theme="dark"][data-skin="razer"] {
+    --color-ink: #000000;
+    --color-surface: #0B0E0B;
+    --color-surface-raised: #111811;
+    --color-surface-line: #1C2E1C;
+    --color-ink-900: #F0FFF0;
+    --color-slate-soft: #7EA67E;
+    --color-gold: #44D62C;
+    --color-gold-soft: rgba(68, 214, 44, 0.18);
+    --color-gold-dim: #22C55E;
+    --color-teal: #44D62C;
+    --color-teal-soft: rgba(68, 214, 44, 0.18);
+    --color-teal-dim: #22C55E;
+    --shadow-glow: 0 0 0 1px #1C2E1C, 0 0 24px -6px rgba(68, 214, 44, 0.25);
+  }
+
+  /* 6. PREDATOR — Acer Predator Aqua & Carbon */
+  [data-skin="predator"],
+  html.dark[data-skin="predator"],
+  html[data-theme="dark"][data-skin="predator"] {
+    --color-ink: #050B10;
+    --color-surface: #0C171F;
+    --color-surface-raised: #121F2A;
+    --color-surface-line: #1B323F;
+    --color-ink-900: #E9F5F8;
+    --color-slate-soft: #88A3B2;
+    --color-gold: #0BC5C0;
+    --color-gold-soft: rgba(11, 197, 192, 0.18);
+    --color-gold-dim: #14B8A6;
+    --color-teal: #22D3A8;
+    --color-teal-soft: rgba(34, 211, 168, 0.18);
+    --color-teal-dim: #22D3A8;
+    --shadow-glow: 0 0 0 1px #1B323F, 0 0 24px -6px rgba(11, 197, 192, 0.25);
+  }
+
+  /* Global Esports Mode Persona */
+  html[data-theme-persona="esports"] {
+    --color-gold: #10B981;
+    --color-gold-soft: rgba(16, 185, 129, 0.18);
+    --color-gold-dim: #34D399;
   }
 }
 

@@ -680,6 +680,58 @@
     background-color: var(--bg);
     color: var(--text);
   }
+
+  /* Universal sleek adaptive scrollbars across all skins & themes */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--brand, #38BDF8) 35%, var(--line, rgba(255, 255, 255, 0.15))) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--brand, #38BDF8) 35%, var(--line, rgba(255, 255, 255, 0.15)));
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--brand, #38BDF8) 65%, var(--line, rgba(255, 255, 255, 0.25)));
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .overview-card {
+    border: 1px solid var(--admin-ui-border);
+    border-radius: 16px;
+    background: var(--admin-card-bg);
+    box-shadow: var(--shadow, 0 1px 3px rgba(0, 0, 0, 0.05));
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .overview-soft-card {
+    border: 1px solid var(--admin-ui-border);
+    border-radius: 12px;
+    background: var(--admin-card-subtle);
+    color: var(--color-ink-900);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .overview-soft-card:hover {
+    border-color: color-mix(in srgb, var(--brand) 40%, var(--admin-ui-border));
+    background: var(--surface);
+    box-shadow: 0 4px 14px var(--glow);
+    transform: translateY(-1.5px);
+  }
   [data-skin] {
     background-color: var(--bg);
     color: var(--text);

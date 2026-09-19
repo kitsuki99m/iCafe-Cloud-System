@@ -55,32 +55,32 @@ const FloorStationNode = memo(function FloorStationNode({
     ? remainingSessionSeconds(session, now)
     : null
 
-  // Status-driven styling variables
-  let borderStyle = 'border-[var(--line,#26314A)]'
-  let bgStyle = 'bg-[var(--surface,#131A28)]/90 text-[var(--text,#E6EAF2)]'
+  // Status-driven high-contrast styling variables
+  let borderStyle = 'border-2 border-[var(--line,#26314A)]'
+  let bgStyle = 'bg-[var(--surface,#121824)] text-ink-900'
   let glowShadow = 'shadow-md'
-  let statusDotColor = 'bg-[var(--free,#2ED3A0)]'
+  let statusDotColor = 'bg-teal'
 
   if (isOccupied) {
     borderStyle = isLocked
-      ? 'border-[var(--live,#FFB020)]/80'
-      : 'border-[var(--live,#FFB020)] ring-1 ring-[var(--live,#FFB020)]/40'
-    bgStyle = 'bg-[var(--surface-2,#1A2233)] text-[var(--text,#E6EAF2)]'
-    glowShadow = 'shadow-[0_0_18px_-4px_var(--glow,rgba(255,176,32,0.35))]'
-    statusDotColor = 'bg-[var(--live,#FFB020)]'
+      ? 'border-2 border-amber-500 ring-2 ring-amber-500/40'
+      : 'border-2 border-amber-500 ring-2 ring-amber-500/50'
+    bgStyle = 'bg-gradient-to-b from-amber-500/20 to-[var(--surface-2,#1A2232)] text-ink-900'
+    glowShadow = 'shadow-[0_0_20px_-2px_rgba(245,158,11,0.4)]'
+    statusDotColor = 'bg-amber-400'
   } else if (isMaintenance) {
-    borderStyle = 'border-[var(--down,#6B7688)]'
-    bgStyle = 'bg-[var(--surface-2,#1A2233)]/80 text-[var(--muted,#8D9AB5)]'
-    statusDotColor = 'bg-[var(--down,#6B7688)]'
+    borderStyle = 'border-2 border-ember/70'
+    bgStyle = 'bg-ember/15 text-ember-dim'
+    statusDotColor = 'bg-ember'
   } else if (isOffline) {
-    borderStyle = 'border-[var(--line-soft,#1E273B)] opacity-60'
-    bgStyle = 'bg-[var(--surface,#131A28)]/50 text-[var(--faint,#6B7891)]'
+    borderStyle = 'border-2 border-surface-line'
+    bgStyle = 'bg-surface/90 text-slate-soft'
     statusDotColor = 'bg-slate-500'
   } else {
     // Available
-    borderStyle = 'border-[var(--free,#2ED3A0)]/50 hover:border-[var(--free,#2ED3A0)]'
-    bgStyle = 'bg-[var(--surface,#131A28)]/90 text-[var(--text,#E6EAF2)]'
-    glowShadow = 'hover:shadow-[0_0_14px_-2px_rgba(46,211,160,0.35)]'
+    borderStyle = 'border-2 border-teal/60 hover:border-teal ring-1 ring-teal/30'
+    bgStyle = 'bg-[var(--surface,#121824)] text-ink-900'
+    glowShadow = 'shadow-[0_0_14px_-2px_rgba(20,184,166,0.35)] hover:shadow-[0_0_20px_-2px_rgba(20,184,166,0.55)]'
   }
 
   return (
@@ -103,7 +103,7 @@ const FloorStationNode = memo(function FloorStationNode({
         zIndex: 20,
         touchAction: 'none',
       }}
-      className={`floor-2d-node group flex flex-col justify-between p-1.5 border cursor-grab select-none transition-all duration-100 hover:scale-105 active:scale-95 ${borderStyle} ${bgStyle} ${glowShadow} ${
+      className={`floor-2d-node group flex flex-col justify-between p-1.5 rounded-xl cursor-grab select-none transition-all duration-100 hover:scale-105 active:scale-95 ${borderStyle} ${bgStyle} ${glowShadow} ${
         isOccupied ? 'occupied' : ''
       } ${!matchesFilter ? 'opacity-20 pointer-events-none' : 'opacity-100'}`}
       title={`${pc.label || `PC ${pcNum}`}${isVip ? ' (VIP)' : ''} · ${effectiveStatus} · Click to inspect session drawer`}
@@ -111,49 +111,49 @@ const FloorStationNode = memo(function FloorStationNode({
       {/* Top Header: Rig Label + VIP + Status Pill */}
       <div className="flex items-center justify-between gap-1 pointer-events-none">
         <div className="flex items-center gap-1">
-          <span className="font-display text-[11px] font-bold tracking-tight text-[var(--text,#E6EAF2)] leading-none">
+          <span className="font-display text-[12px] font-bold tracking-tight text-ink-900 leading-none">
             {pc.label ? pc.label.replace(/^pc[-\s]*/i, '') : `PC${pcNum}`}
           </span>
           {isVip && (
-            <span className="text-[8px] font-black text-amber-400 leading-none" title="VIP Station">
+            <span className="text-[9px] font-black text-amber-400 leading-none" title="VIP Station">
               ★
             </span>
           )}
         </div>
-        <span className={`h-1.5 w-1.5 rounded-full ${statusDotColor} ${isOccupied ? 'animate-pulse' : ''}`} />
+        <span className={`h-2 w-2 rounded-full ${statusDotColor} ${isOccupied ? 'animate-pulse ring-2 ring-amber-500/50' : ''}`} />
       </div>
 
       {/* Middle Readout: Timer / Status */}
       <div className="flex flex-col items-center justify-center my-auto pointer-events-none">
         {isOccupied ? (
           <>
-            <span className="font-mono text-[11px] font-bold tracking-tight text-[var(--live,#FFB020)] leading-none">
+            <span className="font-mono text-[12px] font-bold tracking-tight text-amber-400 leading-none">
               {remainingSec != null ? formatNodeTime(remainingSec) : 'OPEN'}
             </span>
-            <span className="mt-0.5 max-w-[58px] truncate text-[9px] font-medium text-[var(--muted,#8D9AB5)] leading-none">
+            <span className="mt-0.5 max-w-[58px] truncate text-[9.5px] font-semibold text-ink-900 leading-none">
               {session?.customerName || session?.username || 'Guest'}
             </span>
           </>
         ) : isMaintenance ? (
-          <div className="flex items-center gap-0.5 text-[9px] font-bold text-[var(--down,#6B7688)]">
+          <div className="flex items-center gap-0.5 text-[9.5px] font-bold text-ember-dim">
             <Wrench size={10} />
             <span>REPAIR</span>
           </div>
         ) : isOffline ? (
-          <div className="flex items-center gap-0.5 text-[9px] text-[var(--faint,#6B7891)]">
+          <div className="flex items-center gap-0.5 text-[9.5px] font-medium text-slate-soft">
             <WifiOff size={9} />
             <span>OFFLINE</span>
           </div>
         ) : (
-          <span className="rounded px-1 py-0.2 text-[9px] font-bold text-[var(--free,#2ED3A0)] bg-[var(--free,#2ED3A0)]/10">
+          <span className="rounded px-1.5 py-0.5 text-[9.5px] font-bold text-teal-dim bg-teal/15 border border-teal/30">
             OPEN
           </span>
         )}
       </div>
 
       {/* Bottom Footer: Quick Controls Trigger button */}
-      <div className="flex items-center justify-between pt-0.5 border-t border-white/5">
-        <span className="text-[8px] font-mono uppercase text-[var(--faint,#6B7891)]">
+      <div className="flex items-center justify-between pt-0.5 border-t border-surface-line/40">
+        <span className="text-[8.5px] font-mono font-bold uppercase text-slate-soft">
           {pc.rate || pc.hourlyRate ? `₱${pc.rate || pc.hourlyRate}` : 'RIG'}
         </span>
         <button
@@ -162,10 +162,10 @@ const FloorStationNode = memo(function FloorStationNode({
             e.stopPropagation()
             onControls?.(e, pc)
           }}
-          className="rounded p-0.5 text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)] hover:bg-white/10 transition-colors cursor-pointer"
+          className="rounded p-0.5 text-slate-soft hover:text-ink-900 hover:bg-surface-raised transition-colors cursor-pointer"
           title="Station Controls Menu"
         >
-          <MoreHorizontal size={11} />
+          <MoreHorizontal size={12} />
         </button>
       </div>
     </div>
@@ -224,10 +224,11 @@ const FloorMap2D = forwardRef(function FloorMap2D({
   // Default auto-arranged positions (arranged in clean rows like cybercafe setups)
   const computedPositions = useMemo(() => {
     const next = { ...positions }
-    const cols = 12
-    const startX = 36
-    const startY = 36
-    const gap = 76
+    const isSmall = typeof window !== 'undefined' && window.innerWidth < 768
+    const cols = isSmall ? 4 : 8
+    const startX = 24
+    const startY = 24
+    const gap = CELL_SIZE
 
     pcs.forEach((pc, idx) => {
       if (!next[pc.id] || typeof next[pc.id].x !== 'number' || typeof next[pc.id].y !== 'number') {
@@ -519,17 +520,17 @@ const FloorMap2D = forwardRef(function FloorMap2D({
         className="relative transition-all duration-75"
       >
         {/* Esports Blueprint Grid matching skin */}
-        <svg className="absolute inset-0 w-full h-full opacity-20 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
+        <svg className="absolute inset-0 w-full h-full opacity-40 pointer-events-none" xmlns="http://www.w3.org/2000/svg">
           <defs>
             <pattern id="floorGridSmall" width={CELL_SIZE * zoom} height={CELL_SIZE * zoom} patternUnits="userSpaceOnUse">
               <path
                 d={`M ${CELL_SIZE * zoom} 0 L 0 0 0 ${CELL_SIZE * zoom}`}
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="0.75"
-                className="text-[var(--brand,#7B61FF)]"
+                strokeWidth="1"
+                className="text-[var(--brand,#38BDF8)]"
               />
-              <circle cx={CELL_SIZE * zoom} cy={CELL_SIZE * zoom} r="1" fill="currentColor" className="text-[var(--brand,#7B61FF)]" />
+              <circle cx={CELL_SIZE * zoom} cy={CELL_SIZE * zoom} r="1.5" fill="currentColor" className="text-[var(--brand,#38BDF8)]" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#floorGridSmall)" />
