@@ -8,7 +8,7 @@ const ALLOWED_ROOTS = new Set([
   'session-extensions','transfer-requests','promos','logs','analytics','billing-policy',
   'settings','wallet','expenses','tax-estimate','branding','remote-commands','dashboard',
   'earnings','guest','client','launcher','menu-items','menu-orders','shifts','vouchers',
-  'reports','health','tax-policy','public',
+  'reports','health','tax-policy','public','team','cloud','app-data','auth',
 ])
 const METHODS = new Set(['GET','POST','PATCH','PUT','DELETE'])
 

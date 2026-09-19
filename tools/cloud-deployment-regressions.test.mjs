@@ -536,3 +536,17 @@ test('local member creation tags starting-wallet revenue with the member and cas
   assert.match(block,/receiptRecorded: true/)
   assert.match(block,/memberCreate: true/)
 })
+
+test('Admin API includes team, cloud, app-data, auth roots and supports employee invitations in cloud-native mode',()=>{
+  const edge=read('supabase/functions/admin-api/index.ts')
+  const backend=read('backend/src/cloud/adminApi.js')
+  for(const root of ['team','cloud','app-data','auth','reports','shifts','vouchers','launcher','menu-items','menu-orders']){
+    assert.match(edge,new RegExp(`'${root}'`))
+    assert.match(backend,new RegExp(`'${root}'`))
+  }
+  assert.match(edge,/route==='\/team\/invite'/)
+  assert.match(edge,/route==='\/team\/resend-invite'/)
+  assert.match(edge,/brevoApiKey/)
+  assert.match(edge,/cloud\.team\.invite/)
+})
+
