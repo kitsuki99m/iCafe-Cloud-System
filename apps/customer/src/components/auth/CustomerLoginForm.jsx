@@ -18,6 +18,7 @@ import NumericInput from "../common/NumericInput.jsx";
 import PasswordInput from "../common/PasswordInput.jsx";
 import ServerConnectionModal from "../common/ServerConnectionModal.jsx";
 import AdminPinGateModal from "../common/AdminPinGateModal.jsx";
+import PhtClock from "../common/PhtClock.jsx";
 import { apiPost } from "../../lib/api.js";
 import logo from "../../assets/aktura-logo.svg";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -165,6 +166,7 @@ export default function CustomerLoginForm() {
           </div>
         </div>
         <div className="customer-login-actions">
+          <PhtClock className="hidden sm:inline-flex mr-1" />
           <button
             type="button"
             onClick={() => {

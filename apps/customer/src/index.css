@@ -259,6 +259,32 @@
     --color-gold-soft: rgba(16, 185, 129, 0.18);
     --color-gold-dim: #34D399;
   }
+
+  /* Hardware Skin & Esports Dynamic Button & Modal styling */
+  html[data-theme-persona="esports"] .btn-primary,
+  html[data-skin]:not([data-skin="default"]) .btn-primary,
+  html[data-theme-persona="esports"] button.bg-midnight,
+  html[data-skin]:not([data-skin="default"]) button.bg-midnight {
+    background-color: var(--color-gold) !important;
+    color: #0B0F17 !important;
+    box-shadow: var(--shadow-glow) !important;
+    font-weight: 700 !important;
+    border: 1px solid color-mix(in srgb, var(--color-gold) 60%, transparent) !important;
+  }
+
+  html[data-theme-persona="esports"] .btn-primary:hover,
+  html[data-skin]:not([data-skin="default"]) .btn-primary:hover,
+  html[data-theme-persona="esports"] button.bg-midnight:hover,
+  html[data-skin]:not([data-skin="default"]) button.bg-midnight:hover {
+    filter: brightness(1.15) !important;
+    box-shadow: 0 0 16px var(--color-gold) !important;
+  }
+
+  html[data-theme-persona="esports"] [role="dialog"],
+  html[data-skin]:not([data-skin="default"]) [role="dialog"] {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 28px -4px var(--color-gold-soft) !important;
+    border-color: color-mix(in srgb, var(--color-gold) 35%, var(--color-surface-line)) !important;
+  }
 }
 
 @layer components {

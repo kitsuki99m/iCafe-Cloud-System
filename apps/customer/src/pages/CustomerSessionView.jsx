@@ -41,6 +41,7 @@ import MenuOrderModal from "../components/customer/MenuOrderModal.jsx";
 import VoucherRedemptionModal from "../components/customer/VoucherRedemptionModal.jsx";
 import StationLauncherConfigModal from "../components/customer/StationLauncherConfigModal.jsx";
 import AdminPinGateModal from "../components/common/AdminPinGateModal.jsx";
+import PhtClock from "../components/common/PhtClock.jsx";
 import { playSessionWarningVoice, playFinalSecondPing } from "../lib/sound.js";
 import { showToast } from "../lib/toast.js";
 import logo from "../assets/aktura-logo.svg";
@@ -892,6 +893,9 @@ export default function CustomerSessionView() {
             </div>
           )}
         </div>
+
+        {/* Live Philippine Time Clock */}
+        <PhtClock className="hidden md:inline-flex" />
 
         <div className="flex shrink-0 items-center gap-1.5">
           <button
