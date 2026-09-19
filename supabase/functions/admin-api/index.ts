@@ -585,6 +585,61 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     return result({success:true});
   }
 
+  function htmlEscape(value:unknown){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch))}
+  function emailBrandLogoUrl(){
+    const explicit=String(Deno.env.get('AEZAKMI_BRAND_LOGO_URL')||'').trim()
+    if(explicit)return explicit
+    const base=String(Deno.env.get('AEZAKMI_ADMIN_URL')||'https://icafe-aezakmi.vercel.app').trim().replace(/\/+$/,'')
+    return `${base}/aezakmi-logo.png`
+  }
+  function emailShell(input:{logoUrl?:string;eyebrow?:string;title:string;subtitle?:string;contentHtml:string}){
+    const brandLogo=input.logoUrl?`<td width="48" style="padding-right:16px;vertical-align:middle;"><img src="${htmlEscape(input.logoUrl)}" width="44" height="44" alt="Aezakmi" style="display:block;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background-color:#0B0F17;object-fit:contain;"></td>`:''
+    const eyebrowHtml=`<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700;">${htmlEscape(input.eyebrow||'Aezakmi Cafe Management')}</div>`
+    const subHtml=input.subtitle?`<div style="margin-top:4px;font-size:13px;color:#8E9DB5;">${htmlEscape(input.subtitle)}</div>`:''
+    return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#0B0F17;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:#F1F5F9;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0B0F17;padding:36px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="580" cellspacing="0" cellpadding="0" style="max-width:580px;width:100%;background-color:#121824;border:1px solid #222E42;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.45);">
+          <tr>
+            <td style="background:linear-gradient(180deg,#1A2232 0%,#121824 100%);padding:26px 30px;border-bottom:1px solid #222E42;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  ${brandLogo}
+                  <td style="vertical-align:middle;">
+                    ${eyebrowHtml}
+                    <h1 style="margin:4px 0 0 0;font-size:21px;color:#FFFFFF;font-weight:700;line-height:1.3;">${htmlEscape(input.title)}</h1>
+                    ${subHtml}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:30px;color:#F1F5F9;font-size:14px;line-height:1.65;">
+              ${input.contentHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 30px;border-top:1px solid #1E293B;background-color:#0E131F;text-align:center;font-size:11px;line-height:1.6;color:#5E6D84;">
+              <div style="color:#8E9DB5;font-weight:600;margin-bottom:4px;">Aezakmi Cafe Management</div>
+              <div>Cloud café management · Customer Stations · Branch operations</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+  }
+
   if(method==='POST'&&route==='/reports/send-summary'){
     const period=String(body?.period||'daily').toLowerCase();
     const recipientEmail=String(body?.recipientEmail||user.email||'').trim();
@@ -628,37 +683,32 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     let emailSent=false;
     let message=`Summary report for ${period} compiled.`;
 
-    const html=`
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
-        <div style="background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 24px; text-align: center;">
-          <h1 style="margin: 0; font-size: 24px; color: #ffffff; font-weight: 800;">${cafeName}</h1>
-          <p style="margin: 6px 0 0 0; color: #e0f2fe; font-size: 14px; font-weight: 500;">${periodLabel} Performance Summary</p>
-        </div>
-        <div style="padding: 24px;">
-          <div style="background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; text-align: center; border: 1px solid #334155;">
-            <div style="font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Total Net Revenue</div>
-            <div style="font-size: 32px; font-weight: 800; color: #38bdf8; margin-top: 4px;">₱${totalEarnings.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          </div>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <tr style="border-bottom: 1px solid #334155;">
-              <td style="padding: 10px 0; color: #94a3b8;">Wallet Top-Ups</td>
-              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${topUpRevenue.toFixed(2)} (${topUpsCount} top-ups)</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #334155;">
-              <td style="padding: 10px 0; color: #94a3b8;">Snack & Drink Orders</td>
-              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${orderRevenue.toFixed(2)} (${ordersCount} orders)</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #334155;">
-              <td style="padding: 10px 0; color: #94a3b8;">Staff Shifts Logged</td>
-              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">${shiftsCount} shifts (Variance: ₱${shiftsVariance.toFixed(2)})</td>
-            </tr>
-          </table>
-          <div style="font-size: 11px; color: #64748b; text-align: center; margin-top: 24px;">
-            Generated on ${new Date().toLocaleString()} by Aezakmi Cloud Management
-          </div>
-        </div>
+    const contentHtml=`
+      <p style="margin:0 0 18px;color:#8E9DB5;font-size:14px;line-height:1.65;">Here is your <strong style="color:#F8FAFC;">${htmlEscape(periodLabel)}</strong> operational performance summary for <strong style="color:#F8FAFC;">${htmlEscape(cafeName)}</strong>.</p>
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:22px;margin-bottom:20px;text-align:center;">
+        <div style="font-size:12px;color:#8E9DB5;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">Total Net Revenue</div>
+        <div style="font-size:32px;font-weight:800;color:#38BDF8;margin-top:6px;">₱${totalEarnings.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
       </div>
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:16px 20px;margin-bottom:20px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+          <tr>
+            <td style="padding:10px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Wallet Top-Ups</td>
+            <td align="right" style="padding:10px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">₱${topUpRevenue.toFixed(2)} <span style="color:#5E6D84;font-weight:400;">(${topUpsCount} top-up${topUpsCount===1?'':'s'})</span></td>
+          </tr>
+          <tr>
+            <td style="padding:10px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Snack & Drink Orders</td>
+            <td align="right" style="padding:10px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">₱${orderRevenue.toFixed(2)} <span style="color:#5E6D84;font-weight:400;">(${ordersCount} order${ordersCount===1?'':'s'})</span></td>
+          </tr>
+          <tr>
+            <td style="padding:10px 0;color:#8E9DB5;">Staff Shifts Logged</td>
+            <td align="right" style="padding:10px 0;font-weight:600;color:#F8FAFC;">${shiftsCount} shift${shiftsCount===1?'':'s'} <span style="color:${shiftsVariance<0?'#EF4444':'#10B981'};font-weight:500;">(Variance: ₱${shiftsVariance.toFixed(2)})</span></td>
+          </tr>
+        </table>
+      </div>
+      <p style="margin:0;color:#5E6D84;font-size:12px;text-align:center;">Compiled on ${new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'})} via Aezakmi Cloud Management.</p>
     `;
+
+    const html=emailShell({logoUrl:emailBrandLogoUrl(),eyebrow:cafeName,title:`${periodLabel} Performance Summary`,subtitle:'Operational revenue & shift summary',contentHtml});
 
     if(brevoApiKey){
       try{
@@ -729,29 +779,20 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const brevoSenderEmail = String(Deno.env.get('BREVO_SENDER_EMAIL') || 'kyle.serina05@gmail.com').trim();
     const brevoSenderName = String(Deno.env.get('BREVO_SENDER_NAME') || 'Aezakmi Cafe Management').trim();
 
-    const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
-        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
-          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
-          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Employee Invitation</h1>
-        </div>
-        <div style="padding: 28px;">
-          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName}</strong>,</p>
-          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">You have been invited to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}).</p>
-          <div style="background: #111C28; border-radius: 10px; padding: 18px; margin-bottom: 24px; border: 1px solid #1E293B;">
-            <table style="width: 100%; font-size: 13px;">
-              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Role:</td><td style="color: #38BDF8; font-weight: 600; text-align: right;">${roleLabel}</td></tr>
-              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Branch:</td><td style="color: #F8FAFC; text-align: right;">${branchLabel}</td></tr>
-              <tr><td style="color: #64748B; padding: 4px 0;">Authorized Email:</td><td style="color: #E8A33D; text-align: right; font-family: monospace;">${cleanEmail}</td></tr>
-            </table>
-          </div>
-          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your initial PIN or login access to start your shift on the Aezakmi Admin Terminal.</p>
-          <div style="font-size: 11px; color: #475569; text-align: center; margin-top: 28px; border-top: 1px solid #1E293B; padding-top: 18px;">
-            Sent by Aezakmi Cafe Management on behalf of ${cafeName}
-          </div>
-        </div>
+    const contentHtml = `
+      <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${htmlEscape(cleanName)},</p>
+      <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">You have been invited to join the staff team at <strong style="color:#F8FAFC;">${htmlEscape(cafeName)}</strong> (${htmlEscape(branchLabel)}).</p>
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Role</td><td align="right" style="padding:8px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${htmlEscape(roleLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Branch</td><td align="right" style="padding:8px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">${htmlEscape(branchLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;">Authorized Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;">${htmlEscape(cleanEmail)}</td></tr>
+        </table>
       </div>
+      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Please contact your store administrator for your initial PIN or login credentials to start your shift on the Aezakmi Admin Terminal.</p>
     `;
+
+    const html = emailShell({logoUrl:emailBrandLogoUrl(),eyebrow:'Aezakmi Cafe Management',title:'Employee Invitation',subtitle:`Staff onboarding · ${cafeName}`,contentHtml});
 
     let emailSent = false;
     let message = '';
@@ -812,22 +853,20 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const brevoSenderEmail = String(Deno.env.get('BREVO_SENDER_EMAIL') || 'kyle.serina05@gmail.com').trim();
     const brevoSenderName = String(Deno.env.get('BREVO_SENDER_NAME') || 'Aezakmi Cafe Management').trim();
 
-    const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
-        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
-          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
-          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Staff Invitation Reminder</h1>
-        </div>
-        <div style="padding: 28px;">
-          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName || 'Team Member'}</strong>,</p>
-          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">This is a reminder of your invitation to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}) as <strong style="color: #38BDF8;">${roleLabel}</strong>.</p>
-          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your login credentials to start your shift.</p>
-          <div style="font-size: 11px; color: #475569; text-align: center; margin-top: 28px; border-top: 1px solid #1E293B; padding-top: 18px;">
-            Sent by Aezakmi Cafe Management on behalf of ${cafeName}
-          </div>
-        </div>
+    const contentHtml = `
+      <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${htmlEscape(cleanName || 'Team Member')},</p>
+      <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">This is a reminder of your invitation to join the staff team at <strong style="color:#F8FAFC;">${htmlEscape(cafeName)}</strong> (${htmlEscape(branchLabel)}) as <strong style="color:#38BDF8;">${htmlEscape(roleLabel)}</strong>.</p>
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Role</td><td align="right" style="padding:8px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${htmlEscape(roleLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Branch</td><td align="right" style="padding:8px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">${htmlEscape(branchLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;">Authorized Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;">${htmlEscape(cleanEmail)}</td></tr>
+        </table>
       </div>
+      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Please contact your store administrator for your login credentials to start your shift.</p>
     `;
+
+    const html = emailShell({logoUrl:emailBrandLogoUrl(),eyebrow:'Aezakmi Cafe Management',title:'Staff Invitation Reminder',subtitle:`Staff onboarding · ${cafeName}`,contentHtml});
 
     let emailSent = false;
     let message = '';

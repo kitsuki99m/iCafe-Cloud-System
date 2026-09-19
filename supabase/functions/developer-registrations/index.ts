@@ -64,7 +64,8 @@ async function activationLink(admin:SupabaseClient,email:string){
   const props:any=(data as any)?.properties||{}
   return String(props.action_link||props.actionLink||'')||null
 }
-async function maybeActivationLink(admin:SupabaseClient,email:string){try{return await activationLink(admin,email)}catch{return null}}
+const generateInviteLink=activationLink
+async function maybeActivationLink(admin:SupabaseClient,email:string){try{return await generateInviteLink(admin,email)}catch{return null}}
 function inviteMetadata(registration:any,pkg:{plan:string,maxStations:number}){return{name:registration.owner_name,business_name:registration.business_name,aezakmi_registration_id:registration.id,subscription_plan:pkg.plan,max_stations:pkg.maxStations}}
 function emailBrandLogoUrl(){
   const explicit=String(Deno.env.get('AEZAKMI_BRAND_LOGO_URL')||'').trim()
@@ -127,21 +128,108 @@ async function resendActivationEmail(admin:SupabaseClient,registration:any,pkg:{
   if(!link)throw Object.assign(new Error('Unable to generate activation link.'),{status:409,code:'ACTIVATION_LINK_FAILED'})
   return await sendBrevoEmail({to:registration.email,toName:registration.owner_name,subject:`Your Aezakmi Cafe Management activation link — ${registration.business_name}`,html:inviteHtml({...registration,actionLink:link,packageLabel:String(pkg.plan||'').replace(/^./,(c)=>c.toUpperCase()),maxStations:pkg.maxStations,resend:true}),tags:['business-activation']})
 }
-
 function htmlEscape(value:unknown){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]||ch))}
 function peso(value:unknown){return `₱${Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:0,maximumFractionDigits:2})}`}
+function emailShell(input:{logoUrl?:string;eyebrow?:string;title:string;subtitle?:string;contentHtml:string}){
+  const brandLogo=input.logoUrl?`<td width="48" style="padding-right:16px;vertical-align:middle;"><img src="${htmlEscape(input.logoUrl)}" width="44" height="44" alt="Aezakmi" style="display:block;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background-color:#0B0F17;object-fit:contain;"></td>`:''
+  const eyebrowHtml=`<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700;">${htmlEscape(input.eyebrow||'Aezakmi Cafe Management')}</div>`
+  const subHtml=input.subtitle?`<div style="margin-top:4px;font-size:13px;color:#8E9DB5;">${htmlEscape(input.subtitle)}</div>`:''
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#0B0F17;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:#F1F5F9;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0B0F17;padding:36px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="580" cellspacing="0" cellpadding="0" style="max-width:580px;width:100%;background-color:#121824;border:1px solid #222E42;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.45);">
+          <tr>
+            <td style="background:linear-gradient(180deg,#1A2232 0%,#121824 100%);padding:26px 30px;border-bottom:1px solid #222E42;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  ${brandLogo}
+                  <td style="vertical-align:middle;">
+                    ${eyebrowHtml}
+                    <h1 style="margin:4px 0 0 0;font-size:21px;color:#FFFFFF;font-weight:700;line-height:1.3;">${htmlEscape(input.title)}</h1>
+                    ${subHtml}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:30px;color:#F1F5F9;font-size:14px;line-height:1.65;">
+              ${input.contentHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 30px;border-top:1px solid #1E293B;background-color:#0E131F;text-align:center;font-size:11px;line-height:1.6;color:#5E6D84;">
+              <div style="color:#8E9DB5;font-weight:600;margin-bottom:4px;">Aezakmi Cafe Management</div>
+              <div>Cloud café management · Customer Stations · Branch operations</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+}
+
 function inviteHtml(input:any){
   const logoUrl=emailBrandLogoUrl()
-  const logo=`<img src="${htmlEscape(logoUrl)}" width="48" height="48" alt="Aezakmi Cafe Management" style="display:block;border-radius:12px;object-fit:contain;background:#ffffff">`
   const title=input.resend?'Your activation link':'Your workspace is ready'
   const intro=input.resend?'Here is a fresh secure link to finish activating your account.':'Your Aezakmi Cafe Management application has been approved.'
-  return `<!doctype html><html><body style="margin:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif;color:#111827"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f2;padding:28px 12px"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb"><tr><td style="background:#0B1017;padding:24px 28px"><table role="presentation" width="100%"><tr><td width="60">${logo}</td><td><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700">Aezakmi Cafe Management</div><div style="margin-top:4px;font-size:22px;color:#ffffff;font-weight:700">${htmlEscape(title)}</div></td></tr></table></td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 8px;font-size:15px">Hello ${htmlEscape(input.owner_name||input.recipientName||'there')},</p><p style="margin:0;color:#4b5563;font-size:14px;line-height:1.7">${htmlEscape(intro)} Use the secure button below to set your password and open the workspace for <strong style="color:#111827">${htmlEscape(input.business_name||input.businessName)}</strong>.</p><div style="margin:22px 0;padding:16px;border-radius:14px;background:#f4f1e8"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:5px 0;color:#6b7280;font-size:13px">Package</td><td align="right" style="padding:5px 0;font-size:13px;font-weight:700">${htmlEscape(input.packageLabel||'Cloud')}</td></tr><tr><td style="padding:5px 0;color:#6b7280;font-size:13px">Station limit</td><td align="right" style="padding:5px 0;font-size:13px;font-weight:700">${htmlEscape(input.maxStations||'—')}</td></tr></table></div><div style="text-align:center;margin:26px 0"><a href="${htmlEscape(input.actionLink)}" style="display:inline-block;background:#0B1017;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 22px;border-radius:12px">Activate Aezakmi Cafe Management</a></div><p style="margin:0;color:#6b7280;font-size:12px;line-height:1.6">For security, use this link only for the invited owner account. If the button does not open, copy this URL into your browser:</p><p style="margin:8px 0 0;word-break:break-all;color:#6b7280;font-size:11px;line-height:1.6">${htmlEscape(input.actionLink)}</p><p style="margin:24px 0 0;font-size:13px;color:#111827"><strong>Aezakmi Cafe Management</strong><br><span style="color:#6b7280">Cloud café management · Customer Stations · Branch operations</span></p></td></tr></table></td></tr></table></body></html>`
+  const contentHtml=`
+    <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${htmlEscape(input.owner_name||input.recipientName||'there')},</p>
+    <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">${htmlEscape(intro)} Use the secure button below to set your password and open the workspace for <strong style="color:#F8FAFC;">${htmlEscape(input.business_name||input.businessName)}</strong>.</p>
+    <div style="margin:22px 0;padding:18px 20px;border-radius:12px;background-color:#1A2232;border:1px solid #222E42;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+        <tr>
+          <td style="padding:7px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Subscription Package</td>
+          <td align="right" style="padding:7px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${htmlEscape(input.packageLabel||'Cloud')}</td>
+        </tr>
+        <tr>
+          <td style="padding:7px 0;color:#8E9DB5;">Station Limit</td>
+          <td align="right" style="padding:7px 0;font-weight:700;color:#F8FAFC;">${htmlEscape(input.maxStations||'—')}</td>
+        </tr>
+      </table>
+    </div>
+    <div style="text-align:center;margin:28px 0 24px;">
+      <a href="${htmlEscape(input.actionLink)}" style="display:inline-block;background-color:#E8A33D;color:#0B0F17;text-decoration:none;font-size:14px;font-weight:700;padding:13px 26px;border-radius:10px;box-shadow:0 2px 10px rgba(232,163,61,0.25);">Activate Aezakmi Cafe Management</a>
+    </div>
+    <p style="margin:0;color:#5E6D84;font-size:12px;line-height:1.6;">For security, use this link only for the invited owner account. If the button does not open, copy this URL into your browser:</p>
+    <p style="margin:8px 0 0;word-break:break-all;color:#8E9DB5;font-size:11px;line-height:1.6;font-family:monospace;background-color:#0B0F17;padding:10px 12px;border-radius:8px;border:1px solid #222E42;">${htmlEscape(input.actionLink)}</p>
+  `
+  return emailShell({logoUrl,eyebrow:'Aezakmi Cafe Management',title,subtitle:input.business_name||input.businessName,contentHtml})
 }
+
 function quoteHtml(input:any){
   const logoUrl=emailBrandLogoUrl()
-  const noteHtml=input.message?`<div style="margin-top:22px;padding:16px;border-radius:14px;background:#f4f1e8;color:#4b5563;font-size:14px;line-height:1.6"><strong style="color:#111827">Message from Aezakmi</strong><br>${htmlEscape(input.message).replace(/\n/g,'<br>')}</div>`:''
-  const logo=`<img src="${htmlEscape(logoUrl)}" width="48" height="48" alt="Aezakmi Cafe Management" style="display:block;border-radius:12px;object-fit:contain;background:#ffffff">`
-  return `<!doctype html><html><body style="margin:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif;color:#111827"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f2;padding:28px 12px"><tr><td align="center"><table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb"><tr><td style="background:#0B1017;padding:24px 28px"><table role="presentation" width="100%"><tr><td width="60">${logo}</td><td><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700">Aezakmi Cafe Management</div><div style="margin-top:4px;font-size:22px;color:#ffffff;font-weight:700">Business quotation</div></td></tr></table></td></tr><tr><td style="padding:30px 28px"><p style="margin:0 0 8px;font-size:15px">Hello ${htmlEscape(input.recipientName||'there')},</p><p style="margin:0;color:#4b5563;font-size:14px;line-height:1.7">Thank you for considering Aezakmi Cafe Management for <strong style="color:#111827">${htmlEscape(input.businessName)}</strong>. Based on the information provided, here is a tailored estimate for your café.</p><div style="margin:24px 0 0;padding:18px;border:1px solid #e5e7eb;border-radius:16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Quotation</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.quoteNumber)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Package</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.packageLabel)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">PCs</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.stationCount)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Branches</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${htmlEscape(input.branchCount)}</td></tr><tr><td style="padding:12px 0 7px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px">Monthly subscription</td><td align="right" style="padding:12px 0 7px;border-top:1px solid #e5e7eb;font-size:18px;color:#0B1017;font-weight:800">${htmlEscape(input.monthlyLabel||`${peso(input.monthlyPrice)} / month`)}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Initial deployment</td><td align="right" style="padding:7px 0;font-size:13px;font-weight:700">${peso(input.deploymentFeePerBranch)} × ${htmlEscape(input.branchCount)} branch${Number(input.branchCount)===1?'':'es'}</td></tr><tr><td style="padding:7px 0;color:#6b7280;font-size:13px">Deployment total</td><td align="right" style="padding:7px 0;font-size:16px;color:#E8A33D;font-weight:800">${peso(input.deploymentFeeTotal)}</td></tr></table></div>${noteHtml}<div style="margin-top:24px;padding:16px 18px;border-left:4px solid #E8A33D;background:#fffaf0;color:#4b5563;font-size:13px;line-height:1.6">This quotation is valid until <strong style="color:#111827">${htmlEscape(input.validUntilLabel)}</strong>. Final pricing may change if the requested PC count, number of branches, onsite requirements, networking, or deployment scope changes.</div><p style="margin:24px 0 0;color:#4b5563;font-size:13px;line-height:1.7">If you would like to proceed, simply reply to this email and we can finalize the deployment scope and onboarding schedule.</p><p style="margin:24px 0 0;font-size:13px;color:#111827"><strong>Aezakmi Cafe Management</strong><br><span style="color:#6b7280">Cloud café management · Customer Stations · Branch operations</span></p></td></tr></table><div style="max-width:640px;padding:16px 8px;color:#9ca3af;font-size:11px;line-height:1.5;text-align:center">This quotation was generated by Aezakmi Cafe Management for ${htmlEscape(input.businessName)}.</div></td></tr></table></body></html>`
+  const noteHtml=input.message?`<div style="margin:20px 0;padding:16px 18px;border-radius:12px;background-color:#1A2232;border:1px solid #222E42;color:#8E9DB5;font-size:13px;line-height:1.6;"><strong style="color:#F8FAFC;">Message from Aezakmi</strong><br>${htmlEscape(input.message).replace(/\n/g,'<br>')}</div>`:''
+  const contentHtml=`
+    <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${htmlEscape(input.recipientName||'there')},</p>
+    <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">Thank you for considering Aezakmi Cafe Management for <strong style="color:#F8FAFC;">${htmlEscape(input.businessName)}</strong>. Based on your café specifications, here is your tailored estimate.</p>
+    <div style="margin:22px 0;padding:18px 20px;background-color:#1A2232;border:1px solid #222E42;border-radius:12px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+        <tr><td style="padding:7px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Quotation No.</td><td align="right" style="padding:7px 0;font-weight:700;color:#F8FAFC;border-bottom:1px solid #222E42;">${htmlEscape(input.quoteNumber)}</td></tr>
+        <tr><td style="padding:7px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Package</td><td align="right" style="padding:7px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${htmlEscape(input.packageLabel)}</td></tr>
+        <tr><td style="padding:7px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Customer Stations</td><td align="right" style="padding:7px 0;font-weight:700;color:#F8FAFC;border-bottom:1px solid #222E42;">${htmlEscape(input.stationCount)}</td></tr>
+        <tr><td style="padding:7px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Branches</td><td align="right" style="padding:7px 0;font-weight:700;color:#F8FAFC;border-bottom:1px solid #222E42;">${htmlEscape(input.branchCount)}</td></tr>
+        <tr><td style="padding:10px 0 7px;color:#8E9DB5;border-bottom:1px solid #222E42;">Monthly Subscription</td><td align="right" style="padding:10px 0 7px;font-size:16px;color:#38BDF8;font-weight:800;border-bottom:1px solid #222E42;">${htmlEscape(input.monthlyLabel||`${peso(input.monthlyPrice)} / month`)}</td></tr>
+        <tr><td style="padding:7px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Initial Deployment</td><td align="right" style="padding:7px 0;font-weight:700;color:#F8FAFC;border-bottom:1px solid #222E42;">${peso(input.deploymentFeePerBranch)} × ${htmlEscape(input.branchCount)} branch${Number(input.branchCount)===1?'':'es'}</td></tr>
+        <tr><td style="padding:10px 0 4px;color:#8E9DB5;">Deployment Total</td><td align="right" style="padding:10px 0 4px;font-size:16px;color:#E8A33D;font-weight:800;">${peso(input.deploymentFeeTotal)}</td></tr>
+      </table>
+    </div>
+    ${noteHtml}
+    <div style="margin:20px 0;padding:14px 18px;border-left:3px solid #E8A33D;background-color:rgba(232,163,61,0.08);border-radius:0 10px 10px 0;color:#8E9DB5;font-size:13px;line-height:1.6;">
+      This quotation is valid until <strong style="color:#F8FAFC;">${htmlEscape(input.validUntilLabel)}</strong>. Final pricing may change if onsite requirements, station count, networking, or deployment scope changes.
+    </div>
+    <p style="margin:20px 0 0;color:#8E9DB5;font-size:13px;line-height:1.65;">If you would like to proceed, simply reply to this email and we can finalize the deployment scope and onboarding schedule.</p>
+  `
+  return emailShell({logoUrl,eyebrow:'Aezakmi Cafe Management',title:'Business quotation',subtitle:input.businessName,contentHtml})
 }
 async function sendQuotationEmail(input:any){
   return await sendBrevoEmail({to:input.recipientEmail,toName:input.recipientName,subject:`Aezakmi Cafe Management quotation — ${input.businessName}`,html:quoteHtml(input),tags:['quotation']})
@@ -229,7 +317,16 @@ Deno.serve(async req=>{
     if(action==='test_email'){
       const target=String(developer.email||user.email||'').trim()
       if(!target)throw Object.assign(new Error('No developer email is available for the email check.'),{status:400,code:'EMAIL_CHECK_RECIPIENT_REQUIRED'})
-      const delivery=await sendBrevoEmail({to:target,toName:'Aezakmi Developer',subject:'Aezakmi Cafe Management email check',html:`<!doctype html><html><body style="margin:0;background:#eef0f2;font-family:Arial,Helvetica,sans-serif;color:#111827"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef0f2;padding:28px 12px"><tr><td align="center"><table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #e5e7eb"><tr><td style="background:#0B1017;padding:24px 28px"><table role="presentation"><tr><td style="padding-right:14px"><img src="${htmlEscape(emailBrandLogoUrl())}" width="48" height="48" alt="Aezakmi Cafe Management" style="display:block;border-radius:12px"></td><td><div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700">Aezakmi Cafe Management</div><div style="margin-top:4px;font-size:21px;color:#ffffff;font-weight:700">Email delivery is connected</div></td></tr></table></td></tr><tr><td style="padding:28px"><p style="margin:0;color:#4b5563;font-size:14px;line-height:1.7">Brevo is connected to the Developer Console.</p><p style="margin:14px 0 0;color:#6b7280;font-size:12px">Admin URL: ${htmlEscape(activationRedirect())}</p></td></tr></table></td></tr></table></body></html>`,tags:['email-check']})
+      const contentHtml=`
+        <p style="margin:0 0 14px;color:#8E9DB5;font-size:14px;line-height:1.65;">Brevo SMTP delivery is connected and verified for the Aezakmi Developer Console.</p>
+        <div style="margin:20px 0;padding:16px 20px;border-radius:12px;background-color:#1A2232;border:1px solid #222E42;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+            <tr><td style="padding:6px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Status</td><td align="right" style="padding:6px 0;font-weight:700;color:#10B981;border-bottom:1px solid #222E42;">Active · Ready</td></tr>
+            <tr><td style="padding:6px 0;color:#8E9DB5;">Cloud Admin URL</td><td align="right" style="padding:6px 0;font-weight:600;color:#38BDF8;font-family:monospace;font-size:12px;">${htmlEscape(activationRedirect())}</td></tr>
+          </table>
+        </div>
+      `
+      const delivery=await sendBrevoEmail({to:target,toName:'Aezakmi Developer',subject:'Aezakmi Cafe Management email check',html:emailShell({logoUrl:emailBrandLogoUrl(),eyebrow:'Aezakmi Developer Console',title:'Email delivery connected',contentHtml}),tags:['email-check']})
       return json({success:true,emailSent:true,email:delivery.deliveredTo})
     }
 

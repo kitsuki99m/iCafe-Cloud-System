@@ -7374,6 +7374,70 @@ function getCafeSettingsMap() {
   }
 }
 
+function emailBrandLogoUrl() {
+  const explicit = String(process.env.AEZAKMI_BRAND_LOGO_URL || '').trim();
+  if (explicit) return explicit;
+  const base = String(process.env.AEZAKMI_ADMIN_URL || 'https://icafe-aezakmi.vercel.app').trim().replace(/\/+$/, '');
+  return `${base}/aezakmi-logo.png`;
+}
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function emailShell({ logoUrl, eyebrow, title, subtitle, contentHtml }) {
+  const brandLogo = logoUrl ? `<td width="48" style="padding-right:16px;vertical-align:middle;"><img src="${escapeHtml(logoUrl)}" width="44" height="44" alt="Aezakmi" style="display:block;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background-color:#0B0F17;object-fit:contain;"></td>` : '';
+  const eyebrowHtml = `<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#E8A33D;font-weight:700;">${escapeHtml(eyebrow || 'Aezakmi Cafe Management')}</div>`;
+  const subHtml = subtitle ? `<div style="margin-top:4px;font-size:13px;color:#8E9DB5;">${escapeHtml(subtitle)}</div>` : '';
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#0B0F17;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;color:#F1F5F9;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#0B0F17;padding:36px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="580" cellspacing="0" cellpadding="0" style="max-width:580px;width:100%;background-color:#121824;border:1px solid #222E42;border-radius:16px;overflow:hidden;box-shadow:0 16px 40px rgba(0,0,0,0.45);">
+          <tr>
+            <td style="background:linear-gradient(180deg,#1A2232 0%,#121824 100%);padding:26px 30px;border-bottom:1px solid #222E42;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  ${brandLogo}
+                  <td style="vertical-align:middle;">
+                    ${eyebrowHtml}
+                    <h1 style="margin:4px 0 0 0;font-size:21px;color:#FFFFFF;font-weight:700;line-height:1.3;">${escapeHtml(title)}</h1>
+                    ${subHtml}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:30px;color:#F1F5F9;font-size:14px;line-height:1.65;">
+              ${contentHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 30px;border-top:1px solid #1E293B;background-color:#0E131F;text-align:center;font-size:11px;line-height:1.6;color:#5E6D84;">
+              <div style="color:#8E9DB5;font-weight:600;margin-bottom:4px;">Aezakmi Cafe Management</div>
+              <div>Cloud café management · Customer Stations · Branch operations</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), async (req, res, next) => {
   try {
     const { period = 'daily', recipientEmail } = req.body || {};
@@ -7420,41 +7484,41 @@ router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), asyn
     };
 
     const periodLabel = period.charAt(0).toUpperCase() + period.slice(1);
-    const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 12px; overflow: hidden; border: 1px solid #334155;">
-        <div style="background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 24px; text-align: center;">
-          <h1 style="margin: 0; font-size: 24px; color: #ffffff; font-weight: 800;">${cafeName}</h1>
-          <p style="margin: 6px 0 0 0; color: #e0f2fe; font-size: 14px; font-weight: 500;">${periodLabel} Performance Summary</p>
-        </div>
-        <div style="padding: 24px;">
-          <div style="background: #1e293b; border-radius: 8px; padding: 20px; margin-bottom: 20px; text-align: center; border: 1px solid #334155;">
-            <div style="font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;">Total Net Revenue</div>
-            <div style="font-size: 32px; font-weight: 800; color: #38bdf8; margin-top: 4px;">₱${totalEarnings.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-          </div>
-          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-            <tr style="border-bottom: 1px solid #334155;">
-              <td style="padding: 10px 0; color: #94a3b8;">Direct Session Revenue</td>
-              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${Number(reportData.sessionRevenue).toFixed(2)} (${reportData.sessionsCount} sessions)</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #334155;">
-              <td style="padding: 10px 0; color: #94a3b8;">Wallet Top-Ups</td>
-              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${Number(reportData.topUpRevenue).toFixed(2)} (${reportData.topUpsCount} top-ups)</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #334155;">
-              <td style="padding: 10px 0; color: #94a3b8;">Snack & Drink Menu Orders</td>
-              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">₱${Number(reportData.orderRevenue).toFixed(2)} (${reportData.ordersCount} orders)</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #334155;">
-              <td style="padding: 10px 0; color: #94a3b8;">Staff Shifts Reconciled</td>
-              <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #f8fafc;">${reportData.shiftsLogged} shifts (Variance: ₱${Number(reportData.shiftsVariance).toFixed(2)})</td>
-            </tr>
-          </table>
-          <div style="font-size: 11px; color: #64748b; text-align: center; margin-top: 24px;">
-            Generated on ${new Date().toLocaleString()} by Aezakmi Cloud Management
-          </div>
-        </div>
+    const contentHtml = `
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:22px;margin-bottom:24px;text-align:center;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8E9DB5;margin-bottom:6px;">Total Net Revenue</div>
+        <div style="font-size:34px;font-weight:800;color:#38BDF8;letter-spacing:-0.5px;line-height:1.1;">₱${totalEarnings.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
       </div>
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:6px 20px;margin-bottom:20px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;border-collapse:collapse;">
+          <tr>
+            <td style="padding:10px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Direct Session Revenue</td>
+            <td align="right" style="padding:10px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">₱${Number(reportData.sessionRevenue).toFixed(2)} <span style="color:#5E6D84;font-weight:400;">(${reportData.sessionsCount} session${reportData.sessionsCount===1?'':'s'})</span></td>
+          </tr>
+          <tr>
+            <td style="padding:10px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Wallet Top-Ups</td>
+            <td align="right" style="padding:10px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">₱${Number(reportData.topUpRevenue).toFixed(2)} <span style="color:#5E6D84;font-weight:400;">(${reportData.topUpsCount} top-up${reportData.topUpsCount===1?'':'s'})</span></td>
+          </tr>
+          <tr>
+            <td style="padding:10px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Snack &amp; Drink Orders</td>
+            <td align="right" style="padding:10px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">₱${Number(reportData.orderRevenue).toFixed(2)} <span style="color:#5E6D84;font-weight:400;">(${reportData.ordersCount} order${reportData.ordersCount===1?'':'s'})</span></td>
+          </tr>
+          <tr>
+            <td style="padding:10px 0;color:#8E9DB5;">Staff Shifts Logged</td>
+            <td align="right" style="padding:10px 0;font-weight:600;color:#F8FAFC;">${reportData.shiftsLogged} shift${reportData.shiftsLogged===1?'':'s'} <span style="color:${reportData.shiftsVariance<0?'#EF4444':'#10B981'};font-weight:500;">(Variance: ₱${Number(reportData.shiftsVariance).toFixed(2)})</span></td>
+          </tr>
+        </table>
+      </div>
+      <p style="margin:0;color:#5E6D84;font-size:12px;text-align:center;">Compiled on ${new Date().toLocaleString('en-US',{timeZone:'Asia/Manila'})} via Aezakmi Cloud Management.</p>
     `;
+
+    const html = emailShell({
+      logoUrl: emailBrandLogoUrl(),
+      eyebrow: cafeName,
+      title: `${periodLabel} Performance Summary`,
+      subtitle: 'Operational revenue & shift summary',
+      contentHtml
+    });
 
     let emailSent = false;
     let providerMessage = '';
@@ -7508,34 +7572,55 @@ router.post("/team/invite", auth, requireRole("admin"), async (req, res, next) =
       return res.status(400).json({ success: false, error: 'Name and email are required.' });
     }
 
+    const temporaryPassword = String(req.body?.temporaryPassword || `Staff#${Math.floor(1000 + Math.random() * 9000)}`);
+    const passwordHash = await argon2.hash(temporaryPassword);
+    const userRole = role === 'admin' ? 'admin' : 'cashier';
+
+    // Provision or update user account with must_change_credentials = 1
+    const existingUser = db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) AND role IN ('admin', 'cashier')").get(cleanEmail);
+    if (existingUser) {
+      db.prepare(`
+        UPDATE users
+        SET password_hash = ?, role = 'admin', must_change_credentials = 1, auth_method = 'password', is_active = 1, updated_at = ?
+        WHERE id = ?
+      `).run(passwordHash, nowIso(), existingUser.id);
+    } else {
+      const staffUserId = `staff-${id()}`;
+      db.prepare(`
+        INSERT INTO users (id, member_id, username, password_hash, pin_hash, role, is_active, must_change_credentials, auth_method, created_at, updated_at)
+        VALUES (?, NULL, ?, ?, NULL, 'admin', 1, 1, 'password', ?, ?)
+      `).run(staffUserId, cleanEmail, passwordHash, nowIso(), nowIso());
+    }
+
     const cafeSettings = getCafeSettingsMap();
     const cafeName = cafeSettings.cafeName || cafeSettings.cafe_name || "Aezakmi Cafe";
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = branch || cafeSettings.branch || 'Main Branch';
 
-    const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
-        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
-          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
-          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Employee Invitation</h1>
-        </div>
-        <div style="padding: 28px;">
-          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName}</strong>,</p>
-          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">You have been invited to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}).</p>
-          <div style="background: #111C28; border-radius: 10px; padding: 18px; margin-bottom: 24px; border: 1px solid #1E293B;">
-            <table style="width: 100%; font-size: 13px;">
-              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Role:</td><td style="color: #38BDF8; font-weight: 600; text-align: right;">${roleLabel}</td></tr>
-              <tr><td style="color: #64748B; padding: 4px 0;">Assigned Branch:</td><td style="color: #F8FAFC; text-align: right;">${branchLabel}</td></tr>
-              <tr><td style="color: #64748B; padding: 4px 0;">Authorized Email:</td><td style="color: #E8A33D; text-align: right; font-family: monospace;">${cleanEmail}</td></tr>
-            </table>
-          </div>
-          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your initial PIN or login access to start your shift on the Aezakmi Admin Terminal.</p>
-          <div style="font-size: 11px; color: #475569; text-align: center; margin-top: 28px; border-top: 1px solid #1E293B; padding-top: 18px;">
-            Sent by Aezakmi Cafe Management on behalf of ${cafeName}
-          </div>
-        </div>
+    const contentHtml = `
+      <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${escapeHtml(cleanName)},</p>
+      <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">You have been invited to join the staff team at <strong style="color:#F8FAFC;">${escapeHtml(cafeName)}</strong> (${escapeHtml(branchLabel)}).</p>
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Role</td><td align="right" style="padding:8px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${escapeHtml(roleLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Branch</td><td align="right" style="padding:8px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">${escapeHtml(branchLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Login Username / Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;border-bottom:1px solid #222E42;">${escapeHtml(cleanEmail)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;">Temporary Password</td><td align="right" style="padding:8px 0;font-weight:700;color:#F8FAFC;font-family:monospace;font-size:14px;letter-spacing:0.5px;">${escapeHtml(temporaryPassword)}</td></tr>
+        </table>
       </div>
+      <div style="background-color:rgba(234, 179, 8, 0.08);border:1px solid rgba(234, 179, 8, 0.25);border-radius:10px;padding:12px 14px;margin-bottom:18px;">
+        <p style="margin:0;color:#FDE047;font-size:12px;line-height:1.5;"><strong>Important:</strong> On your first login, you will be required to set a new password before accessing the system.</p>
+      </div>
+      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Use the credentials above to sign in on the Aezakmi Admin Terminal.</p>
     `;
+
+    const html = emailShell({
+      logoUrl: emailBrandLogoUrl(),
+      eyebrow: 'Aezakmi Cafe Management',
+      title: 'Employee Invitation',
+      subtitle: `Staff onboarding · ${cafeName}`,
+      contentHtml
+    });
 
     let emailSent = false;
     let providerMessage = '';
@@ -7574,6 +7659,7 @@ router.post("/team/invite", auth, requireRole("admin"), async (req, res, next) =
       success: true,
       emailSent,
       targetEmail: cleanEmail,
+      temporaryPassword,
       message: providerMessage,
     });
   } catch (error) { next(error); }
@@ -7588,24 +7674,53 @@ router.post("/team/resend-invite", auth, requireRole("admin"), async (req, res, 
       return res.status(400).json({ success: false, error: 'Email is required.' });
     }
 
+    const temporaryPassword = String(req.body?.temporaryPassword || `Staff#${Math.floor(1000 + Math.random() * 9000)}`);
+    const passwordHash = await argon2.hash(temporaryPassword);
+
+    const existingUser = db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) AND role IN ('admin', 'cashier')").get(cleanEmail);
+    if (existingUser) {
+      db.prepare(`
+        UPDATE users
+        SET password_hash = ?, role = 'admin', must_change_credentials = 1, auth_method = 'password', is_active = 1, updated_at = ?
+        WHERE id = ?
+      `).run(passwordHash, nowIso(), existingUser.id);
+    } else {
+      const staffUserId = `staff-${id()}`;
+      db.prepare(`
+        INSERT INTO users (id, member_id, username, password_hash, pin_hash, role, is_active, must_change_credentials, auth_method, created_at, updated_at)
+        VALUES (?, NULL, ?, ?, NULL, 'admin', 1, 1, 'password', ?, ?)
+      `).run(staffUserId, cleanEmail, passwordHash, nowIso(), nowIso());
+    }
+
     const cafeSettings = getCafeSettingsMap();
     const cafeName = cafeSettings.cafeName || cafeSettings.cafe_name || "Aezakmi Cafe";
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = branch || cafeSettings.branch || 'Main Branch';
 
-    const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; background: #0B1017; color: #f8fafc; border-radius: 16px; overflow: hidden; border: 1px solid #1E293B;">
-        <div style="background: linear-gradient(135deg, #1E293B, #0F172A); padding: 28px; border-bottom: 1px solid #334155; text-align: center;">
-          <div style="font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #E8A33D; font-weight: 700;">Aezakmi Cafe Management</div>
-          <h1 style="margin: 8px 0 0 0; font-size: 22px; color: #ffffff; font-weight: 700;">Staff Invitation Reminder</h1>
-        </div>
-        <div style="padding: 28px;">
-          <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">Hello <strong style="color: #F8FAFC;">${cleanName || 'Team Member'}</strong>,</p>
-          <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #94A3B8;">This is a reminder of your invitation to join the staff team at <strong style="color: #F8FAFC;">${cafeName}</strong> (${branchLabel}) as <strong style="color: #38BDF8;">${roleLabel}</strong>.</p>
-          <p style="margin: 0; font-size: 13px; line-height: 1.6; color: #94A3B8;">Please contact your store administrator for your login credentials to start your shift.</p>
-        </div>
+    const contentHtml = `
+      <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${escapeHtml(cleanName || 'Team Member')},</p>
+      <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">This is a reminder of your invitation to join the staff team at <strong style="color:#F8FAFC;">${escapeHtml(cafeName)}</strong> (${escapeHtml(branchLabel)}) as <strong style="color:#38BDF8;">${escapeHtml(roleLabel)}</strong>.</p>
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Role</td><td align="right" style="padding:8px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${escapeHtml(roleLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Branch</td><td align="right" style="padding:8px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">${escapeHtml(branchLabel)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Login Username / Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;border-bottom:1px solid #222E42;">${escapeHtml(cleanEmail)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;">Temporary Password</td><td align="right" style="padding:8px 0;font-weight:700;color:#F8FAFC;font-family:monospace;font-size:14px;letter-spacing:0.5px;">${escapeHtml(temporaryPassword)}</td></tr>
+        </table>
       </div>
+      <div style="background-color:rgba(234, 179, 8, 0.08);border:1px solid rgba(234, 179, 8, 0.25);border-radius:10px;padding:12px 14px;margin-bottom:18px;">
+        <p style="margin:0;color:#FDE047;font-size:12px;line-height:1.5;"><strong>Important:</strong> On your first login, you will be required to set a new password before accessing the system.</p>
+      </div>
+      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Use the credentials above to sign in on the Aezakmi Admin Terminal.</p>
     `;
+
+    const html = emailShell({
+      logoUrl: emailBrandLogoUrl(),
+      eyebrow: 'Aezakmi Cafe Management',
+      title: 'Staff Invitation Reminder',
+      subtitle: `Staff onboarding · ${cafeName}`,
+      contentHtml
+    });
 
     let emailSent = false;
     let providerMessage = '';
@@ -7644,8 +7759,11 @@ router.post("/team/resend-invite", auth, requireRole("admin"), async (req, res, 
       success: true,
       emailSent,
       targetEmail: cleanEmail,
+      temporaryPassword,
       message: providerMessage || `Invitation reminder sent to ${cleanEmail}`,
     });
+  } catch (error) { next(error); }
+});
   } catch (error) { next(error); }
 });
 
