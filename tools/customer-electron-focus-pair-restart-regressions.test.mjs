@@ -13,7 +13,22 @@ test('Customer Electron no longer continuously steals Windows focus',()=>{
   assert.doesNotMatch(main,/mainWindow\.on\('blur'[\s\S]*mainWindow\.focus\(\)/)
   // Kiosk/login protection remains mode-based rather than a 500 ms focus loop.
   assert.match(main,/function applyLockedWindowMode\(\)[\s\S]*setKiosk\(true\)[\s\S]*setAlwaysOnTop\(true, 'screen-saver'\)/)
-  assert.match(main,/function applyActiveWindowMode[\s\S]*setAlwaysOnTop\(false\)/)
+  // Active expanded dashboard uses fullscreen kiosk; compact timer drops to the desktop layer.
+  assert.match(main,/function applyCompactSessionMode\(\)[\s\S]*setAlwaysOnTop\(false\)/)
+})
+
+test('Customer Station shows on taskbar when a game is launched, hides on logout',()=>{
+  const main=read('apps/customer/electron/main.cjs')
+  // gameIsLaunched state variable exists and is initialized to false.
+  assert.match(main,/let gameIsLaunched = false/)
+  // onLaunched sets gameIsLaunched=true and shows on taskbar.
+  assert.match(main,/gameIsLaunched = true[\s\S]*setSkipTaskbar\(false\)/)
+  // Compact mode uses gameIsLaunched to conditionally skip taskbar.
+  assert.match(main,/function applyCompactSessionMode[\s\S]*setSkipTaskbar\(!\(gameIsLaunched/)
+  // Logout/lock/idle resets gameIsLaunched and hides from taskbar.
+  assert.match(main,/function showLoginKiosk[\s\S]*gameIsLaunched = false/)
+  assert.match(main,/function applyLockedWindowMode[\s\S]*gameIsLaunched = false/)
+  assert.match(main,/function applyIdleDashboardMode[\s\S]*gameIsLaunched = false/)
 })
 
 test('successful Cloud pairing requires a clean Customer Station relaunch instead of hot reload',()=>{

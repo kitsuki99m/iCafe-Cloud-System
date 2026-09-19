@@ -120,6 +120,7 @@ let windowsKeyHook = null
 let windowState = WINDOW_STATES.LOCKED
 let dashboardVisible = false
 let activeDashboardMode = 'compact'
+let gameIsLaunched = false
 let appIsQuitting = false
 let hookRestartTimer = null
 let sessionStartTransitionPending = false
@@ -343,8 +344,8 @@ function writeSessionLifecycleMarker(value){const file=sessionLifecyclePath();co
 function markActiveSession(data={}){const stamp=new Date().toISOString();return writeSessionLifecycleMarker({active:true,runtimeInstanceId:lifecycleRuntimeId,sessionId:data?.sessionId||data?.id||null,memberId:data?.memberId||null,role:data?.role||null,billing:data?.billing||null,startedAt:data?.startedAt||null,username:data?.username||null,balance:Number.isFinite(Number(data?.balance))?Number(data.balance):null,pcLabel:data?.pcLabel||null,remainingSeconds:Number.isFinite(Number(data?.remainingSeconds))?Math.max(0,Math.floor(Number(data.remainingSeconds))):null,markedAt:stamp,lastSeenAt:stamp,checkpointedAt:stamp,exitReason:null,exitRequestedAt:null})}
 let lifecycleTouchAt=0
 function touchSessionLifecycle(data={}){const nowMs=Date.now();if(nowMs-lifecycleTouchAt<3000)return true;const current=readSessionLifecycleMarker();if(!current?.active)return true;lifecycleTouchAt=nowMs;const next={...current,lastSeenAt:new Date(nowMs).toISOString(),checkpointedAt:new Date(nowMs).toISOString()};if(data?.username!=null)next.username=String(data.username);if(data?.pcLabel!=null)next.pcLabel=String(data.pcLabel);if(Number.isFinite(Number(data?.balance)))next.balance=Number(data.balance);if(Number.isFinite(Number(data?.remainingSeconds)))next.remainingSeconds=Math.max(0,Math.floor(Number(data.remainingSeconds)));writeSessionLifecycleMarker(next);return true}
-function markSessionExit(data={}){const current=readSessionLifecycleMarker()||{};const existingAt=current.exitRequestedAt||null;return writeSessionLifecycleMarker({...current,active:true,runtimeInstanceId:current.runtimeInstanceId||lifecycleRuntimeId,exitReason:String(data?.reason||current.exitReason||'station_exit'),exitRequestedAt:existingAt||String(data?.interruptedAt||new Date().toISOString())})}
-function clearSessionLifecycleMarker(){try{fs.unlinkSync(sessionLifecyclePath())}catch{}return true}
+function markSessionExit(data={}){gameIsLaunched=false;const current=readSessionLifecycleMarker()||{};const existingAt=current.exitRequestedAt||null;return writeSessionLifecycleMarker({...current,active:true,runtimeInstanceId:current.runtimeInstanceId||lifecycleRuntimeId,exitReason:String(data?.reason||current.exitReason||'station_exit'),exitRequestedAt:existingAt||String(data?.interruptedAt||new Date().toISOString())})}
+function clearSessionLifecycleMarker(){gameIsLaunched=false;try{fs.unlinkSync(sessionLifecyclePath())}catch{}return true}
 
 function publicSoftwareInfo(){return{currentVersion:app.getVersion()}}
 
@@ -498,6 +499,7 @@ function createTray() {
 
 function applyLockedWindowMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  gameIsLaunched = false
   keepWindowContentOpaque()
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
@@ -565,7 +567,7 @@ function applyCompactSessionMode() {
     mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
     mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
     mainWindow.setResizable(false)
-    mainWindow.setSkipTaskbar(true)
+    mainWindow.setSkipTaskbar(!(gameIsLaunched && isActive()))
     // The compact timer belongs to the desktop background layer, not above apps.
     // It remains visible on the desktop, but any normal application can cover it.
     mainWindow.setAlwaysOnTop(false)
@@ -613,7 +615,7 @@ function applyActiveWindowMode({ show = false } = {}) {
     // so the dashboard fills the entire display — matching the idle/login
     // experience and giving the launcher + session panel full room.
     mainWindow.setAlwaysOnTop(true, 'screen-saver')
-    mainWindow.setSkipTaskbar(true)
+    mainWindow.setSkipTaskbar(!(gameIsLaunched && isActive()))
     mainWindow.setResizable(false)
     mainWindow.setKiosk(true)
     mainWindow.setFullScreen(true)
@@ -630,6 +632,7 @@ function applyActiveWindowMode({ show = false } = {}) {
 
 function applyIdleDashboardMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  gameIsLaunched = false
   keepWindowContentOpaque()
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(0, 0)
@@ -653,6 +656,7 @@ function isIdleDashboard() { return windowState === WINDOW_STATES.IDLE }
 
 function showIdleDashboard() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
+  gameIsLaunched = false
   if (isIdleDashboard()) {
     if (!mainWindow.isVisible() || !mainWindow.isFullScreen()) applyIdleDashboardMode()
     return true
@@ -692,6 +696,7 @@ function enterActiveState() {
     return true
   }
 
+  gameIsLaunched = false
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
   // Ship request: any session start — Guest or signed-in member, self-service
@@ -709,6 +714,7 @@ function enterActiveState() {
 
 function beginSessionStartTransition() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
+  gameIsLaunched = false
   keepWindowContentOpaque()
   windowState = WINDOW_STATES.ACTIVE
   setWindowsKeyLocked(false)
@@ -776,6 +782,7 @@ function showLoginKiosk() {
   // lock overlay before showing the normal login kiosk. Without this signal,
   // AuthContext can already be logged out while SessionLockedOverlay remains
   // above the login screen, making Pause & Save / Forfeit look like a lock.
+  gameIsLaunched = false
   remoteLockSnapshot = null
   notifyStationLocked(false)
   windowState = WINDOW_STATES.LOCKED
@@ -796,6 +803,7 @@ function lockClientWindow({ preserveState = false } = {}) {
   // Only a lock that interrupts a live/idle session (i.e. triggered remotely
   // by staff or the emergency shortcut) should surface the in-app "session is
   // locked" overlay.
+  gameIsLaunched = false
   const isRemoteInterrupt = !remoteLockSnapshot && windowState !== WINDOW_STATES.LOCKED
   if (!remoteLockSnapshot) remoteLockSnapshot = { windowState, dashboardVisible, activeDashboardMode }
   windowState = WINDOW_STATES.LOCKED
@@ -937,6 +945,10 @@ async function launchDesktopApp(appTarget) {
   const onLaunched = () => {
     setWindowsKeyLocked(false)
     if (isActive()) {
+      gameIsLaunched = true
+      // Show the Customer Station on the Windows taskbar and Alt+Tab switcher
+      // so customers can switch back to it while a game/app is running.
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setSkipTaskbar(false)
       applyCompactSessionMode()
     }
   }
