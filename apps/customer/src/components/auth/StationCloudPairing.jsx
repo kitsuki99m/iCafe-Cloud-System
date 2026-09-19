@@ -91,13 +91,13 @@ export default function StationCloudPairing() {
   return <><main className="customer-pairing-shell">
     <div className="customer-pairing-container">
       <section className="customer-pairing-brand-panel flex min-h-0 flex-col p-6 text-soft-white sm:p-8">
-        <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-soft-white/10 p-2"><img src={logo} className="h-full w-full object-contain" alt=""/></span><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-new-wool">Aezakmi Cloud</p><h1 className="font-display text-xl font-semibold">Customer Station</h1></div></div>
-        <div className="mt-10 max-w-sm"><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-new-wool">First-time setup</p><h2 className="mt-2 font-display text-3xl font-semibold leading-tight">Connect this PC to the correct café.</h2><p className="mt-3 text-sm leading-6 text-dance">Cloud primary · Edge fallback.</p></div>
+        <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-soft-white/10 p-2"><img src={logo} className="h-full w-full object-contain" alt=""/></span><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-slate-400">Aezakmi Cloud</p><h1 className="font-display text-xl font-semibold text-white">Customer Station</h1></div></div>
+        <div className="mt-10 max-w-sm"><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-teal-400">First-time setup</p><h2 className="mt-2 font-display text-3xl font-semibold leading-tight text-white">Connect this PC to the correct café.</h2><p className="mt-3 text-sm leading-6 text-slate-300">Cloud primary · Edge fallback.</p></div>
         <div className="mt-8 space-y-3 text-sm">
-          <div className="flex gap-3 rounded-2xl border border-soft-white/10 bg-soft-white/[.06] p-4"><Cloud className="mt-0.5 shrink-0" size={18}/><div><p className="font-semibold">Cloud first</p><p className="mt-1 text-xs leading-5 text-new-wool">Supabase while online.</p></div></div>
-          <div className="flex gap-3 rounded-2xl border border-soft-white/10 bg-soft-white/[.06] p-4"><WifiOff className="mt-0.5 shrink-0" size={18}/><div><p className="font-semibold">Edge fallback</p><p className="mt-1 text-xs leading-5 text-new-wool">Automatic LAN fallback.</p></div></div>
+          <div className="flex gap-3 rounded-2xl border border-white/10 bg-white/[.06] p-4"><Cloud className="mt-0.5 shrink-0 text-teal-400" size={18}/><div><p className="font-semibold text-white">Cloud first</p><p className="mt-1 text-xs leading-5 text-slate-300">Supabase while online.</p></div></div>
+          <div className="flex gap-3 rounded-2xl border border-white/10 bg-white/[.06] p-4"><WifiOff className="mt-0.5 shrink-0 text-amber-400" size={18}/><div><p className="font-semibold text-white">Edge fallback</p><p className="mt-1 text-xs leading-5 text-slate-300">Automatic LAN fallback.</p></div></div>
         </div>
-        <div className="mt-auto pt-8 text-[11px] text-new-wool"><ShieldCheck className="mr-2 inline" size={14}/>Pairing binds this installation to one branch and PC.</div>
+        <div className="mt-auto pt-8 text-[11px] text-slate-400"><ShieldCheck className="mr-2 inline text-teal-400" size={14}/>Pairing binds this installation to one branch and PC.</div>
       </section>
 
       <section className="customer-pairing-form-panel flex min-h-0 items-center p-6 sm:p-8">
