@@ -1415,6 +1415,8 @@ router.get("/public/settings", (req, res) => {
       branchLocation: all.branchLocation ?? "",
       gcashName: all.gcashName ?? "",
       gcashNumber: all.gcashNumber ?? "",
+      themePersona: all.themePersona ?? "dashboard",
+      skinId: all.skinId ?? "default",
       logoUrl: logo
         ? `/api/public/branding/logo?v=${encodeURIComponent(logo.updated_at)}`
         : null,
@@ -4126,6 +4128,8 @@ router.patch("/settings", auth, requireRole("admin"), (req, res, next) => {
       "decimalPlaces",
       "defaultBilling",
       "floorPlanLayout",
+      "themePersona",
+      "skinId",
     ]);
     const entries = Object.entries(incoming).filter(([key]) =>
       allowed.has(key),
