@@ -10,13 +10,25 @@ export function EsportsThemeProvider({ children }) {
 
   const [themeMode, setThemeModeState] = useState(() => {
     try {
-      const saved = sessionStorage.getItem(THEME_STORAGE_KEY) || localStorage.getItem(THEME_STORAGE_KEY)
+      const saved = sessionStorage.getItem(THEME_STORAGE_KEY)
       if (saved === 'esports' || saved === 'dashboard') return saved
-      return 'esports'
+      return 'dashboard'
     } catch {
-      return 'esports'
+      return 'dashboard'
     }
   })
+
+  // Whenever user logs in or out, always default to original dashboard theme
+  useEffect(() => {
+    if (!user) {
+      setThemeModeState('dashboard')
+      try {
+        sessionStorage.removeItem(THEME_STORAGE_KEY)
+        localStorage.removeItem(THEME_STORAGE_KEY)
+      } catch {}
+      syncSkinDataset('dashboard')
+    }
+  }, [user])
 
   const syncSkinDataset = (mode) => {
     try {
@@ -49,6 +61,18 @@ export function EsportsThemeProvider({ children }) {
   // Keep data-theme-persona and data-skin synchronized on document root
   useEffect(() => {
     syncSkinDataset(themeMode)
+  }, [themeMode])
+
+  // Synchronize when skin changes while in esports mode
+  useEffect(() => {
+    const handleSkinChange = (e) => {
+      if (themeMode === 'esports') {
+        const nextSkin = e.detail?.skin || 'nexus'
+        document.documentElement.dataset.skin = nextSkin
+      }
+    }
+    window.addEventListener('aezakmi:skin-changed', handleSkinChange)
+    return () => window.removeEventListener('aezakmi:skin-changed', handleSkinChange)
   }, [themeMode])
 
   // Keyboard shortcut: F9 to toggle Dashboard vs Esports mode

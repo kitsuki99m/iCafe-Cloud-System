@@ -81,9 +81,7 @@ export function SkinProvider({ children }) {
       localStorage.setItem(SKIN_STORAGE_KEY, valid)
     } catch {}
 
-    if (valid === 'nexus') {
-      document.documentElement.dataset.skin = 'nexus'
-    } else {
+    if (document.documentElement.getAttribute('data-theme-persona') === 'esports') {
       document.documentElement.dataset.skin = valid
     }
 
@@ -95,10 +93,6 @@ export function SkinProvider({ children }) {
 
     window.dispatchEvent(new CustomEvent('aezakmi:skin-changed', { detail: { skin: valid } }))
   }
-
-  useEffect(() => {
-    document.documentElement.dataset.skin = skinId
-  }, [skinId])
 
   const value = useMemo(() => ({
     skinId,

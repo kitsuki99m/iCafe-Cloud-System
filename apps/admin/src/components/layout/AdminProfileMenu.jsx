@@ -51,7 +51,7 @@ export default function AdminProfileMenu({
   const { isDark, toggleTheme, theme } = useTheme()
   const { isSimpleMode, isAdvanceMode, canToggleMode, setUiMode } = useAdminMode()
   const { themeMode, isEsportsMode, isDashboardMode, setThemeMode } = useEsportsTheme()
-  const { activeSkin, openGallery } = useSkin()
+  const { activeSkin, openGallery, skins, setSkin, skinId } = useSkin()
 
   const isOwner = user?.cloudRole === 'owner' || user?.role === 'owner'
   const isAdmin = user?.cloudRole === 'admin' || user?.role === 'admin'
