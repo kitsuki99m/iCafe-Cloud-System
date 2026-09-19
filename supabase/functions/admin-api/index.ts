@@ -284,9 +284,10 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   const topupDecisionMatch=route.match(/^\/top-ups\/([^/]+)\/(approve|reject)$/);
   if(topupDecisionMatch&&method==='PATCH'){
     const topupId=decodeURIComponent(topupDecisionMatch[1]),action=topupDecisionMatch[2];
-    const{data:topup}=await admin.from('branch_top_up_requests').select('pc_id,member_id,amount').eq('branch_id',branchId).eq('local_id',topupId).maybeSingle();
+    const{data:topupRow}=await admin.from('branch_top_ups').select('data').eq('branch_id',branchId).eq('local_id',topupId).maybeSingle();
+    const topupData=topupRow?.data&&typeof topupRow.data==='object'?topupRow.data:{};
     const response=await cloudExecute(admin,branchId,`topup.${action}`,{id:topupId},user.id,operationKey);
-    if(topup?.pc_id)await broadcastStationWakeup(admin,branchId,String(topup.pc_id),{kind:'topup_updated',status:action==='approve'?'approved':'rejected',memberId:topup.member_id,amount:topup.amount});
+    if(topupData?.pcId)await broadcastStationWakeup(admin,branchId,String(topupData.pcId),{kind:'topup_updated',status:action==='approve'?'approved':'rejected',memberId:topupData.memberId,amount:topupData.amount});
     return response;
   }
   if(route==='/top-ups/resolved'&&method==='DELETE')return cloudExecute(admin,branchId,'topup.clear_resolved',{},user.id,operationKey);
@@ -611,7 +612,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const orderRevenue=fulfilledOrders.reduce((sum:number,o:any)=>sum+n(o.total||o.total_amount,0),0);
     const ordersCount=fulfilledOrders.length;
 
-    const{data:topUpsData}=await admin.from('wallet_ledger').select('*').eq('branch_id',branchId).gte('created_at',sinceIso);
+    const{data:topUpsData}=await admin.from('branch_wallet_ledger').select('*').eq('branch_id',branchId).gte('created_at',sinceIso);
     const topUpRevenue=(topUpsData||[]).reduce((sum:number,t:any)=>sum+n(t.amount,0),0);
     const topUpsCount=(topUpsData||[]).length;
 
