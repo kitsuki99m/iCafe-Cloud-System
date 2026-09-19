@@ -89,24 +89,24 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
       }}
       className={`nexus-tile tile group relative flex min-h-[160px] flex-col justify-between border p-3.5 transition-all duration-200 hover:-translate-y-0.5 ${
         isOccupied
-          ? 'live border-[color-mix(in_srgb,var(--live,#FFB020)_45%,var(--line,#26314A))] shadow-[0_10px_26px_-14px_var(--glow,rgba(255,176,32,0.3))] ring-1 ring-[color-mix(in_srgb,var(--live,#FFB020)_30%,transparent)]'
+          ? 'live border-[color-mix(in_srgb,var(--live,#FFB020)_45%,var(--line))] shadow-[0_10px_26px_-14px_var(--glow,rgba(255,176,32,0.3))] ring-1 ring-[color-mix(in_srgb,var(--live,#FFB020)_30%,transparent)]'
           : lowTime
           ? 'border-ember bg-ember/10 shadow-[0_0_20px_rgba(239,68,68,0.25)] ring-1 ring-ember animate-pulse'
-          : 'border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/90 hover:border-[var(--brand,#7B61FF)]'
+          : 'border-[var(--line)] bg-[var(--surface)]/90 hover:border-[var(--brand)]'
       }`}
     >
       {/* Click target for full card selection */}
       <button
         type="button"
         onClick={(event) => onSelect?.(pc, event)}
-        className="absolute inset-0 z-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand,#7B61FF)]"
+        className="absolute inset-0 z-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand)]"
         aria-label={`Open station ${stationTitle}`}
       />
 
       {/* TOP ROW: Station Title + Status Pill + Settings */}
       <div className="relative z-10 flex items-center justify-between gap-2 pointer-events-none">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="font-display font-bold text-sm sm:text-base tracking-tight text-[var(--text,#E6EAF2)]">
+          <span className="font-display font-bold text-sm sm:text-base tracking-tight text-[var(--text)]">
             {stationTitle}
           </span>
           {isVipStation && (
@@ -115,7 +115,7 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
             </span>
           )}
           {customNickname && (
-            <span className="truncate text-[10px] text-[var(--muted,#8D9AB5)]" title={customNickname}>
+            <span className="truncate text-[10px] text-[var(--muted)]" title={customNickname}>
               ({customNickname})
             </span>
           )}
@@ -143,7 +143,7 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
                 event.stopPropagation()
                 onControls(pc, event)
               }}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--line,#26314A)] text-[var(--muted,#8D9AB5)] transition hover:bg-[var(--surface-2,#1A2233)] hover:text-[var(--text,#E6EAF2)]"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
               title="Station Quick Controls"
             >
               <Settings2 size={12} />
@@ -157,10 +157,10 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
         <div
           className={`font-mono text-xl sm:text-2xl font-bold tracking-tight ${
             isOccupied
-              ? 'text-[var(--text,#E6EAF2)]'
+              ? 'text-[var(--text)]'
               : statusKey === 'available'
-              ? 'text-[var(--faint,#6B7891)]'
-              : 'text-[var(--muted,#8D9AB5)]'
+              ? 'text-[var(--faint)]'
+              : 'text-[var(--muted)]'
           }`}
         >
           {isOccupied && timer ? timer : statusKey === 'available' ? '00:00:00' : '—'}
@@ -169,7 +169,7 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
 
       {/* FOOTER ROW: Who & Cost/Rate */}
       <div className="relative z-10 flex flex-col gap-0.5 pointer-events-none text-xs">
-        <div className="truncate font-medium text-[var(--muted,#8D9AB5)]">
+        <div className="truncate font-medium text-[var(--muted)]">
           {isOccupied
             ? `${session?.customerName || session?.username || 'Guest'} · ${pc.game || session?.game || 'Match'}`
             : isHold
@@ -178,7 +178,7 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
             ? 'In maintenance'
             : 'Ready for player'}
         </div>
-        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--faint,#6B7891)]">
+        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--faint)]">
           <span>
             {isOccupied
               ? `₱${dueEstimate.toLocaleString('en-PH')} · ${session?.billing === 'prepaid' ? 'Prepaid' : 'Standard'}`

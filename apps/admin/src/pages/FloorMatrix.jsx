@@ -584,47 +584,47 @@ export default function FloorMatrix() {
       <section className="clients-floor-workspace w-full space-y-4">
         {/* CONSOLE FLOOR KPI METRICS STRIP */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
-            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Stations in use</span>
-            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
-              {stats.occupied} <span className="text-sm font-normal text-[var(--faint,#6B7891)]">of {stats.total}</span>
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line)] bg-[var(--surface)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted)]">Stations in use</span>
+            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
+              {stats.occupied} <span className="text-sm font-normal text-[var(--faint)]">of {stats.total}</span>
             </div>
-            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">{stats.available} open now</div>
-            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--line-soft,#1E273B)]">
-              <i className="block h-full rounded-full bg-[var(--brand,#7B61FF)] transition-all duration-300" style={{ width: `${occupancyPct}%` }} />
+            <div className="mt-1 text-xs text-[var(--faint)]">{stats.available} open now</div>
+            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--line-soft)]">
+              <i className="block h-full rounded-full bg-[var(--brand)] transition-all duration-300" style={{ width: `${occupancyPct}%` }} />
             </div>
           </div>
 
-          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
-            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Taken tonight / shift</span>
-            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line)] bg-[var(--surface)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted)]">Taken tonight / shift</span>
+            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
               {formatAdminPeso(todayRevenue)}
             </div>
-            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">{closedSessionsCount} sessions settled</div>
+            <div className="mt-1 text-xs text-[var(--faint)]">{closedSessionsCount} sessions settled</div>
             <div className="mt-2.5 h-1.5 w-full" />
           </div>
 
-          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
-            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Running on the floor</span>
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line)] bg-[var(--surface)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted)]">Running on the floor</span>
             <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--live,#FFB020)]">
               {formatAdminPeso(runningFloorDue)}
             </div>
-            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">Uncollected active charges</div>
+            <div className="mt-1 text-xs text-[var(--faint)]">Uncollected active charges</div>
             <div className="mt-2.5 h-1.5 w-full" />
           </div>
 
-          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
-            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Average session</span>
-            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
-              {avgSessionMins} <span className="text-sm font-normal text-[var(--faint,#6B7891)]">min</span>
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line)] bg-[var(--surface)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted)]">Average session</span>
+            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text)]">
+              {avgSessionMins} <span className="text-sm font-normal text-[var(--faint)]">min</span>
             </div>
-            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">Across active stations</div>
+            <div className="mt-1 text-xs text-[var(--faint)]">Across active stations</div>
             <div className="mt-2.5 h-1.5 w-full" />
           </div>
         </div>
 
         {/* STATUS LEGEND matching Claude artifact */}
-        <div className="flex items-center gap-4 text-xs text-[var(--muted,#8D9AB5)] flex-wrap py-1 px-1">
+        <div className="flex items-center gap-4 text-xs text-[var(--muted)] flex-wrap py-1 px-1">
           <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--free,#2ED3A0)]" /> Open</div>
           <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--live,#FFB020)] animate-pulse" /> In use</div>
           <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--hold,#4CC2FF)]" /> Reserved</div>
@@ -849,10 +849,10 @@ export default function FloorMatrix() {
         {pcs.some((p) => p.session) && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
             {/* Closing Soon Panel */}
-            <div className="overview-card rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 p-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft,#1E273B)] mb-3">
-                <h3 className="font-display text-sm font-bold text-[var(--text,#E6EAF2)]">Closing Soonest</h3>
-                <span className="text-xs text-[var(--muted,#8D9AB5)]">Active sessions</span>
+            <div className="overview-card rounded-xl border border-[var(--line)] bg-[var(--surface)]/80 p-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft)] mb-3">
+                <h3 className="font-display text-sm font-bold text-[var(--text)]">Closing Soonest</h3>
+                <span className="text-xs text-[var(--muted)]">Active sessions</span>
               </div>
               <div className="space-y-2">
                 {pcs
@@ -869,11 +869,11 @@ export default function FloorMatrix() {
                     return (
                       <div
                         key={p.id}
-                        className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-[var(--surface-2,#1A2233)]/70 text-xs"
+                        className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-[var(--surface-2)]/70 text-xs"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-[var(--text,#E6EAF2)]">{p.label || `PC-${p.id}`}</span>
-                          <span className="text-[var(--muted,#8D9AB5)] truncate max-w-[120px]">
+                          <span className="font-bold text-[var(--text)]">{p.label || `PC-${p.id}`}</span>
+                          <span className="text-[var(--muted)] truncate max-w-[120px]">
                             {p.session?.customerName || p.session?.username || 'Guest'}
                           </span>
                         </div>
@@ -882,7 +882,7 @@ export default function FloorMatrix() {
                           <button
                             type="button"
                             onClick={() => openPopover(p)}
-                            className="rounded px-2 py-0.5 text-[11px] font-semibold text-[var(--brand,#7B61FF)] border border-[var(--brand,#7B61FF)]/30 hover:bg-[var(--brand,#7B61FF)]/15"
+                            className="rounded px-2 py-0.5 text-[11px] font-semibold text-[var(--brand)] border border-[var(--brand)]/30 hover:bg-[var(--brand)]/15 cursor-pointer"
                           >
                             Inspect
                           </button>
@@ -894,23 +894,23 @@ export default function FloorMatrix() {
             </div>
 
             {/* Shift Activity Stream */}
-            <div className="overview-card rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 p-4">
-              <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft,#1E273B)] mb-3">
-                <h3 className="font-display text-sm font-bold text-[var(--text,#E6EAF2)]">Shift Operations Log</h3>
-                <span className="text-xs text-[var(--muted,#8D9AB5)]">Live telemetry</span>
+            <div className="overview-card rounded-xl border border-[var(--line)] bg-[var(--surface)]/80 p-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft)] mb-3">
+                <h3 className="font-display text-sm font-bold text-[var(--text)]">Shift Operations Log</h3>
+                <span className="text-xs text-[var(--muted)]">Live telemetry</span>
               </div>
               <div className="space-y-2 text-xs max-h-48 overflow-y-auto pr-1">
                 {currentShift?.activityLog?.length ? (
                   currentShift.activityLog.slice(0, 5).map((log, idx) => (
-                    <div key={idx} className="flex items-start gap-2 py-1 border-b border-[var(--line-soft,#1E273B)]/40 last:border-0">
-                      <span className="font-mono text-[10px] text-[var(--faint,#6B7891)] shrink-0">
+                    <div key={idx} className="flex items-start gap-2 py-1 border-b border-[var(--line-soft)]/40 last:border-0">
+                      <span className="font-mono text-[10px] text-[var(--faint)] shrink-0">
                         {log.timestamp ? new Date(log.timestamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : 'Now'}
                       </span>
-                      <span className="text-[var(--text,#E6EAF2)]">{log.message || log.description || JSON.stringify(log)}</span>
+                      <span className="text-[var(--text)]">{log.message || log.description || JSON.stringify(log)}</span>
                     </div>
                   ))
                 ) : (
-                  <div className="py-4 text-center text-xs text-[var(--muted,#8D9AB5)]">
+                  <div className="py-4 text-center text-xs text-[var(--muted)]">
                     Floor shift active · {stats.occupied} sessions in progress
                   </div>
                 )}

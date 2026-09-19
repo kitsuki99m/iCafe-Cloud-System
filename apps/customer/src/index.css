@@ -1,41 +1,37 @@
 @import "tailwindcss";
 
 @theme {
-  /* Aezakmi brand palette */
-  --color-midnight: #202937;
-  --color-bluish: #423D42;
-  --color-grape: #766664;
-  --color-trillium: #A99898;
-  --color-new-wool: #D4C1B9;
-  --color-dance: #E6D7CD;
-  --color-soft-white: #F5F5F5;
+  /* Dynamic semantic token mapping to active Theme Mode & Hardware Skin */
+  --color-midnight: var(--color-midnight);
+  --color-bluish: var(--color-bluish);
+  --color-grape: var(--color-grape);
+  --color-trillium: var(--color-trillium);
+  --color-new-wool: var(--color-new-wool);
+  --color-dance: var(--color-dance);
+  --color-soft-white: var(--color-soft-white);
 
-  /* Existing semantic token names remapped to the approved palette. */
-  --color-ink: #F5F5F5;
-  --color-ink-soft: #E6D7CD;
-  --color-ink-900: #202937;
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-900: var(--color-ink-900);
 
-  --color-surface: #F5F5F5;
-  --color-surface-raised: #E6D7CD;
-  --color-surface-line: #D4C1B9;
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-line: var(--color-surface-line);
 
-  /* Customer secondary/accent color: true gold. */
-  --color-gold: #C9A85D;
-  --color-gold-soft: #F3E6C4;
-  --color-gold-dim: #8B6B25;
+  --color-gold: var(--color-gold);
+  --color-gold-soft: var(--color-gold-soft);
+  --color-gold-dim: var(--color-gold-dim);
 
-  /* Semantic status colors stay recognizable. */
-  --color-teal: #2E9E6B;
-  --color-teal-soft: #E1F3EA;
-  --color-teal-dim: #237A54;
+  --color-teal: var(--color-teal);
+  --color-teal-soft: var(--color-teal-soft);
+  --color-teal-dim: var(--color-teal-dim);
 
-  --color-ember: #DD5353;
-  --color-ember-soft: #FBE4E4;
-  --color-ember-dim: #B53E3E;
+  --color-ember: var(--color-ember);
+  --color-ember-soft: var(--color-ember-soft);
+  --color-ember-dim: var(--color-ember-dim);
 
-  /* Tertiary/supporting copy uses neutral slate, not a warm accent. */
-  --color-slate: #94A3B8;
-  --color-slate-soft: #5F6F82;
+  --color-slate: var(--color-slate);
+  --color-slate-soft: var(--color-slate-soft);
 
   --font-display: "Space Grotesk", "Chakra Petch", sans-serif;
   --font-body: "Inter", sans-serif;
@@ -61,27 +57,77 @@
 }
 
 @layer base {
-  html {
+  :root,
+  html,
+  html.light,
+  html[data-theme="light"] {
     color-scheme: light;
     --app-dot: rgba(118, 102, 100, 0.11);
+    --color-midnight: #202937;
+    --color-bluish: #423D42;
+    --color-grape: #766664;
+    --color-trillium: #A99898;
+    --color-new-wool: #D4C1B9;
+    --color-dance: #E6D7CD;
+    --color-soft-white: #F5F5F5;
+
+    --color-ink: #F5F5F5;
+    --color-ink-soft: #E6D7CD;
+    --color-ink-900: #202937;
+
+    --color-surface: #F5F5F5;
+    --color-surface-raised: #E6D7CD;
+    --color-surface-line: #D4C1B9;
+
+    --color-gold: #C9A85D;
+    --color-gold-soft: #F3E6C4;
+    --color-gold-dim: #8B6B25;
+
+    --color-teal: #2E9E6B;
+    --color-teal-soft: #E1F3EA;
+    --color-teal-dim: #237A54;
+
+    --color-ember: #DD5353;
+    --color-ember-soft: #FBE4E4;
+    --color-ember-dim: #B53E3E;
+
+    --color-slate: #94A3B8;
+    --color-slate-soft: #5F6F82;
   }
+  html.dark,
   html[data-theme="dark"] {
+    color-scheme: dark;
     --app-dot: rgba(245, 245, 245, 0.055);
-    --color-ink: #202937;
-    --color-ink-soft: #D4C1B9;
-    --color-ink-900: #F5F5F5;
-    --color-surface: #272D39;
-    --color-surface-raised: #303744;
-    --color-surface-line: #4B5360;
+    --color-midnight: #0F172A;
+    --color-bluish: #8E9DB5;
+    --color-grape: #64748B;
+    --color-trillium: #5E6D84;
+    --color-new-wool: #222E42;
+    --color-dance: #1A2232;
+    --color-soft-white: #FFFFFF;
+
+    --color-ink: #0B0F17;
+    --color-ink-soft: #1A2232;
+    --color-ink-900: #F1F5F9;
+
+    --color-surface: #121824;
+    --color-surface-raised: #1A2232;
+    --color-surface-line: #222E42;
+
     --color-gold: #D6B76A;
     --color-gold-soft: #5A4C2A;
     --color-gold-dim: #E8CD85;
-    --color-teal-soft: #55C9A0;
-    --color-teal-dim: #8ED8B8;
-    --color-ember-soft: #C86B6B;
-    --color-ember-dim: #FFB1B1;
-    --color-slate: #64748B;
-    --color-slate-soft: #94A3B8;
+
+    --color-teal: #10B981;
+    --color-teal-soft: rgba(16, 185, 129, 0.15);
+    --color-teal-dim: #34D399;
+
+    --color-ember: #F87171;
+    --color-ember-soft: rgba(248, 113, 113, 0.15);
+    --color-ember-dim: #EF4444;
+
+    --color-slate: #8E9DB5;
+    --color-slate-soft: #5E6D84;
   }
   html,
   body,
@@ -148,6 +194,8 @@
     --color-surface-raised: #1A2232;
     --color-surface-line: #222E42;
     --color-ink-900: #F1F5F9;
+    --color-midnight: #1A2232;
+    --color-slate: #8E9DB5;
     --color-slate-soft: #8E9DB5;
     --color-gold: #7B61FF;
     --color-gold-soft: rgba(123, 97, 255, 0.18);
@@ -162,57 +210,63 @@
   [data-skin="victus"],
   html.dark[data-skin="victus"],
   html[data-theme="dark"][data-skin="victus"] {
-    --color-ink: #060B12;
-    --color-surface: #0E1724;
-    --color-surface-raised: #142133;
-    --color-surface-line: #1F334E;
-    --color-ink-900: #EDF4FC;
-    --color-slate-soft: #88A1BF;
+    --color-ink: #07101E;
+    --color-surface: #0E1C30;
+    --color-surface-raised: #14253E;
+    --color-surface-line: #1E3758;
+    --color-ink-900: #E8F1FB;
+    --color-midnight: #14253E;
+    --color-slate: #8FA8C6;
+    --color-slate-soft: #8FA8C6;
     --color-gold: #0096D6;
     --color-gold-soft: rgba(0, 150, 214, 0.18);
     --color-gold-dim: #38BDF8;
     --color-teal: #3FD6B0;
     --color-teal-soft: rgba(63, 214, 176, 0.18);
     --color-teal-dim: #3FD6B0;
-    --shadow-glow: 0 0 0 1px #1F334E, 0 0 24px -6px rgba(0, 150, 214, 0.25);
+    --shadow-glow: 0 0 0 1px #1E3758, 0 0 24px -6px rgba(0, 150, 214, 0.25);
   }
 
   /* 3. ALIENWARE — Space Black & AlienFX Cyan */
   [data-skin="alien"],
   html.dark[data-skin="alien"],
   html[data-theme="dark"][data-skin="alien"] {
-    --color-ink: #050608;
-    --color-surface: #0D0F14;
-    --color-surface-raised: #141720;
-    --color-surface-line: #222736;
-    --color-ink-900: #EBF1F5;
-    --color-slate-soft: #7C879C;
+    --color-ink: #06070C;
+    --color-surface: #0F111A;
+    --color-surface-raised: #161824;
+    --color-surface-line: #232738;
+    --color-ink-900: #EDF2FA;
+    --color-midnight: #161824;
+    --color-slate: #93A0BC;
+    --color-slate-soft: #93A0BC;
     --color-gold: #00CFE5;
     --color-gold-soft: rgba(0, 207, 229, 0.18);
     --color-gold-dim: #22D3EE;
     --color-teal: #3BE8C0;
     --color-teal-soft: rgba(59, 232, 192, 0.18);
     --color-teal-dim: #3BE8C0;
-    --shadow-glow: 0 0 0 1px #222736, 0 0 24px -6px rgba(0, 207, 229, 0.25);
+    --shadow-glow: 0 0 0 1px #232738, 0 0 24px -6px rgba(0, 207, 229, 0.25);
   }
 
   /* 4. ROG STRIX — Republic of Gamers Crimson */
   [data-skin="rog"],
   html.dark[data-skin="rog"],
   html[data-theme="dark"][data-skin="rog"] {
-    --color-ink: #0A0A0C;
-    --color-surface: #121318;
-    --color-surface-raised: #1B1C24;
-    --color-surface-line: #302A32;
-    --color-ink-900: #FAF5F5;
-    --color-slate-soft: #9F939A;
+    --color-ink: #090708;
+    --color-surface: #130E10;
+    --color-surface-raised: #1B1316;
+    --color-surface-line: #2C1B1F;
+    --color-ink-900: #F5F3F3;
+    --color-midnight: #1B1316;
+    --color-slate: #A89598;
+    --color-slate-soft: #A89598;
     --color-gold: #DE272C;
-    --color-gold-soft: rgba(222, 39, 44, 0.18);
+    --color-gold-soft: rgba(222, 39, 44, 0.22);
     --color-gold-dim: #FF4D4F;
-    --color-teal: #D4A33A;
-    --color-teal-soft: rgba(212, 163, 58, 0.18);
-    --color-teal-dim: #FBBF24;
-    --shadow-glow: 0 0 0 1px #302A32, 0 0 24px -6px rgba(222, 39, 44, 0.25);
+    --color-teal: #57D97B;
+    --color-teal-soft: rgba(87, 217, 123, 0.18);
+    --color-teal-dim: #57D97B;
+    --shadow-glow: 0 0 0 1px #2C1B1F, 0 0 24px -6px rgba(222, 39, 44, 0.28);
   }
 
   /* 5. RAZER CHROMA — Deep Black & Snake Green */
@@ -220,18 +274,20 @@
   html.dark[data-skin="razer"],
   html[data-theme="dark"][data-skin="razer"] {
     --color-ink: #000000;
-    --color-surface: #0B0E0B;
-    --color-surface-raised: #111811;
-    --color-surface-line: #1C2E1C;
-    --color-ink-900: #F0FFF0;
-    --color-slate-soft: #7EA67E;
+    --color-surface: #0E0E0E;
+    --color-surface-raised: #161616;
+    --color-surface-line: #242424;
+    --color-ink-900: #FFFFFF;
+    --color-midnight: #161616;
+    --color-slate: #A8A8A8;
+    --color-slate-soft: #A8A8A8;
     --color-gold: #44D62C;
-    --color-gold-soft: rgba(68, 214, 44, 0.18);
+    --color-gold-soft: rgba(68, 214, 44, 0.22);
     --color-gold-dim: #22C55E;
     --color-teal: #44D62C;
     --color-teal-soft: rgba(68, 214, 44, 0.18);
     --color-teal-dim: #22C55E;
-    --shadow-glow: 0 0 0 1px #1C2E1C, 0 0 24px -6px rgba(68, 214, 44, 0.25);
+    --shadow-glow: 0 0 0 1px #242424, 0 0 24px -6px rgba(68, 214, 44, 0.28);
   }
 
   /* 6. PREDATOR — Acer Predator Aqua & Carbon */
@@ -243,14 +299,16 @@
     --color-surface-raised: #121F2A;
     --color-surface-line: #1B323F;
     --color-ink-900: #E9F5F8;
+    --color-midnight: #121F2A;
+    --color-slate: #88A3B2;
     --color-slate-soft: #88A3B2;
     --color-gold: #0BC5C0;
-    --color-gold-soft: rgba(11, 197, 192, 0.18);
+    --color-gold-soft: rgba(11, 197, 192, 0.22);
     --color-gold-dim: #14B8A6;
     --color-teal: #22D3A8;
     --color-teal-soft: rgba(34, 211, 168, 0.18);
     --color-teal-dim: #22D3A8;
-    --shadow-glow: 0 0 0 1px #1B323F, 0 0 24px -6px rgba(11, 197, 192, 0.25);
+    --shadow-glow: 0 0 0 1px #1B323F, 0 0 24px -6px rgba(11, 197, 192, 0.28);
   }
 
   /* Global Esports Mode Persona */

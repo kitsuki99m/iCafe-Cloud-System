@@ -290,7 +290,7 @@ export default function MainLayout({ children }) {
           /* ===== ADVANCE MODE: Full 232px Enterprise Sidebar ===== */
           <aside className="admin-sidebar sticky top-0 z-[120] hidden h-full w-[220px] shrink-0 flex-col overflow-hidden px-4 py-5 lg:flex lg:w-[232px] lg:px-5 lg:py-6">
             <div className="admin-sidebar-brand mb-6 flex items-center gap-3 px-1 pt-0.5">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-[var(--brand,#7B61FF)]/40 bg-[var(--surface,#131A28)] shadow-[0_0_14px_var(--glow,rgba(123,97,255,0.25))] p-1 overflow-hidden transition-all duration-300">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-[var(--brand)]/40 bg-[var(--surface)] shadow-[0_0_14px_var(--glow,rgba(123,97,255,0.25))] p-1 overflow-hidden transition-all duration-300">
                 <img
                   key={branding.logoUrl || 'default-logo'}
                   src={branding.logoUrl || logo}
@@ -511,10 +511,10 @@ export default function MainLayout({ children }) {
                   <button
                     type="button"
                     onClick={openGallery}
-                    className="flex items-center gap-1.5 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-3 py-1.5 text-xs font-semibold text-[var(--text,#E6EAF2)] transition-all hover:border-[var(--brand,#7B61FF)] hover:bg-[var(--surface,#131A28)] shadow-xs cursor-pointer"
+                    className="flex items-center gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--text)] transition-all hover:border-[var(--brand)] hover:bg-[var(--surface)] shadow-xs cursor-pointer"
                     title="Switch Console Skin"
                   >
-                    <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
+                    <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--brand)] text-[9px] font-bold text-white shadow-xs">
                       {activeSkin?.mark || 'N'}
                     </span>
                     <span className="font-display tracking-tight">{activeSkin?.name || 'Skins'}</span>
@@ -542,7 +542,7 @@ export default function MainLayout({ children }) {
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="admin-mobile-bottom-bar fixed bottom-0 inset-x-0 z-[140] flex h-16 items-center justify-around border-t border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/95 backdrop-blur-xl px-2 shadow-lg lg:hidden" aria-label="Mobile Navigation">
+      <nav className="admin-mobile-bottom-bar fixed bottom-0 inset-x-0 z-[140] flex h-16 items-center justify-around border-t border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-xl px-2 shadow-lg lg:hidden" aria-label="Mobile Navigation">
         {(() => {
           const isMoreActive = !['/', '/clients', '/menu', '/members'].some((p) => isNavItemActive(p, location.pathname, p === '/'))
           return (

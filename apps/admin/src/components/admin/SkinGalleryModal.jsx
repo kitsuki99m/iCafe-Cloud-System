@@ -73,10 +73,10 @@ export default function SkinGalleryModal() {
                 type="button"
                 data-skin={s.id}
                 onClick={() => handleSelect(s.id)}
-                className={`group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-1 ${
+                className={`group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-1 cursor-pointer ${
                   isSelected
-                    ? 'border-[var(--brand,#7B61FF)] shadow-[0_0_24px_-4px_var(--glow,rgba(123,97,255,0.4))] ring-2 ring-[var(--brand,#7B61FF)]'
-                    : 'border-[var(--line,#26314A)] hover:border-[var(--brand,#7B61FF)]/60'
+                    ? 'border-[var(--brand)] shadow-[0_0_24px_-4px_var(--glow,rgba(123,97,255,0.4))] ring-2 ring-[var(--brand)]'
+                    : 'border-[var(--line)] hover:border-[var(--brand)]/60'
                 }`}
               >
                 {/* Visual Preview Box */}
@@ -84,8 +84,8 @@ export default function SkinGalleryModal() {
                   {/* Mock Mini Floor Layout */}
                   <div className="absolute inset-3 flex gap-2">
                     {/* Rail mock */}
-                    <div className="flex w-5 flex-col items-center gap-1 rounded bg-[var(--surface,#131A28)]/80 p-1 border border-white/5">
-                      <div className="h-2.5 w-2.5 rounded-full bg-[var(--brand,#7B61FF)]" />
+                    <div className="flex w-5 flex-col items-center gap-1 rounded bg-[var(--surface)]/80 p-1 border border-white/5">
+                      <div className="h-2.5 w-2.5 rounded-full bg-[var(--brand)]" />
                       <div className="h-1.5 w-2.5 rounded-sm bg-white/20" />
                       <div className="h-1.5 w-2.5 rounded-sm bg-white/20" />
                     </div>
@@ -93,21 +93,21 @@ export default function SkinGalleryModal() {
                     <div className="flex flex-1 flex-col gap-1.5">
                       <div className="grid grid-cols-3 gap-1.5">
                         <div
-                          className="h-8 rounded-[var(--tile-r,8px)] border border-[var(--live,#FFB020)]/60 bg-[var(--surface,#131A28)]/90 shadow-[0_0_10px_var(--glow,rgba(255,176,32,0.3))] p-1 flex flex-col justify-between"
+                          className="h-8 rounded-[var(--tile-r,8px)] border border-[var(--live,#FFB020)]/60 bg-[var(--surface)]/90 shadow-[0_0_10px_var(--glow,rgba(255,176,32,0.3))] p-1 flex flex-col justify-between"
                           style={{ clipPath: 'var(--tile-clip, none)' }}
                         >
                           <div className="h-1 w-3 rounded-full bg-[var(--live,#FFB020)]" />
                           <div className="h-1 w-5 rounded-full bg-white/40" />
                         </div>
                         <div
-                          className="h-8 rounded-[var(--tile-r,8px)] border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/75 p-1 flex flex-col justify-between"
+                          className="h-8 rounded-[var(--tile-r,8px)] border border-[var(--line)] bg-[var(--surface)]/75 p-1 flex flex-col justify-between"
                           style={{ clipPath: 'var(--tile-clip, none)' }}
                         >
                           <div className="h-1 w-3 rounded-full bg-[var(--free,#2ED3A0)]" />
                           <div className="h-1 w-4 rounded-full bg-white/20" />
                         </div>
                         <div
-                          className="h-8 rounded-[var(--tile-r,8px)] border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/75 p-1 flex flex-col justify-between"
+                          className="h-8 rounded-[var(--tile-r,8px)] border border-[var(--line)] bg-[var(--surface)]/75 p-1 flex flex-col justify-between"
                           style={{ clipPath: 'var(--tile-clip, none)' }}
                         >
                           <div className="h-1 w-3 rounded-full bg-[var(--hold,#4CC2FF)]" />
@@ -115,32 +115,32 @@ export default function SkinGalleryModal() {
                         </div>
                       </div>
                       {/* Progress bar mock */}
-                      <div className="h-1.5 w-3/4 rounded-full bg-[var(--line-soft,#1E273B)] overflow-hidden">
-                        <div className="h-full w-2/3 rounded-full bg-[var(--brand,#7B61FF)]" />
+                      <div className="h-1.5 w-3/4 rounded-full bg-[var(--line-soft)] overflow-hidden">
+                        <div className="h-full w-2/3 rounded-full bg-[var(--brand)]" />
                       </div>
                     </div>
                   </div>
 
                   {/* Active Indicator Badge */}
                   {isSelected && (
-                    <span className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full bg-[var(--brand,#7B61FF)] px-2 py-0.5 text-[10px] font-bold text-white shadow-md">
+                    <span className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full bg-[var(--brand)] px-2 py-0.5 text-[10px] font-bold text-white shadow-md">
                       <Check size={11} strokeWidth={3} /> ACTIVE
                     </span>
                   )}
                 </div>
 
                 {/* Metadata */}
-                <div className="flex flex-1 flex-col justify-between bg-[var(--surface,#131A28)] p-3.5">
+                <div className="flex flex-1 flex-col justify-between bg-[var(--surface)] p-3.5">
                   <div>
                     <div className="flex items-center justify-between">
-                      <h3 className="font-display text-sm font-bold text-[var(--text,#E6EAF2)] group-hover:text-[var(--brand,#7B61FF)]">
+                      <h3 className="font-display text-sm font-bold text-[var(--text)] group-hover:text-[var(--brand)]">
                         {s.name}
                       </h3>
-                      <span className="font-mono text-[10px] uppercase text-[var(--faint,#6B7891)]">
+                      <span className="font-mono text-[10px] uppercase text-[var(--faint)]">
                         {s.font}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted,#8D9AB5)] line-clamp-2">
+                    <p className="mt-1 text-[11px] leading-relaxed text-[var(--muted)] line-clamp-2">
                       {s.note}
                     </p>
                   </div>

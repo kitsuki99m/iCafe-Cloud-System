@@ -735,6 +735,35 @@
   [data-skin] {
     background-color: var(--bg);
     color: var(--text);
+
+    --color-ink: var(--bg);
+    --color-ink-soft: var(--surface-2);
+    --color-ink-900: var(--text);
+    --color-surface: var(--surface);
+    --color-surface-raised: var(--surface-2);
+    --color-surface-line: var(--line);
+    --color-midnight: var(--surface-2);
+    --color-bluish: var(--muted);
+    --color-grape: var(--faint);
+    --color-trillium: var(--faint);
+    --color-new-wool: var(--line);
+    --color-dance: var(--surface-2);
+    --color-soft-white: var(--text);
+    --color-slate: var(--muted);
+    --color-slate-soft: var(--muted);
+
+    --color-gold: var(--brand);
+    --color-gold-soft: var(--glow);
+    --color-gold-dim: var(--brand);
+
+    --admin-canvas-bg: var(--bg);
+    --admin-shell-bg: var(--bg);
+    --admin-sidebar-bg: var(--surface);
+    --admin-card-bg: var(--surface);
+    --admin-card-subtle: var(--surface-2);
+    --admin-card-strong: var(--surface-2);
+    --admin-ui-border: var(--line);
+    --admin-shell-shadow: var(--shadow);
   }
   [data-skin] body {
     background-color: var(--bg) !important;

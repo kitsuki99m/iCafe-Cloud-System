@@ -507,7 +507,7 @@ const FloorMap2D = forwardRef(function FloorMap2D({
   }, [onSelect])
 
   return (
-    <div className="relative w-full h-[clamp(420px,calc(100dvh-295px),740px)] rounded-2xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/75 backdrop-blur-md overflow-auto select-none shadow-card">
+    <div className="relative w-full h-[clamp(420px,calc(100dvh-295px),740px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)]/75 backdrop-blur-md overflow-auto select-none shadow-card">
       <div
         ref={canvasRef}
         style={{
@@ -528,9 +528,9 @@ const FloorMap2D = forwardRef(function FloorMap2D({
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="1"
-                className="text-[var(--brand,#38BDF8)]"
+                className="text-[var(--brand)]"
               />
-              <circle cx={CELL_SIZE * zoom} cy={CELL_SIZE * zoom} r="1.5" fill="currentColor" className="text-[var(--brand,#38BDF8)]" />
+              <circle cx={CELL_SIZE * zoom} cy={CELL_SIZE * zoom} r="1.5" fill="currentColor" className="text-[var(--brand)]" />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#floorGridSmall)" />

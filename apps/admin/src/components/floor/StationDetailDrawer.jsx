@@ -119,15 +119,15 @@ export default function StationDetailDrawer({
 
       {/* Slide-out Drawer */}
       <aside
-        className="fixed right-0 top-0 z-[170] flex h-screen w-full max-w-[420px] flex-col border-l border-[var(--line,#26314A)] bg-[var(--surface,#131A28)] text-[var(--text,#E6EAF2)] shadow-2xl transition-transform duration-200"
+        className="fixed right-0 top-0 z-[170] flex h-screen w-full max-w-[420px] flex-col border-l border-[var(--line)] bg-[var(--surface)] text-[var(--text)] shadow-2xl transition-transform duration-200"
         role="dialog"
         aria-label={`Station ${stationTitle} details`}
       >
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-[var(--line-soft,#1E273B)] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-[var(--line-soft)] px-5 py-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="font-display text-xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
+              <h2 className="font-display text-xl font-bold tracking-tight text-[var(--text)]">
                 {stationTitle}
               </h2>
               {pc.isVip && (
@@ -136,7 +136,7 @@ export default function StationDetailDrawer({
                 </span>
               )}
             </div>
-            <div className="mt-0.5 truncate text-xs text-[var(--muted,#8D9AB5)]">
+            <div className="mt-0.5 truncate text-xs text-[var(--muted)]">
               {zoneLabel} · {pc.specs || 'Core Gaming Rig'}
             </div>
           </div>
@@ -144,7 +144,7 @@ export default function StationDetailDrawer({
             <button
               type="button"
               onClick={() => onOpenSessionModal?.(pc)}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--line,#26314A)] text-[var(--muted,#8D9AB5)] transition-colors hover:bg-[var(--surface-2,#1A2233)] hover:text-[var(--text,#E6EAF2)]"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--line)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
               title="Open full controls"
             >
               <Maximize2 size={15} />
@@ -152,7 +152,7 @@ export default function StationDetailDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--line,#26314A)] text-[var(--muted,#8D9AB5)] transition-colors hover:bg-[var(--surface-2,#1A2233)] hover:text-[var(--text,#E6EAF2)]"
+              className="grid h-8 w-8 place-items-center rounded-lg border border-[var(--line)] text-[var(--muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
               aria-label="Close"
             >
               <X size={16} />
@@ -165,14 +165,14 @@ export default function StationDetailDrawer({
           {isLive ? (
             <>
               {/* Digital Readout Box */}
-              <div className="flex flex-col gap-1 rounded-xl border border-[var(--line-soft,#1E273B)] bg-[var(--surface-2,#1A2233)] p-4">
+              <div className="flex flex-col gap-1 rounded-xl border border-[var(--line-soft)] bg-[var(--surface-2)] p-4">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--live,#FFB020)]">
                   {session?.billing === 'prepaid' ? 'Time Remaining' : 'Session Running'}
                 </span>
-                <div className="font-mono text-4xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
+                <div className="font-mono text-4xl font-bold tracking-tight text-[var(--text)]">
                   {timerText}
                 </div>
-                <div className="mt-1 text-xs text-[var(--muted,#8D9AB5)]">
+                <div className="mt-1 text-xs text-[var(--muted)]">
                   Started{' '}
                   {session?.startTime
                     ? new Date(session.startTime).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })
@@ -182,19 +182,19 @@ export default function StationDetailDrawer({
               </div>
 
               {/* Financial Key-Values */}
-              <div className="rounded-xl border border-[var(--line-soft,#1E273B)] bg-[var(--surface,#131A28)]/60 px-4 py-2">
-                <div className="flex items-center justify-between border-b border-[var(--line-soft,#1E273B)] py-2.5 text-xs">
-                  <span className="text-[var(--muted,#8D9AB5)]">
+              <div className="rounded-xl border border-[var(--line-soft)] bg-[var(--surface)]/60 px-4 py-2">
+                <div className="flex items-center justify-between border-b border-[var(--line-soft)] py-2.5 text-xs">
+                  <span className="text-[var(--muted)]">
                     {ratePlan?.name || 'Standard'} ({formatAdminPeso(ratePlan?.price || 35)}/hr)
                   </span>
-                  <b className="font-mono text-sm text-[var(--text,#E6EAF2)]">{formatAdminPeso(timeCharge)}</b>
+                  <b className="font-mono text-sm text-[var(--text)]">{formatAdminPeso(timeCharge)}</b>
                 </div>
-                <div className="flex items-center justify-between border-b border-[var(--line-soft,#1E273B)] py-2.5 text-xs">
-                  <span className="text-[var(--muted,#8D9AB5)]">Food & Drinks Tab</span>
-                  <b className="font-mono text-sm text-[var(--text,#E6EAF2)]">{formatAdminPeso(tabTotal)}</b>
+                <div className="flex items-center justify-between border-b border-[var(--line-soft)] py-2.5 text-xs">
+                  <span className="text-[var(--muted)]">Food & Drinks Tab</span>
+                  <b className="font-mono text-sm text-[var(--text)]">{formatAdminPeso(tabTotal)}</b>
                 </div>
                 <div className="flex items-center justify-between py-2.5 text-sm font-semibold">
-                  <span className="text-[var(--text,#E6EAF2)]">Total Due Now</span>
+                  <span className="text-[var(--text)]">Total Due Now</span>
                   <b className="font-mono text-base text-[var(--live,#FFB020)]">{formatAdminPeso(totalDue)}</b>
                 </div>
               </div>
@@ -202,16 +202,16 @@ export default function StationDetailDrawer({
               {/* Tab Items */}
               {stationOrders.length > 0 && (
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--muted,#8D9AB5)]">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)]">
                     <UtensilsCrossed size={13} /> Active Orders Tab ({stationOrders.length})
                   </div>
-                  <div className="max-h-36 overflow-y-auto rounded-lg border border-[var(--line-soft,#1E273B)] bg-[var(--surface-2,#1A2233)] p-2">
+                  <div className="max-h-36 overflow-y-auto rounded-lg border border-[var(--line-soft)] bg-[var(--surface-2)] p-2">
                     {stationOrders.map((item, i) => (
                       <div key={i} className="flex items-center justify-between py-1 text-xs">
-                        <span className="truncate text-[var(--text,#E6EAF2)]">
+                        <span className="truncate text-[var(--text)]">
                           {item.itemName || item.name || 'Snack / Drink'}
                         </span>
-                        <span className="font-mono text-[var(--muted,#8D9AB5)]">
+                        <span className="font-mono text-[var(--muted)]">
                           {formatAdminPeso(item.totalAmount || item.total || 0)}
                         </span>
                       </div>
@@ -222,10 +222,10 @@ export default function StationDetailDrawer({
 
               {/* Game Tag */}
               <div className="flex flex-col gap-1.5">
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-[var(--muted,#8D9AB5)]">
+                <label className="flex items-center gap-1.5 text-xs font-semibold text-[var(--muted)]">
                   <Gamepad2 size={13} /> Current Activity
                 </label>
-                <div className="rounded-lg border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-3 py-2 text-xs font-medium text-[var(--text,#E6EAF2)]">
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs font-medium text-[var(--text)]">
                   {pc?.game || session?.game || 'Valorant / In-Game'}
                 </div>
               </div>
@@ -235,18 +235,18 @@ export default function StationDetailDrawer({
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
                 <Wrench size={32} className="mx-auto text-amber-500" />
                 <h3 className="mt-2 text-base font-bold text-amber-400">Station Under Maintenance</h3>
-                <p className="mt-1 text-xs text-[var(--muted,#8D9AB5)]">
+                <p className="mt-1 text-xs text-[var(--muted)]">
                   Pulled offline for hardware or peripheral servicing. Put it back in service when ready.
                 </p>
               </div>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              <div className="rounded-xl border border-[var(--line-soft,#1E273B)] bg-[var(--surface-2,#1A2233)] p-4">
+              <div className="rounded-xl border border-[var(--line-soft)] bg-[var(--surface-2)] p-4">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--free,#2ED3A0)]">
                   {isHold ? 'Station Reserved' : 'Station Ready'}
                 </span>
-                <div className="mt-1 text-xs text-[var(--muted,#8D9AB5)]">
+                <div className="mt-1 text-xs text-[var(--muted)]">
                   {isHold
                     ? `Held for ${pc.reservedFor || 'a player'}. Click start to clock in.`
                     : 'Assign a customer or launch a walk-in match on this rig.'}
@@ -255,11 +255,11 @@ export default function StationDetailDrawer({
 
               {/* Member Picker */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Customer</label>
+                <label className="text-xs font-semibold text-[var(--muted)]">Customer</label>
                 <select
                   value={selectedMemberId}
                   onChange={(e) => setSelectedMemberId(e.target.value)}
-                  className="rounded-lg border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-3 py-2 text-xs text-[var(--text,#E6EAF2)] outline-none focus:border-[var(--brand,#7B61FF)]"
+                  className="rounded-lg border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--text)] outline-none focus:border-[var(--brand)]"
                 >
                   <option value="">Walk-in Guest</option>
                   {members.map((m) => (
@@ -272,7 +272,7 @@ export default function StationDetailDrawer({
 
               {/* Rate Plan Picker */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Pricing Plan</label>
+                <label className="text-xs font-semibold text-[var(--muted)]">Pricing Plan</label>
                 <div className="grid grid-cols-2 gap-2">
                   {ratePlans.slice(0, 4).map((r) => (
                     <button
@@ -281,12 +281,12 @@ export default function StationDetailDrawer({
                       onClick={() => setSelectedRateId(r.id)}
                       className={`rounded-lg border p-2.5 text-left text-xs transition-colors ${
                         selectedRateId === String(r.id) || (!selectedRateId && r.isDefault)
-                          ? 'border-[var(--brand,#7B61FF)] bg-[var(--brand,#7B61FF)]/15 text-[var(--brand,#7B61FF)] font-bold'
-                          : 'border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] text-[var(--text,#E6EAF2)] hover:border-[var(--line-soft,#1E273B)]'
+                          ? 'border-[var(--brand)] bg-[var(--brand)]/15 text-[var(--brand)] font-bold'
+                          : 'border-[var(--line)] bg-[var(--surface-2)] text-[var(--text)] hover:border-[var(--line-soft)]'
                       }`}
                     >
                       <div className="truncate font-semibold">{r.name}</div>
-                      <div className="mt-0.5 font-mono text-[11px] text-[var(--muted,#8D9AB5)]">
+                      <div className="mt-0.5 font-mono text-[11px] text-[var(--muted)]">
                         {formatAdminPeso(r.price || r.rate || 35)}/hr
                       </div>
                     </button>
@@ -298,20 +298,20 @@ export default function StationDetailDrawer({
         </div>
 
         {/* Footer Actions */}
-        <footer className="border-t border-[var(--line-soft,#1E273B)] bg-[var(--surface,#131A28)] px-5 py-3.5 flex gap-2">
+        <footer className="border-t border-[var(--line-soft)] bg-[var(--surface)] px-5 py-3.5 flex gap-2">
           {isLive ? (
             <>
               <button
                 type="button"
                 onClick={() => onTransferSession?.(pc)}
-                className="flex-1 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-3 py-2 text-xs font-semibold text-[var(--text,#E6EAF2)] transition-colors hover:bg-[var(--line,#26314A)] flex items-center justify-center gap-1.5"
+                className="flex-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-xs font-semibold text-[var(--text)] transition-colors hover:bg-[var(--line)] flex items-center justify-center gap-1.5"
               >
                 <ArrowRightLeft size={14} /> Move Rig
               </button>
               <button
                 type="button"
                 onClick={() => onEndSession?.(pc, 'settle')}
-                className="flex-1 rounded-xl bg-[var(--brand,#7B61FF)] px-3 py-2 text-xs font-bold text-white shadow-md transition-opacity hover:opacity-90 flex items-center justify-center gap-1.5"
+                className="flex-1 rounded-xl bg-[var(--brand)] px-3 py-2 text-xs font-bold text-white shadow-md transition-opacity hover:opacity-90 flex items-center justify-center gap-1.5"
               >
                 <LogOut size={14} /> Close & Settle
               </button>
