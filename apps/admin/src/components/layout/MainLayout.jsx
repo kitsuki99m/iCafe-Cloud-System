@@ -79,14 +79,20 @@ export default function MainLayout({ children }) {
   const { activeSkin, openGallery, skins, setSkin, skinId } = useSkin()
   const branding = useBranding()
   const location = useLocation()
-  const isCashier = user?.role === 'cashier' || user?.role === 'staff'
+  const isNavItemActive = (to, pathname, end) => {
+    if (end) return pathname === to
+    if (to === '/') return pathname === '/'
+    if (to === '/tariffs' && (pathname === '/vouchers' || pathname.startsWith('/tariffs'))) return true
+    if (to === '/earnings' && (pathname === '/expenses' || pathname === '/expense' || pathname.startsWith('/earnings'))) return true
+    return pathname === to || pathname.startsWith(to + '/')
+  }
   const filteredNav = BASE_NAV.filter((item) => {
     if (isCashier && item.adminOnly) return false
     if (isSimpleMode && !SIMPLE_NAV_PATHS.has(item.to)) return false
     return true
   })
   const navItems = (user?.cloudDeveloper && isAdvanceMode) ? [...filteredNav, { to: '/developer', label: 'Developer', icon: ShieldCheck }] : filteredNav
-  const currentNav = BASE_NAV.find((item) => (item.end ? location.pathname === item.to : (item.to !== '/' && location.pathname.startsWith(item.to))))
+  const currentNav = BASE_NAV.find((item) => isNavItemActive(item.to, location.pathname, item.end))
   const currentLabel = PAGE_ALIASES[location.pathname] || currentNav?.label || (location.pathname === '/' ? 'Overview' : 'Console')
   const isOverview = location.pathname === '/'
   const pendingOrdersCount = useMemo(() => {
@@ -231,12 +237,13 @@ export default function MainLayout({ children }) {
               {navItems.map(({ to, label, shortLabel, icon: Icon, end }) => {
                 const isMenu = to === '/menu'
                 const hasPending = isMenu && pendingOrdersCount > 0
+                const isActive = isNavItemActive(to, location.pathname, end)
                 return (
                   <NavLink
                     key={to}
                     to={to}
                     end={end}
-                    className={({ isActive }) => `admin-rail-nav-btn ${isActive ? 'active' : ''}`}
+                    className={`admin-rail-nav-btn ${isActive ? 'active' : ''}`}
                     title={label}
                   >
                     <div className="relative">
@@ -316,12 +323,13 @@ export default function MainLayout({ children }) {
               {navItems.map(({ to, label, icon: Icon, end }) => {
                 const isMenu = to === '/menu'
                 const hasPending = isMenu && pendingOrdersCount > 0
+                const isActive = isNavItemActive(to, location.pathname, end)
                 return (
                   <NavLink
                     key={to}
                     to={to}
                     end={end}
-                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                    className={`nav-item ${isActive ? 'active' : ''}`}
                   >
                     <Icon size={17} strokeWidth={1.8} />
                     <span>{label}</span>
@@ -439,9 +447,12 @@ export default function MainLayout({ children }) {
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => setSkin(s.id)}
+                    onClick={() => {
+                      setSkin(s.id)
+                      if (!isEsportsMode) setThemeMode('esports')
+                    }}
                     className="sw"
-                    style={{ backgroundColor: s.chips?.[0] || s.accent || '#7B61FF' }}
+                    style={{ backgroundColor: s.chips?.[0] || s.accent || s.brand || '#7B61FF' }}
                     aria-pressed={s.id === skinId}
                     title={`${s.name} Skin`}
                   />
@@ -534,74 +545,85 @@ export default function MainLayout({ children }) {
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="admin-mobile-bottom-bar fixed bottom-0 inset-x-0 z-[140] flex h-16 items-center justify-around border-t border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/95 backdrop-blur-xl px-2 shadow-lg lg:hidden" aria-label="Mobile Navigation">
-        <NavLink
-          to="/"
-          end
-          className={({ isActive }) =>
-            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
-              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
-            }`
-          }
-        >
-          <LayoutDashboard size={20} strokeWidth={1.8} />
-          <span>Overview</span>
-        </NavLink>
+        {(() => {
+          const isMoreActive = !['/', '/clients', '/menu', '/members'].some((p) => isNavItemActive(p, location.pathname, p === '/'))
+          return (
+            <>
+              <NavLink
+                to="/"
+                end
+                className={() => {
+                  const active = isNavItemActive('/', location.pathname, true)
+                  return `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
+                    active ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+                  }`
+                }}
+              >
+                <LayoutDashboard size={20} strokeWidth={1.8} />
+                <span>Overview</span>
+              </NavLink>
 
-        <NavLink
-          to="/clients"
-          className={({ isActive }) =>
-            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
-              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
-            }`
-          }
-        >
-          <MonitorCog size={20} strokeWidth={1.8} />
-          <span>Floor</span>
-        </NavLink>
+              <NavLink
+                to="/clients"
+                className={() => {
+                  const active = isNavItemActive('/clients', location.pathname, false)
+                  return `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
+                    active ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+                  }`
+                }}
+              >
+                <MonitorCog size={20} strokeWidth={1.8} />
+                <span>Floor</span>
+              </NavLink>
 
-        <NavLink
-          to="/menu"
-          className={({ isActive }) =>
-            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors relative ${
-              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
-            }`
-          }
-        >
-          <div className="relative">
-            <UtensilsCrossed size={20} strokeWidth={1.8} />
-            {pendingOrdersCount > 0 && (
-              <span className="absolute -top-1 -right-1.5 flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
-              </span>
-            )}
-          </div>
-          <span>Shop</span>
-        </NavLink>
+              <NavLink
+                to="/menu"
+                className={() => {
+                  const active = isNavItemActive('/menu', location.pathname, false)
+                  return `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors relative ${
+                    active ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+                  }`
+                }}
+              >
+                <div className="relative">
+                  <UtensilsCrossed size={20} strokeWidth={1.8} />
+                  {pendingOrdersCount > 0 && (
+                    <span className="absolute -top-1 -right-1.5 flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
+                    </span>
+                  )}
+                </div>
+                <span>Shop</span>
+              </NavLink>
 
-        <NavLink
-          to="/members"
-          className={({ isActive }) =>
-            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
-              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
-            }`
-          }
-        >
-          <Users size={20} strokeWidth={1.8} />
-          <span>Members</span>
-        </NavLink>
+              <NavLink
+                to="/members"
+                className={() => {
+                  const active = isNavItemActive('/members', location.pathname, false)
+                  return `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
+                    active ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+                  }`
+                }}
+              >
+                <Users size={20} strokeWidth={1.8} />
+                <span>Members</span>
+              </NavLink>
 
-        <button
-          type="button"
-          onClick={() => setMobileNavOpen((prev) => !prev)}
-          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors cursor-pointer ${
-            mobileNavOpen ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
-          }`}
-          aria-label="More navigation items"
-        >
-          <Menu size={20} strokeWidth={1.8} />
-          <span>More</span>
-        </button>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen((prev) => !prev)}
+                className={`flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors cursor-pointer ${
+                  mobileNavOpen || isMoreActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+                }`}
+                aria-label="More navigation items"
+              >
+                <Menu size={20} strokeWidth={1.8} />
+                <span>More</span>
+              </button>
+            </>
+          )
+        })()}
       </nav>
       {mobileNavOpen && <div className="fixed inset-0 z-[800] lg:hidden" role="presentation">
         <button type="button" className="absolute inset-0 bg-midnight/60" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"/>
@@ -620,13 +642,14 @@ export default function MainLayout({ children }) {
               {navItems.map(({to,label,icon:Icon,end})=>{
                 const isMenu = to === '/menu'
                 const hasPending = isMenu && pendingOrdersCount > 0
+                const isActive = isNavItemActive(to, location.pathname, end)
                 return (
                   <NavLink
                     key={to}
                     to={to}
                     end={end}
                     onClick={()=>setMobileNavOpen(false)}
-                    className={({isActive})=>`nav-item mobile-nav-item ${isActive?'active':''}`}
+                    className={`nav-item mobile-nav-item ${isActive ? 'active' : ''}`}
                   >
                     <Icon size={18} strokeWidth={1.8}/>
                     <span>{label}</span>
@@ -646,15 +669,43 @@ export default function MainLayout({ children }) {
               })}
             </div>
           </nav>
-          <div className="shrink-0 border-t border-[var(--admin-ui-border)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="shrink-0 border-t border-[var(--admin-ui-border)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3">
+            {/* Quick action bar */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false)
+                  openGallery()
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] py-2 text-xs font-semibold text-[var(--text,#E6EAF2)]"
+              >
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white">
+                  {activeSkin?.mark || 'N'}
+                </span>
+                <span>Console Skins</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileNavOpen(false)
+                  setManualOpen(true)
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] py-2 text-xs font-semibold text-[var(--text,#E6EAF2)]"
+              >
+                <BookOpenText size={14} />
+                <span>Manual</span>
+              </button>
+            </div>
             <PwaInstallButton />
-            <div className="admin-sidebar-status mb-3 flex items-center gap-2.5 rounded-xl px-3 py-2.5">
+            <div className="admin-sidebar-status flex items-center gap-2.5 rounded-xl px-3 py-2.5">
               <span className={`h-2 w-2 shrink-0 rounded-full ${serverError?'bg-ember':'bg-teal'}`}/>
               <div className="min-w-0"><p className="text-[11px] font-semibold text-ink-900">{serverError?(cloud?'Edge Offline':'Server Offline'):(cloud?'Edge Online':'Server Online')}</p><p className="mt-0.5 truncate text-[9px] text-slate-soft">{cloud?'Supabase ↔ Edge':'Local network'}</p></div>
             </div>
             <div className="flex items-center gap-2 rounded-xl bg-[var(--admin-card-subtle)] p-2.5">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-midnight text-soft-white"><UserRound size={16}/></span>
               <div className="min-w-0 flex-1"><p className="truncate text-[11px] font-semibold text-ink-900">{adminDisplayName}</p><p className="text-[9px] text-slate-soft">Administrator</p></div>
+              <button type="button" onClick={toggleTheme} className="admin-icon-button" aria-label="Toggle theme">{isDark ? <Sun size={15}/> : <Moon size={15}/>}</button>
               <button type="button" onClick={openLock} className="admin-icon-button" aria-label="Lock admin console"><LockKeyhole size={15}/></button>
               <button type="button" onClick={logout} className="admin-icon-button" aria-label="Log out"><LogOut size={15}/></button>
             </div>

@@ -132,11 +132,18 @@ export default function AdminProfileMenu({
             </div>
           </div>
 
-          {/* Quick Persona Mode Switcher: Dashboard vs Esports */}
+          {/* Mode Tool: Standard Dashboard vs Esports Console Skins */}
           <div className="py-2.5 border-b border-surface-line/80">
-            <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-soft mb-1.5">
-              Theme Persona
-            </p>
+            <div className="flex items-center justify-between px-1 mb-1.5">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-soft">
+                Console Mode
+              </p>
+              {isEsportsMode && (
+                <span className="rounded-full bg-[var(--brand,#7B61FF)]/15 px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)]">
+                  {activeSkin?.name?.split(' ')[0] || 'Nexus'}
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line/60">
               <button
                 type="button"
@@ -146,6 +153,7 @@ export default function AdminProfileMenu({
                     ? 'bg-surface text-ink-900 shadow-xs border border-surface-line'
                     : 'text-slate-soft hover:text-ink-900'
                 }`}
+                title="Standard Business Dashboard Interface"
               >
                 <LayoutDashboard size={13} />
                 <span>Dashboard</span>
@@ -155,14 +163,64 @@ export default function AdminProfileMenu({
                 onClick={() => setThemeMode('esports')}
                 className={`flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition cursor-pointer ${
                   isEsportsMode
-                    ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/30 text-teal-dim shadow-xs border border-teal/40'
+                    ? 'bg-[var(--brand,#7B61FF)]/20 text-[var(--brand,#7B61FF)] shadow-xs border border-[var(--brand,#7B61FF)]/40 font-black'
                     : 'text-slate-soft hover:text-ink-900'
                 }`}
+                title="Esports Gaming Console Mode with Hardware Skins"
               >
                 <Gamepad2 size={13} />
-                <span>Esports</span>
+                <span>Esports Mode</span>
               </button>
             </div>
+
+            {/* Esports Console Skins Picker Tool */}
+            {isEsportsMode && (
+              <div className="mt-2.5 rounded-xl bg-surface/80 p-2 border border-surface-line/60 space-y-1.5">
+                <div className="flex items-center justify-between px-0.5">
+                  <span className="text-[9.5px] font-bold uppercase tracking-wider text-slate-soft">
+                    Active Skin
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false)
+                      openGallery()
+                    }}
+                    className="text-[9.5px] font-semibold text-[var(--brand,#7B61FF)] hover:underline flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>Gallery</span>
+                    <Sparkles size={10} />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {(skins || []).map((s) => {
+                    const isSelected = s.id === skinId
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          setSkin(s.id)
+                          if (!isEsportsMode) setThemeMode('esports')
+                        }}
+                        className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[10.5px] font-semibold transition cursor-pointer border ${
+                          isSelected
+                            ? 'bg-[var(--surface-2,#1A2233)] text-ink-900 border-[var(--brand,#7B61FF)] shadow-xs'
+                            : 'bg-surface-raised/50 text-slate-soft border-transparent hover:text-ink-900 hover:bg-surface-raised'
+                        }`}
+                        title={`${s.name} Skin (${s.note})`}
+                      >
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs"
+                          style={{ backgroundColor: s.chips?.[0] || s.brand || '#7B61FF' }}
+                        />
+                        <span className="truncate">{s.name.split(' ')[0]}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* UI Complexity & Appearance Toggles */}
@@ -170,7 +228,7 @@ export default function AdminProfileMenu({
             {canToggleMode && (
               <div>
                 <p className="px-1 text-[10px] font-bold uppercase tracking-wider text-slate-soft mb-1.5">
-                  UI Mode
+                  UI Complexity
                 </p>
                 <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-raised p-1 border border-surface-line/60">
                   <button
@@ -261,7 +319,7 @@ export default function AdminProfileMenu({
             >
               <div className="flex items-center gap-2.5">
                 <Sparkles size={15} className="text-[var(--brand,#7B61FF)]" />
-                <span>Console Skins</span>
+                <span>Console Skins & Themes</span>
               </div>
               <span className="rounded-full bg-[var(--brand,#7B61FF)]/15 px-2 py-0.5 text-[9px] font-bold text-[var(--brand,#7B61FF)]">
                 {activeSkin?.name?.split(' ')[0] || 'Nexus'}

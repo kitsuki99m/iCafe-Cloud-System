@@ -99,6 +99,38 @@ const MANUALS = {
     warning: 'Settings can change behavior across the entire branch. Make one deliberate change at a time and test it before changing another operational rule.',
     tips: ['Finish Settings, Rates, and Clients setup before opening the cafe to customers.', 'Store recovery information securely outside the customer PCs.'],
   },
+  Launcher: {
+    summary: 'Games & Apps configures station launcher executables, game disk paths, game categories, and station launcher settings.',
+    outcome: 'Customer stations should display updated game catalogs, working disk shortcuts, and accurate launcher categories.',
+    steps: [
+      { title: 'Organize games by category', items: ['Group games into Popular, FPS, MOBA, Battle Royale, RPG, and Apps.', 'Ensure custom titles have high-resolution banners or icons for the customer launcher.', 'Deactivate outdated game titles instead of deleting them if usage metrics are tracked.'] },
+      { title: 'Configure executable paths', items: ['Set correct absolute disk/drive paths (e.g., D:\\Games\\...).', 'Verify working directories and launch parameters where applicable.', 'Test launching newly configured titles on a test station before publishing across all PCs.'] },
+      { title: 'Station deployment & sync', items: ['Push category and executable updates to all online customer PCs.', 'Verify station launcher reload signals are acknowledged.'] },
+    ],
+    warning: 'Incorrect executable paths will cause launch failures on customer stations. Always test games on physical client hardware.',
+    tips: ['Keep game cover art consistent in aspect ratio.', 'Use disk drive letters standard across your cafe image.'],
+  },
+  Menu: {
+    summary: 'Menu & Kitchen Orders manages snack & drink catalog, in-session orders, prices, stock availability, and the live kitchen queue.',
+    outcome: 'Customers can seamlessly browse and order food and drinks from their stations, and staff can efficiently fulfill orders.',
+    steps: [
+      { title: 'Maintain item catalog & stock', items: ['Organize food, drinks, and snacks into clear categories.', 'Update item availability immediately when stock runs low.', 'Set accurate pricing and optional cost prices for margin tracking.'] },
+      { title: 'Process kitchen & counter orders', items: ['Monitor incoming orders in real time.', 'Update order status from Pending to Preparing and Completed.', 'Reconcile payment method (Cash, Member Wallet, GCash) with the register.'] },
+      { title: 'Track food & beverage sales', items: ['Review menu earnings in shift totals and detailed reports.', 'Identify top-selling items to optimize inventory purchasing.'] },
+    ],
+    warning: 'Ensure stock counts and prices are verified. Discrepancies between physical inventory and system counts lead to order cancellation disputes.',
+    tips: ['Keep items marked Unavailable when out of stock.', 'Set up attractive item images to increase food & drink sales.'],
+  },
+  Vouchers: {
+    summary: 'Vouchers & Promo Codes enables creation and redemption of time/wallet vouchers, customer discounts, and marketing campaigns.',
+    outcome: 'Valid promo codes provide promotional session time or wallet credit securely without unauthorized abuse.',
+    steps: [
+      { title: 'Create promo voucher batches', items: ['Set clear duration or peso credit value per voucher code.', 'Set expiration dates and total usage limit per code.', 'Export or print codes cleanly for customer distribution.'] },
+      { title: 'Audit redemption activity', items: ['Track which member or guest station redeemed each voucher.', 'Monitor for bulk or suspicious redemption patterns in logs.'] },
+    ],
+    warning: 'Expired or disabled vouchers cannot be used. Never share administrative override codes publicly.',
+    tips: ['Use promo vouchers for community tournaments, marketing events, and first-time member acquisition.'],
+  },
   Developer: {
     summary: 'Developer is a platform-owner area for reviewing Aezakmi Cloud business registrations. Normal cafe owners do not need this section.',
     outcome: 'Only valid businesses should be approved for Cloud access, with branch/account ownership verified first.',
@@ -111,12 +143,52 @@ const MANUALS = {
   },
 }
 
+const ALIAS_MAP = {
+  'Overview': 'Overview',
+  'Clients': 'Clients',
+  'Floor Matrix': 'Clients',
+  'Floor': 'Clients',
+  'Launcher': 'Launcher',
+  'Games & Apps': 'Launcher',
+  'Games & Launcher': 'Launcher',
+  'Games': 'Launcher',
+  'Menu': 'Menu',
+  'Menu & Orders': 'Menu',
+  'Menu & Kitchen Orders': 'Menu',
+  'Shop': 'Menu',
+  'Tariffs': 'Rates',
+  'Rates': 'Rates',
+  'Rates & Promos': 'Rates',
+  'Members': 'Members',
+  'Member Directory': 'Members',
+  'Vouchers': 'Vouchers',
+  'Vouchers & Promo Codes': 'Vouchers',
+  'Earnings': 'Earnings',
+  'Earnings & Reports': 'Earnings',
+  'Expenses': 'Earnings',
+  'Analytics': 'Analytics',
+  'Performance Analytics': 'Analytics',
+  'Logs': 'Logs',
+  'Shift & Audit Logs': 'Logs',
+  'Settings': 'Settings',
+  'System Settings': 'Settings',
+  'Developer': 'Developer',
+  'Developer Console': 'Developer',
+}
+
+export function normalizeManualSection(section) {
+  if (!section) return 'Overview'
+  return ALIAS_MAP[section] || (MANUALS[section] ? section : 'Overview')
+}
+
 export function hasSectionManual(section) {
-  return Boolean(MANUALS[section])
+  const key = normalizeManualSection(section)
+  return Boolean(MANUALS[key])
 }
 
 export default function AdminSectionManual({ open, onClose, section = 'Overview' }) {
-  const manual = MANUALS[section] || MANUALS.Overview
+  const normalizedKey = normalizeManualSection(section)
+  const manual = MANUALS[normalizedKey] || MANUALS.Overview
 
   return (
     <Modal
