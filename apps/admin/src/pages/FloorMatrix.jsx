@@ -25,6 +25,7 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import PcCard from '../components/floor/PcCard.jsx'
 import FloorMap2D from '../components/floor/FloorMap2D.jsx'
+import StationDetailDrawer from '../components/floor/StationDetailDrawer.jsx'
 
 import SessionModal from '../components/floor/SessionModal.jsx'
 import StartSessionModal from '../components/floor/StartSessionModal.jsx'
@@ -87,6 +88,8 @@ export default function FloorMatrix() {
     topUpMemberSession,
     adjustSessionTime,
     refresh,
+    menuOrders = [],
+    currentShift,
   } = useAppData()
   const { user } = useAuth()
   const { isEsportsMode } = useEsportsTheme()
@@ -161,9 +164,34 @@ export default function FloorMatrix() {
     occupied:pcs.filter(p=>effectivePcStatus(p)==='occupied').length,
     maintenance:pcs.filter(p=>effectivePcStatus(p)==='maintenance').length,
     offline:pcs.filter(p=>effectivePcStatus(p)==='offline').length,
+    reserved:pcs.filter(p=>effectivePcStatus(p)==='reserved').length,
     locked:pcs.filter(p=>p.session?.isLocked).length,
     total:pcs.length,
   }), [pcs])
+
+  const runningFloorDue = useMemo(() => {
+    return pcs
+      .filter((p) => p.session)
+      .reduce((sum, p) => {
+        const ratePerHour = Number(p.rate || p.hourlyRate || (p.isVip ? 60 : 35))
+        const elapsedSec = elapsedSessionSeconds(p.session, now)
+        const timeCharge = p.session.billing === 'prepaid'
+          ? Number(p.session.totalAmount || p.session.paidAmount || 0)
+          : Math.round((elapsedSec / 3600) * ratePerHour)
+        return sum + timeCharge
+      }, 0)
+  }, [pcs, now])
+
+  const occupancyPct = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0
+  const todayRevenue = currentShift?.totalRevenue || currentShift?.cashRevenue || 0
+  const closedSessionsCount = currentShift?.closedSessionsCount || currentShift?.sessionsCount || 0
+  const avgSessionMins = useMemo(() => {
+    const liveSessions = pcs.filter(p => p.session)
+    if (!liveSessions.length) return 45
+    const totalMins = liveSessions.reduce((acc, p) => acc + (elapsedSessionSeconds(p.session, now) / 60), 0)
+    return Math.round(totalMins / liveSessions.length)
+  }, [pcs, now])
+
   const selected = selectedId ? pcs.find((p) => String(p.id) === String(selectedId)) ?? null : null
   const detailPc = requestedPcId ? pcs.find((pc) => String(pc.id) === String(requestedPcId)) ?? null : null
   const editingPc = editingPcId ? pcs.find((p) => p.id === editingPcId) ?? null : null
@@ -553,38 +581,55 @@ export default function FloorMatrix() {
       {/* 2-COLUMN LIVE CYBERCAFE WORKSPACE */}
       {/* FULL-WIDTH LIVE ESPORTS FLOOR MATRIX */}
       <section className="clients-floor-workspace w-full space-y-4">
-        {isEsportsMode && (
-          <div className="relative overflow-hidden rounded-2xl border border-teal/30 bg-gradient-to-r from-surface-raised via-surface to-teal/5 p-4 sm:p-5 shadow-lg backdrop-blur-xl transition-all duration-300">
-            <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] font-extrabold uppercase tracking-widest bg-teal/20 text-teal-dim border border-teal/40">
-                    LIVE ARENA TELEMETRY
-                  </span>
-                  <span className="text-xs text-slate-soft">· {settings.cafeName || 'Aezakmi Cyber Arena'}</span>
-                </div>
-                <h2 className="font-display text-lg sm:text-xl font-black tracking-tight text-ink-900 flex items-center gap-2">
-                  TOURNAMENT STAGE <span className="text-xs font-sans font-bold text-gold-dim bg-gold/15 px-2 py-0.5 rounded-full border border-gold/30">STAGE ACTIVE</span>
-                </h2>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2.5 font-mono text-xs">
-                <div className="rounded-xl border border-surface-line bg-surface/80 px-3.5 py-1.5 text-center shadow-xs">
-                  <div className="text-[10px] text-slate-soft uppercase tracking-wider">Stations In Match</div>
-                  <div className="text-base font-bold text-teal-dim">{stats.occupied} <span className="text-xs text-slate-soft">/ {stats.total}</span></div>
-                </div>
-                <div className="rounded-xl border border-surface-line bg-surface/80 px-3.5 py-1.5 text-center shadow-xs">
-                  <div className="text-[10px] text-slate-soft uppercase tracking-wider">Arena Occupancy</div>
-                  <div className="text-base font-bold text-gold-dim">{stats.total > 0 ? ((stats.occupied / stats.total) * 100).toFixed(1) : 0}%</div>
-                </div>
-                <div className="rounded-xl border border-surface-line bg-surface/80 px-3.5 py-1.5 text-center shadow-xs">
-                  <div className="text-[10px] text-slate-soft uppercase tracking-wider">Ready Podiums</div>
-                  <div className="text-base font-bold text-teal-dim">{stats.available}</div>
-                </div>
-              </div>
+        {/* CONSOLE FLOOR KPI METRICS STRIP */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Stations in use</span>
+            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
+              {stats.occupied} <span className="text-sm font-normal text-[var(--faint,#6B7891)]">of {stats.total}</span>
+            </div>
+            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">{stats.available} open now</div>
+            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--line-soft,#1E273B)]">
+              <i className="block h-full rounded-full bg-[var(--brand,#7B61FF)] transition-all duration-300" style={{ width: `${occupancyPct}%` }} />
             </div>
           </div>
-        )}
+
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Taken tonight / shift</span>
+            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
+              {formatAdminPeso(todayRevenue)}
+            </div>
+            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">{closedSessionsCount} sessions settled</div>
+            <div className="mt-2.5 h-1.5 w-full" />
+          </div>
+
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Running on the floor</span>
+            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--live,#FFB020)]">
+              {formatAdminPeso(runningFloorDue)}
+            </div>
+            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">Uncollected active charges</div>
+            <div className="mt-2.5 h-1.5 w-full" />
+          </div>
+
+          <div className="overview-card flex flex-col justify-between p-4 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 shadow-card">
+            <span className="text-xs font-semibold text-[var(--muted,#8D9AB5)]">Average session</span>
+            <div className="mt-1 font-mono text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text,#E6EAF2)]">
+              {avgSessionMins} <span className="text-sm font-normal text-[var(--faint,#6B7891)]">min</span>
+            </div>
+            <div className="mt-1 text-xs text-[var(--faint,#6B7891)]">Across active stations</div>
+            <div className="mt-2.5 h-1.5 w-full" />
+          </div>
+        </div>
+
+        {/* STATUS LEGEND matching Claude artifact */}
+        <div className="flex items-center gap-4 text-xs text-[var(--muted,#8D9AB5)] flex-wrap py-1 px-1">
+          <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--free,#2ED3A0)]" /> Open</div>
+          <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--live,#FFB020)] animate-pulse" /> In use</div>
+          <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--hold,#4CC2FF)]" /> Reserved</div>
+          <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--down,#6B7688)]" /> Down for repair</div>
+          <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-slate-soft/50" /> Offline</div>
+        </div>
 
         <div className="admin-page-toolbar space-y-2.5">
           {/* Row 1: View Switcher, Search Bar, and Action Controls */}
@@ -798,6 +843,80 @@ export default function FloorMatrix() {
             </>
           )}
         </div>
+
+        {/* CLOSING SOON & SHIFT FEED PANELS (Claude artifact cols) */}
+        {pcs.some((p) => p.session) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+            {/* Closing Soon Panel */}
+            <div className="overview-card rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 p-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft,#1E273B)] mb-3">
+                <h3 className="font-display text-sm font-bold text-[var(--text,#E6EAF2)]">Closing Soonest</h3>
+                <span className="text-xs text-[var(--muted,#8D9AB5)]">Active sessions</span>
+              </div>
+              <div className="space-y-2">
+                {pcs
+                  .filter((p) => p.session)
+                  .sort((a, b) => {
+                    const remA = a.session?.billing === 'prepaid' ? remainingSessionSeconds(a.session, now) : 99999
+                    const remB = b.session?.billing === 'prepaid' ? remainingSessionSeconds(b.session, now) : 99999
+                    return remA - remB
+                  })
+                  .slice(0, 5)
+                  .map((p) => {
+                    const rem = p.session?.billing === 'prepaid' ? remainingSessionSeconds(p.session, now) : null
+                    const remText = rem != null ? `${Math.ceil(rem / 60)} min left` : 'Postpaid'
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-[var(--surface-2,#1A2233)]/70 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-[var(--text,#E6EAF2)]">{p.label || `PC-${p.id}`}</span>
+                          <span className="text-[var(--muted,#8D9AB5)] truncate max-w-[120px]">
+                            {p.session?.customerName || p.session?.username || 'Guest'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono text-[var(--live,#FFB020)] font-semibold">{remText}</span>
+                          <button
+                            type="button"
+                            onClick={() => openPopover(p)}
+                            className="rounded px-2 py-0.5 text-[11px] font-semibold text-[var(--brand,#7B61FF)] border border-[var(--brand,#7B61FF)]/30 hover:bg-[var(--brand,#7B61FF)]/15"
+                          >
+                            Inspect
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+
+            {/* Shift Activity Stream */}
+            <div className="overview-card rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/80 p-4">
+              <div className="flex items-center justify-between pb-3 border-b border-[var(--line-soft,#1E273B)] mb-3">
+                <h3 className="font-display text-sm font-bold text-[var(--text,#E6EAF2)]">Shift Operations Log</h3>
+                <span className="text-xs text-[var(--muted,#8D9AB5)]">Live telemetry</span>
+              </div>
+              <div className="space-y-2 text-xs max-h-48 overflow-y-auto pr-1">
+                {currentShift?.activityLog?.length ? (
+                  currentShift.activityLog.slice(0, 5).map((log, idx) => (
+                    <div key={idx} className="flex items-start gap-2 py-1 border-b border-[var(--line-soft,#1E273B)]/40 last:border-0">
+                      <span className="font-mono text-[10px] text-[var(--faint,#6B7891)] shrink-0">
+                        {log.timestamp ? new Date(log.timestamp).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' }) : 'Now'}
+                      </span>
+                      <span className="text-[var(--text,#E6EAF2)]">{log.message || log.description || JSON.stringify(log)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-4 text-center text-xs text-[var(--muted,#8D9AB5)]">
+                    Floor shift active · {stats.occupied} sessions in progress
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
 
@@ -822,40 +941,31 @@ export default function FloorMatrix() {
         />}
       </AnchoredPopover>
 
-      {detailPc && !pendingTimeAction && !timeAction && (() => {
-        const pc=detailPc
-        const effectiveStatus=effectivePcStatus(pc)
-        const statusLabel=pc.session?.isLocked ? 'Session locked' : effectiveStatus==='occupied' ? 'In use' : effectiveStatus
-        return <SidePanel
-          open
+      {detailPc && !pendingTimeAction && !timeAction && (
+        <StationDetailDrawer
+          pc={detailPc}
+          now={now}
+          members={members}
+          ratePlans={ratePlans}
+          menuOrders={menuOrders}
           onClose={closePopover}
-          eyebrow="Station details"
-          title={pc.label}
-          ariaLabel={`${pc.label} station details`}
-        >
-          <div className="space-y-5">
-            <section className="overview-soft-card p-4">
-              <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Station</p><p className="mt-1 text-sm font-semibold text-ink-900">{pc.spec || 'Cafe PC'}</p><p className="stat-figure mt-1 text-[11px] text-slate-soft">{pc.ipAddress}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold capitalize ${effectiveStatus==='available'?'bg-teal/10 text-teal-dim':effectiveStatus==='maintenance'||effectiveStatus==='offline'?'bg-ember/10 text-ember-dim':'bg-gold/10 text-gold-dim'}`}>{statusLabel}</span></div>
-            </section>
-
-            <StationActions
-              pc={pc}
-              variant="drawer"
-              commandBusy={commandBusy}
-              pauseSaveBusy={pauseSaveBusy === pc.id}
-              onSession={openSessionModal}
-              onTimeAction={openTimeAction}
-              onForfeit={(pc)=>afterPopoverClose(()=>setForfeitTarget(pc))}
-              onCommand={quickCommand}
-              onPauseSave={(pc)=>afterPopoverClose(()=>setPauseSaveTarget(pc))}
-              onMaintenance={(pc,toMaintenance)=>afterPopoverClose(()=>handleSetMaintenance(pc,toMaintenance).catch(()=>{}))}
-              onEdit={(pc)=>afterPopoverClose(()=>setEditingPcId(pc.id))}
-            />
-
-            {pc.session ? <section className="overview-card p-4"><div className="mb-3 flex items-center justify-between"><div><p className="eyebrow">Current session</p><h3 className="mt-1 text-sm font-semibold text-ink-900">{pc.session.customerName || pc.session.username || 'Guest session'}</h3></div><span className="rounded-full bg-surface-raised px-2 py-1 text-[10px] font-semibold capitalize text-slate-soft">{pc.session.billing || 'prepaid'}</span></div><div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl bg-surface-raised/60 p-3"><p className="text-[10px] text-slate-soft">Rate</p><p className="mt-1 font-semibold text-ink-900">{pc.session.ratePlanName || 'Current rate'}</p></div><div className="rounded-xl bg-surface-raised/60 p-3"><p className="text-[10px] text-slate-soft">Session state</p><p className="mt-1 font-semibold text-ink-900">{pc.session.isLocked ? 'Locked' : 'Active'}</p></div></div></section> : <section className="rounded-[16px] border border-dashed border-surface-line px-4 py-5 text-center"><p className="text-sm font-semibold text-ink-900">No active session</p><p className="mt-1 text-xs text-slate-soft">This station is ready for a member or guest session.</p></section>}
-          </div>
-        </SidePanel>
-      })()}
+          onOpenSessionModal={(pc) => {
+            closePopover()
+            openSessionModal(pc)
+          }}
+          onOpenStartModal={() => {
+            closePopover()
+            setStartSessionModalOpen(true)
+          }}
+          onEndSession={(pc, disposition) => handleEnd(pc, disposition)}
+          onSetMaintenance={(pc, toMaint) => handleSetMaintenance(pc, toMaint)}
+          onQuickCommand={quickCommand}
+          onTransferSession={(pc) => {
+            closePopover()
+            openTimeAction(pc, 'transfer')
+          }}
+        />
+      )}
 
       <Modal
         open={stationPairingOpen}

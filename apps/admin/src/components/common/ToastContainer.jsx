@@ -41,28 +41,30 @@ export default function ToastContainer() {
   if (!toasts.length) return null
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[1000] flex w-[min(300px,calc(100vw-1.5rem))] flex-col gap-1.5">
+    <div className="admin-toast-container pointer-events-none fixed bottom-4 right-4 z-[1000] flex w-[min(340px,calc(100vw-1.5rem))] flex-col gap-2">
       {toasts.map((toast) => {
         const tone = TONE[toast.tone] || TONE.info
         const Icon = tone.icon
         return (
           <div
             key={toast.id}
-            className={`animate-rise pointer-events-auto flex items-start gap-2.5 rounded-xl border px-3 py-2 shadow-md transition-opacity duration-150 ${tone.border} ${tone.bg}`}
+            className={`admin-toast admin-toast-${toast.tone || 'info'} animate-rise pointer-events-auto flex items-start gap-3 rounded-xl border px-3.5 py-2.5 shadow-lg transition-all duration-150 ${tone.border} ${tone.bg}`}
             role="status"
           >
-            <Icon size={14} className={`mt-0.5 shrink-0 ${tone.iconClass}`} />
+            <div className="admin-toast-icon-wrap mt-0.5 shrink-0">
+              <Icon size={15} className={`admin-toast-icon ${tone.iconClass}`} />
+            </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-ink-900 tracking-tight leading-tight">{toast.title}</p>
-              {toast.message ? <p className="mt-0.5 text-[11px] leading-snug text-slate-soft line-clamp-2">{toast.message}</p> : null}
+              <p className="admin-toast-title text-xs font-semibold text-ink-900 tracking-tight leading-tight">{toast.title}</p>
+              {toast.message ? <p className="admin-toast-message mt-0.5 text-[11px] leading-snug text-slate-soft line-clamp-2">{toast.message}</p> : null}
             </div>
             <button
               type="button"
               onClick={() => dismiss(toast.id)}
-              className="rounded-md p-0.5 text-slate-soft/60 hover:bg-surface-raised hover:text-ink-900 transition-colors"
+              className="admin-toast-close rounded p-1 text-slate-soft/60 hover:bg-surface-raised hover:text-ink-900 transition-colors"
               aria-label="Dismiss notification"
             >
-              <X size={12} />
+              <X size={13} />
             </button>
           </div>
         )

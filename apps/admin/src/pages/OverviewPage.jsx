@@ -41,6 +41,7 @@ import { useAuth } from '../context/AuthContext.jsx'
 import { useTheme } from '../context/ThemeContext.jsx'
 import { useAdminMode } from '../context/AdminModeContext.jsx'
 import { useEsportsTheme } from '../context/EsportsThemeContext.jsx'
+import { useSkin } from '../context/SkinContext.jsx'
 import { formatAdminPeso } from '../lib/numeric.js'
 import { effectivePcStatus } from '../lib/pcStatus.js'
 import { buildRevenueScale, formatRevenueDay, normalizeSevenDayRevenue } from '../lib/revenueChart.js'
@@ -142,6 +143,7 @@ export default function OverviewPage(){
   const { user }=useAuth()
   const { isDark, toggleTheme }=useTheme()
   const { uiMode, isSimpleMode, isAdvanceMode, canToggleMode, setUiMode }=useAdminMode()
+  const { activeSkin, openGallery } = useSkin()
   const { themeMode, isEsportsMode, isDashboardMode, setThemeMode }=useEsportsTheme()
   const { settings, pcs, topUpRequests, supportRequests, serverError, sendEmailSummary }=useAppData()
   const [data,setData]=useState(null)
@@ -314,6 +316,17 @@ export default function OverviewPage(){
           </div>
           <div className="overview-header-actions flex min-w-0 flex-1 items-center justify-end gap-2">
             <AdminQuickFind />
+            <button
+              type="button"
+              onClick={openGallery}
+              className="overview-header-control cursor-pointer"
+              title="Switch Console Skin"
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
+                {activeSkin?.mark || 'N'}
+              </span>
+              <span className="hidden xl:inline font-display">{activeSkin?.name || 'Skins'}</span>
+            </button>
             <button type="button" onClick={()=>setFeedbackOpen(true)} className="overview-header-control relative" title="Open customer feedback">
               <MessageSquareText size={15}/><span className="hidden xl:inline">Feedback</span>
               {feedbackCount>0&&<span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-midnight px-1 text-[9px] font-bold text-soft-white">{feedbackCount>=3?'3+':feedbackCount}</span>}

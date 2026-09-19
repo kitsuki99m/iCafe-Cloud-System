@@ -184,6 +184,693 @@
       linear-gradient(to bottom, rgba(0, 245, 160, 0.03) 1px, transparent 1px);
     background-size: auto, auto, 32px 32px, 32px 32px;
   }
+
+  /* ===== Aezakmi Esports Console Skins ===== */
+  :root {
+    --bg: #F3F5FA;
+    --surface: #FFFFFF;
+    --surface-2: #F7F9FC;
+    --line: #E3E8F1;
+    --line-soft: #EDF1F7;
+    --text: #101724;
+    --muted: #68758C;
+    --faint: #93A0B5;
+    --free: #0FA97B;
+    --live: #D98200;
+    --hold: #1E8FD1;
+    --down: #7C889C;
+    --brand: #6B4DF6;
+    --brand-ink: #FFFFFF;
+    --glow: rgba(217, 130, 0, 0.18);
+    --shadow: 0 1px 2px rgba(16, 23, 36, 0.06), 0 8px 24px -12px rgba(16, 23, 36, 0.18);
+    --r: 14px;
+    --display: 'Archivo';
+    --tile-r: 12px;
+    --tile-clip: none;
+    --panel-r: 14px;
+    --art: none;
+    --ring: 0 0 0 1px transparent;
+    --fx: rgba(123, 97, 255, 0.16);
+    --lift: 0.5px;
+  }
+
+  html[data-theme="dark"],
+  html.dark {
+    --bg: #0C111B;
+    --surface: #131A28;
+    --surface-2: #1A2233;
+    --line: #26314A;
+    --line-soft: #1E273B;
+    --text: #E6EAF2;
+    --muted: #8D9AB5;
+    --faint: #6B7891;
+    --free: #2ED3A0;
+    --live: #FFB020;
+    --hold: #4CC2FF;
+    --down: #6B7688;
+    --brand: #7B61FF;
+    --brand-ink: #0C111B;
+    --glow: rgba(255, 176, 32, 0.16);
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+  }
+
+  /* Nexus — Signature console look */
+  [data-skin="nexus"], .sk-nexus {
+    --bg: #0C111B;
+    --surface: #131A28;
+    --surface-2: #1A2233;
+    --line: #26314A;
+    --line-soft: #1E273B;
+    --text: #E6EAF2;
+    --muted: #8D9AB5;
+    --faint: #6B7891;
+    --brand: #7B61FF;
+    --brand-ink: #0C111B;
+    --free: #2ED3A0;
+    --live: #FFB020;
+    --hold: #4CC2FF;
+    --down: #6B7688;
+    --display: 'Archivo';
+    --tile-r: 12px;
+    --tile-clip: none;
+    --panel-r: 14px;
+    --glow: rgba(255, 176, 32, 0.2);
+    --fx: rgba(123, 97, 255, 0.16);
+    --art: radial-gradient(700px 320px at 70% -20%, rgba(123, 97, 255, 0.16), transparent 70%), linear-gradient(180deg, #0E1422, #0A0F19);
+  }
+
+  /* Victus — HP performance blue over navy mica */
+  [data-skin="victus"], .sk-victus {
+    --bg: #08111F;
+    --surface: #0F1D31;
+    --surface-2: #15263E;
+    --line: #21395A;
+    --line-soft: #182C47;
+    --text: #E8F1FB;
+    --muted: #8FA8C6;
+    --faint: #6B86A6;
+    --brand: #0096D6;
+    --brand-ink: #04121D;
+    --free: #3FD6B0;
+    --live: #FFC34D;
+    --hold: #59C2FF;
+    --down: #5F7899;
+    --display: 'Saira';
+    --tile-r: 10px;
+    --panel-r: 12px;
+    --tile-clip: polygon(0 0, 100% 0, 100% calc(100% - 13px), calc(100% - 13px) 100%, 0 100%);
+    --glow: rgba(0, 150, 214, 0.22);
+    --fx: rgba(0, 150, 214, 0.16);
+    --art:
+      radial-gradient(1100px 520px at 82% -14%, rgba(0, 150, 214, 0.26), transparent 66%),
+      repeating-linear-gradient(112deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 11px),
+      linear-gradient(180deg, #0A1526 0%, #08111F 58%, #060D18 100%);
+  }
+
+  /* Alienware — Space black, honeycomb, AlienFX morph */
+  [data-skin="alien"], .sk-alien {
+    --bg: #07080D;
+    --surface: #11131C;
+    --surface-2: #171A25;
+    --line: #262B3C;
+    --line-soft: #1C2030;
+    --text: #EDF2FA;
+    --muted: #93A0BC;
+    --faint: #6E7A96;
+    --brand: #00CFE5;
+    --brand-ink: #041417;
+    --free: #3BE8C0;
+    --live: #FFB648;
+    --hold: #7C8CFF;
+    --down: #616C87;
+    --display: 'Rajdhani';
+    --tile-r: 18px;
+    --panel-r: 18px;
+    --tile-clip: none;
+    --glow: rgba(0, 207, 229, 0.24);
+    --fx: rgba(0, 207, 229, 0.20);
+    --art:
+      radial-gradient(760px 460px at 50% -8%, rgba(0, 207, 229, 0.20), transparent 68%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='60' height='52'><g fill='none' stroke='%2300CFE5' stroke-opacity='0.13'><path d='M15 1 L45 1 L60 26 L45 51 L15 51 L0 26 Z'/></g></svg>"),
+      linear-gradient(180deg, #090A11, #050609);
+  }
+
+  /* ROG — ROG red on black, hazard slashes, scanlines, anniversary gold */
+  [data-skin="rog"], .sk-rog {
+    --bg: #0A0809;
+    --surface: #141012;
+    --surface-2: #1B1518;
+    --line: #2E2023;
+    --line-soft: #231A1C;
+    --text: #F3F3F3;
+    --muted: #A79598;
+    --faint: #7E6D70;
+    --brand: #DE272C;
+    --brand-ink: #FFFFFF;
+    --free: #57D97B;
+    --live: #D4A33A;
+    --hold: #FF6E8A;
+    --down: #6E6062;
+    --display: 'Chakra Petch';
+    --tile-r: 2px;
+    --panel-r: 3px;
+    --tile-clip: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+    --glow: rgba(222, 39, 44, 0.3);
+    --fx: rgba(222, 39, 44, 0.20);
+    --art:
+      repeating-linear-gradient(-42deg, rgba(222, 39, 44, 0.085) 0 3px, transparent 3px 19px),
+      radial-gradient(820px 420px at 12% -6%, rgba(222, 39, 44, 0.22), transparent 66%),
+      repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 4px),
+      linear-gradient(180deg, #0C090A, #070506);
+  }
+
+  /* Razer — True black, snake green, Chroma spectrum */
+  [data-skin="razer"], .sk-razer {
+    --bg: #000000;
+    --surface: #0E0E0E;
+    --surface-2: #161616;
+    --line: #262626;
+    --line-soft: #1A1A1A;
+    --text: #FFFFFF;
+    --muted: #A8A8A8;
+    --faint: #7A7A7A;
+    --brand: #44D62C;
+    --brand-ink: #000000;
+    --free: #44D62C;
+    --live: #FFAA00;
+    --hold: #00E0FF;
+    --down: #5A5A5A;
+    --display: 'Archivo';
+    --tile-r: 2px;
+    --panel-r: 2px;
+    --tile-clip: none;
+    --glow: rgba(68, 214, 44, 0.28);
+    --fx: rgba(68, 214, 44, 0.16);
+    --art:
+      radial-gradient(760px 380px at 50% -6%, rgba(68, 214, 44, 0.15), transparent 70%),
+      repeating-linear-gradient(90deg, rgba(68, 214, 44, 0.055) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(0deg, rgba(68, 214, 44, 0.055) 0 1px, transparent 1px 46px),
+      linear-gradient(180deg, #000, #000);
+  }
+
+  /* Predator — Steel blue, aqua beams, ember highlights */
+  [data-skin="predator"], .sk-predator {
+    --bg: #060D13;
+    --surface: #0E1922;
+    --surface-2: #13212D;
+    --line: #1F3644;
+    --line-soft: #172935;
+    --text: #E9F5F8;
+    --muted: #88A3B2;
+    --faint: #647D8C;
+    --brand: #0BC5C0;
+    --brand-ink: #03191A;
+    --free: #22D3A8;
+    --live: #FF7A18;
+    --hold: #4FD8F0;
+    --down: #5A7182;
+    --display: 'Saira';
+    --tile-r: 0px;
+    --panel-r: 0px;
+    --tile-clip: polygon(0 16px, 16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+    --glow: rgba(255, 122, 24, 0.22);
+    --fx: rgba(11, 197, 192, 0.18);
+    --art:
+      linear-gradient(112deg, transparent 38%, rgba(11, 197, 192, 0.12) 44%, transparent 49%),
+      repeating-linear-gradient(112deg, rgba(255, 122, 24, 0.055) 0 1px, transparent 1px 30px),
+      radial-gradient(1000px 520px at 88% 6%, rgba(11, 197, 192, 0.20), transparent 66%),
+      linear-gradient(180deg, #07121A, #050A0F);
+  }
+
+  /* Backdrop animated layer */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    background-image: var(--art);
+    background-color: var(--bg);
+    background-repeat: repeat;
+    animation: drift 90s linear infinite;
+    pointer-events: none;
+  }
+  [data-skin="nexus"] .backdrop,
+  :root:not([data-skin]) .backdrop {
+    animation: none;
+  }
+  .backdrop::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  [data-skin="alien"] .backdrop::after {
+    opacity: 1;
+    background: radial-gradient(620px 380px at 50% 0%, var(--fx), transparent 70%);
+    animation: morph 26s linear infinite;
+  }
+  [data-skin="rog"] .backdrop::after {
+    opacity: 1;
+    background: linear-gradient(180deg, transparent, rgba(222, 39, 44, 0.14), transparent);
+    height: 38%;
+    inset: auto 0 auto 0;
+    animation: sweep 16s ease-in-out infinite;
+  }
+  [data-skin="predator"] .backdrop::after {
+    opacity: 1;
+    background: linear-gradient(112deg, transparent 45%, rgba(11, 197, 192, 0.14) 50%, transparent 55%);
+    animation: beam 13s ease-in-out infinite;
+  }
+
+  @keyframes drift {
+    to { background-position: 0 0, 340px -340px, 0 0, 0 0; }
+  }
+  @keyframes morph {
+    0% { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+  }
+  @keyframes sweep {
+    0%, 100% { transform: translateY(-40vh); }
+    50% { transform: translateY(120vh); }
+  }
+  @keyframes beam {
+    0%, 100% { transform: translateX(-30%); }
+    50% { transform: translateX(30%); }
+  }
+
+  .chroma {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 999;
+    display: none;
+    background: linear-gradient(90deg, #f00, #f80, #fe0, #44d62c, #0ff, #09f, #a0f, #f08, #f00);
+    background-size: 300% 100%;
+    animation: chroma 9s linear infinite;
+    pointer-events: none;
+  }
+  [data-skin="razer"] .chroma {
+    display: block;
+  }
+  @keyframes chroma {
+    to { background-position: 300% 0; }
+  }
+  @keyframes powerOn {
+    0% { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: none; }
+  }
+  .booting .admin-main,
+  .booting .admin-sidebar,
+  .booting .overview-container {
+    animation: powerOn 0.38s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+  @keyframes ringPulse {
+    0%, 100% { box-shadow: 0 0 0 0 transparent; }
+    50% { box-shadow: 0 0 0 3px var(--glow); }
+  }
+
+  /* Skin-driven glassmorphism & surfaces */
+  [data-skin] {
+    background-color: var(--bg);
+    color: var(--text);
+  }
+  [data-skin] body {
+    background-color: transparent !important;
+    color: var(--text) !important;
+  }
+  [data-skin] .admin-app-canvas,
+  [data-skin] .admin-shell-frame,
+  [data-skin] .admin-main {
+    background: transparent !important;
+  }
+  [data-skin] .admin-sidebar,
+  [data-skin] .admin-global-header,
+  [data-skin] .admin-mobile-header {
+    background: color-mix(in srgb, var(--surface) 86%, transparent) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-color: var(--line) !important;
+  }
+  [data-skin] .overview-card,
+  [data-skin] .overview-soft-card,
+  [data-skin] .admin-panel-card {
+    background: color-mix(in srgb, var(--surface) 82%, transparent) !important;
+    border-radius: var(--panel-r) !important;
+    border-color: var(--line) !important;
+  }
+  [data-skin] .nexus-tile {
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
+    border-radius: var(--tile-r);
+    clip-path: var(--tile-clip);
+    border-color: var(--line);
+  }
+  [data-skin] .nexus-tile.live {
+    animation: ringPulse 3.4s ease-in-out infinite;
+  }
+  [data-skin="rog"] h1,
+  [data-skin="razer"] h1,
+  [data-skin="predator"] h1 {
+    letter-spacing: 0.01em;
+  }
+  [data-skin="rog"] .admin-sidebar-brand,
+  [data-skin="predator"] .admin-sidebar-brand {
+    border-radius: 3px;
+  }
+  [data-skin="alien"] .admin-sidebar-brand {
+    border-radius: 50%;
+  }
+
+  /* ===== Skin Adaptation: Buttons ===== */
+  [data-skin] .btn,
+  [data-skin] button.btn,
+  [data-skin] a.btn {
+    font-family: var(--display), sans-serif;
+    border-radius: calc(var(--panel-r) * 0.65);
+    transition: background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, transform 0.1s ease, color 0.14s ease;
+  }
+
+  /* Primary buttons */
+  [data-skin] .btn.primary,
+  [data-skin] .btn-primary,
+  [data-skin] button.btn-primary {
+    background: var(--brand) !important;
+    color: var(--brand-ink) !important;
+    border: 1px solid var(--brand) !important;
+    box-shadow: 0 4px 18px -4px var(--glow), 0 0 0 1px var(--brand) !important;
+  }
+  [data-skin] .btn.primary:hover:not(:disabled),
+  [data-skin] .btn-primary:hover:not(:disabled) {
+    filter: brightness(1.12);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px -2px var(--glow), 0 0 0 1px var(--brand) !important;
+  }
+  [data-skin] .btn.primary:active:not(:disabled),
+  [data-skin] .btn-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  /* Secondary & Outline buttons */
+  [data-skin] .btn.secondary,
+  [data-skin] .btn-secondary,
+  [data-skin] .btn-subtle,
+  [data-skin] .btn-outline {
+    background: color-mix(in srgb, var(--surface) 92%, transparent) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--line) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  }
+  [data-skin] .btn.secondary:hover:not(:disabled),
+  [data-skin] .btn-secondary:hover:not(:disabled),
+  [data-skin] .btn-subtle:hover:not(:disabled),
+  [data-skin] .btn-outline:hover:not(:disabled) {
+    background: var(--surface-2) !important;
+    border-color: color-mix(in srgb, var(--brand) 45%, var(--line)) !important;
+    color: var(--text) !important;
+  }
+
+  /* Ghost buttons */
+  [data-skin] .btn.ghost,
+  [data-skin] .btn-ghost {
+    background: transparent !important;
+    color: var(--muted) !important;
+    border: 1px solid transparent !important;
+  }
+  [data-skin] .btn.ghost:hover:not(:disabled),
+  [data-skin] .btn-ghost:hover:not(:disabled) {
+    color: var(--text) !important;
+    background: var(--surface-2) !important;
+    border-color: var(--line) !important;
+  }
+
+  /* Danger buttons */
+  [data-skin] .btn.danger,
+  [data-skin] .btn-danger {
+    background: color-mix(in srgb, var(--live, #FF4655) 12%, var(--surface)) !important;
+    color: var(--live, #FF4655) !important;
+    border: 1px solid color-mix(in srgb, var(--live, #FF4655) 42%, var(--line)) !important;
+    box-shadow: 0 4px 16px -6px rgba(255, 70, 85, 0.32) !important;
+  }
+  [data-skin] .btn.danger:hover:not(:disabled),
+  [data-skin] .btn-danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--live, #FF4655) 24%, var(--surface)) !important;
+    border-color: var(--live, #FF4655) !important;
+  }
+
+  /* Teal / Success buttons */
+  [data-skin] .btn-teal {
+    background: var(--free) !important;
+    color: var(--bg) !important;
+    border: 1px solid var(--free) !important;
+    box-shadow: 0 4px 18px -4px rgba(46, 211, 160, 0.35) !important;
+  }
+
+  /* Skin button shapes & geometries */
+  [data-skin="rog"] .btn,
+  [data-skin="rog"] button.btn,
+  [data-skin="rog"] .admin-modal-close,
+  [data-skin="rog"] .admin-icon-button {
+    border-radius: 2px !important;
+    font-family: 'Chakra Petch', sans-serif !important;
+  }
+  [data-skin="rog"] .btn.primary,
+  [data-skin="rog"] .btn-primary {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  [data-skin="razer"] .btn,
+  [data-skin="razer"] button.btn,
+  [data-skin="razer"] .admin-modal-close,
+  [data-skin="razer"] .admin-icon-button {
+    border-radius: 2px !important;
+    font-family: 'Archivo', sans-serif !important;
+  }
+
+  [data-skin="predator"] .btn,
+  [data-skin="predator"] button.btn {
+    border-radius: 0 !important;
+    clip-path: polygon(0 7px, 7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%) !important;
+    font-family: 'Saira', sans-serif !important;
+  }
+  [data-skin="predator"] .admin-modal-close,
+  [data-skin="predator"] .admin-icon-button {
+    border-radius: 0 !important;
+    clip-path: polygon(0 5px, 5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%) !important;
+  }
+
+  [data-skin="victus"] .btn,
+  [data-skin="victus"] button.btn {
+    border-radius: 8px !important;
+    font-family: 'Saira', sans-serif !important;
+  }
+
+  [data-skin="alien"] .btn,
+  [data-skin="alien"] button.btn {
+    border-radius: 12px !important;
+    font-family: 'Rajdhani', sans-serif !important;
+    font-weight: 600;
+  }
+
+  /* ===== Skin Adaptation: Modals ===== */
+  [data-skin] .admin-modal-backdrop {
+    background: rgba(4, 7, 13, 0.74) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  html[data-skin] .admin-modal-shell,
+  [data-skin] .admin-modal-shell {
+    background: color-mix(in srgb, var(--surface) 94%, transparent) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--line) !important;
+    border-radius: var(--panel-r) !important;
+    box-shadow: 0 0 0 1px var(--line), 0 25px 65px -12px rgba(0, 0, 0, 0.85), 0 0 35px -10px var(--glow) !important;
+    color: var(--text) !important;
+  }
+
+  html[data-skin="predator"] .admin-modal-shell,
+  [data-skin="predator"] .admin-modal-shell {
+    border-radius: 0 !important;
+    clip-path: polygon(0 16px, 16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%) !important;
+  }
+  html[data-skin="rog"] .admin-modal-shell,
+  [data-skin="rog"] .admin-modal-shell {
+    border-radius: 3px !important;
+    border-color: color-mix(in srgb, var(--brand) 38%, var(--line)) !important;
+  }
+  html[data-skin="razer"] .admin-modal-shell,
+  [data-skin="razer"] .admin-modal-shell {
+    border-radius: 2px !important;
+    border-color: color-mix(in srgb, var(--brand) 42%, var(--line)) !important;
+  }
+  html[data-skin="alien"] .admin-modal-shell,
+  [data-skin="alien"] .admin-modal-shell {
+    border-radius: 18px !important;
+    border-color: color-mix(in srgb, var(--brand) 32%, var(--line)) !important;
+  }
+  html[data-skin="victus"] .admin-modal-shell,
+  [data-skin="victus"] .admin-modal-shell {
+    border-radius: 12px !important;
+    border-color: color-mix(in srgb, var(--brand) 36%, var(--line)) !important;
+  }
+
+  [data-skin] .admin-modal-header {
+    background: color-mix(in srgb, var(--surface-2) 65%, transparent) !important;
+    border-bottom: 1px solid var(--line) !important;
+  }
+
+  [data-skin] .admin-modal-title {
+    color: var(--text) !important;
+    font-family: var(--display), sans-serif !important;
+    font-weight: 700;
+  }
+
+  [data-skin] .admin-modal-description {
+    color: var(--muted) !important;
+  }
+
+  [data-skin] .admin-modal-close {
+    color: var(--muted) !important;
+  }
+  [data-skin] .admin-modal-close:hover {
+    color: var(--text) !important;
+    background: var(--surface-2) !important;
+  }
+
+  [data-skin] .admin-modal-body {
+    background: transparent !important;
+    color: var(--text) !important;
+  }
+
+  [data-skin] .admin-modal-footer {
+    background: color-mix(in srgb, var(--surface-2) 65%, transparent) !important;
+    border-top: 1px solid var(--line) !important;
+  }
+
+  /* Form controls inside modals in active skins */
+  [data-skin] .admin-modal-body input:not([type="checkbox"]):not([type="radio"]),
+  [data-skin] .admin-modal-body select,
+  [data-skin] .admin-modal-body textarea {
+    background: var(--surface-2) !important;
+    border: 1px solid var(--line) !important;
+    color: var(--text) !important;
+    border-radius: calc(var(--panel-r) * 0.7);
+  }
+  [data-skin] .admin-modal-body input::placeholder,
+  [data-skin] .admin-modal-body textarea::placeholder {
+    color: var(--faint) !important;
+  }
+
+  [data-skin="rog"] .admin-modal-body input,
+  [data-skin="rog"] .admin-modal-body select,
+  [data-skin="rog"] .admin-modal-body textarea,
+  [data-skin="razer"] .admin-modal-body input,
+  [data-skin="razer"] .admin-modal-body select,
+  [data-skin="razer"] .admin-modal-body textarea {
+    border-radius: 2px !important;
+  }
+  [data-skin="predator"] .admin-modal-body input,
+  [data-skin="predator"] .admin-modal-body select,
+  [data-skin="predator"] .admin-modal-body textarea {
+    border-radius: 0 !important;
+  }
+
+  [data-skin] .admin-modal-body input:focus,
+  [data-skin] .admin-modal-body select:focus,
+  [data-skin] .admin-modal-body textarea:focus {
+    border-color: var(--brand) !important;
+    box-shadow: 0 0 0 2px var(--glow) !important;
+    outline: none !important;
+  }
+
+  /* ConfirmModal callout */
+  [data-skin] .admin-confirm-callout {
+    background: color-mix(in srgb, var(--surface-2) 80%, transparent) !important;
+    border-color: var(--line) !important;
+    border-radius: calc(var(--panel-r) * 0.7) !important;
+  }
+  [data-skin] .admin-confirm-text {
+    color: var(--muted) !important;
+  }
+  [data-skin] .admin-confirm-icon {
+    background: color-mix(in srgb, var(--live) 15%, transparent) !important;
+    color: var(--live) !important;
+  }
+
+  /* ===== Skin Adaptation: Toast Notifications ===== */
+  [data-skin] .admin-toast {
+    background: color-mix(in srgb, var(--surface) 92%, var(--text) 8%) !important;
+    color: var(--text) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--line) !important;
+    border-radius: var(--panel-r) !important;
+    box-shadow: 0 12px 36px -10px rgba(0, 0, 0, 0.75), 0 0 20px -5px var(--glow) !important;
+  }
+
+  [data-skin="predator"] .admin-toast {
+    border-radius: 0 !important;
+    clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%) !important;
+  }
+  [data-skin="rog"] .admin-toast,
+  [data-skin="razer"] .admin-toast {
+    border-radius: 2px !important;
+  }
+  [data-skin="alien"] .admin-toast {
+    border-radius: 14px !important;
+  }
+  [data-skin="victus"] .admin-toast {
+    border-radius: 10px !important;
+  }
+
+  [data-skin] .admin-toast .admin-toast-title {
+    color: var(--text) !important;
+    font-family: var(--display), sans-serif !important;
+    font-weight: 700;
+  }
+  [data-skin] .admin-toast .admin-toast-message {
+    color: var(--muted) !important;
+  }
+  [data-skin] .admin-toast .admin-toast-close {
+    color: var(--muted) !important;
+  }
+  [data-skin] .admin-toast .admin-toast-close:hover {
+    color: var(--text) !important;
+    background: var(--surface-2) !important;
+  }
+
+  /* Toast Tones */
+  [data-skin] .admin-toast.admin-toast-success {
+    border-color: color-mix(in srgb, var(--free) 48%, var(--line)) !important;
+  }
+  [data-skin] .admin-toast.admin-toast-success .admin-toast-icon {
+    color: var(--free) !important;
+  }
+
+  [data-skin] .admin-toast.admin-toast-error {
+    border-color: color-mix(in srgb, var(--live, #FF4655) 48%, var(--line)) !important;
+  }
+  [data-skin] .admin-toast.admin-toast-error .admin-toast-icon {
+    color: var(--live, #FF4655) !important;
+  }
+
+  [data-skin] .admin-toast.admin-toast-warning {
+    border-color: color-mix(in srgb, var(--live) 48%, var(--line)) !important;
+  }
+  [data-skin] .admin-toast.admin-toast-warning .admin-toast-icon {
+    color: var(--live) !important;
+  }
+
+  [data-skin] .admin-toast.admin-toast-info {
+    border-color: color-mix(in srgb, var(--brand) 48%, var(--line)) !important;
+  }
+  [data-skin] .admin-toast.admin-toast-info .admin-toast-icon {
+    color: var(--brand) !important;
+  }
+
   html, body, #root {
     width: 100%;
     height: 100%;

@@ -6,6 +6,7 @@ import { AppDataProvider } from './context/AppDataContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
 import { AdminModeProvider } from './context/AdminModeContext.jsx'
 import { EsportsThemeProvider } from './context/EsportsThemeContext.jsx'
+import { SkinProvider } from './context/SkinContext.jsx'
 import App from './App.jsx'
 import { cloudConsumeAuthCallback } from './lib/cloudClient.js'
 import './index.css'
@@ -20,7 +21,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <AuthProvider>
         <AdminModeProvider>
           <EsportsThemeProvider>
-            <ThemeProvider><AppDataProvider><App /></AppDataProvider></ThemeProvider>
+            <SkinProvider>
+              <ThemeProvider><AppDataProvider><App /></AppDataProvider></ThemeProvider>
+            </SkinProvider>
           </EsportsThemeProvider>
         </AdminModeProvider>
       </AuthProvider>

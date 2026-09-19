@@ -30,8 +30,8 @@ export default function Button({
     <button
       type={type}
       disabled={disabled}
-      className={`inline-flex items-center justify-center rounded-lg font-semibold
-        transition-colors duration-150
+      className={`btn btn-${variant} ${variant} inline-flex items-center justify-center font-semibold
+        transition-all duration-150
         disabled:opacity-40 disabled:cursor-not-allowed
         ${activeVariant} ${sizes[size] || sizes.md} ${className}`}
       {...props}

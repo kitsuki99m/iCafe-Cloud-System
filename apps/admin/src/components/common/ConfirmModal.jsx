@@ -37,11 +37,11 @@ export default function ConfirmModal({
         </>
       }
     >
-      <div className="flex gap-3 rounded-xl border border-surface-line bg-surface-raised/55 p-3">
-        <div className="mt-0.5 shrink-0 rounded-lg bg-gold/10 p-1.5 text-gold-dim">
+      <div className="admin-confirm-callout flex gap-3 rounded-xl border border-surface-line bg-surface-raised/55 p-3">
+        <div className="admin-confirm-icon mt-0.5 shrink-0 rounded-lg bg-gold/10 p-1.5 text-gold-dim">
           <AlertTriangle size={16} />
         </div>
-        <div className="min-w-0 text-xs leading-5 text-slate-soft">{content}</div>
+        <div className="admin-confirm-text min-w-0 text-xs leading-5 text-slate-soft">{content}</div>
       </div>
     </Modal>
   )

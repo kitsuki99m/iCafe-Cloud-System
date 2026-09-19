@@ -56,61 +56,85 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
   const isDefaultNumberLabel = /^pc0*\d+$/i.test(normalizedLabel) || normalizedLabel === normalizedTitle
   const customNickname = !isDefaultNumberLabel && pc.label && pc.label !== stationTitle ? pc.label : null
 
+  const pillStyles = {
+    available: 'text-[var(--free,#2ED3A0)] bg-[color-mix(in_srgb,var(--free,#2ED3A0)_15%,transparent)] border-[color-mix(in_srgb,var(--free,#2ED3A0)_30%,transparent)]',
+    occupied: 'text-[var(--live,#FFB020)] bg-[color-mix(in_srgb,var(--live,#FFB020)_15%,transparent)] border-[color-mix(in_srgb,var(--live,#FFB020)_35%,transparent)]',
+    reserved: 'text-[var(--hold,#4CC2FF)] bg-[color-mix(in_srgb,var(--hold,#4CC2FF)_15%,transparent)] border-[color-mix(in_srgb,var(--hold,#4CC2FF)_30%,transparent)]',
+    maintenance: 'text-[var(--down,#6B7688)] bg-[color-mix(in_srgb,var(--down,#6B7688)_15%,transparent)] border-[color-mix(in_srgb,var(--down,#6B7688)_30%,transparent)]',
+    offline: 'text-[var(--muted,#8D9AB5)] bg-[color-mix(in_srgb,var(--muted,#8D9AB5)_12%,transparent)] border-[var(--line,#26314A)]',
+  }
+
+  const pillText = {
+    available: 'Open',
+    occupied: 'In use',
+    reserved: 'Reserved',
+    maintenance: 'Repair',
+    offline: 'Offline',
+  }
+
+  const ratePerHour = pc.rate || pc.hourlyRate || (isVipStation ? 60 : 35)
+  const dueEstimate = session
+    ? (session.billing === 'prepaid'
+        ? Number(session.totalAmount || session.paidAmount || 0)
+        : Math.round(((elapsed || 0) / 3600) * ratePerHour))
+    : 0
+
   return (
     <article
       data-pc-id={pc.id}
-      className={`group relative flex min-h-[178px] flex-col rounded-2xl border p-3.5 shadow-card transition-all duration-200 hover:-translate-y-1 ${
-        lowTime
-          ? 'border-ember bg-gradient-to-b from-ember/10 to-surface shadow-[0_0_20px_rgba(239,68,68,0.18)] ring-1 ring-ember/40 animate-pulse hover:border-ember'
-          : config.cardClass
+      style={{
+        clipPath: 'var(--tile-clip, none)',
+        borderRadius: 'var(--tile-r, 12px)',
+      }}
+      className={`nexus-tile tile group relative flex min-h-[160px] flex-col justify-between border p-3.5 transition-all duration-200 hover:-translate-y-0.5 ${
+        isOccupied
+          ? 'live border-[color-mix(in_srgb,var(--live,#FFB020)_45%,var(--line,#26314A))] shadow-[0_10px_26px_-14px_var(--glow,rgba(255,176,32,0.3))] ring-1 ring-[color-mix(in_srgb,var(--live,#FFB020)_30%,transparent)]'
+          : lowTime
+          ? 'border-ember bg-ember/10 shadow-[0_0_20px_rgba(239,68,68,0.25)] ring-1 ring-ember animate-pulse'
+          : 'border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/90 hover:border-[var(--brand,#7B61FF)]'
       }`}
     >
       {/* Click target for full card selection */}
       <button
         type="button"
         onClick={(event) => onSelect?.(pc, event)}
-        className="absolute inset-0 rounded-2xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold z-0 cursor-pointer"
-        aria-label={`Open actions for ${pc.label || stationTitle}`}
+        className="absolute inset-0 z-0 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand,#7B61FF)]"
+        aria-label={`Open station ${stationTitle}`}
       />
 
-      {/* TOP HEADER: Esports Station Badge + Status Pill + Controls */}
-      <div className="relative z-10 flex items-start justify-between gap-2 pointer-events-none">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-soft/80">STATION</span>
-            {isVipStation && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 border border-gold/40 px-1.5 py-0.2 text-[9px] font-black text-gold-dim">
-                <Crown size={10} className="text-gold-dim" />
-                VIP
-              </span>
-            )}
-          </div>
-          <div className="flex items-baseline gap-1.5 min-w-0 flex-nowrap overflow-hidden">
-            <h3 className="font-display text-base sm:text-lg font-black tracking-tight text-ink-900 whitespace-nowrap shrink-0">
-              {stationTitle}
-            </h3>
-            {customNickname && (
-              <span className="truncate text-[10px] font-medium text-slate-soft shrink min-w-0" title={customNickname}>
-                ({customNickname})
-              </span>
-            )}
-          </div>
+      {/* TOP ROW: Station Title + Status Pill + Settings */}
+      <div className="relative z-10 flex items-center justify-between gap-2 pointer-events-none">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="font-display font-bold text-sm sm:text-base tracking-tight text-[var(--text,#E6EAF2)]">
+            {stationTitle}
+          </span>
+          {isVipStation && (
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[9px] font-black text-amber-400 border border-amber-500/40">
+              <Crown size={9} /> VIP
+            </span>
+          )}
+          {customNickname && (
+            <span className="truncate text-[10px] text-[var(--muted,#8D9AB5)]" title={customNickname}>
+              ({customNickname})
+            </span>
+          )}
         </div>
 
-        <div className="relative z-10 flex shrink-0 items-center gap-1.5 pointer-events-auto">
-          {/* Status Badge */}
+        <div className="flex shrink-0 items-center gap-1.5 pointer-events-auto">
+          {/* Status Pill matching Claude artifact */}
           <span
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-black tracking-wider uppercase ${
-              lowTime
-                ? 'border-ember/40 bg-ember/15 text-ember-dim animate-pulse'
-                : config.badgeClass
+            className={`pill inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+              pillStyles[statusKey] || pillStyles.offline
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${lowTime ? 'bg-ember animate-ping' : config.dotColor}`} />
-            {lowTime ? '<5M LEFT' : config.label}
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isOccupied ? 'bg-[var(--live,#FFB020)] animate-pulse' : 'bg-current'
+              }`}
+            />
+            {lowTime ? '<5m left' : pillText[statusKey] || 'Offline'}
           </span>
 
-          {/* Quick Settings Action */}
           {onControls && (
             <button
               type="button"
@@ -118,108 +142,50 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
                 event.stopPropagation()
                 onControls(pc, event)
               }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-surface-line bg-surface-raised/90 text-slate-soft transition hover:bg-surface-line hover:text-ink-900 shadow-xs"
-              aria-label={`Open station controls for ${stationTitle}`}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--line,#26314A)] text-[var(--muted,#8D9AB5)] transition hover:bg-[var(--surface-2,#1A2233)] hover:text-[var(--text,#E6EAF2)]"
               title="Station Quick Controls"
             >
-              <Settings2 size={13} />
+              <Settings2 size={12} />
             </button>
           )}
         </div>
       </div>
 
-      {/* MIDDLE ZONE: Session Gamer Display or Ready Status */}
-      <div className="relative z-10 my-auto py-2 pointer-events-none">
-        {session ? (
-          <div className="rounded-xl border border-surface-line/70 bg-surface-raised/50 p-2.5 space-y-1.5">
-            {/* Player Info Row */}
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-midnight/8 text-ink-900">
-                  <User size={11} />
-                </span>
-                <span className="truncate text-xs font-bold text-ink-900">
-                  {guestOfflinePause
-                    ? 'Time Paused'
-                    : session.isLocked
-                    ? 'Session Locked'
-                    : session.username || session.customerName || 'Guest Player'}
-                </span>
-              </div>
-
-              {/* Billing Mode Badge */}
-              <span className="inline-flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.2 text-[9px] font-black uppercase tracking-wider text-slate-soft bg-surface-raised border border-surface-line/50">
-                {session.billing === 'prepaid' ? (
-                  <>
-                    <Zap size={9} className="text-gold-dim" /> Prepaid
-                  </>
-                ) : (
-                  'Postpaid'
-                )}
-              </span>
-            </div>
-
-            {/* Esports Digital Match Timer */}
-            {timer && (
-              <div className="flex items-center justify-between rounded-lg bg-surface/80 border border-surface-line/40 px-2 py-1">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-soft">
-                  {session.billing === 'prepaid' ? 'Remaining' : 'Elapsed'}
-                </span>
-                <span
-                  className={`font-mono stat-figure text-sm sm:text-[15px] font-black tracking-tight ${
-                    lowTime
-                      ? 'text-ember-dim animate-pulse'
-                      : isOccupied
-                      ? 'text-teal-dim'
-                      : 'text-ink-900'
-                  }`}
-                >
-                  {timer}
-                </span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 rounded-xl border border-dashed border-surface-line/80 bg-surface-raised/20 p-2 text-slate-soft">
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${config.badgeClass}`}>
-              <Icon size={14} />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-ink-900 truncate">
-                {statusKey === 'available' ? 'Available to Play' : config.sublabel}
-              </p>
-              <p className="text-[9px] text-slate-soft truncate">
-                {statusKey === 'available' ? 'Click to assign or start session' : 'System idle'}
-              </p>
-            </div>
-          </div>
-        )}
+      {/* MIDDLE ROW: Big Monospace Timer Readout */}
+      <div className="relative z-10 my-1 pointer-events-none">
+        <div
+          className={`font-mono text-xl sm:text-2xl font-bold tracking-tight ${
+            isOccupied
+              ? 'text-[var(--text,#E6EAF2)]'
+              : statusKey === 'available'
+              ? 'text-[var(--faint,#6B7891)]'
+              : 'text-[var(--muted,#8D9AB5)]'
+          }`}
+        >
+          {isOccupied && timer ? timer : statusKey === 'available' ? '00:00:00' : '—'}
+        </div>
       </div>
 
-      {/* Disconnection or Locked Alert */}
-      {disconnected && (
-        <div className={`pointer-events-none relative mb-2 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[9px] font-semibold ${
-          guestOfflinePause ? 'bg-grape/15 text-grape border border-grape/30' : 'bg-ember/10 text-ember-dim border border-ember/20'
-        }`}>
-          <ShieldAlert size={11} className="shrink-0" />
-          <span className="truncate">
-            {guestOfflinePause ? 'Station offline · Time saved' : 'Station connection lost · session still active'}
-          </span>
+      {/* FOOTER ROW: Who & Cost/Rate */}
+      <div className="relative z-10 flex flex-col gap-0.5 pointer-events-none text-xs">
+        <div className="truncate font-medium text-[var(--muted,#8D9AB5)]">
+          {isOccupied
+            ? `${session?.customerName || session?.username || 'Guest'} · ${pc.game || session?.game || 'Match'}`
+            : isHold
+            ? `Held for ${pc.reservedFor || 'a player'}`
+            : statusKey === 'maintenance'
+            ? 'In maintenance'
+            : 'Ready for player'}
         </div>
-      )}
-
-      {/* FOOTER: Hardware Specs & Network Telemetry */}
-      <div className="relative z-10 mt-auto flex items-center justify-between gap-2 pt-2 border-t border-surface-line/50 pointer-events-none text-[10px] text-slate-soft">
-        <span className="truncate font-medium" title={pc.spec || 'Esports Rig'}>
-          {pc.spec || 'Standard Rig'}
-        </span>
-        <div className="flex shrink-0 items-center gap-1.5 font-mono">
-          <span className="stat-figure">{pc.ipAddress || 'No IP'}</span>
-          {pc.customerVersion && (
-            <span className="rounded bg-surface-raised px-1 py-0.2 text-[8px] font-sans font-bold">
-              v{pc.customerVersion}
-            </span>
-          )}
+        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--faint,#6B7891)]">
+          <span>
+            {isOccupied
+              ? `₱${dueEstimate.toLocaleString('en-PH')} · ${session?.billing === 'prepaid' ? 'Prepaid' : 'Standard'}`
+              : statusKey === 'available'
+              ? `₱${ratePerHour}/hr`
+              : pc.spec || 'Gaming Station'}
+          </span>
+          {pc.ipAddress && <span className="text-[10px] opacity-75">{pc.ipAddress}</span>}
         </div>
       </div>
     </article>

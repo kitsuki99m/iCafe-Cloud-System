@@ -5,6 +5,9 @@ export default defineConfig({
   // Electron loads dist/index.html through file://, so asset URLs must stay relative.
   base: './',
   plugins: [react()],
+  resolve: {
+    dedupe: ['react', 'react-dom', 'react-router-dom'],
+  },
   server: {
     host: '0.0.0.0',
     port: 5174,

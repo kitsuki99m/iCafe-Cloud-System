@@ -20,6 +20,7 @@ import { useAppData } from '../../context/AppDataContext.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import { useAdminMode } from '../../context/AdminModeContext.jsx'
 import { useEsportsTheme } from '../../context/EsportsThemeContext.jsx'
+import { useSkin } from '../../context/SkinContext.jsx'
 import { hasSectionManual } from '../admin/AdminSectionManual.jsx'
 
 function getInitials(name = 'Admin') {
@@ -50,6 +51,7 @@ export default function AdminProfileMenu({
   const { isDark, toggleTheme, theme } = useTheme()
   const { isSimpleMode, isAdvanceMode, canToggleMode, setUiMode } = useAdminMode()
   const { themeMode, isEsportsMode, isDashboardMode, setThemeMode } = useEsportsTheme()
+  const { activeSkin, openGallery } = useSkin()
 
   const isOwner = user?.cloudRole === 'owner' || user?.role === 'owner'
   const isAdmin = user?.cloudRole === 'admin' || user?.role === 'admin'
@@ -248,6 +250,23 @@ export default function AdminProfileMenu({
                 <span>{currentLabel} Owner Manual</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                openGallery()
+              }}
+              className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-xs font-medium text-ink-900 transition hover:bg-surface-raised cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <Sparkles size={15} className="text-[var(--brand,#7B61FF)]" />
+                <span>Console Skins</span>
+              </div>
+              <span className="rounded-full bg-[var(--brand,#7B61FF)]/15 px-2 py-0.5 text-[9px] font-bold text-[var(--brand,#7B61FF)]">
+                {activeSkin?.name?.split(' ')[0] || 'Nexus'}
+              </span>
+            </button>
 
             {onOpenShiftModal && (
               <button

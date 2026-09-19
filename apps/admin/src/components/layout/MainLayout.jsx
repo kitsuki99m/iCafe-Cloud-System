@@ -20,6 +20,8 @@ import { isCloudAdmin, cloudVerifyPassword } from '../../lib/cloudClient.js'
 import AdminSectionManual, { hasSectionManual } from '../admin/AdminSectionManual.jsx'
 import PwaInstallButton from '../common/PwaInstallButton.jsx'
 import AdminProfileMenu from './AdminProfileMenu.jsx'
+import { useSkin } from '../../context/SkinContext.jsx'
+import SkinGalleryModal from '../admin/SkinGalleryModal.jsx'
 
 const BASE_NAV = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -58,6 +60,7 @@ export default function MainLayout({ children }) {
   const { isDark, toggleTheme } = useTheme()
   const { uiMode, isSimpleMode, isAdvanceMode, canToggleMode, setUiMode, toggleUiMode } = useAdminMode()
   const { themeMode, isEsportsMode, isDashboardMode, setThemeMode } = useEsportsTheme()
+  const { activeSkin, openGallery } = useSkin()
   const branding = useBranding()
   const location = useLocation()
   const isCashier = user?.role === 'cashier' || user?.role === 'staff'
@@ -184,11 +187,21 @@ export default function MainLayout({ children }) {
   }, [])
 
   return (
-    <div className="admin-app-canvas h-dvh min-h-0 w-full overflow-hidden">
-      <div className="admin-shell-frame flex h-full min-h-0 overflow-hidden">
+    <div className="admin-app-canvas h-dvh min-h-0 w-full overflow-hidden relative">
+      <div className="backdrop" aria-hidden="true" />
+      <div className="chroma" aria-hidden="true" />
+      <div className="admin-shell-frame flex h-full min-h-0 overflow-hidden relative z-10">
         <aside className="admin-sidebar sticky top-0 z-[120] hidden h-full w-[220px] shrink-0 flex-col overflow-hidden px-4 py-5 lg:flex lg:w-[232px] lg:px-5 lg:py-6">
-          <div className="admin-sidebar-brand mb-7 flex items-center gap-2.5 px-1 pt-0.5">
-            <img key={branding.logoUrl || 'default-logo'} src={branding.logoUrl || logo} onError={event=>{event.currentTarget.src=logo}} alt="" className="h-9 w-9 rounded-[11px] shadow-sm" />
+          <div className="admin-sidebar-brand mb-6 flex items-center gap-3 px-1 pt-0.5">
+            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-[var(--brand,#7B61FF)]/40 bg-[var(--surface,#131A28)] shadow-[0_0_14px_var(--glow,rgba(123,97,255,0.25))] p-1 overflow-hidden transition-all duration-300">
+              <img
+                key={branding.logoUrl || 'default-logo'}
+                src={branding.logoUrl || logo}
+                onError={(event) => { event.currentTarget.src = logo }}
+                alt="Aezakmi"
+                className="h-full w-full object-contain"
+              />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <p className="truncate font-display text-[15px] font-bold uppercase leading-tight tracking-[0.045em] text-ink-900">
@@ -197,11 +210,14 @@ export default function MainLayout({ children }) {
               </div>
               <div className="mt-0.5 flex items-center justify-between gap-1">
                 <p className="max-w-[120px] truncate text-[10px] font-medium uppercase tracking-[0.13em] text-slate-soft" title={branding.branchLocation || settings?.branchLocation || ''}>{branding.branch || settings?.branch || 'Davao Branch'}</p>
-                {isEsportsMode && (
-                  <span className="rounded bg-teal/15 px-1 py-0.2 text-[8px] font-bold tracking-wider text-teal-dim border border-teal/30">
-                    HUD
-                  </span>
-                )}
+                <button
+                  type="button"
+                  onClick={openGallery}
+                  className="rounded px-1.5 py-0.2 text-[8px] font-bold uppercase tracking-wider text-[var(--brand,#7B61FF)] border border-[var(--brand,#7B61FF)]/30 hover:bg-[var(--brand,#7B61FF)]/15 transition-colors"
+                  title="Switch Console Skin"
+                >
+                  {activeSkin?.mark || 'HUD'}
+                </button>
               </div>
             </div>
           </div>
@@ -276,7 +292,18 @@ export default function MainLayout({ children }) {
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-soft">{branding.cafeName || settings?.cafeName || 'Aezakmi Cafe'}</p>
               <p className="truncate font-display text-[15px] font-semibold leading-tight text-ink-900">{currentLabel}</p>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={openGallery}
+                className="flex items-center gap-1 rounded-lg border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-2 py-1 text-xs font-semibold text-[var(--text,#E6EAF2)] shadow-xs"
+                title="Switch Console Skin"
+              >
+                <span className="flex h-3.5 w-3.5 items-center justify-center rounded-xs bg-[var(--brand,#7B61FF)] text-[8px] font-bold text-white">
+                  {activeSkin?.mark || 'N'}
+                </span>
+                <span className="text-[10px] font-display">{activeSkin?.name?.split(' ')[0]}</span>
+              </button>
               <AdminNotificationCenter />
               <AnnouncementCenter />
               <AdminProfileMenu
@@ -295,6 +322,17 @@ export default function MainLayout({ children }) {
             </div>
             <AdminQuickFind />
             <div className="ml-auto flex items-center gap-2 text-slate-soft">
+              <button
+                type="button"
+                onClick={openGallery}
+                className="flex items-center gap-1.5 rounded-xl border border-[var(--line,#26314A)] bg-[var(--surface-2,#1A2233)] px-3 py-1.5 text-xs font-semibold text-[var(--text,#E6EAF2)] transition-all hover:border-[var(--brand,#7B61FF)] hover:bg-[var(--surface,#131A28)] shadow-xs cursor-pointer"
+                title="Switch Console Skin"
+              >
+                <span className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--brand,#7B61FF)] text-[9px] font-bold text-white shadow-xs">
+                  {activeSkin?.mark || 'N'}
+                </span>
+                <span className="font-display tracking-tight">{activeSkin?.name || 'Skins'}</span>
+              </button>
               <AdminNotificationCenter />
               <AnnouncementCenter />
               <AdminProfileMenu
@@ -310,6 +348,7 @@ export default function MainLayout({ children }) {
           </header>}
           <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
           <ShiftManagementModal isOpen={shiftModalOpen} onClose={() => setShiftModalOpen(false)} />
+          <SkinGalleryModal />
           {!isOverview && <FeedbackInboxModal open={feedbackOpen} onClose={()=>setFeedbackOpen(false)} />}
         </main>
       </div>
