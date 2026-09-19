@@ -678,10 +678,15 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
         if(brevoRes.ok){
           emailSent=true;
           message=`Summary report delivered to ${targetEmail} via Brevo.`;
+        } else {
+          const errData=await brevoRes.json().catch(()=>({}));
+          message=`Brevo delivery failed (${brevoRes.status}): ${errData?.message || 'Check BREVO_API_KEY and verified sender.'}`;
         }
-      }catch(_err){
-        // Brevo attempt failed, continue returning report data
+      }catch(err: any){
+        message=`Email delivery error: ${err?.message || 'Connection failed'}`;
       }
+    } else {
+      message='BREVO_API_KEY secret is not configured in Supabase Edge Functions. Report compiled without email delivery.';
     }
 
     return result({
@@ -771,13 +776,13 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
           message = `Invitation delivered to ${cleanEmail} via Brevo.`;
         } else {
           const data = await response.json().catch(() => ({}));
-          message = data?.message || `Brevo returned HTTP ${response.status}`;
+          message = `Brevo delivery failed (${response.status}): ${data?.message || 'Check BREVO_API_KEY and verified sender.'}`;
         }
       } catch (err: any) {
-        message = err?.message || 'Email delivery failed';
+        message = `Email delivery error: ${err?.message || 'Connection failed'}`;
       }
     } else {
-      message = 'Brevo API key not configured; invite registered in system.';
+      message = 'BREVO_API_KEY secret is not configured in Supabase Edge Functions. Invite registered without email delivery.';
     }
 
     await audit(admin, branch, user.id, 'cloud.team.invite', 'team_member', null, { email: cleanEmail, name: cleanName, role, emailSent });
@@ -847,11 +852,13 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
           message = `Reminder delivered to ${cleanEmail} via Brevo.`;
         } else {
           const data = await response.json().catch(() => ({}));
-          message = data?.message || `Brevo returned HTTP ${response.status}`;
+          message = `Brevo delivery failed (${response.status}): ${data?.message || 'Check BREVO_API_KEY and verified sender.'}`;
         }
       } catch (err: any) {
-        message = err?.message || 'Email delivery failed';
+        message = `Email delivery error: ${err?.message || 'Connection failed'}`;
       }
+    } else {
+      message = 'BREVO_API_KEY secret is not configured in Supabase Edge Functions. Reminder registered without email delivery.';
     }
 
     return result({

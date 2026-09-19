@@ -71,7 +71,7 @@ function shouldFallback(error) {
   if (!error) return true
   if (error instanceof TypeError) return true
   const status=Number(error.status||0)
-  return [502,503,504].includes(status) || ['EDGE_UNAVAILABLE','EDGE_TIMEOUT','BUSINESS_SUSPENDED','BUSINESS_TERMINATED'].includes(String(error.code||''))
+  return [502,503,504].includes(status) || ['EDGE_UNAVAILABLE','EDGE_TIMEOUT','BUSINESS_SUSPENDED','BUSINESS_TERMINATED','STATION_AUTH_INVALID','STATION_AUTH_REQUIRED','STATION_NOT_PAIRED'].includes(String(error.code||''))
 }
 
 async function localApiFetch(path, options = {}) {

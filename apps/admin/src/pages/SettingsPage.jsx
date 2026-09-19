@@ -251,12 +251,12 @@ export default function SettingsPage() {
       setInviteName('')
       setInviteEmail('')
       setInviteRole('cashier')
-      const msg = response?.message || `Invitation email sent to ${cleanEmail} as ${inviteRole === 'admin' ? 'Branch Admin' : inviteRole === 'manager' ? 'Shift Manager' : 'Cashier'}.`
+      const msg = response?.message || (response?.emailSent ? `Invitation email delivered to ${cleanEmail}.` : `Invitation registered locally for ${cleanEmail}.`)
       setInviteSuccess(msg)
       showToast({
-        title: 'Employee Invited',
-        message: response?.emailSent ? `Invitation email delivered to ${cleanEmail} via Brevo.` : `Invitation registered for ${cleanEmail}`,
-        tone: 'success',
+        title: response?.emailSent ? 'Employee Invited' : 'Employee Registered (Email Not Sent)',
+        message: msg,
+        tone: response?.emailSent ? 'success' : 'warning',
       })
     } catch (err) {
       setInviteError(err?.message || 'Failed to send invitation.')
@@ -279,9 +279,9 @@ export default function SettingsPage() {
         branch: member.branch,
       })
       showToast({
-        title: 'Invitation Resent',
-        message: response?.message || `Fresh activation link sent to ${member.email}`,
-        tone: 'success',
+        title: response?.emailSent ? 'Invitation Resent' : 'Reminder Recorded (Email Not Sent)',
+        message: response?.message || (response?.emailSent ? `Fresh activation link delivered to ${member.email} via Brevo.` : `Reminder saved. Brevo API key is not configured.`),
+        tone: response?.emailSent ? 'success' : 'warning',
       })
     } catch (err) {
       showToast({

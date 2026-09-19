@@ -102,16 +102,32 @@ export async function pairCloudStation({ pairingCode }) {
 }
 
 export async function cloudStationApiFetch(path, { method='GET', body, operationKey=null, localAuthToken='' }={}) {
-  const response=await fetch(`${SUPABASE_URL}/functions/v1/station-api`,{method:'POST',headers:stationHeaders(),body:JSON.stringify({method,path,body:body??{},operationKey:operationKey||null,localAuthToken:localAuthToken||''})})
-  const data=await parse(response)
-  markCloudStationOnline()
-  return data
+  try {
+    const response=await fetch(`${SUPABASE_URL}/functions/v1/station-api`,{method:'POST',headers:stationHeaders(),body:JSON.stringify({method,path,body:body??{},operationKey:operationKey||null,localAuthToken:localAuthToken||''})})
+    const data=await parse(response)
+    markCloudStationOnline()
+    return data
+  } catch (error) {
+    if ([401,403].includes(Number(error?.status)) && error?.code==='STATION_AUTH_INVALID') {
+      await clearCloudStationCredential()
+      window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-invalid',{detail:error.data}))
+    }
+    throw error
+  }
 }
 export async function cloudStationRuntime(action, payload={}) {
-  const response=await fetch(`${SUPABASE_URL}/functions/v1/station-runtime`,{method:'POST',headers:stationHeaders(),body:JSON.stringify({action,...payload})})
-  const data=await parse(response)
-  markCloudStationOnline()
-  return data
+  try {
+    const response=await fetch(`${SUPABASE_URL}/functions/v1/station-runtime`,{method:'POST',headers:stationHeaders(),body:JSON.stringify({action,...payload})})
+    const data=await parse(response)
+    markCloudStationOnline()
+    return data
+  } catch (error) {
+    if ([401,403].includes(Number(error?.status)) && error?.code==='STATION_AUTH_INVALID') {
+      await clearCloudStationCredential()
+      window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-invalid',{detail:error.data}))
+    }
+    throw error
+  }
 }
 export async function acknowledgeCloudStationCommand(commandId,status,result={}) { return cloudStationRuntime('ack',{commandId,status,result}) }
 
@@ -122,8 +138,12 @@ async function pollCommands() {
     const data=await cloudStationRuntime('poll')
     for (const command of data?.commands||[]) window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-command',{detail:{...command,cloudStationCommand:true}}))
   } catch (error) {
-    if ([401,403].includes(Number(error?.status)) && error?.code==='STATION_AUTH_INVALID') window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-invalid',{detail:error.data}))
-    else markCloudStationFallback(error?.message||'Cloud unavailable')
+    if ([401,403].includes(Number(error?.status)) && error?.code==='STATION_AUTH_INVALID') {
+      await clearCloudStationCredential()
+      window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-invalid',{detail:error.data}))
+    } else {
+      markCloudStationFallback(error?.message||'Cloud unavailable')
+    }
   } finally { polling=false }
 }
 async function heartbeat() {
@@ -139,7 +159,14 @@ async function heartbeat() {
       softwareVersion:String(software.currentVersion||'').slice(0,64),
     })
     if(transport!=='cloud') { markCloudStationOnline(); connectWakeSocket(); void pollCommands() }
-  } catch(error){ markCloudStationFallback(error?.message||'Cloud unavailable') }
+  } catch(error){
+    if ([401,403].includes(Number(error?.status)) && error?.code==='STATION_AUTH_INVALID') {
+      await clearCloudStationCredential()
+      window.dispatchEvent(new CustomEvent('aezakmi:cloud-station-invalid',{detail:error.data}))
+    } else {
+      markCloudStationFallback(error?.message||'Cloud unavailable')
+    }
+  }
 }
 let pingTimer = null
 

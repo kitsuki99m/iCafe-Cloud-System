@@ -1027,52 +1027,6 @@ async function cloudNativeMutation(path, method, body, operationKey) {
   if (method === "POST" && refundSessionMatch) {
     return cloudStationAdmin("session_close", { branchId, sessionId:decodeURIComponent(refundSessionMatch[1]), disposition:"refund", operationKey:operationKey || null });
   }
-  if (method === "POST" && path === "/reports/send-summary") {
-    const period = String(body?.period || "daily").toLowerCase();
-    const recipientEmail = String(body?.recipientEmail || "").trim();
-    const now = new Date();
-    let sinceIso = "";
-    if (period === "daily") {
-      sinceIso = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    } else if (period === "weekly") {
-      sinceIso = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    } else if (period === "monthly") {
-      sinceIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    } else {
-      sinceIso = new Date(0).toISOString();
-    }
-    const encoded = encodeURIComponent(branchId);
-    const [shifts, orders, topUps] = await Promise.all([
-      rest(`branch_user_shifts?select=*&branch_id=eq.${encoded}&opened_at=gte.${encodeURIComponent(sinceIso)}`).catch(() => []),
-      rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&created_at=gte.${encodeURIComponent(sinceIso)}`).catch(() => []),
-      rest(`wallet_ledger?select=*&branch_id=eq.${encoded}&created_at=gte.${encodeURIComponent(sinceIso)}`).catch(() => []),
-    ]);
-    const shiftsCount = (shifts || []).length;
-    const shiftsVariance = (shifts || []).reduce((sum, s) => sum + Number(s.variance_centavos || 0) / 100, 0);
-    const fulfilledOrders = (orders || []).filter((o) => String(o.order_status || "").toLowerCase() === "fulfilled" || o.status === "completed");
-    const orderRevenue = fulfilledOrders.reduce((sum, o) => sum + Number(o.total_centavos || 0) / 100, 0);
-    const ordersCount = fulfilledOrders.length;
-    const topUpRevenue = (topUps || []).reduce((sum, t) => sum + Number(t.amount || 0), 0);
-    const topUpsCount = (topUps || []).length;
-    const totalEarnings = orderRevenue + topUpRevenue;
-
-    return {
-      success: true,
-      emailSent: true,
-      message: `Summary report for ${period} compiled. Total revenue: ₱${totalEarnings.toFixed(2)}`,
-      reportData: {
-        period,
-        since: sinceIso,
-        totalEarnings,
-        topUpRevenue,
-        topUpsCount,
-        orderRevenue,
-        ordersCount,
-        shiftsLogged: shiftsCount,
-        shiftsVariance,
-      },
-    };
-  }
   return null;
 }
 

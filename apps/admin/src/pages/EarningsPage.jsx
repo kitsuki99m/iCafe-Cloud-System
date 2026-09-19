@@ -108,11 +108,19 @@ export default function EarningsPage(){
       setSendingEmail(true)
       try {
         const res = await sendEmailSummary(emailPeriod, emailRecipient)
-        showToast({
-          title: res?.emailSent ? 'Summary Email Sent' : 'Summary Report Generated',
-          message: res?.message || `Summary report for ${emailPeriod} generated.`,
-          tone: res?.emailSent ? 'success' : 'default',
-        })
+        if (res?.emailSent) {
+          showToast({
+            title: 'Summary Email Sent',
+            message: res?.message || `Summary report delivered to ${res?.targetEmail || 'your email'} via Brevo.`,
+            tone: 'success',
+          })
+        } else {
+          showToast({
+            title: 'Email Delivery Inactive',
+            message: res?.message || 'Report generated locally, but email delivery via Brevo was not completed. Verify your BREVO_API_KEY environment configuration.',
+            tone: 'warning',
+          })
+        }
         setModal(null)
       } catch (err) {
         showToast({ title: 'Email Delivery Failed', message: err.message, tone: 'error' })

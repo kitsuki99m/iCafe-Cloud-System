@@ -7365,12 +7365,21 @@ router.delete("/vouchers/:id", auth, requireRole("admin", "cashier"), (req, res)
 // ON-DEMAND & SCHEDULED EMAIL REPORTS (BREVO)
 // ==========================================
 
+function getCafeSettingsMap() {
+  try {
+    const rows = db.prepare("SELECT key, value FROM settings").all();
+    return Object.fromEntries(rows.map(r => [r.key, r.value]));
+  } catch {
+    return {};
+  }
+}
+
 router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), async (req, res, next) => {
   try {
     const { period = 'daily', recipientEmail } = req.body || {};
-    const cafeSettings = db.prepare("SELECT * FROM settings WHERE id=1").get() || {};
-    const cafeName = cafeSettings.cafe_name || "Aezakmi Cafe";
-    const targetEmail = recipientEmail || cafeSettings.admin_email || "kyle.serina05@gmail.com";
+    const cafeSettings = getCafeSettingsMap();
+    const cafeName = cafeSettings.cafeName || cafeSettings.cafe_name || "Aezakmi Cafe";
+    const targetEmail = recipientEmail || cafeSettings.adminEmail || cafeSettings.admin_email || cafeSettings.ownerEmail || cafeSettings.owner_email || req.user?.email || env.brevoSenderEmail || "kyle.serina05@gmail.com";
 
     let sinceIso = '';
     const now = new Date();
@@ -7471,13 +7480,13 @@ router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), asyn
           providerMessage = `Summary report email delivered to ${targetEmail} via Brevo.`;
         } else {
           const data = await response.json().catch(() => ({}));
-          providerMessage = data?.message || `Brevo returned HTTP ${response.status}`;
+          providerMessage = `Brevo delivery failed (${response.status}): ${data?.message || 'Check BREVO_API_KEY and verified sender.'}`;
         }
       } catch (err) {
-        providerMessage = err.message || 'Email delivery failed';
+        providerMessage = `Email delivery error: ${err.message}`;
       }
     } else {
-      providerMessage = 'Brevo API key is not configured in environment; report data returned locally.';
+      providerMessage = 'BREVO_API_KEY is not configured in backend environment. Summary report compiled locally.';
     }
 
     res.json({
@@ -7499,8 +7508,8 @@ router.post("/team/invite", auth, requireRole("admin"), async (req, res, next) =
       return res.status(400).json({ success: false, error: 'Name and email are required.' });
     }
 
-    const cafeSettings = db.prepare("SELECT * FROM settings WHERE id=1").get() || {};
-    const cafeName = cafeSettings.cafe_name || "Aezakmi Cafe";
+    const cafeSettings = getCafeSettingsMap();
+    const cafeName = cafeSettings.cafeName || cafeSettings.cafe_name || "Aezakmi Cafe";
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = branch || cafeSettings.branch || 'Main Branch';
 
@@ -7552,13 +7561,13 @@ router.post("/team/invite", auth, requireRole("admin"), async (req, res, next) =
           providerMessage = `Invitation delivered to ${cleanEmail} via Brevo.`;
         } else {
           const data = await response.json().catch(() => ({}));
-          providerMessage = data?.message || `Brevo returned HTTP ${response.status}`;
+          providerMessage = `Brevo delivery failed (${response.status}): ${data?.message || 'Check BREVO_API_KEY and verified sender.'}`;
         }
       } catch (err) {
-        providerMessage = err.message || 'Email delivery failed';
+        providerMessage = `Email delivery error: ${err.message}`;
       }
     } else {
-      providerMessage = 'Brevo API key not configured; invite registered locally.';
+      providerMessage = 'BREVO_API_KEY is not configured; invite registered in database.';
     }
 
     res.json({
@@ -7579,8 +7588,8 @@ router.post("/team/resend-invite", auth, requireRole("admin"), async (req, res, 
       return res.status(400).json({ success: false, error: 'Email is required.' });
     }
 
-    const cafeSettings = db.prepare("SELECT * FROM settings WHERE id=1").get() || {};
-    const cafeName = cafeSettings.cafe_name || "Aezakmi Cafe";
+    const cafeSettings = getCafeSettingsMap();
+    const cafeName = cafeSettings.cafeName || cafeSettings.cafe_name || "Aezakmi Cafe";
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = branch || cafeSettings.branch || 'Main Branch';
 
@@ -7620,10 +7629,15 @@ router.post("/team/resend-invite", auth, requireRole("admin"), async (req, res, 
         if (response.ok) {
           emailSent = true;
           providerMessage = `Reminder delivered to ${cleanEmail} via Brevo.`;
+        } else {
+          const data = await response.json().catch(() => ({}));
+          providerMessage = `Brevo delivery failed (${response.status}): ${data?.message || 'Check BREVO_API_KEY and verified sender.'}`;
         }
       } catch (err) {
-        providerMessage = err.message || 'Email delivery failed';
+        providerMessage = `Email delivery error: ${err.message}`;
       }
+    } else {
+      providerMessage = 'BREVO_API_KEY is not configured; reminder logged in database.';
     }
 
     res.json({
