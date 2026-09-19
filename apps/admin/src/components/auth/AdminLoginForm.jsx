@@ -20,8 +20,7 @@ import {
   isCloudAdmin,
 } from "../../lib/cloudClient.js";
 
-const inputClass =
-  "w-full min-h-11 rounded-xl border border-surface-line bg-soft-white px-3.5 text-sm text-midnight placeholder:text-slate-soft focus:border-midnight/45 focus:outline-none focus:ring-2 focus:ring-midnight/10";
+const inputClass = "admin-login-input";
 
 
 export default function AdminLoginForm() {
@@ -245,14 +244,14 @@ export default function AdminLoginForm() {
           )}
 
           {!cloud && (
-            <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl border border-surface-line bg-dance/30 p-1">
+            <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100/70 p-1">
               <button
                 type="button"
                 onClick={() => {
                   setMode("pin");
                   setError("");
                 }}
-                className={`min-h-10 rounded-lg px-3 text-xs font-semibold transition-colors ${mode === "pin" ? "bg-soft-white text-midnight shadow-card" : "text-slate-soft hover:text-midnight"}`}
+                className={`admin-login-mode-tab ${mode === "pin" ? "active" : ""}`}
               >
                 <KeyRound className="mr-1.5 inline" size={14} />
                 Admin PIN
@@ -263,7 +262,7 @@ export default function AdminLoginForm() {
                   setMode("password");
                   setError("");
                 }}
-                className={`min-h-10 rounded-lg px-3 text-xs font-semibold transition-colors ${mode === "password" ? "bg-soft-white text-midnight shadow-card" : "text-slate-soft hover:text-midnight"}`}
+                className={`admin-login-mode-tab ${mode === "password" ? "active" : ""}`}
               >
                 Username + Password
               </button>
@@ -273,7 +272,7 @@ export default function AdminLoginForm() {
                   setMode("pin_password");
                   setError("");
                 }}
-                className={`min-h-10 rounded-lg px-2 text-[11px] font-semibold transition-colors ${mode === "pin_password" ? "bg-soft-white text-midnight shadow-card" : "text-slate-soft hover:text-midnight"}`}
+                className={`admin-login-mode-tab ${mode === "pin_password" ? "active" : ""}`}
               >
                 PIN + Password
               </button>
@@ -489,20 +488,18 @@ export default function AdminLoginForm() {
 
             <div className={requesting && requestStep > 1 ? "grid grid-cols-[auto_minmax(0,1fr)] gap-2" : ""}>
               {requesting && requestStep > 1 && (
-                <Button
+                <button
                   type="button"
-                  variant="ghost"
-                  className="min-h-11"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-transparent px-4 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer disabled:opacity-40"
                   disabled={busy}
                   onClick={() => { setError(""); setRequestStep((step) => Math.max(1, step - 1)); }}
                 >
                   Back
-                </Button>
+                </button>
               )}
-              <Button
+              <button
                 type="submit"
-                variant="primary"
-                className="min-h-11 w-full"
+                className="admin-login-submit-btn"
                 disabled={busy || (!cloud && !backendReady) || (requesting ? requestStepMissing : missingCredentials)}
               >
                 {busy ? (
@@ -526,7 +523,7 @@ export default function AdminLoginForm() {
                     <ArrowRight size={16} />
                   </>
                 )}
-              </Button>
+              </button>
             </div>
           </form>
 
