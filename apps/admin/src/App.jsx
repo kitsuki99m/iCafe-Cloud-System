@@ -39,7 +39,7 @@ export default function App() {
         <Route path="/menu" element={<MenuManagementPage />} />
         <Route path="/tariffs" element={isStaffOrCashier ? <Navigate to="/" replace /> : <TariffsPage />} />
         <Route path="/members" element={<MembersPage />} />
-        <Route path="/vouchers" element={<VouchersPage />} />
+        <Route path="/vouchers" element={<TariffsPage initialTab="vouchers" />} />
         <Route path="/earnings" element={isStaffOrCashier ? <Navigate to="/" replace /> : <EarningsPage />} />
         <Route path="/expenses" element={isStaffOrCashier ? <Navigate to="/" replace /> : <EarningsPage />} />
         <Route path="/expense" element={isStaffOrCashier ? <Navigate to="/" replace /> : <EarningsPage />} />

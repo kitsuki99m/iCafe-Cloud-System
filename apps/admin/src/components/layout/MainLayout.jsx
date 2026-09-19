@@ -26,26 +26,25 @@ import SkinGalleryModal from '../admin/SkinGalleryModal.jsx'
 import { formatAdminPeso } from '../../lib/numeric.js'
 
 const BASE_NAV = [
+  { to: '/', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/clients', label: 'Floor Matrix', shortLabel: 'Floor', icon: MonitorCog },
   { to: '/menu', label: 'Menu & Orders', shortLabel: 'Shop', icon: UtensilsCrossed },
-  { to: '/vouchers', label: 'Vouchers', shortLabel: 'Vouchers', icon: Ticket },
   { to: '/launcher', label: 'Games & Apps', shortLabel: 'Games', icon: Gamepad2 },
   { to: '/members', label: 'Members', shortLabel: 'Members', icon: Users },
-  { to: '/tariffs', label: 'Rates', shortLabel: 'Rates', icon: Tags, adminOnly: true },
+  { to: '/tariffs', label: 'Rates & Promos', shortLabel: 'Rates', icon: Tags, adminOnly: true },
   { to: '/analytics', label: 'Analytics', shortLabel: 'Analytics', icon: ChartNoAxesCombined, adminOnly: true },
-  { to: '/', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/earnings', label: 'Earnings', shortLabel: 'Earnings', icon: CircleDollarSign, adminOnly: true },
   { to: '/logs', label: 'Logs', shortLabel: 'Logs', icon: ScrollText, adminOnly: true },
   { to: '/settings', label: 'Settings', shortLabel: 'Settings', icon: Settings, adminOnly: true },
 ]
-const SIMPLE_NAV_PATHS = new Set(['/clients', '/menu', '/vouchers', '/launcher', '/members', '/tariffs', '/analytics', '/earnings', '/logs', '/', '/settings'])
+const SIMPLE_NAV_PATHS = new Set(['/', '/clients', '/menu', '/launcher', '/members', '/tariffs', '/analytics', '/earnings', '/logs', '/settings'])
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 const PAGE_ALIASES = {
   '/': 'Overview',
   '/clients': 'Floor Matrix',
   '/launcher': 'Games & Launcher',
   '/menu': 'Menu & Kitchen Orders',
-  '/tariffs': 'Rates & Pricing Plans',
+  '/tariffs': 'Rates & Promos',
   '/members': 'Member Directory',
   '/vouchers': 'Vouchers & Promo Codes',
   '/earnings': 'Earnings & Reports',
@@ -205,18 +204,18 @@ export default function MainLayout({ children }) {
   }, [])
 
   return (
-    <div className="admin-app-canvas h-dvh min-h-0 w-full overflow-hidden relative">
+    <div className="admin-app-canvas h-full w-full overflow-hidden relative">
       <div className="backdrop" aria-hidden="true" />
       <div className="chroma" aria-hidden="true" />
-      <div className="admin-shell-frame flex h-full min-h-0 overflow-hidden relative z-10">
+      <div className="admin-shell-frame flex h-full min-h-0 w-full overflow-hidden relative z-10">
         {isSimpleMode ? (
           /* ===== SIMPLE MODE: Console Rail Navigation matching nexus-floor.html ===== */
           <aside className="admin-rail-shell hidden lg:flex">
             {/* Brand Logo Mark */}
             <NavLink
-              to="/clients"
+              to="/"
               className="admin-rail-mark"
-              title={`${branding.cafeName || 'Aezakmi'} · Go to Floor`}
+              title={`${branding.cafeName || 'Aezakmi'} · Go to Overview`}
             >
               <img
                 key={branding.logoUrl || 'default-logo'}
@@ -228,7 +227,7 @@ export default function MainLayout({ children }) {
             </NavLink>
 
             {/* Rail Navigation Stack */}
-            <nav className="flex flex-col items-center gap-1.5 w-full px-2 py-1 min-h-0 flex-1 overflow-y-auto">
+            <nav className="flex flex-col items-center gap-1 w-full px-1 py-1 min-h-0 flex-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               {navItems.map(({ to, label, shortLabel, icon: Icon, end }) => {
                 const isMenu = to === '/menu'
                 const hasPending = isMenu && pendingOrdersCount > 0
@@ -241,7 +240,7 @@ export default function MainLayout({ children }) {
                     title={label}
                   >
                     <div className="relative">
-                      <Icon size={20} strokeWidth={1.8} />
+                      <Icon size={18} strokeWidth={1.8} />
                       {hasPending && (
                         <span className="absolute -top-1 -right-1.5 flex h-2 w-2">
                           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
@@ -249,7 +248,7 @@ export default function MainLayout({ children }) {
                         </span>
                       )}
                     </div>
-                    <span className="text-[10.5px] leading-tight">{shortLabel || label}</span>
+                    <span className="text-[9.5px] font-medium tracking-tight text-center leading-tight max-w-[56px] truncate">{shortLabel || label}</span>
                   </NavLink>
                 )
               })}
@@ -373,7 +372,7 @@ export default function MainLayout({ children }) {
           </aside>
         )}
 
-        <main className="admin-main relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="admin-main relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {/* Mobile Header */}
           <header className="admin-mobile-header z-[130] flex min-h-[58px] shrink-0 items-center gap-3 border-b border-[var(--admin-ui-border)] px-3 sm:px-4 lg:hidden">
             <button type="button" onClick={()=>setMobileNavOpen(true)} className="admin-mobile-menu-button" aria-label="Open navigation" aria-expanded={mobileNavOpen}>
@@ -526,12 +525,84 @@ export default function MainLayout({ children }) {
               </header>
             )
           )}
-          <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden">{children}</div>
+          <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative pb-20 lg:pb-0">{children}</div>
           <ShiftManagementModal isOpen={shiftModalOpen} onClose={() => setShiftModalOpen(false)} />
           <SkinGalleryModal />
           {!isOverview && <FeedbackInboxModal open={feedbackOpen} onClose={()=>setFeedbackOpen(false)} />}
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="admin-mobile-bottom-bar fixed bottom-0 inset-x-0 z-[140] flex h-16 items-center justify-around border-t border-[var(--line,#26314A)] bg-[var(--surface,#131A28)]/95 backdrop-blur-xl px-2 shadow-lg lg:hidden" aria-label="Mobile Navigation">
+        <NavLink
+          to="/"
+          end
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
+              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+            }`
+          }
+        >
+          <LayoutDashboard size={20} strokeWidth={1.8} />
+          <span>Overview</span>
+        </NavLink>
+
+        <NavLink
+          to="/clients"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
+              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+            }`
+          }
+        >
+          <MonitorCog size={20} strokeWidth={1.8} />
+          <span>Floor</span>
+        </NavLink>
+
+        <NavLink
+          to="/menu"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors relative ${
+              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+            }`
+          }
+        >
+          <div className="relative">
+            <UtensilsCrossed size={20} strokeWidth={1.8} />
+            {pendingOrdersCount > 0 && (
+              <span className="absolute -top-1 -right-1.5 flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-ember" />
+              </span>
+            )}
+          </div>
+          <span>Shop</span>
+        </NavLink>
+
+        <NavLink
+          to="/members"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors ${
+              isActive ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+            }`
+          }
+        >
+          <Users size={20} strokeWidth={1.8} />
+          <span>Members</span>
+        </NavLink>
+
+        <button
+          type="button"
+          onClick={() => setMobileNavOpen((prev) => !prev)}
+          className={`flex flex-col items-center justify-center gap-1 min-w-[56px] py-1 text-[10.5px] font-semibold transition-colors cursor-pointer ${
+            mobileNavOpen ? 'text-[var(--brand,#7B61FF)] font-bold' : 'text-[var(--muted,#8D9AB5)] hover:text-[var(--text,#E6EAF2)]'
+          }`}
+          aria-label="More navigation items"
+        >
+          <Menu size={20} strokeWidth={1.8} />
+          <span>More</span>
+        </button>
+      </nav>
       {mobileNavOpen && <div className="fixed inset-0 z-[800] lg:hidden" role="presentation">
         <button type="button" className="absolute inset-0 bg-midnight/60" onClick={()=>setMobileNavOpen(false)} aria-label="Close navigation"/>
         <aside className="admin-mobile-drawer absolute inset-y-0 left-0 flex w-[min(88vw,340px)] flex-col overflow-hidden border-r border-[var(--admin-ui-border)] bg-[var(--admin-sidebar-bg)] shadow-2xl" role="dialog" aria-modal="true" aria-label="Admin navigation">

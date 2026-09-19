@@ -141,49 +141,7 @@
     color: #F5F5F5;
   }
 
-  /* Esports Persona Theme Styling */
-  html[data-theme-persona="esports"] {
-    --font-display: "Space Grotesk", "Chakra Petch", sans-serif;
-    --font-mono: "JetBrains Mono", monospace;
-    --app-dot: rgba(0, 245, 160, 0.08);
-    --color-midnight: #070A13;
-    --color-bluish: #151F33;
-    --color-grape: #475569;
-    --color-trillium: #94A3B8;
-    --color-new-wool: #00F5A0;
-    --color-dance: #00D2FF;
-    --color-soft-white: #F8FAFC;
-    --color-ink: #070A13;
-    --color-ink-soft: #CBD5E1;
-    --color-ink-900: #FFFFFF;
-    --color-surface: #0E1626;
-    --color-surface-raised: #141F36;
-    --color-surface-line: #1E2E4E;
-    --color-gold: #00F5A0;
-    --color-gold-soft: #00D2FF;
-    --color-gold-dim: #38BDF8;
-    --color-teal: #00F5A0;
-    --color-teal-soft: rgba(0, 245, 160, 0.15);
-    --color-teal-dim: #00F5A0;
-    --color-orange: #FF9F1C;
-    --color-orange-soft: rgba(255, 159, 28, 0.15);
-    --color-orange-dim: #FFA726;
-    --color-ember: #FF4655;
-    --color-ember-soft: rgba(255, 70, 85, 0.15);
-    --color-ember-dim: #FF7582;
-    --color-slate: #94A3B8;
-    --color-slate-soft: #CBD5E1;
-  }
-  html[data-theme-persona="esports"] body {
-    background-color: #070A13;
-    color: #F8FAFC;
-    background-image: 
-      radial-gradient(circle at 50% -10%, rgba(0, 245, 160, 0.14) 0%, transparent 50%),
-      radial-gradient(circle at 100% 100%, rgba(0, 210, 255, 0.08) 0%, transparent 45%),
-      linear-gradient(to right, rgba(0, 245, 160, 0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(0, 245, 160, 0.03) 1px, transparent 1px);
-    background-size: auto, auto, 32px 32px, 32px 32px;
-  }
+  /* Esports theme is unified with Console Hardware Skins (Nexus, Victus, ROG, Razer, Predator, Alienware) */
 
   /* ===== Aezakmi Esports Console Skins ===== */
   :root {
@@ -528,9 +486,10 @@
     align-items: center;
     gap: 4px;
     padding: 14px 0;
-    position: sticky;
-    top: 0;
-    height: 100vh;
+    position: relative;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
     z-index: 120;
     flex-shrink: 0;
     user-select: none;
@@ -599,11 +558,11 @@
     background: color-mix(in srgb, var(--surface) 86%, transparent);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
-    position: sticky;
-    top: 0;
+    position: relative;
     z-index: 50;
     flex-wrap: wrap;
     min-height: 60px;
+    flex-shrink: 0;
   }
   .nexus-topbar .shift {
     display: flex;
@@ -1043,8 +1002,11 @@
   html, body, #root {
     width: 100%;
     height: 100%;
+    max-height: 100%;
     min-width: 0;
-    overflow: hidden;
+    margin: 0;
+    padding: 0;
+    overflow: hidden !important;
   }
   body {
     @apply bg-ink text-ink-900 font-body antialiased;
@@ -1215,12 +1177,16 @@
 @layer components {
   .admin-app-canvas {
     width: 100%;
-    height: 100dvh;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
     background: var(--admin-shell-bg);
   }
   .admin-shell-frame {
     width: 100%;
     height: 100%;
+    max-height: 100%;
+    overflow: hidden;
     border: 0;
     border-radius: 0;
     background: var(--admin-shell-bg);
@@ -1231,7 +1197,21 @@
     border-right: 1px solid var(--admin-ui-border);
   }
   .admin-main {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
     background: var(--admin-shell-bg);
+  }
+  .admin-route-viewport {
+    flex: 1 1 0%;
+    min-height: 0;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
   .admin-page-header {
     background: var(--admin-card-bg);
@@ -1809,9 +1789,9 @@
 }
 
 @media (max-width: 1023px) {
-  html, body, #root { min-width: 0; width: 100%; }
-  body { overflow: hidden; }
-  .admin-app-canvas { min-height: 100dvh; height: 100dvh; }
+  html, body, #root { min-width: 0; width: 100%; height: 100%; max-height: 100%; overflow: hidden !important; }
+  body { overflow: hidden !important; }
+  .admin-app-canvas { height: 100%; max-height: 100%; overflow: hidden; }
   .admin-shell-frame {
     border: 0;
     border-radius: 0;

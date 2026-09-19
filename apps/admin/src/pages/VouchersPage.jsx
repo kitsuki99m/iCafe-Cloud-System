@@ -24,7 +24,7 @@ import { AdminEmptyState, AdminMetricCard, AdminPageWorkspace, AdminRailCard } f
 
 const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
-export default function VouchersPage() {
+export default function VouchersPage({ headerSlot }) {
   const { vouchers, createVoucher, deleteVoucher } = useAppData()
   const { user } = useAuth()
   const isCashier = user?.role === 'cashier' || user?.role === 'staff'
@@ -178,6 +178,7 @@ export default function VouchersPage() {
         </>
       }
     >
+      {headerSlot}
       <div className="space-y-4">
         {/* Top Action Bar */}
         <div className="flex items-center justify-end gap-3">

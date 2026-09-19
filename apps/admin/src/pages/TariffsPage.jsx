@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Tags,
+  Ticket,
   Pencil,
   Trash2,
   Plus,
@@ -22,6 +24,7 @@ import { makeRatePlanId } from "../lib/rates.js";
 import { formatAdminPeso, positiveNumber } from "../lib/numeric.js";
 import { formatDuration } from "../lib/duration.js";
 import { AdminEmptyState, AdminPageWorkspace, AdminRailCard } from "../components/layout/AdminPageWorkspace.jsx";
+import VouchersPage from "./VouchersPage.jsx";
 
 const BLANK_LINEAR = {
   mode: "linear",
@@ -435,7 +438,9 @@ function RatePlanFields({ draft, setDraft, errors = {} }) {
   );
 }
 
-export default function TariffsPage() {
+export default function TariffsPage({ initialTab }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || initialTab || 'rates';
   const {
     ratePlans = [],
     settings,
@@ -632,9 +637,43 @@ export default function TariffsPage() {
     { label: "Premium plans", value: premiumCount, hint: "Gold + VIP", icon: Sparkles, tone: "text-gold-dim bg-gold/10" },
   ];
 
+  const renderTabSwitcher = () => (
+    <div className="mb-4 flex items-center gap-2 border-b border-[var(--line,#26314A)] pb-3">
+      <button
+        type="button"
+        onClick={() => setSearchParams({})}
+        className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+          activeTab === 'rates'
+            ? 'bg-[var(--brand,#7B61FF)] text-white shadow-xs'
+            : 'text-slate-soft hover:text-ink-900 hover:bg-surface-raised'
+        }`}
+      >
+        <Tags size={14} />
+        <span>Hourly & Package Rates</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setSearchParams({ tab: 'vouchers' })}
+        className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all cursor-pointer ${
+          activeTab === 'vouchers'
+            ? 'bg-[var(--brand,#7B61FF)] text-white shadow-xs'
+            : 'text-slate-soft hover:text-ink-900 hover:bg-surface-raised'
+        }`}
+      >
+        <Ticket size={14} />
+        <span>Promo Vouchers</span>
+      </button>
+    </div>
+  );
+
+  if (activeTab === 'vouchers') {
+    return <VouchersPage headerSlot={renderTabSwitcher()} />;
+  }
+
   return (
     <AdminPageWorkspace>
       <h1 className="sr-only">Rates</h1>
+      {renderTabSwitcher()}
       <div className="rates-settings-layout grid items-start gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="rates-sticky-rail space-y-4 xl:sticky xl:top-[140px]">
           <section className="overview-card p-3">
