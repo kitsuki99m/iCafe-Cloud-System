@@ -6,14 +6,19 @@ import Button from '../common/Button.jsx'
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 export default function AdminCredentialSetup() {
-  const { setupCredentials } = useAuth()
-  const [method, setMethod] = useState('pin')
-  const [username, setUsername] = useState('admin')
+  const { user, setupCredentials } = useAuth()
+  const [method, setMethod] = useState(user?.authMethod || 'password')
+  const [username, setUsername] = useState(user?.username || 'admin')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const dialogRef = useRef(null)
+
+  useEffect(() => {
+    if (user?.username) setUsername(user.username)
+    if (user?.authMethod) setMethod(user.authMethod)
+  }, [user?.username, user?.authMethod])
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -53,7 +58,7 @@ export default function AdminCredentialSetup() {
     setBusy(true)
     setError('')
     try {
-      const result = await setupCredentials({ method, username, password, pin })
+      const result = await setupCredentials({ method, username: username.trim(), password, pin })
       if (!result.ok) setError(result.error)
     } finally {
       setBusy(false)
@@ -67,8 +72,8 @@ export default function AdminCredentialSetup() {
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold/10 text-gold-dim"><LockKeyhole size={18}/></span>
           <div>
             <p className="eyebrow mb-1">First-time security</p>
-            <h2 id="admin-credential-setup-title" className="admin-modal-title font-display font-semibold text-ink-900">Set up your admin login</h2>
-            <p className="admin-modal-description">Choose the sign-in method staff will use for this admin console.</p>
+            <h2 id="admin-credential-setup-title" className="admin-modal-title font-display font-semibold text-ink-900">Set up your permanent login</h2>
+            <p className="admin-modal-description">Choose your new permanent password and sign-in method to replace temporary credentials.</p>
           </div>
         </div>
       </div>

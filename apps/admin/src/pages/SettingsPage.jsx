@@ -241,6 +241,7 @@ export default function SettingsPage() {
         role: inviteRole,
         branch: branchName,
         status: 'invited',
+        temporaryPassword: response?.temporaryPassword || null,
         invitedAt: new Date().toISOString(),
       }
       const updated = [...teamMembers, newMember]
@@ -251,10 +252,11 @@ export default function SettingsPage() {
       setInviteName('')
       setInviteEmail('')
       setInviteRole('cashier')
-      const msg = response?.message || (response?.emailSent ? `Invitation email delivered to ${cleanEmail}.` : `Invitation registered locally for ${cleanEmail}.`)
+      const tempPassNote = response?.temporaryPassword ? ` Temporary password: ${response.temporaryPassword}` : ''
+      const msg = response?.message ? `${response.message}${tempPassNote}` : (response?.emailSent ? `Invitation delivered to ${cleanEmail}.${tempPassNote}` : `Invitation registered for ${cleanEmail}.${tempPassNote}`)
       setInviteSuccess(msg)
       showToast({
-        title: response?.emailSent ? 'Employee Invited' : 'Employee Registered (Email Not Sent)',
+        title: response?.emailSent ? 'Employee Invited' : 'Employee Registered',
         message: msg,
         tone: response?.emailSent ? 'success' : 'warning',
       })
@@ -278,9 +280,15 @@ export default function SettingsPage() {
         role: member.role,
         branch: member.branch,
       })
+      if (response?.temporaryPassword) {
+        const updated = teamMembers.map(m => m.id === member.id ? { ...m, temporaryPassword: response.temporaryPassword } : m)
+        setTeamMembers(updated)
+        try { localStorage.setItem('aezakmi_team_members', JSON.stringify(updated)) } catch {}
+      }
+      const tempPassNote = response?.temporaryPassword ? ` Temporary password: ${response.temporaryPassword}` : ''
       showToast({
-        title: response?.emailSent ? 'Invitation Resent' : 'Reminder Recorded (Email Not Sent)',
-        message: response?.message || (response?.emailSent ? `Fresh activation link delivered to ${member.email} via Brevo.` : `Reminder saved. Brevo API key is not configured.`),
+        title: response?.emailSent ? 'Invitation Resent' : 'Reminder Recorded',
+        message: response?.message ? `${response.message}${tempPassNote}` : (response?.emailSent ? `Fresh activation link delivered to ${member.email}.${tempPassNote}` : `Reminder saved.${tempPassNote}`),
         tone: response?.emailSent ? 'success' : 'warning',
       })
     } catch (err) {
@@ -978,6 +986,11 @@ export default function SettingsPage() {
                                   {member.status === 'invited' && (
                                     <span className="rounded bg-gold/10 px-1.5 py-0.5 text-[9px] font-bold text-gold-dim">
                                       Invited · Pending
+                                    </span>
+                                  )}
+                                  {member.status === 'invited' && member.temporaryPassword && (
+                                    <span className="rounded bg-midnight/10 border border-surface-line px-1.5 py-0.5 font-mono text-[9px] font-medium text-slate-soft" title="Temporary Password">
+                                      Temp: {member.temporaryPassword}
                                     </span>
                                   )}
                                 </div>

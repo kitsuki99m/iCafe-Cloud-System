@@ -771,6 +771,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
       return json({ success: false, status: 400, code: 'NAME_REQUIRED', error: 'Full name is required.' }, 200);
     }
 
+    const temporaryPassword = String(body?.temporaryPassword || `Staff#${Math.floor(1000 + Math.random() * 9000)}`);
     const cafeName = branch.name || 'Aezakmi Cafe';
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = targetBranch || cafeName;
@@ -782,14 +783,18 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const contentHtml = `
       <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${htmlEscape(cleanName)},</p>
       <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">You have been invited to join the staff team at <strong style="color:#F8FAFC;">${htmlEscape(cafeName)}</strong> (${htmlEscape(branchLabel)}).</p>
-      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
           <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Role</td><td align="right" style="padding:8px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${htmlEscape(roleLabel)}</td></tr>
           <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Branch</td><td align="right" style="padding:8px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">${htmlEscape(branchLabel)}</td></tr>
-          <tr><td style="padding:8px 0;color:#8E9DB5;">Authorized Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;">${htmlEscape(cleanEmail)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Login Username / Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;border-bottom:1px solid #222E42;">${htmlEscape(cleanEmail)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;">Temporary Password</td><td align="right" style="padding:8px 0;font-weight:700;color:#F8FAFC;font-family:monospace;font-size:14px;letter-spacing:0.5px;">${htmlEscape(temporaryPassword)}</td></tr>
         </table>
       </div>
-      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Please contact your store administrator for your initial PIN or login credentials to start your shift on the Aezakmi Admin Terminal.</p>
+      <div style="background-color:rgba(234, 179, 8, 0.08);border:1px solid rgba(234, 179, 8, 0.25);border-radius:10px;padding:12px 14px;margin-bottom:18px;">
+        <p style="margin:0;color:#FDE047;font-size:12px;line-height:1.5;"><strong>Important:</strong> On your first login, you will be required to set a new password before accessing the system.</p>
+      </div>
+      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Use the credentials above to sign in on the Aezakmi Admin Terminal.</p>
     `;
 
     const html = emailShell({logoUrl:emailBrandLogoUrl(),eyebrow:'Aezakmi Cafe Management',title:'Employee Invitation',subtitle:`Staff onboarding · ${cafeName}`,contentHtml});
@@ -833,6 +838,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
       success: true,
       emailSent,
       targetEmail: cleanEmail,
+      temporaryPassword,
       message,
     }, 201);
   }
@@ -845,6 +851,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
       return json({ success: false, status: 400, code: 'INVALID_EMAIL', error: 'Email is required.' }, 200);
     }
 
+    const temporaryPassword = String(body?.temporaryPassword || `Staff#${Math.floor(1000 + Math.random() * 9000)}`);
     const cafeName = branch.name || 'Aezakmi Cafe';
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = targetBranch || cafeName;
@@ -856,14 +863,18 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const contentHtml = `
       <p style="margin:0 0 14px;font-size:15px;font-weight:600;color:#F1F5F9;">Hello ${htmlEscape(cleanName || 'Team Member')},</p>
       <p style="margin:0 0 20px;color:#8E9DB5;font-size:14px;line-height:1.65;">This is a reminder of your invitation to join the staff team at <strong style="color:#F8FAFC;">${htmlEscape(cafeName)}</strong> (${htmlEscape(branchLabel)}) as <strong style="color:#38BDF8;">${htmlEscape(roleLabel)}</strong>.</p>
-      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:24px;">
+      <div style="background-color:#1A2232;border:1px solid #222E42;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size:13px;">
           <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Role</td><td align="right" style="padding:8px 0;font-weight:700;color:#38BDF8;border-bottom:1px solid #222E42;">${htmlEscape(roleLabel)}</td></tr>
           <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Assigned Branch</td><td align="right" style="padding:8px 0;font-weight:600;color:#F8FAFC;border-bottom:1px solid #222E42;">${htmlEscape(branchLabel)}</td></tr>
-          <tr><td style="padding:8px 0;color:#8E9DB5;">Authorized Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;">${htmlEscape(cleanEmail)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;border-bottom:1px solid #222E42;">Login Username / Email</td><td align="right" style="padding:8px 0;font-weight:600;color:#E8A33D;font-family:monospace;border-bottom:1px solid #222E42;">${htmlEscape(cleanEmail)}</td></tr>
+          <tr><td style="padding:8px 0;color:#8E9DB5;">Temporary Password</td><td align="right" style="padding:8px 0;font-weight:700;color:#F8FAFC;font-family:monospace;font-size:14px;letter-spacing:0.5px;">${htmlEscape(temporaryPassword)}</td></tr>
         </table>
       </div>
-      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Please contact your store administrator for your login credentials to start your shift.</p>
+      <div style="background-color:rgba(234, 179, 8, 0.08);border:1px solid rgba(234, 179, 8, 0.25);border-radius:10px;padding:12px 14px;margin-bottom:18px;">
+        <p style="margin:0;color:#FDE047;font-size:12px;line-height:1.5;"><strong>Important:</strong> On your first login, you will be required to set a new password before accessing the system.</p>
+      </div>
+      <p style="margin:0 0 12px;color:#8E9DB5;font-size:13px;line-height:1.65;">Use the credentials above to sign in on the Aezakmi Admin Terminal.</p>
     `;
 
     const html = emailShell({logoUrl:emailBrandLogoUrl(),eyebrow:'Aezakmi Cafe Management',title:'Staff Invitation Reminder',subtitle:`Staff onboarding · ${cafeName}`,contentHtml});
@@ -905,6 +916,7 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
       success: true,
       emailSent,
       targetEmail: cleanEmail,
+      temporaryPassword,
       message: message || `Invitation reminder sent to ${cleanEmail}`,
     });
   }

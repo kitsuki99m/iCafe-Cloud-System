@@ -130,7 +130,7 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         if (!adminUsername || !password) return res.status(400).json({ success:false, code:'AUTH_FIELDS_REQUIRED', error:'Username and password are required.' })
         user = db.prepare(`
           SELECT * FROM users
-          WHERE role IN ('admin','cashier') AND username = ? AND is_active = 1
+          WHERE role IN ('admin','cashier') AND lower(username) = lower(?) AND is_active = 1
         `).get(adminUsername)
         if (!user) return res.status(401).json({ success:false, code:'INVALID_CREDENTIALS', error:'Incorrect staff credentials.' })
         const method=user.auth_method || 'pin'
@@ -359,20 +359,20 @@ router.post('/complete-customer-password-setup', authenticate, async (req,res,ne
 
 router.post('/setup-credentials', authenticate, async (req,res,next) => {
   try {
-    if (req.auth.role !== 'admin') return res.status(403).json({success:false,code:'FORBIDDEN',error:'Admin access required.'})
-    if (!req.auth.mustChangeCredentials) return res.status(409).json({success:false,code:'CREDENTIAL_SETUP_COMPLETE',error:'Initial admin credential setup has already been completed.'})
-    const {method='pin',username='admin',password='',pin=''}=req.body??{}
+    if (req.auth.role !== 'admin' && req.auth.role !== 'cashier') return res.status(403).json({success:false,code:'FORBIDDEN',error:'Staff or admin access required.'})
+    if (!req.auth.mustChangeCredentials) return res.status(409).json({success:false,code:'CREDENTIAL_SETUP_COMPLETE',error:'Initial credential setup has already been completed.'})
+    const {method='pin',username='',password='',pin=''}=req.body??{}
     if(!['pin','password','pin_password'].includes(method)) return res.status(400).json({success:false,code:'INVALID_AUTH_METHOD',error:'Invalid authentication method.'})
     if((method==='password'||method==='pin_password')) {
       const error=passwordError(String(password))
       if(error)return res.status(400).json({success:false,code:'PASSWORD_REQUIRED',error})
     }
     if((method==='pin'||method==='pin_password')&&!/^\d{4,8}$/.test(String(pin)))return res.status(400).json({success:false,code:'INVALID_PIN',error:'PIN must contain 4 to 8 digits.'})
-    const user=db.prepare("SELECT * FROM users WHERE id=? AND role='admin'").get(req.auth.userId)
-    if(!user)return res.status(404).json({success:false,code:'USER_NOT_FOUND',error:'Admin account not found.'})
+    const user=db.prepare("SELECT * FROM users WHERE id=? AND role IN ('admin','cashier')").get(req.auth.userId)
+    if(!user)return res.status(404).json({success:false,code:'USER_NOT_FOUND',error:'Staff account not found.'})
     const passwordHash=method==='pin'?await argon2.hash(id()):await argon2.hash(String(password))
     const pinHash=method==='password'?user.pin_hash:await argon2.hash(String(pin))
-    const nextUsername=String(username).trim()
+    const nextUsername=String(username || user.username || 'admin').trim()
     if(!nextUsername)return res.status(400).json({success:false,code:'USERNAME_REQUIRED',error:'Username is required.'})
     const duplicate=db.prepare('SELECT id FROM users WHERE lower(username)=lower(?) AND id<>?').get(nextUsername,user.id)
     if(duplicate)return res.status(409).json({success:false,code:'USERNAME_EXISTS',error:'That username is already in use.'})
