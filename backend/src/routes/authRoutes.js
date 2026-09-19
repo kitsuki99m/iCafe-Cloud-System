@@ -357,6 +357,68 @@ router.post('/complete-customer-password-setup', authenticate, async (req,res,ne
   } catch(err) { next(err) }
 })
 
+router.post('/forgot-password', loginLimiter, async (req, res, next) => {
+  try {
+    const emailOrUsername = String(req.body?.email || req.body?.username || '').trim()
+    if (!emailOrUsername) {
+      return res.status(400).json({ success: false, code: 'EMAIL_REQUIRED', error: 'Email or username is required.' })
+    }
+
+    const user = db.prepare(`
+      SELECT * FROM users
+      WHERE role IN ('admin', 'cashier')
+        AND (lower(username) = lower(?) OR lower(username) = lower(?))
+        AND is_active = 1
+      LIMIT 1
+    `).get(emailOrUsername, emailOrUsername)
+
+    if (user) {
+      const temporaryPassword = `Staff#${Math.floor(1000 + Math.random() * 9000)}`
+      const passwordHash = await argon2.hash(temporaryPassword)
+      db.prepare(`
+        UPDATE users
+        SET password_hash = ?, must_change_credentials = 1, updated_at = ?
+        WHERE id = ?
+      `).run(passwordHash, nowIso(), user.id)
+
+      if (env.brevoApiKey && user.username && user.username.includes('@')) {
+        try {
+          const html = `
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;background:#0B1017;color:#f8fafc;border-radius:16px;padding:28px;border:1px solid #1E293B;">
+              <h2 style="color:#E8A33D;margin-top:0;">Password Reset Request</h2>
+              <p style="color:#94A3B8;font-size:14px;line-height:1.6;">A password reset was requested for your staff account. Use the temporary password below to sign in:</p>
+              <div style="background:#111C28;border:1px solid #1E293B;border-radius:10px;padding:16px;margin:20px 0;text-align:center;">
+                <span style="font-family:monospace;font-size:18px;font-weight:700;color:#38BDF8;letter-spacing:1px;">${temporaryPassword}</span>
+              </div>
+              <p style="color:#FDE047;font-size:12px;line-height:1.5;"><strong>Important:</strong> You will be required to choose a new permanent password immediately upon login.</p>
+            </div>
+          `
+          await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+              'api-key': env.brevoApiKey,
+              'accept': 'application/json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              sender: { name: env.brevoSenderName, email: env.brevoSenderEmail },
+              to: [{ email: user.username }],
+              subject: `[Aezakmi Cafe] Staff Password Reset`,
+              htmlContent: html,
+              tags: ['staff-password-reset']
+            })
+          })
+        } catch {}
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'If an active staff account exists for this email, password reset instructions have been dispatched.',
+    })
+  } catch(err) { next(err) }
+})
+
 router.post('/setup-credentials', authenticate, async (req,res,next) => {
   try {
     if (req.auth.role !== 'admin' && req.auth.role !== 'cashier') return res.status(403).json({success:false,code:'FORBIDDEN',error:'Staff or admin access required.'})

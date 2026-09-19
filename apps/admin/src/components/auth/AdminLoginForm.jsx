@@ -17,8 +17,10 @@ import { useBackendStatus } from "../../hooks/useBackendStatus.js";
 import {
   cloudRequestBusinessAccess,
   cloudRequestRegistrationCaptcha,
+  cloudRequestPasswordReset,
   isCloudAdmin,
 } from "../../lib/cloudClient.js";
+import { apiPost } from "../../lib/api.js";
 
 const inputClass = "admin-login-input";
 
@@ -35,6 +37,11 @@ export default function AdminLoginForm() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [cloudAuthMode, setCloudAuthMode] = useState("signin");
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSuccess, setForgotSuccess] = useState("");
+  const [forgotError, setForgotError] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
   const [requestStep, setRequestStep] = useState(1);
   const [captcha, setCaptcha] = useState(null);
   const [captchaAnswer, setCaptchaAnswer] = useState("");
@@ -154,6 +161,31 @@ export default function AdminLoginForm() {
     }
   }
 
+  async function handleForgotPassword(e) {
+    if (e?.preventDefault) e.preventDefault();
+    const clean = forgotEmail.trim();
+    if (!clean) {
+      setForgotError(cloud ? "Please enter your email address." : "Please enter your username or email address.");
+      return;
+    }
+    setForgotBusy(true);
+    setForgotError("");
+    setForgotSuccess("");
+    try {
+      if (cloud) {
+        await cloudRequestPasswordReset(clean);
+        setForgotSuccess("Password recovery email sent. Check your inbox for instructions to set a new password.");
+      } else {
+        const res = await apiPost('/auth/forgot-password', { email: clean });
+        setForgotSuccess(res?.message || "If an active staff account exists, recovery instructions have been dispatched.");
+      }
+    } catch (err) {
+      setForgotError(err?.message || "Unable to request password reset.");
+    } finally {
+      setForgotBusy(false);
+    }
+  }
+
   return (
     <main className="admin-login-shell">
       <div className="admin-login-grid">
@@ -192,6 +224,98 @@ export default function AdminLoginForm() {
 
         </section>
 
+        {forgotMode ? (
+          <section className="admin-login-card">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="eyebrow">Password recovery</p>
+                <h2 className="mt-1 font-display text-[24px] font-semibold tracking-[-0.025em] text-ink-900">
+                  Forgot password
+                </h2>
+                <p className="mt-1.5 max-w-sm text-[12px] leading-5 text-slate-soft">
+                  {cloud
+                    ? "Enter your registered business email to receive recovery instructions."
+                    : "Enter your staff email or username to reset your credentials."}
+                </p>
+              </div>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-midnight/8 text-gold-dim">
+                <ShieldCheck size={18} />
+              </span>
+            </div>
+
+            {forgotError && (
+              <div className="mb-4 flex items-center gap-2 rounded-xl border border-ember/25 bg-ember/10 p-3 text-xs text-ember-dim">
+                <AlertCircle size={15} className="shrink-0" />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-teal/30 bg-teal/10 p-3.5 text-xs font-medium text-teal-dim">
+                  {forgotSuccess}
+                </div>
+                <button
+                  type="button"
+                  className="admin-login-submit-btn w-full cursor-pointer"
+                  onClick={() => {
+                    setForgotMode(false);
+                    setForgotSuccess("");
+                    setForgotError("");
+                  }}
+                >
+                  Back to sign in
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div>
+                  <label className="eyebrow mb-2 block">
+                    {cloud ? "Registered Email" : "Staff Email or Username"}
+                  </label>
+                  <input
+                    autoFocus
+                    type={cloud ? "email" : "text"}
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder={cloud ? "owner@example.com" : "e.g. staff@icafe.ph or username"}
+                    className={inputClass}
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="admin-login-submit-btn w-full cursor-pointer"
+                  disabled={forgotBusy || !forgotEmail.trim()}
+                >
+                  {forgotBusy ? (
+                    "Sending…"
+                  ) : (
+                    <>
+                      <span>Send recovery instructions</span>
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="mt-3 w-full text-center text-xs font-medium text-slate-soft underline cursor-pointer"
+                  onClick={() => {
+                    setForgotMode(false);
+                    setForgotError("");
+                    setForgotSuccess("");
+                  }}
+                >
+                  Back to sign in
+                </button>
+              </form>
+            )}
+
+            <p className="mt-4 text-center text-[10px] text-slate-soft">Authorized staff only</p>
+          </section>
+        ) : (
         <section className="admin-login-card">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -429,7 +553,21 @@ export default function AdminLoginForm() {
               </>
             ) : !cloud && mode === "pin" ? (
               <div>
-                <label className="eyebrow mb-2 block">Admin PIN</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="eyebrow block">Admin PIN</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotMode(true);
+                      setForgotEmail("");
+                      setForgotError("");
+                      setForgotSuccess("");
+                    }}
+                    className="text-[11px] font-medium text-slate-soft hover:text-gold-dim underline cursor-pointer"
+                  >
+                    Forgot PIN?
+                  </button>
+                </div>
                 <PasswordInput
                   autoFocus
                   inputMode="numeric"
@@ -441,7 +579,6 @@ export default function AdminLoginForm() {
                   inputClassName={`${inputClass} text-lg tracking-[0.28em]`}
                   placeholder="Enter PIN"
                 />
-
               </div>
             ) : (
               <>
@@ -459,7 +596,21 @@ export default function AdminLoginForm() {
                   />
                 </div>
                 <div>
-                  <label className="eyebrow mb-2 block">Password</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="eyebrow block">Password</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotMode(true);
+                        setForgotEmail(username);
+                        setForgotError("");
+                        setForgotSuccess("");
+                      }}
+                      className="text-[11px] font-medium text-slate-soft hover:text-gold-dim underline cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
                   <PasswordInput
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}

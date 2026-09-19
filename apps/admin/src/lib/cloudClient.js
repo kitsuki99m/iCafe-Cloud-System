@@ -125,6 +125,18 @@ export function cloudClearInvitationSetup() {
   localStorage.removeItem(INVITE_SETUP_KEY);
 }
 
+export async function cloudRequestPasswordReset(email) {
+  if (!cloudConfigReady()) throw configError();
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  if (!cleanEmail) throw Object.assign(new Error('Enter your email address to reset password.'), { status: 400, code: 'EMAIL_REQUIRED' });
+  const response = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    method: "POST",
+    headers: headers({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ email: cleanEmail }),
+  });
+  return await parse(response);
+}
+
 export async function cloudSignIn(email, password) {
   if (!cloudConfigReady()) throw configError();
   const response = await fetch(
