@@ -702,6 +702,7 @@ export default function AdminLoginForm() {
 
           <p className="mt-4 text-center text-[10px] text-slate-soft">Authorized staff only</p>
         </section>
+        )}
       </div>
       {!cloud && (
         <ServerConnectionModal

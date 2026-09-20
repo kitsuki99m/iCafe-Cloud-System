@@ -7764,8 +7764,6 @@ router.post("/team/resend-invite", auth, requireRole("admin"), async (req, res, 
     });
   } catch (error) { next(error); }
 });
-  } catch (error) { next(error); }
-});
 
 // ==========================================
 // DYNAMIC GAME & APP LAUNCHER MANAGEMENT

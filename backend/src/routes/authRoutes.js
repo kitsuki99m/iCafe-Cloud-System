@@ -38,6 +38,10 @@ router.post('/verify-admin-credentials', authenticate, adminCredentialLimiter, a
       verified=pinOk && passwordOk
     }
     if(!verified) return res.status(401).json({success:false,code:'INVALID_CREDENTIALS',error:'Incorrect Admin credentials.'})
+    res.json({success:true,verifiedAt:nowIso()})
+  } catch(error) { next(error) }
+})
+
 router.post('/verify-manager-override', authenticate, adminCredentialLimiter, async (req,res,next) => {
   try {
     const pin=String(req.body?.pin||'').trim()
