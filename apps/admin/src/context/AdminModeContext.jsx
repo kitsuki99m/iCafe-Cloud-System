@@ -5,29 +5,21 @@ const AdminModeContext = createContext(null)
 
 const UI_MODE_STORAGE_KEY = 'aezakmi.ui_mode'
 
+function initialUiMode() {
+  try {
+    const saved = localStorage.getItem(UI_MODE_STORAGE_KEY) || sessionStorage.getItem(UI_MODE_STORAGE_KEY)
+    if (saved === 'advance' || saved === 'simple') return saved
+    return 'simple'
+  } catch {
+    return 'simple'
+  }
+}
+
 export function AdminModeProvider({ children }) {
   const { user } = useAuth()
   const isRestrictedRole = user?.role === 'cashier' || user?.role === 'staff'
   
-  const [savedMode, setSavedMode] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem(UI_MODE_STORAGE_KEY)
-      return stored === 'simple' || stored === 'advance' ? stored : 'simple'
-    } catch {
-      return 'simple'
-    }
-  })
-
-  // When user logs out (user is null or changes), reset to simple mode and clean temp storage
-  useEffect(() => {
-    if (!user) {
-      setSavedMode('simple')
-      try {
-        sessionStorage.removeItem(UI_MODE_STORAGE_KEY)
-        localStorage.removeItem(UI_MODE_STORAGE_KEY)
-      } catch {}
-    }
-  }, [user])
+  const [savedMode, setSavedMode] = useState(initialUiMode)
 
   // Staff and Cashier roles are strictly locked to Simple Mode
   const uiMode = isRestrictedRole ? 'simple' : savedMode
@@ -35,11 +27,11 @@ export function AdminModeProvider({ children }) {
 
   const setUiMode = (mode) => {
     if (isRestrictedRole) return
-    const targetMode = mode === 'simple' ? 'simple' : 'advance'
+    const targetMode = mode === 'advance' ? 'advance' : 'simple'
     setSavedMode(targetMode)
     try {
+      localStorage.setItem(UI_MODE_STORAGE_KEY, targetMode)
       sessionStorage.setItem(UI_MODE_STORAGE_KEY, targetMode)
-      localStorage.removeItem(UI_MODE_STORAGE_KEY)
     } catch {}
   }
 
