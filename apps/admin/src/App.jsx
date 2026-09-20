@@ -27,8 +27,7 @@ export default function App() {
   if (user.cloud && user.cloudInviteSetup) return <><CloudInviteSetup /><ToastContainer /></>
   if (user.cloud && user.cloudBusinessSuspended) return <><CloudAccessPending suspended /><ToastContainer /></>
   if (user.cloud && user.cloudDeveloper && user.cloudNeedsSetup) return <><DeveloperConsolePage standalone /><ToastContainer /></>
-  if (user.cloud && user.cloudNeedsSetup) return <><CloudAccessPending /><ToastContainer /></>
-  const isStaffOrCashier = user?.role === 'cashier' || user?.role === 'staff'
+  const isStaffOrCashier = user?.role === 'cashier' || user?.role === 'staff' || user?.cloudRole === 'cashier' || user?.cloudRole === 'staff' || user?.cloudRole === 'viewer'
   return <>
     {mustChange && <AdminCredentialSetup />}
     <MainLayout>
