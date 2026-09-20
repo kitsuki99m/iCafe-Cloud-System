@@ -342,6 +342,17 @@ export async function cloudUpdatePassword(password) {
     }),
   );
 }
+export async function cloudUpdateUser(attributes = {}) {
+  const h = await cloudAuthHeaders();
+  userReadCache = null;
+  return parse(
+    await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: "PUT",
+      headers: h,
+      body: JSON.stringify(attributes),
+    }),
+  );
+}
 export async function cloudVerifyPassword(email, password) {
   await cloudSignIn(email, password);
   return true;

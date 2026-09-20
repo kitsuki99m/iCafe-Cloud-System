@@ -64,8 +64,7 @@ async function activationLink(admin:SupabaseClient,email:string){
   const props:any=(data as any)?.properties||{}
   return String(props.action_link||props.actionLink||'')||null
 }
-const generateInviteLink=activationLink
-async function maybeActivationLink(admin:SupabaseClient,email:string){try{return await generateInviteLink(admin,email)}catch{return null}}
+async function maybeActivationLink(admin:SupabaseClient,email:string){try{return await activationLink(admin,email)}catch{return null}}
 function inviteMetadata(registration:any,pkg:{plan:string,maxStations:number}){return{name:registration.owner_name,business_name:registration.business_name,aezakmi_registration_id:registration.id,subscription_plan:pkg.plan,max_stations:pkg.maxStations}}
 function emailBrandLogoUrl(){
   const explicit=String(Deno.env.get('AEZAKMI_BRAND_LOGO_URL')||'').trim()

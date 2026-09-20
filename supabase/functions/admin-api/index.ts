@@ -775,6 +775,47 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const cafeName = branch.name || 'Aezakmi Cafe';
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = targetBranch || cafeName;
+    const memberRole = role === 'admin' ? 'admin' : role === 'manager' ? 'manager' : 'cashier';
+
+    // Provision or update user account in Supabase Auth
+    let authUserId: string | null = null;
+    const { data: userListData } = await admin.auth.admin.listUsers();
+    const existingAuthUser = (userListData?.users || []).find((u: any) => String(u.email || '').toLowerCase() === cleanEmail);
+
+    if (existingAuthUser) {
+      authUserId = existingAuthUser.id;
+      await admin.auth.admin.updateUserById(authUserId, {
+        password: temporaryPassword,
+        user_metadata: {
+          ...(existingAuthUser.user_metadata || {}),
+          name: cleanName,
+          display_name: cleanName,
+          must_change_password: true,
+        }
+      });
+    } else {
+      const { data: newUser, error: createAuthErr } = await admin.auth.admin.createUser({
+        email: cleanEmail,
+        password: temporaryPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: cleanName,
+          display_name: cleanName,
+          must_change_password: true,
+        }
+      });
+      if (createAuthErr) throw createAuthErr;
+      authUserId = newUser?.user?.id || null;
+    }
+
+    if (authUserId) {
+      await admin.from('organization_members').upsert({
+        organization_id: branch.organization_id,
+        user_id: authUserId,
+        role: memberRole,
+        updated_at: now()
+      }, { onConflict: 'organization_id,user_id' });
+    }
 
     const brevoApiKey = String(Deno.env.get('BREVO_API_KEY') || '').trim();
     const brevoSenderEmail = String(Deno.env.get('BREVO_SENDER_EMAIL') || 'kyle.serina05@gmail.com').trim();
@@ -855,6 +896,47 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const cafeName = branch.name || 'Aezakmi Cafe';
     const roleLabel = role === 'admin' ? 'Branch Admin' : role === 'manager' ? 'Shift Manager' : 'Front-Desk Cashier';
     const branchLabel = targetBranch || cafeName;
+    const memberRole = role === 'admin' ? 'admin' : role === 'manager' ? 'manager' : 'cashier';
+
+    // Provision or update user account in Supabase Auth
+    let authUserId: string | null = null;
+    const { data: userListData } = await admin.auth.admin.listUsers();
+    const existingAuthUser = (userListData?.users || []).find((u: any) => String(u.email || '').toLowerCase() === cleanEmail);
+
+    if (existingAuthUser) {
+      authUserId = existingAuthUser.id;
+      await admin.auth.admin.updateUserById(authUserId, {
+        password: temporaryPassword,
+        user_metadata: {
+          ...(existingAuthUser.user_metadata || {}),
+          name: cleanName || existingAuthUser.user_metadata?.name || cleanEmail,
+          display_name: cleanName || existingAuthUser.user_metadata?.display_name || cleanEmail,
+          must_change_password: true,
+        }
+      });
+    } else {
+      const { data: newUser, error: createAuthErr } = await admin.auth.admin.createUser({
+        email: cleanEmail,
+        password: temporaryPassword,
+        email_confirm: true,
+        user_metadata: {
+          name: cleanName || cleanEmail,
+          display_name: cleanName || cleanEmail,
+          must_change_password: true,
+        }
+      });
+      if (createAuthErr) throw createAuthErr;
+      authUserId = newUser?.user?.id || null;
+    }
+
+    if (authUserId) {
+      await admin.from('organization_members').upsert({
+        organization_id: branch.organization_id,
+        user_id: authUserId,
+        role: memberRole,
+        updated_at: now()
+      }, { onConflict: 'organization_id,user_id' });
+    }
 
     const brevoApiKey = String(Deno.env.get('BREVO_API_KEY') || '').trim();
     const brevoSenderEmail = String(Deno.env.get('BREVO_SENDER_EMAIL') || 'kyle.serina05@gmail.com').trim();
