@@ -27,6 +27,7 @@ import { cloudDeveloperRegistrations } from '../lib/cloudClient.js'
 import { readSnapshot, writeSnapshot } from '../lib/localCache.js'
 import { userCacheKey } from '../lib/pageCache.js'
 import { useAuth } from '../context/AuthContext.jsx'
+import { showToast } from '../lib/toast.js'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
 import { SUBSCRIPTION_PACKAGES, formatPackagePrice, normalizeSubscriptionPackages, packageDefinition, packageForStations } from '../lib/subscriptionPackages.js'
@@ -50,14 +51,14 @@ const ACTION_COPY={
 
 export default function DeveloperConsolePage({standalone=false}){
   const{logout,user}=useAuth()
-  const[items,setItems]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[filter,setFilter]=useState('pending'),[query,setQuery]=useState(''),[selected,setSelected]=useState(null),[notes,setNotes]=useState(''),[busy,setBusy]=useState(''),[activationLink,setActivationLink]=useState(''),[confirm,setConfirm]=useState(null),[confirmReason,setConfirmReason]=useState(''),[confirmName,setConfirmName]=useState(''),[subscriptionPlan,setSubscriptionPlan]=useState('bronze'),[ultraStationLimit,setUltraStationLimit]=useState('51')
+  const[items,setItems]=useState([]),[loading,setLoading]=useState(true),[filter,setFilter]=useState('pending'),[query,setQuery]=useState(''),[selected,setSelected]=useState(null),[notes,setNotes]=useState(''),[busy,setBusy]=useState(''),[activationLink,setActivationLink]=useState(''),[confirm,setConfirm]=useState(null),[confirmReason,setConfirmReason]=useState(''),[confirmName,setConfirmName]=useState(''),[subscriptionPlan,setSubscriptionPlan]=useState('bronze'),[ultraStationLimit,setUltraStationLimit]=useState('51')
   const[packageCatalog,setPackageCatalog]=useState(SUBSCRIPTION_PACKAGES),[pricingSettings,setPricingSettings]=useState({deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14}),[emailDelivery,setEmailDelivery]=useState(null),[observability,setObservability]=useState({last24Hours:0,bucketCount:0,recent:[]}),[pricingOpen,setPricingOpen]=useState(false),[pricingDraft,setPricingDraft]=useState([]),[pricingSettingsDraft,setPricingSettingsDraft]=useState({deploymentFeeMin:'2500',deploymentFeeMax:'5000',quoteValidDays:'14'})
   const[quoteOpen,setQuoteOpen]=useState(false),[quoteDraft,setQuoteDraft]=useState({packageId:'bronze',stationCount:'1',branchCount:'1',monthlyPrice:'499',deploymentFeePerBranch:'2500',validDays:'14',message:''})
   const ultraFloor=Math.max(1,Number(packageDefinition('gold',packageCatalog).maxStations||50)+1)
   const developerCacheKey=useMemo(()=>userCacheKey('developer-console',user),[user])
 
   function applyDeveloperSnapshot(snapshot){if(!snapshot)return;setItems(snapshot.requests||[]);if(snapshot.packageCatalog)setPackageCatalog(normalizeSubscriptionPackages(snapshot.packageCatalog));if(snapshot.pricingSettings)setPricingSettings(snapshot.pricingSettings);if(snapshot.emailDelivery)setEmailDelivery(snapshot.emailDelivery);if(snapshot.observability)setObservability(snapshot.observability)}
-  async function load(){setLoading(true);setError('');try{const r=await cloudDeveloperRegistrations('list');const requests=r.requests||[];const snapshot={requests,packageCatalog:r.packageCatalog||SUBSCRIPTION_PACKAGES,pricingSettings:r.pricingSettings||{deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14},emailDelivery:r.emailDelivery||null,observability:r.observability||{last24Hours:0,bucketCount:0,recent:[]}};applyDeveloperSnapshot(snapshot);if(developerCacheKey)void writeSnapshot(developerCacheKey,snapshot);setSelected(current=>current?(requests.find(x=>x.id===current.id)||null):current)}catch(e){setError(e.message||'Unable to load registration requests. Showing cached data when available.')}finally{setLoading(false)}}
+  async function load(){setLoading(true);try{const r=await cloudDeveloperRegistrations('list');const requests=r.requests||[];const snapshot={requests,packageCatalog:r.packageCatalog||SUBSCRIPTION_PACKAGES,pricingSettings:r.pricingSettings||{deployment_fee_min:2500,deployment_fee_max:5000,quote_valid_days:14},emailDelivery:r.emailDelivery||null,observability:r.observability||{last24Hours:0,bucketCount:0,recent:[]}};applyDeveloperSnapshot(snapshot);if(developerCacheKey)void writeSnapshot(developerCacheKey,snapshot);setSelected(current=>current?(requests.find(x=>x.id===current.id)||null):current)}catch(e){showToast({title:'Sync Error',message:e.message||'Unable to load registration requests.',tone:'error'})}finally{setLoading(false)}}
   useEffect(()=>{let active=true;if(developerCacheKey)void readSnapshot(developerCacheKey).then(snapshot=>{if(active&&snapshot){applyDeveloperSnapshot(snapshot);setLoading(false)}}).finally(()=>{if(active)void load()});else void load();const timer=setInterval(()=>{if(document.visibilityState==='visible')void load()},300000);const onOnline=()=>void load();const onVisible=()=>{if(document.visibilityState==='visible')void load()};window.addEventListener('online',onOnline);document.addEventListener('visibilitychange',onVisible);return()=>{active=false;clearInterval(timer);window.removeEventListener('online',onOnline);document.removeEventListener('visibilitychange',onVisible)}},[developerCacheKey])
   useEffect(()=>{
     if(!selected)return
@@ -71,38 +72,49 @@ export default function DeveloperConsolePage({standalone=false}){
 
   async function act(action,payload={}){
     if(!selected||busy)return null
-    setBusy(action);setError('');setNotice('')
+    setBusy(action)
     try{
       const result=await cloudDeveloperRegistrations(action,{requestId:selected.id,reviewNotes:notes.trim()||null,...payload})
-      if(action==='send_quote'&&result?.emailSent){setActivationLink('');setNotice(`Quotation ${result.quotation?.quote_number||''} sent to ${result.email||selected.email}.`)}else if(result?.emailSent){setActivationLink('');setNotice(result.resent?`Activation email resent to ${result.email||selected.email}.`:`Invitation email sent automatically to ${result.email||selected.email}.`)}else if(result?.activationLink){setActivationLink(result.activationLink);setNotice('Manual activation link generated. Use it only if email delivery is unavailable.')}
+      if(action==='send_quote'&&result?.emailSent){
+        setActivationLink('')
+        showToast({title:'Quotation Sent',message:`Quotation ${result.quotation?.quote_number||''} sent to ${result.email||selected.email}.`,tone:'success'})
+      }else if(result?.emailSent){
+        setActivationLink('')
+        showToast({title:result.resent?'Invite Resent':'Invite Sent',message:result.resent?`Activation email resent to ${result.email||selected.email}.`:`Invitation email sent automatically to ${result.email||selected.email}.`,tone:'success'})
+      }else if(result?.activationLink){
+        setActivationLink(result.activationLink)
+        showToast({title:'Activation Link Ready',message:'Manual activation link generated. Use it only if email delivery is unavailable.',tone:'info'})
+      }else{
+        showToast({title:'Application Updated',message:`Action ${action} completed successfully.`,tone:'success'})
+      }
       setNotes('');await load();return result
-    }catch(e){setError(e.message||'Unable to update application.');return null}
+    }catch(e){showToast({title:'Action Failed',message:e.message||'Unable to update application.',tone:'error'});return null}
     finally{setBusy('')}
   }
 
   async function testEmail(){
     if(busy)return
-    setBusy('test_email');setError('');setNotice('')
-    try{const result=await cloudDeveloperRegistrations('test_email');setNotice(`Email check sent to ${result.email}.`);await load()}catch(e){setError(e.message||'Unable to send test email.')}finally{setBusy('')}
+    setBusy('test_email')
+    try{const result=await cloudDeveloperRegistrations('test_email');showToast({title:'Email Check Sent',message:`Email check sent to ${result.email}.`,tone:'success'});await load()}catch(e){showToast({title:'Email Check Failed',message:e.message||'Unable to send test email.',tone:'error'})}finally{setBusy('')}
   }
 
   async function copyActivationLink(){
     const result=await act('copy_activation_link')
     const link=result?.activationLink
     if(!link)return
-    try{await navigator.clipboard.writeText(link);setNotice('Activation link copied to clipboard.')}catch{setNotice('Activation link generated. Copy it manually below.')}
+    try{await navigator.clipboard.writeText(link);showToast({title:'Copied',message:'Activation link copied to clipboard.',tone:'success'})}catch{showToast({title:'Link Generated',message:'Activation link generated. Copy it manually below.',tone:'info'})}
   }
 
   function validatedUltraLimit(){
     const ultraLimit=Math.floor(Number(ultraStationLimit))
-    if(subscriptionPlan==='ultra'&&(!Number.isInteger(ultraLimit)||ultraLimit<ultraFloor||ultraLimit>10000)){setError(`Ultra station limit must be between ${ultraFloor} and 10,000.`);return null}
+    if(subscriptionPlan==='ultra'&&(!Number.isInteger(ultraLimit)||ultraLimit<ultraFloor||ultraLimit>10000)){showToast({title:'Invalid Ultra Limit',message:`Ultra station limit must be between ${ultraFloor} and 10,000.`,tone:'error'});return null}
     return ultraLimit
   }
   async function saveSubscription(){
     const ultraLimit=validatedUltraLimit()
     if(subscriptionPlan==='ultra'&&ultraLimit==null)return
     const result=await act('set_subscription',{subscriptionPlan,ultraStationLimit:subscriptionPlan==='ultra'?ultraLimit:undefined})
-    if(result?.subscription)setNotice(`${packageDefinition(result.subscription.plan,packageCatalog).label} package saved · ${result.subscription.max_stations} station limit.`)
+    if(result?.subscription)showToast({title:'Package Saved',message:`${packageDefinition(result.subscription.plan,packageCatalog).label} package saved · ${result.subscription.max_stations} station limit.`,tone:'success'})
   }
   async function approveSelected(){
     const ultraLimit=validatedUltraLimit()
@@ -110,15 +122,34 @@ export default function DeveloperConsolePage({standalone=false}){
     await act('approve',{subscriptionPlan,ultraStationLimit:subscriptionPlan==='ultra'?ultraLimit:undefined})
   }
 
-
   function openPricingEditor(){
     setPricingDraft(packageCatalog.map(pkg=>({...pkg,maxStations:pkg.maxStations==null?'':String(pkg.maxStations),monthlyPrice:String(pkg.monthlyPrice??0),description:pkg.description||''})))
     setPricingSettingsDraft({deploymentFeeMin:String(pricingSettings.deployment_fee_min??2500),deploymentFeeMax:String(pricingSettings.deployment_fee_max??5000),quoteValidDays:String(pricingSettings.quote_valid_days??14)})
-    setPricingOpen(true);setError('')
+    setPricingOpen(true)
   }
+
+  const isPricingValid = useMemo(()=>{
+    try{
+      const fixedCaps=Object.fromEntries(pricingDraft.filter(pkg=>pkg.id!=='ultra').map(pkg=>[pkg.id,Math.floor(Number(pkg.maxStations))]))
+      if(!(fixedCaps.bronze>=1&&fixedCaps.bronze<fixedCaps.silver&&fixedCaps.silver<fixedCaps.gold))return false
+      const deploymentMin=Number(pricingSettingsDraft.deploymentFeeMin),deploymentMax=Number(pricingSettingsDraft.deploymentFeeMax),quoteDays=Math.floor(Number(pricingSettingsDraft.quoteValidDays))
+      if(!Number.isFinite(deploymentMin)||deploymentMin<0||!Number.isFinite(deploymentMax)||deploymentMax<deploymentMin)return false
+      if(!Number.isInteger(quoteDays)||quoteDays<1||quoteDays>90)return false
+      for(const pkg of pricingDraft){
+        if(pkg.id!=='ultra'){
+          const maxStations=Math.floor(Number(pkg.maxStations))
+          if(!Number.isInteger(maxStations)||maxStations<1||maxStations>10000)return false
+        }
+        const monthlyPrice=Number(pkg.monthlyPrice)
+        if(!Number.isFinite(monthlyPrice)||monthlyPrice<0||monthlyPrice>1000000)return false
+      }
+      return true
+    }catch{return false}
+  },[pricingDraft,pricingSettingsDraft])
+
   async function savePricingEditor(){
-    if(busy)return
-    setBusy('save_pricing');setError('');setNotice('')
+    if(busy||!isPricingValid)return
+    setBusy('save_pricing')
     try{
       const fixedCaps=Object.fromEntries(pricingDraft.filter(pkg=>pkg.id!=='ultra').map(pkg=>[pkg.id,Math.floor(Number(pkg.maxStations))]))
       if(!(fixedCaps.bronze>=1&&fixedCaps.bronze<fixedCaps.silver&&fixedCaps.silver<fixedCaps.gold))throw new Error('PC limits must increase from Bronze to Silver to Gold.')
@@ -135,38 +166,65 @@ export default function DeveloperConsolePage({standalone=false}){
       const result=await cloudDeveloperRegistrations('update_pricing_catalog',{packages,deploymentFeeMin:deploymentMin,deploymentFeeMax:deploymentMax,quoteValidDays:quoteDays})
       if(result?.packageCatalog)setPackageCatalog(normalizeSubscriptionPackages(result.packageCatalog))
       if(result?.pricingSettings)setPricingSettings(result.pricingSettings)
-      await load();setPricingOpen(false);setNotice('Pricing catalog updated.')
-    }catch(e){setError(e.message||'Unable to save pricing.')}finally{setBusy('')}
+      await load();setPricingOpen(false);showToast({title:'Pricing Catalog Updated',message:'Platform pricing updated successfully.',tone:'success'})
+    }catch(e){showToast({title:'Pricing Update Failed',message:e.message||'Unable to save pricing.',tone:'error'})}finally{setBusy('')}
   }
+
   function openQuote(){
     if(!selected)return
     const suggested=packageForStations(selected.expected_station_count||1,packageCatalog)
     const pkg=packageDefinition(selected.subscription_plan||suggested.id,packageCatalog)
     const stationCount=pkg.id==='ultra'?Math.max(ultraFloor,Number(selected.expected_station_count)||ultraFloor):Math.max(1,Number(selected.expected_station_count)||1)
     setQuoteDraft({packageId:pkg.id,stationCount:String(stationCount),branchCount:'1',monthlyPrice:String(pkg.monthlyPrice??0),deploymentFeePerBranch:String(pricingSettings.deployment_fee_min??2500),validDays:String(pricingSettings.quote_valid_days??14),message:''})
-    setQuoteOpen(true);setError('')
+    setQuoteOpen(true)
   }
   function setQuotePackage(packageId){
     const pkg=packageDefinition(packageId,packageCatalog)
     setQuoteDraft(current=>({...current,packageId:pkg.id,monthlyPrice:String(pkg.monthlyPrice??0),stationCount:pkg.id==='ultra'?String(Math.max(ultraFloor,Number(current.stationCount)||ultraFloor)):current.stationCount}))
   }
+
+  const quoteValidation = useMemo(()=>{
+    const stationCount=Math.floor(Number(quoteDraft.stationCount)),branchCount=Math.floor(Number(quoteDraft.branchCount)),monthlyPrice=Number(quoteDraft.monthlyPrice),deploymentFeePerBranch=Number(quoteDraft.deploymentFeePerBranch),validDays=Math.floor(Number(quoteDraft.validDays))
+    const stationValid=Number.isInteger(stationCount)&&stationCount>=1&&stationCount<=10000&&(quoteDraft.packageId!=='ultra'||stationCount>=ultraFloor)
+    const branchValid=Number.isInteger(branchCount)&&branchCount>=1&&branchCount<=1000
+    const priceValid=Number.isFinite(monthlyPrice)&&monthlyPrice>=0&&monthlyPrice<=1000000
+    const deploymentValid=Number.isFinite(deploymentFeePerBranch)&&deploymentFeePerBranch>=0&&deploymentFeePerBranch<=1000000
+    const daysValid=Number.isInteger(validDays)&&validDays>=1&&validDays<=90
+    return {
+      isValid: stationValid && branchValid && priceValid && deploymentValid && daysValid,
+      stationValid,
+      branchValid,
+      priceValid,
+      deploymentValid,
+      daysValid,
+    }
+  },[quoteDraft,ultraFloor])
+
   async function sendQuote(){
     const stationCount=Math.floor(Number(quoteDraft.stationCount)),branchCount=Math.floor(Number(quoteDraft.branchCount)),monthlyPrice=Number(quoteDraft.monthlyPrice),deploymentFeePerBranch=Number(quoteDraft.deploymentFeePerBranch),validDays=Math.floor(Number(quoteDraft.validDays))
-    if(!Number.isInteger(stationCount)||stationCount<1||stationCount>10000){setError('Quotation PC count must be between 1 and 10,000.');return}
-    if(quoteDraft.packageId==='ultra'&&stationCount<ultraFloor){setError(`Ultra quotations require at least ${ultraFloor} PCs.`);return}
-    if(!Number.isInteger(branchCount)||branchCount<1||branchCount>1000){setError('Quotation branch count must be between 1 and 1,000.');return}
-    if(!Number.isInteger(validDays)||validDays<1||validDays>90){setError('Quotation validity must be between 1 and 90 days.');return}
-    if(!Number.isFinite(monthlyPrice)||monthlyPrice<0||!Number.isFinite(deploymentFeePerBranch)||deploymentFeePerBranch<0){setError('Quotation pricing is invalid.');return}
+    if(!Number.isInteger(stationCount)||stationCount<1||stationCount>10000){showToast({title:'Invalid PC Count',message:'Quotation PC count must be between 1 and 10,000.',tone:'error'});return}
+    if(quoteDraft.packageId==='ultra'&&stationCount<ultraFloor){showToast({title:'Ultra Minimum',message:`Ultra quotations require at least ${ultraFloor} PCs.`,tone:'error'});return}
+    if(!Number.isInteger(branchCount)||branchCount<1||branchCount>1000){showToast({title:'Invalid Branch Count',message:'Quotation branch count must be between 1 and 1,000.',tone:'error'});return}
+    if(!Number.isInteger(validDays)||validDays<1||validDays>90){showToast({title:'Invalid Validity',message:'Quotation validity must be between 1 and 90 days.',tone:'error'});return}
+    if(!Number.isFinite(monthlyPrice)||monthlyPrice<0||!Number.isFinite(deploymentFeePerBranch)||deploymentFeePerBranch<0){showToast({title:'Invalid Pricing',message:'Quotation pricing is invalid.',tone:'error'});return}
     const result=await act('send_quote',{subscriptionPlan:quoteDraft.packageId,ultraStationLimit:quoteDraft.packageId==='ultra'?stationCount:undefined,stationCount,branchCount,monthlyPrice,deploymentFeePerBranch,validDays,message:quoteDraft.message})
     if(result){setQuoteOpen(false)}
   }
 
-  function openConfirm(action){setConfirm(action);setConfirmReason('');setConfirmName('');setError('')}
+  function openConfirm(action){setConfirm(action);setConfirmReason('');setConfirmName('')}
+  const isConfirmValid = useMemo(()=>{
+    const spec=ACTION_COPY[confirm]
+    if(!spec)return false
+    if(!spec.reasonOptional&&!confirmReason.trim())return false
+    if(spec.requireName&&confirmName.trim()!==selected?.business_name)return false
+    return true
+  },[confirm,confirmReason,confirmName,selected?.business_name])
+
   async function runConfirmed(){
     const spec=ACTION_COPY[confirm]
-    if(!spec||busy)return
-    if(!spec.reasonOptional&&!confirmReason.trim()){setError('Enter a reason before continuing.');return}
-    if(spec.requireName&&confirmName.trim()!==selected?.business_name){setError('Type the exact business name to confirm permanent deletion.');return}
+    if(!spec||busy||!isConfirmValid)return
+    if(!spec.reasonOptional&&!confirmReason.trim()){showToast({title:'Reason Required',message:'Enter a reason before continuing.',tone:'error'});return}
+    if(spec.requireName&&confirmName.trim()!==selected?.business_name){showToast({title:'Name Mismatch',message:'Type the exact business name to confirm permanent deletion.',tone:'error'});return}
     const result=await act(confirm,{reviewNotes:confirmReason.trim()||null,confirmBusinessName:confirmName.trim()||undefined})
     if(result){setConfirm(null);setConfirmReason('');setConfirmName('')}
   }
@@ -178,8 +236,6 @@ export default function DeveloperConsolePage({standalone=false}){
       <div><p className="eyebrow">Platform access</p><h1 className="font-display text-xl font-semibold text-ink-900 sm:text-2xl">Developer approvals</h1></div>
       <div className="flex w-full flex-wrap gap-2 sm:w-auto"><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={Settings2} onClick={openPricingEditor}>Pricing</Button><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={Mail} onClick={testEmail} disabled={Boolean(busy)}>{busy==='test_email'?'Sending…':'Email check'}</Button><Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={RefreshCw} onClick={load} disabled={loading}>{loading?'Refreshing…':'Refresh'}</Button>{standalone&&<Button className="flex-1 sm:flex-none" variant="ghost" size="sm" icon={LogOut} onClick={logout}>Sign out</Button>}</div>
     </div>
-    {error&&<div className="rounded-xl border border-ember/25 bg-ember/10 px-3 py-2.5 text-xs text-ember-dim">{error}</div>}
-    {notice&&<div className="rounded-xl border border-teal/20 bg-teal/5 px-3 py-2.5 text-xs text-teal-dim">{notice}</div>}
     <div className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${Number(observability?.last24Hours||0)>0?'border-ember/20 bg-ember/5':'border-surface-line bg-surface-raised/35'}`}>
       <div className="flex min-w-0 items-center gap-2"><TriangleAlert size={15} className={Number(observability?.last24Hours||0)>0?'shrink-0 text-ember-dim':'shrink-0 text-slate-soft'}/><div className="min-w-0"><p className="text-xs font-semibold text-ink-900">System monitoring</p><p className="truncate text-[10px] text-slate-soft">{observability?.recent?.[0]?`${observability.recent[0].source} · ${observability.recent[0].code||'error'} · ${formatDate(observability.recent[0].last_seen_at)}`:'No Cloud/Edge errors recorded in the last 24 hours.'}</p></div></div>
       <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${Number(observability?.last24Hours||0)>0?'bg-ember/10 text-ember-dim':'bg-teal/10 text-teal-dim'}`}>{Number(observability?.last24Hours||0)} / 24h</span>
@@ -218,7 +274,7 @@ export default function DeveloperConsolePage({standalone=false}){
             </button>
           )
         })}</div>
-        <div className="mt-3 space-y-2 overflow-y-auto lg:min-h-0 lg:flex-1 lg:max-h-none">{visible.length?visible.map(item=><button key={item.id} onClick={()=>{const suggested=packageForStations(item.expected_station_count||1,packageCatalog);const next=String(item.subscription_plan||suggested.id).toLowerCase();setSelected(item);setSubscriptionPlan(next);setUltraStationLimit(String(next==='ultra'?Math.max(ultraFloor,Number(item.subscription_max_stations)||0,Number(item.expected_station_count)||0):(item.subscription_max_stations||packageDefinition(next,packageCatalog).maxStations||50)));setNotes(item.review_notes||'');setActivationLink('');setNotice('')}} className={`w-full rounded-xl border p-3 text-left transition-colors ${selected?.id===item.id?'border-gold/50 bg-gold/5':'border-surface-line bg-surface-raised/35 hover:bg-surface-raised'}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink-900">{item.business_name}</p><p className="mt-0.5 truncate text-[11px] text-slate-soft">{item.owner_name} · {item.email}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${badge(item.status)}`}>{labels[item.status]||item.status}</span></div><div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-soft"><span>Submitted {formatDate(item.created_at)}</span>{item.organization_status&&<span className={`rounded-full px-2 py-0.5 font-semibold ${businessBadge(item.organization_status)}`}>{businessLabels[item.organization_status]||item.organization_status}</span>}</div></button>):<div className="flex min-h-40 items-center justify-center text-xs text-slate-soft">No applications in this view.</div>}</div>
+        <div className="mt-3 space-y-2 overflow-y-auto lg:min-h-0 lg:flex-1 lg:max-h-none">{visible.length?visible.map(item=><button key={item.id} onClick={()=>{const suggested=packageForStations(item.expected_station_count||1,packageCatalog);const next=String(item.subscription_plan||suggested.id).toLowerCase();setSelected(item);setSubscriptionPlan(next);setUltraStationLimit(String(next==='ultra'?Math.max(ultraFloor,Number(item.subscription_max_stations)||0,Number(item.expected_station_count)||0):(item.subscription_max_stations||packageDefinition(next,packageCatalog).maxStations||50)));setNotes(item.review_notes||'');setActivationLink('')}} className={`w-full rounded-xl border p-3 text-left transition-colors ${selected?.id===item.id?'border-gold/50 bg-gold/5':'border-surface-line bg-surface-raised/35 hover:bg-surface-raised'}`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="truncate text-sm font-semibold text-ink-900">{item.business_name}</p><p className="mt-0.5 truncate text-[11px] text-slate-soft">{item.owner_name} · {item.email}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-[9px] font-semibold uppercase tracking-wide ${badge(item.status)}`}>{labels[item.status]||item.status}</span></div><div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-soft"><span>Submitted {formatDate(item.created_at)}</span>{item.organization_status&&<span className={`rounded-full px-2 py-0.5 font-semibold ${businessBadge(item.organization_status)}`}>{businessLabels[item.organization_status]||item.organization_status}</span>}</div></button>):<div className="flex min-h-40 items-center justify-center text-xs text-slate-soft">No applications in this view.</div>}</div>
       </section>
 
       <section className="min-w-0 rounded-2xl border border-surface-line bg-surface p-3 sm:p-4">{selected?<>
@@ -229,7 +285,7 @@ export default function DeveloperConsolePage({standalone=false}){
           <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="text-xs font-semibold text-ink-900">Subscription package</p></div>{selected.subscription_status&&<span className="rounded-full bg-midnight/7 px-2 py-1 text-[9px] font-semibold uppercase tracking-wide text-slate-soft">{selected.subscription_status}</span>}</div>
           <div className="mt-3 grid grid-cols-2 gap-2">{packageCatalog.map(pkg=><button type="button" key={pkg.id} onClick={()=>{setSubscriptionPlan(pkg.id);if(pkg.id==='ultra'&&Number(ultraStationLimit)<ultraFloor)setUltraStationLimit(String(Math.max(ultraFloor,Number(selected.expected_station_count)||ultraFloor)))}} className={`rounded-xl border p-2.5 text-left transition-colors ${subscriptionPlan===pkg.id?'border-gold/55 bg-gold/10':'border-surface-line bg-surface hover:bg-surface-raised'}`}><p className={`text-xs font-semibold ${subscriptionPlan===pkg.id?'text-gold-dim':'text-ink-900'}`}>{pkg.label}</p><p className="mt-1 text-[10px] text-slate-soft">{pkg.maxStations===null?`${ultraFloor}+ PCs · custom cap`:`Up to ${pkg.maxStations} PCs`} · {formatPackagePrice(pkg)}</p></button>)}</div>
           {subscriptionPlan==='ultra'&&<label className="mt-3 block"><span className="eyebrow mb-1.5 block">Ultra station limit</span><input type="number" min={ultraFloor} max="10000" value={ultraStationLimit} onChange={e=>setUltraStationLimit(e.target.value)} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/><span className="mt-1 block text-[10px] text-slate-soft">Developer-defined organization-wide station allowance.</span></label>}
-          {selected.organization_id&&<div className="mt-3 flex items-center justify-between gap-3"><p className="text-[10px] text-slate-soft">Current limit: <strong className="text-ink-900">{selected.subscription_max_stations||'—'} stations</strong>{selected.grace_until?` · grace until ${formatDate(selected.grace_until)}`:''}</p><Button size="sm" variant="subtle" disabled={Boolean(busy)} onClick={saveSubscription}>{busy==='set_subscription'?'Saving…':'Save package'}</Button></div>}
+          {selected.organization_id&&<div className="mt-3 flex items-center justify-between gap-3"><p className="text-[10px] text-slate-soft">Current limit: <strong className="text-ink-900">{selected.subscription_max_stations||'—'} stations</strong>{selected.grace_until?` · grace until ${formatDate(selected.grace_until)}`:''}</p><Button size="sm" variant="subtle" disabled={Boolean(busy)||(subscriptionPlan==='ultra'&&(!Number.isInteger(Number(ultraStationLimit))||Number(ultraStationLimit)<ultraFloor||Number(ultraStationLimit)>10000))} onClick={saveSubscription}>{busy==='set_subscription'?'Saving…':'Save package'}</Button></div>}
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold/20 bg-gold/5 p-3"><div><p className="text-xs font-semibold text-ink-900">Customer quotation</p></div><Button variant="subtle" size="sm" icon={Send} disabled={Boolean(busy)} onClick={openQuote}>Send quotation</Button></div>
         {selected.organization_reason&&<div className="mt-3 rounded-xl border border-ember/15 bg-ember/5 p-3 text-xs leading-5 text-slate-soft"><span className="font-semibold text-ink-900">Lifecycle reason:</span> {selected.organization_reason}</div>}
@@ -238,7 +294,7 @@ export default function DeveloperConsolePage({standalone=false}){
         {!['invited','activated'].includes(selected.status)&&<div className="mt-4 grid gap-2 sm:grid-cols-2"><Button variant="ghost" size="sm" icon={ShieldCheck} disabled={Boolean(busy)} onClick={()=>act('reviewing')}>{busy==='reviewing'?'Saving…':'Mark reviewing'}</Button><Button variant="ghost" size="sm" icon={Mail} disabled={Boolean(busy)} onClick={()=>act('needs_info')}>{busy==='needs_info'?'Saving…':'Needs info'}</Button><Button variant="danger" size="sm" icon={X} disabled={Boolean(busy)} onClick={()=>act('reject')}>{busy==='reject'?'Rejecting…':'Reject'}</Button><Button variant="primary" size="sm" icon={Check} disabled={Boolean(busy)||selected.status==='rejected'} onClick={approveSelected}>{busy==='approve'?'Approving…':'Approve & send invite'}</Button></div>}
 
         {selected.status==='invited'&&<div className="mt-4 space-y-3 rounded-xl border border-gold/25 bg-gold/5 p-3 text-xs leading-5 text-slate-soft"><p>Aezakmi-branded invitation sent automatically to <strong className="text-ink-900">{selected.email}</strong> {formatDate(selected.invite_sent_at)}. The owner opens the secure email link and sets their own password.</p><div className="grid gap-2 sm:grid-cols-3"><Button variant="primary" size="sm" icon={Mail} disabled={Boolean(busy)} onClick={()=>act('resend_invite')}>{busy==='resend_invite'?'Sending…':'Resend invite email'}</Button><Button variant="ghost" size="sm" icon={Link2} disabled={Boolean(busy)} onClick={copyActivationLink}>{busy==='copy_activation_link'?'Generating…':'Copy activation link'}</Button><Button variant="danger" size="sm" icon={Ban} disabled={Boolean(busy)} onClick={()=>openConfirm('cancel_invite')}>Cancel invite</Button></div></div>}
-        {activationLink&&<div className="mt-3 rounded-xl border border-teal/20 bg-teal/5 p-3"><div className="flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-teal-dim">Manual activation link</p><button type="button" className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-teal-dim hover:bg-teal/10" onClick={async()=>{try{await navigator.clipboard.writeText(activationLink);setNotice('Activation link copied to clipboard.')}catch{}}}><Copy size={13}/> Copy</button></div><input readOnly value={activationLink} onFocus={e=>e.currentTarget.select()} className="mt-2 min-h-10 w-full rounded-lg border border-teal/20 bg-surface px-3 text-[10px] text-ink-900"/></div>}
+        {activationLink&&<div className="mt-3 rounded-xl border border-teal/20 bg-teal/5 p-3"><div className="flex items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-teal-dim">Manual activation link</p><button type="button" className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-teal-dim hover:bg-teal/10 cursor-pointer" onClick={async()=>{try{await navigator.clipboard.writeText(activationLink);showToast({title:'Copied',message:'Activation link copied to clipboard.',tone:'success'})}catch{}}}><Copy size={13}/> Copy</button></div><input readOnly value={activationLink} onFocus={e=>e.currentTarget.select()} className="mt-2 min-h-10 w-full rounded-lg border border-teal/20 bg-surface px-3 text-[10px] text-ink-900"/></div>}
         {selected.status==='invite_cancelled'&&<div className="mt-4 rounded-xl border border-ember/20 bg-ember/5 p-3 text-xs leading-5 text-slate-soft">Invitation cancelled {formatDate(selected.invite_cancelled_at)}. The provisional Auth account and Cloud tenant were removed. Mark the request reviewing to invite again later.</div>}
 
         {selected.status==='activated'&&<div className="mt-4 space-y-3"><div className="rounded-xl border border-teal/25 bg-teal/5 p-3 text-xs leading-5 text-teal-dim">Business owner activated the approved account {formatDate(selected.activated_at)}.</div>
@@ -255,15 +311,15 @@ export default function DeveloperConsolePage({standalone=false}){
       </>:<div className="flex min-h-[360px] flex-col items-center justify-center text-center lg:min-h-[520px]"><ShieldCheck size={26} className="text-gold-dim"/><p className="mt-3 text-sm font-semibold text-ink-900">Select an application</p></div>}</section>
     </div>
 
-    <Modal open={pricingOpen} onClose={()=>!busy&&setPricingOpen(false)} busy={busy==='save_pricing'} maxWidth="max-w-3xl" eyebrow="Platform pricing" title="Aezakmi packages & deployment pricing" footer={<><Button variant="ghost" disabled={Boolean(busy)} onClick={()=>setPricingOpen(false)}>Cancel</Button><Button variant="primary" disabled={Boolean(busy)} onClick={savePricingEditor}>{busy==='save_pricing'?'Saving…':'Save pricing'}</Button></>}>
+    <Modal open={pricingOpen} onClose={()=>!busy&&setPricingOpen(false)} busy={busy==='save_pricing'} maxWidth="max-w-3xl" eyebrow="Platform pricing" title="Aezakmi packages & deployment pricing" footer={<><Button variant="ghost" disabled={Boolean(busy)} onClick={()=>setPricingOpen(false)}>Cancel</Button><Button variant="primary" disabled={Boolean(busy)||!isPricingValid} onClick={savePricingEditor}>{busy==='save_pricing'?'Saving…':'Save pricing'}</Button></>}>
       <div className="space-y-4"><p className="text-xs leading-5 text-slate-soft">Defaults for new quotations only.</p><div className="grid gap-3 sm:grid-cols-2">{pricingDraft.map((pkg,index)=><div key={pkg.id} className="rounded-xl border border-surface-line bg-surface-raised/35 p-3"><div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-ink-900">{pkg.label}</p><span className="rounded-full bg-gold/10 px-2 py-1 text-[9px] font-semibold uppercase text-gold-dim">{pkg.id}</span></div><div className="mt-3 grid gap-2 sm:grid-cols-2"><label><span className="eyebrow mb-1 block">Monthly ₱</span><input type="number" min="0" max="1000000" value={pkg.monthlyPrice} onChange={e=>setPricingDraft(rows=>rows.map((row,i)=>i===index?{...row,monthlyPrice:e.target.value}:row))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><label><span className="eyebrow mb-1 block">PC limit</span>{pkg.id==='ultra'?<div className="flex min-h-10 items-center rounded-lg border border-surface-line bg-surface px-3 text-xs text-slate-soft">{ultraFloor}+ · custom per business</div>:<input type="number" min="1" max="10000" value={pkg.maxStations} onChange={e=>setPricingDraft(rows=>rows.map((row,i)=>i===index?{...row,maxStations:e.target.value}:row))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/>}</label></div><label className="mt-2 block"><span className="eyebrow mb-1 block">Description</span><input value={pkg.description||''} onChange={e=>setPricingDraft(rows=>rows.map((row,i)=>i===index?{...row,description:e.target.value}:row))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label></div>)}</div><div className="rounded-xl border border-surface-line bg-surface-raised/35 p-3"><p className="text-xs font-semibold text-ink-900">Initial deployment & quotation defaults</p><div className="mt-3 grid gap-3 sm:grid-cols-3"><label><span className="eyebrow mb-1 block">Minimum / branch ₱</span><input type="number" min="0" max="1000000" value={pricingSettingsDraft.deploymentFeeMin} onChange={e=>setPricingSettingsDraft(v=>({...v,deploymentFeeMin:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><label><span className="eyebrow mb-1 block">Maximum / branch ₱</span><input type="number" min="0" max="1000000" value={pricingSettingsDraft.deploymentFeeMax} onChange={e=>setPricingSettingsDraft(v=>({...v,deploymentFeeMax:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><label><span className="eyebrow mb-1 block">Quote valid days</span><input type="number" min="1" max="90" value={pricingSettingsDraft.quoteValidDays} onChange={e=>setPricingSettingsDraft(v=>({...v,quoteValidDays:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label></div></div></div>
     </Modal>
 
-    <Modal open={quoteOpen&&Boolean(selected)} onClose={()=>!busy&&setQuoteOpen(false)} busy={busy==='send_quote'} maxWidth="max-w-2xl" eyebrow="Aezakmi quotation" title={`Send quote to ${selected?.business_name||'customer'}`} footer={<><Button variant="ghost" disabled={Boolean(busy)} onClick={()=>setQuoteOpen(false)}>Cancel</Button><Button variant="primary" icon={Send} disabled={Boolean(busy)} onClick={sendQuote}>{busy==='send_quote'?'Sending…':'Send branded quotation'}</Button></>}>
-      {selected&&<div className="space-y-4"><div className="rounded-xl border border-gold/20 bg-gold/5 p-3 text-xs leading-5 text-slate-soft">The quotation will be sent to <strong className="text-ink-900">{selected.email}</strong> using the Aezakmi email template. You can override the suggested figures before sending.</div><div className="grid gap-3 sm:grid-cols-2"><label><span className="eyebrow mb-1.5 block">Package</span><select value={quoteDraft.packageId} onChange={e=>setQuotePackage(e.target.value)} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50">{packageCatalog.map(pkg=><option key={pkg.id} value={pkg.id}>{pkg.label} · {formatPackagePrice(pkg)}</option>)}</select></label><label><span className="eyebrow mb-1.5 block">PC count</span><input type="number" min="1" max="10000" value={quoteDraft.stationCount} onChange={e=>setQuoteDraft(v=>({...v,stationCount:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><label><span className="eyebrow mb-1.5 block">Branches</span><input type="number" min="1" max="1000" value={quoteDraft.branchCount} onChange={e=>setQuoteDraft(v=>({...v,branchCount:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><label><span className="eyebrow mb-1.5 block">Monthly price ₱</span><input type="number" min="0" max="1000000" value={quoteDraft.monthlyPrice} onChange={e=>setQuoteDraft(v=>({...v,monthlyPrice:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><label><span className="eyebrow mb-1.5 block">Deployment / branch ₱</span><input type="number" min="0" max="1000000" value={quoteDraft.deploymentFeePerBranch} onChange={e=>setQuoteDraft(v=>({...v,deploymentFeePerBranch:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/><span className="mt-1 block text-[10px] text-slate-soft">Current recommended range: ₱{Number(pricingSettings.deployment_fee_min||0).toLocaleString()}–₱{Number(pricingSettings.deployment_fee_max||0).toLocaleString()} / branch</span></label><label><span className="eyebrow mb-1.5 block">Valid for days</span><input type="number" min="1" max="90" value={quoteDraft.validDays} onChange={e=>setQuoteDraft(v=>({...v,validDays:e.target.value}))} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label></div><label className="block"><span className="eyebrow mb-1.5 block">Optional message</span><textarea rows={3} value={quoteDraft.message} onChange={e=>setQuoteDraft(v=>({...v,message:e.target.value}))} placeholder="Example: Includes initial onsite setup for the main branch." className="w-full rounded-xl border border-surface-line bg-surface p-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><div className="rounded-xl border border-surface-line bg-surface-raised/35 p-3 text-xs text-slate-soft"><div className="flex justify-between gap-3"><span>Monthly</span><strong className="text-ink-900">₱{Number(quoteDraft.monthlyPrice||0).toLocaleString()}</strong></div><div className="mt-1 flex justify-between gap-3"><span>Initial deployment total</span><strong className="text-gold-dim">₱{(Number(quoteDraft.deploymentFeePerBranch||0)*Math.max(1,Number(quoteDraft.branchCount)||1)).toLocaleString()}</strong></div></div></div>}
+    <Modal open={quoteOpen&&Boolean(selected)} onClose={()=>!busy&&setQuoteOpen(false)} busy={busy==='send_quote'} maxWidth="max-w-2xl" eyebrow="Aezakmi quotation" title={`Send quote to ${selected?.business_name||'customer'}`} footer={<><Button variant="ghost" disabled={Boolean(busy)} onClick={()=>setQuoteOpen(false)}>Cancel</Button><Button variant="primary" icon={Send} disabled={Boolean(busy)||!quoteValidation.isValid} onClick={sendQuote}>{busy==='send_quote'?'Sending…':'Send branded quotation'}</Button></>}>
+      {selected&&<div className="space-y-4"><div className="rounded-xl border border-gold/20 bg-gold/5 p-3 text-xs leading-5 text-slate-soft">The quotation will be sent to <strong className="text-ink-900">{selected.email}</strong> using the Aezakmi email template. You can override the suggested figures before sending.</div><div className="grid gap-3 sm:grid-cols-2"><label><span className="eyebrow mb-1.5 block">Package</span><select value={quoteDraft.packageId} onChange={e=>setQuotePackage(e.target.value)} className="min-h-10 w-full rounded-lg border border-surface-line bg-surface px-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50">{packageCatalog.map(pkg=><option key={pkg.id} value={pkg.id}>{pkg.label} · {formatPackagePrice(pkg)}</option>)}</select></label><label><span className="eyebrow mb-1.5 block">PC count</span><input type="number" min="1" max="10000" value={quoteDraft.stationCount} onChange={e=>setQuoteDraft(v=>({...v,stationCount:e.target.value}))} className={`min-h-10 w-full rounded-lg border bg-surface px-3 text-xs text-ink-900 focus:outline-none ${!quoteValidation.stationValid?'border-ember/40 focus:border-ember':'border-surface-line focus:border-gold/50'}`}/></label><label><span className="eyebrow mb-1.5 block">Branches</span><input type="number" min="1" max="1000" value={quoteDraft.branchCount} onChange={e=>setQuoteDraft(v=>({...v,branchCount:e.target.value}))} className={`min-h-10 w-full rounded-lg border bg-surface px-3 text-xs text-ink-900 focus:outline-none ${!quoteValidation.branchValid?'border-ember/40 focus:border-ember':'border-surface-line focus:border-gold/50'}`}/></label><label><span className="eyebrow mb-1.5 block">Monthly price ₱</span><input type="number" min="0" max="1000000" value={quoteDraft.monthlyPrice} onChange={e=>setQuoteDraft(v=>({...v,monthlyPrice:e.target.value}))} className={`min-h-10 w-full rounded-lg border bg-surface px-3 text-xs text-ink-900 focus:outline-none ${!quoteValidation.priceValid?'border-ember/40 focus:border-ember':'border-surface-line focus:border-gold/50'}`}/></label><label><span className="eyebrow mb-1.5 block">Deployment / branch ₱</span><input type="number" min="0" max="1000000" value={quoteDraft.deploymentFeePerBranch} onChange={e=>setQuoteDraft(v=>({...v,deploymentFeePerBranch:e.target.value}))} className={`min-h-10 w-full rounded-lg border bg-surface px-3 text-xs text-ink-900 focus:outline-none ${!quoteValidation.deploymentValid?'border-ember/40 focus:border-ember':'border-surface-line focus:border-gold/50'}`}/><span className="mt-1 block text-[10px] text-slate-soft">Current recommended range: ₱{Number(pricingSettings.deployment_fee_min||0).toLocaleString()}–₱{Number(pricingSettings.deployment_fee_max||0).toLocaleString()} / branch</span></label><label><span className="eyebrow mb-1.5 block">Valid for days</span><input type="number" min="1" max="90" value={quoteDraft.validDays} onChange={e=>setQuoteDraft(v=>({...v,validDays:e.target.value}))} className={`min-h-10 w-full rounded-lg border bg-surface px-3 text-xs text-ink-900 focus:outline-none ${!quoteValidation.daysValid?'border-ember/40 focus:border-ember':'border-surface-line focus:border-gold/50'}`}/></label></div><label className="block"><span className="eyebrow mb-1.5 block">Optional message</span><textarea rows={3} value={quoteDraft.message} onChange={e=>setQuoteDraft(v=>({...v,message:e.target.value}))} placeholder="Example: Includes initial onsite setup for the main branch." className="w-full rounded-xl border border-surface-line bg-surface p-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50"/></label><div className="rounded-xl border border-surface-line bg-surface-raised/35 p-3 text-xs text-slate-soft"><div className="flex justify-between gap-3"><span>Monthly</span><strong className="text-ink-900">₱{Number(quoteDraft.monthlyPrice||0).toLocaleString()}</strong></div><div className="mt-1 flex justify-between gap-3"><span>Initial deployment total</span><strong className="text-gold-dim">₱{(Number(quoteDraft.deploymentFeePerBranch||0)*Math.max(1,Number(quoteDraft.branchCount)||1)).toLocaleString()}</strong></div></div></div>}
     </Modal>
 
-    {confirm&&selected&&<div className="fixed inset-0 z-[120] flex items-end justify-center bg-midnight/55 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true"><div className="max-h-[100dvh] w-full overflow-y-auto rounded-t-2xl border border-surface-line bg-surface p-4 shadow-card sm:max-w-lg sm:rounded-2xl sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Developer action</p><h3 className="mt-1 font-display text-lg font-semibold text-ink-900">{ACTION_COPY[confirm]?.title}</h3></div><button type="button" onClick={()=>setConfirm(null)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-soft hover:bg-surface-raised" aria-label="Close"><X size={17}/></button></div><p className="mt-3 text-xs leading-5 text-slate-soft">{ACTION_COPY[confirm]?.description}</p><label className="mt-4 block"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-soft">{ACTION_COPY[confirm]?.reasonOptional?'Reason / note (optional)':'Reason (required)'}</span><textarea autoFocus value={confirmReason} onChange={e=>setConfirmReason(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-surface-line bg-surface p-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50" placeholder="Why are you performing this action?"/></label>{ACTION_COPY[confirm]?.requireName&&<label className="mt-3 block"><span className="text-[10px] font-semibold uppercase tracking-wide text-ember-dim">Type {selected.business_name} to confirm</span><input value={confirmName} onChange={e=>setConfirmName(e.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-ember/25 bg-surface px-3 text-xs text-ink-900 focus:outline-none"/></label>}<div className="mt-5 grid gap-2 sm:grid-cols-2"><Button variant="ghost" onClick={()=>setConfirm(null)} disabled={Boolean(busy)}>Cancel</Button><Button variant={ACTION_COPY[confirm]?.variant||'danger'} onClick={runConfirmed} disabled={Boolean(busy)}>{busy===confirm?'Working…':ACTION_COPY[confirm]?.confirm}</Button></div></div></div>}
+    {confirm&&selected&&<div className="fixed inset-0 z-[120] flex items-end justify-center bg-midnight/55 p-0 sm:items-center sm:p-4" role="dialog" aria-modal="true"><div className="max-h-[100dvh] w-full overflow-y-auto rounded-t-2xl border border-surface-line bg-surface p-4 shadow-card sm:max-w-lg sm:rounded-2xl sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Developer action</p><h3 className="mt-1 font-display text-lg font-semibold text-ink-900">{ACTION_COPY[confirm]?.title}</h3></div><button type="button" onClick={()=>setConfirm(null)} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-soft hover:bg-surface-raised cursor-pointer" aria-label="Close"><X size={17}/></button></div><p className="mt-3 text-xs leading-5 text-slate-soft">{ACTION_COPY[confirm]?.description}</p><label className="mt-4 block"><span className="text-[10px] font-semibold uppercase tracking-wide text-slate-soft">{ACTION_COPY[confirm]?.reasonOptional?'Reason / note (optional)':'Reason (required)'}</span><textarea autoFocus value={confirmReason} onChange={e=>setConfirmReason(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-surface-line bg-surface p-3 text-xs text-ink-900 focus:outline-none focus:border-gold/50" placeholder="Why are you performing this action?"/></label>{ACTION_COPY[confirm]?.requireName&&<label className="mt-3 block"><span className="text-[10px] font-semibold uppercase tracking-wide text-ember-dim">Type {selected.business_name} to confirm</span><input value={confirmName} onChange={e=>setConfirmName(e.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-ember/25 bg-surface px-3 text-xs text-ink-900 focus:outline-none"/></label>}<div className="mt-5 grid gap-2 sm:grid-cols-2"><Button variant="ghost" onClick={()=>setConfirm(null)} disabled={Boolean(busy)}>Cancel</Button><Button variant={ACTION_COPY[confirm]?.variant||'danger'} onClick={runConfirmed} disabled={Boolean(busy)||!isConfirmValid}>{busy===confirm?'Working…':ACTION_COPY[confirm]?.confirm}</Button></div></div></div>}
   </div>
 
   if(standalone)return <main className="admin-app-canvas min-h-screen">{content}</main>

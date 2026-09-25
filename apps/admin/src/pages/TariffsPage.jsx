@@ -24,6 +24,7 @@ import { makeRatePlanId } from "../lib/rates.js";
 import { formatAdminPeso, positiveNumber } from "../lib/numeric.js";
 import { formatDuration } from "../lib/duration.js";
 import { AdminEmptyState, AdminPageWorkspace, AdminRailCard } from "../components/layout/AdminPageWorkspace.jsx";
+import { showToast } from "../lib/toast.js";
 import VouchersPage from "./VouchersPage.jsx";
 
 const BLANK_LINEAR = {
@@ -511,9 +512,12 @@ export default function TariffsPage({ initialTab }) {
         lowTimeWarningMinutes: positiveNumber(policy.lowTimeWarningMinutes),
         defaultAddTimeRatePlanId: policy.defaultAddTimeRatePlanId || null,
       });
+      showToast({ title: "Policy Saved", message: "Session policy updated successfully." });
       setPolicyModal(null);
     } catch (err) {
-      setError(err?.message || "Unable to save the session policy.");
+      const msg = err?.message || "Unable to save the session policy.";
+      setError(msg);
+      showToast({ title: "Policy Error", message: msg, tone: "error" });
     } finally {
       setPolicySaving(false);
     }
@@ -575,16 +579,21 @@ export default function TariffsPage({ initialTab }) {
     if (!editing) return;
     const errors = validateDraft(editing, ratePlans, editing.id);
     if (Object.keys(errors).length) {
-      setError(Object.values(errors)[0]);
+      const firstErr = Object.values(errors)[0];
+      setError(firstErr);
+      showToast({ title: "Validation Error", message: firstErr, tone: "error" });
       return;
     }
     setSaving(true);
     setError("");
     try {
       await updateRatePlan(editing.id, ratePlanPayload(editing));
+      showToast({ title: "Rate Plan Updated", message: `Updated ${editing.name || "plan"}.` });
       setEditing(null);
     } catch (err) {
-      setError(err?.message || "Unable to update the rate plan.");
+      const msg = err?.message || "Unable to update the rate plan.";
+      setError(msg);
+      showToast({ title: "Update Failed", message: msg, tone: "error" });
     } finally {
       setSaving(false);
     }
@@ -594,7 +603,9 @@ export default function TariffsPage({ initialTab }) {
     if (!creating) return;
     const errors = validateDraft(creating, ratePlans);
     if (Object.keys(errors).length) {
-      setError(Object.values(errors)[0]);
+      const firstErr = Object.values(errors)[0];
+      setError(firstErr);
+      showToast({ title: "Validation Error", message: firstErr, tone: "error" });
       return;
     }
     setSaving(true);
@@ -602,9 +613,12 @@ export default function TariffsPage({ initialTab }) {
     try {
       const plan = ratePlanPayload(creating);
       await addRatePlan({ ...plan, id: makeRatePlanId(plan.name) });
+      showToast({ title: "Rate Plan Created", message: `Created ${creating.name}.` });
       setCreating(null);
     } catch (err) {
-      setError(err?.message || "Unable to create the rate plan.");
+      const msg = err?.message || "Unable to create the rate plan.";
+      setError(msg);
+      showToast({ title: "Creation Failed", message: msg, tone: "error" });
     } finally {
       setSaving(false);
     }
@@ -616,9 +630,12 @@ export default function TariffsPage({ initialTab }) {
     setError("");
     try {
       await deleteRatePlan(deleteTarget.id);
+      showToast({ title: "Rate Plan Deleted", message: deleteTarget.name, tone: "warning" });
       setDeleteTarget(null);
     } catch (err) {
-      setError(err?.message || "Unable to delete the rate plan.");
+      const msg = err?.message || "Unable to delete the rate plan.";
+      setError(msg);
+      showToast({ title: "Delete Failed", message: msg, tone: "error" });
     } finally {
       setDeleting(false);
     }

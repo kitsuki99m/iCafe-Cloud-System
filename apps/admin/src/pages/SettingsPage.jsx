@@ -320,8 +320,11 @@ export default function SettingsPage() {
     setSaveError('')
     try {
       await updateSettings(values)
+      showToast({ title: 'Settings Saved', message: `${key.charAt(0).toUpperCase() + key.slice(1)} settings updated.` })
     } catch(error) {
-      setSaveError(error.message || `Unable to save ${key} settings.`)
+      const msg = error.message || `Unable to save ${key} settings.`
+      setSaveError(msg)
+      showToast({ title: 'Save Failed', message: msg, tone: 'error' })
     } finally {
       setSaving('')
     }
@@ -333,16 +336,19 @@ export default function SettingsPage() {
     setSavedSoundPrefs(saved)
     setSoundPrefs(saved)
     setSaving('')
+    showToast({ title: 'Sound Settings Saved', message: 'Audio preferences updated.' })
   }
 
   async function selectLogo(file) {
     if (!file) return
     if (!['image/png', 'image/svg+xml'].includes(file.type)) {
       setLogoWarning('Please choose a PNG or safe SVG logo.')
+      showToast({ title: 'Invalid Image', message: 'Please choose a PNG or safe SVG logo.', tone: 'warning' })
       return
     }
     if (file.size > 512 * 1024) {
       setLogoWarning('Logo image is too large. Please choose an image that is 512 KB or smaller.')
+      showToast({ title: 'File Too Large', message: 'Logo image must be 512 KB or smaller.', tone: 'warning' })
       return
     }
     setSaving('logo')
@@ -355,8 +361,11 @@ export default function SettingsPage() {
       })
       setPendingLogoDataUrl(dataUrl)
       setLogoUrl(dataUrl)
+      showToast({ title: 'Logo Loaded', message: 'Logo preview updated. Save profile to apply.' })
     } catch (error) {
-      setLogoWarning(error?.message || 'Unable to read that logo file.')
+      const msg = error?.message || 'Unable to read that logo file.'
+      setLogoWarning(msg)
+      showToast({ title: 'Logo Error', message: msg, tone: 'error' })
     } finally {
       setSaving('')
     }
@@ -376,15 +385,21 @@ export default function SettingsPage() {
         setPendingLogoDataUrl('')
         window.dispatchEvent(new CustomEvent('aezakmi:branding-updated', { detail: { logoUrl: next, logoVersion: result.logoVersion || Date.now() } }))
       }
+      showToast({ title: 'Profile Saved', message: 'Café branding and profile updated.' })
     } catch(error) {
-      setSaveError(error?.message || 'Unable to save cafe profile.')
+      const msg = error?.message || 'Unable to save cafe profile.'
+      setSaveError(msg)
+      showToast({ title: 'Save Failed', message: msg, tone: 'error' })
     } finally {
       setSaving('')
     }
   }
 
   async function saveSecurity() {
-    if (!securityValid) return
+    if (!securityValid) {
+      showToast({ title: 'Validation Error', message: 'Please fulfill all required credential fields.', tone: 'error' })
+      return
+    }
     setSaving('security')
     setSecurityError('')
     setSecurityMessage('')
@@ -398,10 +413,14 @@ export default function SettingsPage() {
       })
       if (!result.ok) throw new Error(result.error || 'Unable to update Admin credentials.')
       setSecurity({ currentPin: '', currentPassword: '', newPin: '', newPassword: '', confirmPassword: '', authMethod: result.user?.authMethod || security.authMethod })
-      setSecurityMessage(cloudMode ? 'Cloud account password updated.' : 'Admin credentials updated. Other Admin sessions were signed out.')
+      const msg = cloudMode ? 'Cloud account password updated.' : 'Admin credentials updated. Other Admin sessions were signed out.'
+      setSecurityMessage(msg)
+      showToast({ title: 'Security Updated', message: msg })
       await refresh()
     } catch (error) {
-      setSecurityError(error?.message || 'Unable to update Admin credentials.')
+      const msg = error?.message || 'Unable to update Admin credentials.'
+      setSecurityError(msg)
+      showToast({ title: 'Security Error', message: msg, tone: 'error' })
     } finally {
       setSaving('')
     }
