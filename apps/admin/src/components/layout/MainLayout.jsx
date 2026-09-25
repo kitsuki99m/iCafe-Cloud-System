@@ -22,6 +22,7 @@ import PwaInstallButton from '../common/PwaInstallButton.jsx'
 import AdminProfileMenu from './AdminProfileMenu.jsx'
 import { useSkin } from '../../context/SkinContext.jsx'
 import SkinGalleryModal from '../admin/SkinGalleryModal.jsx'
+import EsportsBrandingOverlay from '../esports/EsportsBrandingOverlay.jsx'
 
 import { formatAdminPeso } from '../../lib/numeric.js'
 
@@ -214,6 +215,7 @@ export default function MainLayout({ children }) {
     <div className="admin-app-canvas h-dvh min-h-0 w-full overflow-hidden relative">
       <div className="backdrop" aria-hidden="true" />
       <div className="chroma" aria-hidden="true" />
+      <EsportsBrandingOverlay />
       <div className="admin-shell-frame flex h-full min-h-0 w-full overflow-hidden relative z-10">
         {isSimpleMode ? (
           /* ===== SIMPLE MODE: Console Rail Navigation matching nexus-floor.html ===== */
