@@ -151,6 +151,7 @@ export default function CustomerSessionView() {
   const [now, setNow] = useState(Date.now());
   const [compactView, setCompactView] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 420 && window.innerHeight <= 180);
   const [dashboardMode, setDashboardMode] = useState(() => (typeof window !== 'undefined' && window.innerWidth <= 1024 && window.innerHeight <= 720 ? 'minified' : 'expanded'));
+  const isMinified = dashboardMode === 'minified';
   const [timerPreferences, setTimerPreferences] = useState(() => {
     const saved = typeof window !== 'undefined' ? window.aezakmiClient?.getTimerPreferences?.() : null;
     const rawOpacity = Number(saved?.opacity);
@@ -168,6 +169,7 @@ export default function CustomerSessionView() {
   const [appCategory, setAppCategory] = useState("All");
   const [launcherSearchQuery, setLauncherSearchQuery] = useState("");
   const [stationConfigModalOpen, setStationConfigModalOpen] = useState(false);
+  const [launcherModalOpen, setLauncherModalOpen] = useState(false);
   const [stationPinGateOpen, setStationPinGateOpen] = useState(false);
   const [assistanceSent, setAssistanceSent] = useState(false);
   const [assistanceBusy, setAssistanceBusy] = useState(false);
@@ -875,40 +877,44 @@ export default function CustomerSessionView() {
             <p className="truncate font-display text-[15px] font-semibold tracking-tight text-ink-900">
               {branding.cafeName || settings?.cafeName || "Aezakmi Cafe"}
             </p>
-            <div className="flex items-center gap-1.5 text-[11px] text-slate-soft">
-              <span className="font-semibold text-ink-900">{pc?.label || (isGuest ? "Guest Station" : "Customer Station")}</span>
-              {pc?.ipAddress && <span>· {pc.ipAddress}</span>}
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${serverError ? "border border-ember/30 bg-ember/10 text-ember-dim" : "border border-teal/25 bg-teal/10 text-teal-dim"}`}>
-                <span className={`h-1.5 w-1.5 rounded-full ${serverError ? "bg-ember" : "bg-teal"}`} />
-                {serverError ? "Offline" : "Online"}
-              </span>
-            </div>
+            {!isMinified && (
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-soft">
+                <span className="font-semibold text-ink-900">{pc?.label || (isGuest ? "Guest Station" : "Customer Station")}</span>
+                {pc?.ipAddress && <span>· {pc.ipAddress}</span>}
+                <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${serverError ? "border border-ember/30 bg-ember/10 text-ember-dim" : "border border-teal/25 bg-teal/10 text-teal-dim"}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${serverError ? "bg-ember" : "bg-teal"}`} />
+                  {serverError ? "Offline" : "Online"}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* User Badge / Balance */}
-        <div className="hidden md:flex items-center gap-2.5 customer-neutral-surface border border-surface-line px-3.5 py-1.5 rounded-xl text-xs">
-          <UserRound size={14} className="text-gold-dim" />
-          <span className="font-bold text-ink-900">{user.username || user.name}</span>
-          <span className="text-slate-soft text-[11px] hidden lg:inline">{isGuest ? "Guest access" : "Signed in"}</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isGuest ? "bg-midnight/8 text-ink-900" : (TIER_STYLE[user.tier] ?? TIER_STYLE.Regular)}`}>
-            {isGuest ? (legacyBillingSession ? "Guest · Staff checkout" : "Guest · Prepaid") : (user.tier ?? "Regular")}
-          </span>
-          {!isGuest && (
-            <span className="border-l border-surface-line pl-2.5 font-mono font-bold text-ink-900">
-              {peso(wallet)}
+        {!isMinified && (
+          <div className="hidden md:flex items-center gap-2.5 customer-neutral-surface border border-surface-line px-3.5 py-1.5 rounded-xl text-xs">
+            <UserRound size={14} className="text-gold-dim" />
+            <span className="font-bold text-ink-900">{user.username || user.name}</span>
+            <span className="text-slate-soft text-[11px] hidden lg:inline">{isGuest ? "Guest access" : "Signed in"}</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${isGuest ? "bg-midnight/8 text-ink-900" : (TIER_STYLE[user.tier] ?? TIER_STYLE.Regular)}`}>
+              {isGuest ? (legacyBillingSession ? "Guest · Staff checkout" : "Guest · Prepaid") : (user.tier ?? "Regular")}
             </span>
-          )}
-          {isDevBypass && (
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-bold text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Dev Platform Bypass
-            </div>
-          )}
-        </div>
+            {!isGuest && (
+              <span className="border-l border-surface-line pl-2.5 font-mono font-bold text-ink-900">
+                {peso(wallet)}
+              </span>
+            )}
+            {isDevBypass && (
+              <div className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] font-bold text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Dev Platform Bypass
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Live Philippine Time Clock */}
-        <PhtClock className="hidden md:inline-flex" />
+        {!isMinified && <PhtClock className="hidden md:inline-flex" />}
 
         <div className="flex shrink-0 items-center gap-1.5">
           <button
@@ -918,10 +924,21 @@ export default function CustomerSessionView() {
             className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35 disabled:opacity-50"
             title="Ask staff for assistance"
           >
-            <Bell size={14} /> <span className="hidden sm:inline">{assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}</span>
+            <Bell size={14} /> <span className={isMinified ? "hidden" : "hidden sm:inline"}>{assistanceBusy ? "Calling staff…" : assistanceSent ? "Staff notified" : legacyBillingSession ? "Call Staff" : "Ask for Help"}</span>
           </button>
+          {/* Games Launcher Button (Minified Mode) */}
+          {isMinified && (
+            <button
+              type="button"
+              onClick={() => setLauncherModalOpen(true)}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-gold/40 bg-gold/10 px-2.5 text-[11px] font-bold text-gold-dim transition-colors hover:bg-gold/20 cursor-pointer"
+              title="Open Games & Apps Launcher"
+            >
+              <Gamepad2 size={14} /> Games
+            </button>
+          )}
           {/* Announcements Dropdown Menu */}
-          <div className="relative" ref={announcementsDropdownRef}>
+          {!isMinified && <div className="relative" ref={announcementsDropdownRef}>
             <button
               type="button"
               onClick={() => setAnnouncementsOpen((prev) => !prev)}
@@ -1008,7 +1025,7 @@ export default function CustomerSessionView() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
           {/* Dashboard Sizing / Minified 960x640 HUD Toggle */}
           {dashboardMode === 'minified' ? (
             <button
@@ -1170,10 +1187,12 @@ export default function CustomerSessionView() {
         </div>
       )}
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-12 gap-3.5 overflow-hidden">
+      <main className={`min-h-0 flex-1 overflow-hidden ${isMinified ? 'flex flex-col' : 'grid grid-cols-1 lg:grid-cols-12 gap-3.5'}`}>
         {/* ======================================================== */}
         {/* LEFT COLUMN: FULL SCREEN APP & GAME LAUNCHER (MAJORITY) */}
+        {/* Hidden in minified mode — accessible via modal instead  */}
         {/* ======================================================== */}
+        {!isMinified && (
         <section className="lg:col-span-8 xl:col-span-9 flex flex-col min-h-0 min-w-0 customer-primary-card overflow-hidden shadow-lg border border-surface-line">
           {/* Launcher Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-surface-line px-4 py-3 bg-surface-raised/40 shrink-0">
@@ -1267,11 +1286,13 @@ export default function CustomerSessionView() {
             )}
           </div>
         </section>
+        )}
 
         {/* ======================================================== */}
         {/* RIGHT COLUMN: TIME, ORDERS, WALLET, SUPPORT (SIDEBAR) */}
+        {/* In minified mode this becomes the full main content       */}
         {/* ======================================================== */}
-        <aside className="lg:col-span-4 xl:col-span-3 flex flex-col min-h-0 min-w-0 gap-3 overflow-y-auto pr-0.5">
+        <aside className={`${isMinified ? 'flex-1' : 'lg:col-span-4 xl:col-span-3'} flex flex-col min-h-0 min-w-0 gap-3 overflow-y-auto pr-0.5`}>
           {/* 1. UNIFIED SESSION & WALLET CARD */}
           <div className="customer-primary-card shrink-0 flex flex-col overflow-hidden shadow-sm">
             {/* Card Header: Session Info & Status */}
@@ -2051,6 +2072,96 @@ export default function CustomerSessionView() {
         serverCategories={launcherCategories}
         onConfigChanged={() => reloadStationLauncherConfig?.()}
       />
+
+      {/* Games & Apps Launcher Modal (Minified Mode) */}
+      <Modal
+        open={launcherModalOpen}
+        onClose={() => setLauncherModalOpen(false)}
+        eyebrow="Station Launcher"
+        title="Games & Applications"
+        maxWidth="max-w-4xl"
+        zIndexClass="z-[550]"
+      >
+        <div className="flex flex-col gap-3 -mx-1">
+          {/* Search + Config */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-soft" size={13} />
+              <input
+                type="text"
+                placeholder="Search games, apps..."
+                value={launcherSearchQuery}
+                onChange={(e) => setLauncherSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-surface-line customer-neutral-surface py-2 pl-7 pr-2.5 text-xs text-ink-900 focus:outline-none focus:border-gold/50"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => { setLauncherModalOpen(false); setStationPinGateOpen(true); }}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-soft hover:text-gold-dim px-2.5 py-2 rounded-xl border border-surface-line customer-neutral-surface transition shrink-0"
+              title="Configure Local Game Paths"
+            >
+              <SlidersHorizontal size={13} /> Paths
+            </button>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+            {activeCategories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setAppCategory(cat)}
+                className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                  appCategory === cat
+                    ? "bg-midnight/10 text-ink-900 border border-gold/40 shadow-xs"
+                    : "text-slate-soft hover:text-ink-900 border border-transparent hover:bg-surface-raised/50"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+
+          {/* App Grid */}
+          <div className="max-h-[50vh] overflow-y-auto">
+            {activeAppsList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center text-xs text-slate-soft border border-dashed border-surface-line rounded-2xl">
+                <Gamepad2 size={32} className="text-slate-soft/50 mb-2" />
+                <p className="font-semibold text-ink-900 text-sm">No applications found</p>
+                <p className="mt-1">No games or apps match your search filter.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                {activeAppsList.map((app) => (
+                  <button
+                    key={app.id || app.name}
+                    type="button"
+                    onClick={() => { handleLaunchApp(app); setLauncherModalOpen(false); }}
+                    className="customer-neutral-surface border border-surface-line rounded-xl p-2 flex flex-col items-center justify-between text-center gap-1 hover:bg-surface-raised/80 hover:border-gold/50 hover:shadow-md transition-all duration-200 group relative cursor-pointer active:scale-[0.98]"
+                  >
+                    <CustomerAppIcon
+                      icon={app.icon}
+                      name={app.name}
+                      className="h-10 w-10 group-hover:scale-105 transition-transform duration-200 rounded-xl shadow-xs"
+                      iconClass="text-lg"
+                    />
+                    <div className="min-w-0 w-full mt-0.5">
+                      <span className="font-display text-[10px] font-bold text-ink-900 truncate block w-full leading-tight">{app.name}</span>
+                      <span className="text-[8px] uppercase font-semibold text-slate-soft tracking-wider truncate block w-full mt-0.5">
+                        {app.categoryName || app.category || "Online Games"}
+                      </span>
+                    </div>
+                    <span className="mt-0.5 w-full py-0.5 px-1 rounded-md text-[9px] font-bold bg-midnight/8 text-ink-900 group-hover:bg-gold group-hover:text-midnight transition flex items-center justify-center gap-1">
+                      <PlayCircle size={9} /> Launch
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
