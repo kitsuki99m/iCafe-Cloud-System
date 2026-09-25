@@ -1182,13 +1182,25 @@ export function AppDataProvider({ children }) {
 
   function createAnnouncement(payload) { return refreshAfter(apiPost('/announcements', payload)) }
   function updateAnnouncement(id, payload) { return refreshAfter(apiPatch(`/announcements/${id}`, payload)) }
-  function deleteAnnouncement(id) { return refreshAfter(apiDelete(`/announcements/${id}`)) }
+  function deleteAnnouncement(id) {
+    optimisticState((curr) => ({
+      ...curr,
+      announcements: (curr.announcements || []).filter((a) => String(a.id) !== String(id))
+    }))
+    return refreshAfter(apiDelete(`/announcements/${id}`))
+  }
 
   // Menu Items & Orders
   function createMenuItem(payload) { return refreshAfter(apiPost('/menu-items', payload)) }
   function batchCreateMenuItems(items) { return refreshAfter(apiPost('/menu-items/batch', { items })) }
   function updateMenuItem(id, payload) { return refreshAfter(apiPatch(`/menu-items/${id}`, payload)) }
-  function deleteMenuItem(id) { return refreshAfter(apiDelete(`/menu-items/${id}`)) }
+  function deleteMenuItem(id) {
+    optimisticState((curr) => ({
+      ...curr,
+      menuItems: (curr.menuItems || []).filter((m) => String(m.id) !== String(id))
+    }))
+    return refreshAfter(apiDelete(`/menu-items/${id}`))
+  }
   function updateOrderStatus(id, status) { return refreshAfter(apiPatch(`/menu-orders/${id}/status`, { status })) }
   function cancelMenuOrder(id) { return refreshAfter(apiPost(`/menu-orders/${id}/cancel`, {})) }
 
@@ -1199,17 +1211,35 @@ export function AppDataProvider({ children }) {
 
   // Vouchers
   function createVoucher(payload) { return refreshAfter(apiPost('/vouchers', payload)) }
-  function deleteVoucher(id) { return refreshAfter(apiDelete(`/vouchers/${id}`)) }
+  function deleteVoucher(id) {
+    optimisticState((curr) => ({
+      ...curr,
+      vouchers: (curr.vouchers || []).filter((v) => String(v.id) !== String(id))
+    }))
+    return refreshAfter(apiDelete(`/vouchers/${id}`))
+  }
 
   // Launcher Categories & Apps
   function createLauncherCategory(payload) { return refreshAfter(apiPost('/launcher/categories', payload)) }
   function updateLauncherCategory(id, payload) { return refreshAfter(apiPatch(`/launcher/categories/${id}`, payload)) }
-  function deleteLauncherCategory(id) { return refreshAfter(apiDelete(`/launcher/categories/${id}`)) }
+  function deleteLauncherCategory(id) {
+    optimisticState((curr) => ({
+      ...curr,
+      launcherCategories: (curr.launcherCategories || []).filter((c) => String(c.id) !== String(id))
+    }))
+    return refreshAfter(apiDelete(`/launcher/categories/${id}`))
+  }
 
   function createLauncherApp(payload) { return refreshAfter(apiPost('/launcher/apps', payload)) }
   function batchCreateLauncherApps(apps) { return refreshAfter(apiPost('/launcher/apps/batch', { apps })) }
   function updateLauncherApp(id, payload) { return refreshAfter(apiPatch(`/launcher/apps/${id}`, payload)) }
-  function deleteLauncherApp(id) { return refreshAfter(apiDelete(`/launcher/apps/${id}`)) }
+  function deleteLauncherApp(id) {
+    optimisticState((curr) => ({
+      ...curr,
+      launcherApps: (curr.launcherApps || []).filter((a) => String(a.id) !== String(id))
+    }))
+    return refreshAfter(apiDelete(`/launcher/apps/${id}`))
+  }
 
   // Reports
   function sendEmailSummary(period = 'daily', recipientEmail = '') {

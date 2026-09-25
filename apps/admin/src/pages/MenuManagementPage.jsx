@@ -192,6 +192,8 @@ export default function MenuManagementPage() {
 
   const filteredItems = useMemo(() => {
     return menuItems.filter((item) => {
+      const isAct = item.is_active !== undefined ? Boolean(item.is_active) : (item.isActive !== undefined ? Boolean(item.isActive) : true)
+      if (!isAct) return false
       const matchCat = selectedCategory === 'All' || item.category?.toLowerCase() === selectedCategory.toLowerCase()
       const matchSearch = !searchQuery.trim() || item.name?.toLowerCase().includes(searchQuery.toLowerCase())
       return matchCat && matchSearch
@@ -271,11 +273,12 @@ export default function MenuManagementPage() {
 
   async function confirmDeleteItem() {
     if (!deleteTargetItem) return
+    const target = deleteTargetItem
+    setDeleteTargetItem(null)
     setActionBusy(true)
     try {
-      await deleteMenuItem(deleteTargetItem.id)
-      showToast({ title: 'Item Deleted', message: deleteTargetItem.name, tone: 'warning' })
-      setDeleteTargetItem(null)
+      await deleteMenuItem(target.id)
+      showToast({ title: 'Item Deleted', message: target.name, tone: 'warning' })
     } catch (err) {
       showToast({ title: 'Delete Failed', message: err.message, tone: 'error' })
     } finally {

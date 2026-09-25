@@ -6940,8 +6940,7 @@ router.put("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, res) 
 });
 
 router.delete("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, res) => {
-  const existing = db.prepare("SELECT * FROM menu_items WHERE id=?").get(req.params.id);
-  if (!existing) return res.status(404).json({ success: false, error: "Menu item not found." });
+  db.prepare("DELETE FROM menu_items WHERE id=?").run(req.params.id);
   db.prepare("UPDATE menu_items SET is_active=0, updated_at=? WHERE id=?").run(nowIso(), req.params.id);
   emitDataChanged({ entity: 'menu_items' });
   res.json({ success: true, message: "Menu item deleted successfully." });

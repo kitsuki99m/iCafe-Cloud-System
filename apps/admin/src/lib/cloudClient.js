@@ -753,7 +753,9 @@ async function cloudAppData(branchId) {
 
   const mappedLauncherCategories = (catsSource || []).map((r) => ({ id: r.local_id || r.id, name: r.name, sortOrder: Number(r.sort_order || 0), isActive: Boolean(r.is_active), createdAt: r.created_at }));
   const mappedLauncherApps = (appsSource || []).map((r) => ({ id: r.local_id || r.id, name: r.name, categoryId: r.category_id, categoryName: r.category_name || "Online Games", icon: r.icon, executablePath: r.executable_path, protocolUrl: r.protocol_url, launchArguments: r.launch_arguments, workingDirectory: r.working_directory, isEnabled: Boolean(r.is_enabled), sortOrder: Number(r.sort_order || 0), isPreset: Boolean(r.is_preset), createdAt: r.created_at, updatedAt: r.updated_at }));
-  const mappedMenuItems = (menuSource || []).map((m) => ({ id: m.local_id || m.id, name: m.name, category: m.category, description: m.description, price: Number(m.price_centavos || 0) / 100, imageUrl: m.image_url, stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null, isAvailable: Boolean(m.is_available), isActive: Boolean(m.is_active), createdAt: m.created_at, updatedAt: m.updated_at }));
+  const mappedMenuItems = (menuSource || [])
+    .filter((m) => m.is_active !== false && m.isActive !== false)
+    .map((m) => ({ id: m.local_id || m.id, name: m.name, category: m.category, description: m.description, price: Number(m.price_centavos || 0) / 100, imageUrl: m.image_url, stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null, isAvailable: Boolean(m.is_available), isActive: Boolean(m.is_active), createdAt: m.created_at, updatedAt: m.updated_at }));
   const mappedMenuOrders = (ordersSource || []).map((r) => ({ id: r.local_id || r.id, customerId: r.customer_id, customerName: r.customer_name, pcId: r.pc_id, pcLabel: r.pc_label, items: typeof r.items_json === "string" ? JSON.parse(r.items_json) : (r.items_json || []), total: Number(r.total_centavos || 0) / 100, paymentMethod: r.payment_method, paymentStatus: r.payment_status, orderStatus: r.order_status, notes: r.notes, createdAt: r.created_at, fulfilledAt: r.fulfilled_at, cancelledAt: r.cancelled_at }));
   const currentShift = openShift ? { id: openShift.local_id || openShift.id, userId: openShift.user_id, userName: openShift.user_name, userRole: openShift.user_role, openingFloat: Number(openShift.opening_float_centavos || 0) / 100, notes: openShift.notes, openedAt: openShift.opened_at } : null;
   const mappedVouchers = (voucherSource || []).map((v) => ({ id: v.local_id || v.id, code: v.code, benefitType: v.benefit_type, valueAmount: v.value_amount, maxRedemptions: v.max_redemptions, currentRedemptions: v.current_redemptions, expiresAt: v.expires_at, isActive: v.is_active, createdAt: v.created_at }));
@@ -934,19 +936,21 @@ async function cloudDirectRead(path, branchId) {
     const rows = await rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&order=category.asc,name.asc`);
     return {
       success: true,
-      menuItems: (rows || []).map((m) => ({
-        id: m.local_id || m.id,
-        name: m.name,
-        category: m.category,
-        description: m.description,
-        price: Number(m.price_centavos || 0) / 100,
-        imageUrl: m.image_url,
-        stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null,
-        isAvailable: Boolean(m.is_available),
-        isActive: Boolean(m.is_active),
-        createdAt: m.created_at,
-        updatedAt: m.updated_at,
-      }))
+      menuItems: (rows || [])
+        .filter((m) => m.is_active !== false && m.isActive !== false)
+        .map((m) => ({
+          id: m.local_id || m.id,
+          name: m.name,
+          category: m.category,
+          description: m.description,
+          price: Number(m.price_centavos || 0) / 100,
+          imageUrl: m.image_url,
+          stockQuantity: m.stock_quantity != null ? Number(m.stock_quantity) : null,
+          isAvailable: Boolean(m.is_available),
+          isActive: Boolean(m.is_active),
+          createdAt: m.created_at,
+          updatedAt: m.updated_at,
+        }))
     };
   }
   if (route === "/menu-orders") {
