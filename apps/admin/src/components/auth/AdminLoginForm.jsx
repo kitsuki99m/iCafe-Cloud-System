@@ -5,7 +5,11 @@ import {
   KeyRound,
   ShieldCheck,
   Server,
+  Lock,
+  Cpu,
+  Sparkles,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Button from "../common/Button.jsx";
 import PasswordInput from "../common/PasswordInput.jsx";
@@ -188,11 +192,16 @@ export default function AdminLoginForm() {
 
   return (
     <main className="admin-login-shell">
-      <div className="admin-login-grid">
+      <motion.div
+        initial={{ opacity: 0, y: 12, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        className="admin-login-grid"
+      >
         <section className="admin-login-context">
           <div>
             <div className="admin-login-brand flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-soft-white/15 bg-soft-white/10 p-2">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 p-2 shadow-inner">
                 <img
                   src={branding.logoUrl || logo}
                   onError={(event) => {
@@ -203,25 +212,38 @@ export default function AdminLoginForm() {
                 />
               </span>
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-new-wool">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                   {branding.branch || "Aezakmi"}
                 </p>
-                <h1 className="truncate font-display text-[20px] font-semibold tracking-tight text-soft-white">
+                <h1 className="truncate font-display text-[20px] font-semibold tracking-tight text-white">
                   {branding.cafeName || "iCafe"}
                 </h1>
               </div>
             </div>
             <div className="admin-login-intro mt-10 max-w-sm">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-new-wool">
-                Admin workspace
-              </p>
-              <h2 className="mt-2 font-display text-[30px] font-semibold leading-[1.08] tracking-[-0.03em] text-soft-white">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-400 mb-3">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Admin workspace</span>
+              </div>
+              <h2 className="font-display text-[30px] font-semibold leading-[1.08] tracking-[-0.03em] text-white">
                 Manage your café.
               </h2>
-
+              <p className="mt-3 text-xs leading-relaxed text-slate-400">
+                Authoritative station controls, multi-tier billing, POS kitchen queue, and real-time revenue intelligence.
+              </p>
             </div>
           </div>
 
+          <div className="mt-8 pt-6 border-t border-white/10 space-y-3">
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <ShieldCheck size={14} className="text-emerald-400 shrink-0" />
+              <span>Hardware-isolated staff session boundary</span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <Cpu size={14} className="text-slate-400 shrink-0" />
+              <span>Café Edge & Cloud Realtime synchronized</span>
+            </div>
+          </div>
         </section>
 
         {forgotMode ? (
@@ -243,16 +265,23 @@ export default function AdminLoginForm() {
               </span>
             </div>
 
-            {forgotError && (
-              <div className="mb-4 flex items-center gap-2 rounded-xl border border-ember/25 bg-ember/10 p-3 text-xs text-ember-dim">
-                <AlertCircle size={15} className="shrink-0" />
-                <span>{forgotError}</span>
-              </div>
-            )}
+            <AnimatePresence mode="wait">
+              {forgotError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="mb-4 flex items-center gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs text-rose-600"
+                >
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>{forgotError}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {forgotSuccess ? (
               <div className="space-y-4">
-                <div className="rounded-xl border border-teal/30 bg-teal/10 p-3.5 text-xs font-medium text-teal-dim">
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs font-medium text-emerald-700">
                   {forgotSuccess}
                 </div>
                 <button
@@ -347,7 +376,7 @@ export default function AdminLoginForm() {
               <button
                 type="button"
                 onClick={() => setServerConnectionOpen(true)}
-                className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-surface-line bg-dance/20 px-3 text-xs font-semibold text-ink-900 transition-colors hover:bg-dance/40"
+                className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 transition-colors hover:bg-slate-100 cursor-pointer"
               >
                 <Server size={14} /> Server Connection
               </button>
@@ -358,9 +387,9 @@ export default function AdminLoginForm() {
               <div className="flex items-center gap-2" aria-label={`Registration step ${requestStep} of 3`}>
                 {[1, 2, 3].map((step) => (
                   <div key={step} className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${step <= requestStep ? "bg-midnight text-soft-white" : "bg-midnight/7 text-slate-soft"}`}>{step}</span>
+                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${step <= requestStep ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500"}`}>{step}</span>
                     <span className={`hidden truncate text-[10px] font-semibold sm:block ${step === requestStep ? "text-ink-900" : "text-slate-soft"}`}>{step === 1 ? "Business" : step === 2 ? "Contact" : "Review"}</span>
-                    {step < 3 && <span className={`h-px min-w-3 flex-1 ${step < requestStep ? "bg-midnight/45" : "bg-surface-line"}`} />}
+                    {step < 3 && <span className={`h-px min-w-3 flex-1 ${step < requestStep ? "bg-slate-900" : "bg-slate-200"}`} />}
                   </div>
                 ))}
               </div>
@@ -368,14 +397,14 @@ export default function AdminLoginForm() {
           )}
 
           {!cloud && (
-            <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-100/70 p-1">
+            <div className="mb-5 grid grid-cols-3 gap-1 rounded-xl border border-slate-200/90 bg-slate-100/80 p-1">
               <button
                 type="button"
                 onClick={() => {
                   setMode("pin");
                   setError("");
                 }}
-                className={`admin-login-mode-tab ${mode === "pin" ? "active" : ""}`}
+                className={`admin-login-mode-tab relative ${mode === "pin" ? "active" : ""}`}
               >
                 <KeyRound className="mr-1.5 inline" size={14} />
                 Admin PIN
@@ -386,7 +415,7 @@ export default function AdminLoginForm() {
                   setMode("password");
                   setError("");
                 }}
-                className={`admin-login-mode-tab ${mode === "password" ? "active" : ""}`}
+                className={`admin-login-mode-tab relative ${mode === "password" ? "active" : ""}`}
               >
                 Username + Password
               </button>
@@ -396,24 +425,36 @@ export default function AdminLoginForm() {
                   setMode("pin_password");
                   setError("");
                 }}
-                className={`admin-login-mode-tab ${mode === "pin_password" ? "active" : ""}`}
+                className={`admin-login-mode-tab relative ${mode === "pin_password" ? "active" : ""}`}
               >
                 PIN + Password
               </button>
             </div>
           )}
 
-          {error && (
-            <p className="mb-4 flex items-start gap-2 rounded-xl border border-ember/25 bg-ember/10 px-3 py-2.5 text-xs leading-5 text-ember-dim">
-              <AlertCircle className="mt-0.5 shrink-0" size={14} />
-              {error}
-            </p>
-          )}
-          {message && (
-            <p className="mb-4 rounded-xl border border-teal/25 bg-teal/10 px-3 py-2.5 text-xs leading-5 text-teal-dim">
-              {message}
-            </p>
-          )}
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="mb-4 flex items-start gap-2 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2.5 text-xs leading-5 text-rose-600 font-medium"
+              >
+                <AlertCircle className="mt-0.5 shrink-0" size={14} />
+                <span>{error}</span>
+              </motion.p>
+            )}
+            {message && (
+              <motion.p
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                className="mb-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2.5 text-xs leading-5 text-emerald-700 font-medium"
+              >
+                {message}
+              </motion.p>
+            )}
+          </AnimatePresence>
 
           <form onSubmit={submit} className="space-y-4">
             {requesting ? (
@@ -552,7 +593,12 @@ export default function AdminLoginForm() {
                 />
               </>
             ) : !cloud && mode === "pin" ? (
-              <div>
+              <motion.div
+                key="pin-mode"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+              >
                 <div className="flex items-center justify-between mb-2">
                   <label className="eyebrow block">Admin PIN</label>
                   <button
@@ -563,7 +609,7 @@ export default function AdminLoginForm() {
                       setForgotError("");
                       setForgotSuccess("");
                     }}
-                    className="text-[11px] font-medium text-slate-soft hover:text-gold-dim underline cursor-pointer"
+                    className="text-[11px] font-medium text-slate-500 hover:text-slate-900 underline cursor-pointer"
                   >
                     Forgot PIN?
                   </button>
@@ -576,12 +622,18 @@ export default function AdminLoginForm() {
                   onChange={(event) =>
                     setPin(event.target.value.replace(/\D/g, ""))
                   }
-                  inputClassName={`${inputClass} text-lg tracking-[0.28em]`}
+                  inputClassName={`${inputClass} text-lg tracking-[0.28em] font-mono`}
                   placeholder="Enter PIN"
                 />
-              </div>
+              </motion.div>
             ) : (
-              <>
+              <motion.div
+                key="password-mode"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-4"
+              >
                 <div>
                   <label className="eyebrow mb-2 block">
                     {cloud ? "Email" : "Username"}
@@ -606,7 +658,7 @@ export default function AdminLoginForm() {
                         setForgotError("");
                         setForgotSuccess("");
                       }}
-                      className="text-[11px] font-medium text-slate-soft hover:text-gold-dim underline cursor-pointer"
+                      className="text-[11px] font-medium text-slate-500 hover:text-slate-900 underline cursor-pointer"
                     >
                       Forgot password?
                     </button>
@@ -630,11 +682,11 @@ export default function AdminLoginForm() {
                         setPin(event.target.value.replace(/\D/g, ""))
                       }
                       placeholder="Enter PIN"
-                      inputClassName={`${inputClass} tracking-[0.22em]`}
+                      inputClassName={`${inputClass} tracking-[0.22em] font-mono`}
                     />
                   </div>
                 )}
-              </>
+              </motion.div>
             )}
 
             <div className={requesting && requestStep > 1 ? "grid grid-cols-[auto_minmax(0,1fr)] gap-2" : ""}>
@@ -681,7 +733,7 @@ export default function AdminLoginForm() {
           {cloud && (
             <button
               type="button"
-              className="mt-3 w-full text-center text-xs font-medium text-slate-soft underline"
+              className="mt-3 w-full text-center text-xs font-medium text-slate-soft underline cursor-pointer"
               onClick={() => {
                 setCloudAuthMode((value) =>
                   value === "signin" ? "request" : "signin",
@@ -703,7 +755,7 @@ export default function AdminLoginForm() {
           <p className="mt-4 text-center text-[10px] text-slate-soft">Authorized staff only</p>
         </section>
         )}
-      </div>
+      </motion.div>
       {!cloud && (
         <ServerConnectionModal
           open={serverConnectionOpen}

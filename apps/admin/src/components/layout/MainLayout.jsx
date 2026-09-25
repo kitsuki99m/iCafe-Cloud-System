@@ -48,8 +48,8 @@ const PAGE_ALIASES = {
   '/members': 'Member Directory',
   '/vouchers': 'Vouchers & Promo Codes',
   '/earnings': 'Earnings & Reports',
-  '/expenses': 'Earnings & Reports',
-  '/expense': 'Earnings & Reports',
+  '/expenses': 'Earnings',
+  '/expense': 'Earnings',
   '/analytics': 'Performance Analytics',
   '/logs': 'Shift & Audit Logs',
   '/settings': 'System Settings',
@@ -211,7 +211,7 @@ export default function MainLayout({ children }) {
   }, [])
 
   return (
-    <div className="admin-app-canvas h-full w-full overflow-hidden relative">
+    <div className="admin-app-canvas h-dvh min-h-0 w-full overflow-hidden relative">
       <div className="backdrop" aria-hidden="true" />
       <div className="chroma" aria-hidden="true" />
       <div className="admin-shell-frame flex h-full min-h-0 w-full overflow-hidden relative z-10">
@@ -334,7 +334,7 @@ export default function MainLayout({ children }) {
                     key={to}
                     to={to}
                     end={end}
-                    className={`nav-item ${isActive ? 'active' : ''}`}
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                   >
                     <Icon size={17} strokeWidth={1.8} />
                     <span>{label}</span>
@@ -508,8 +508,7 @@ export default function MainLayout({ children }) {
               />
             </header>
           ) : (
-            !isOverview && (
-              <header className="admin-global-header relative z-[150] hidden min-h-[96px] shrink-0 items-center gap-4 px-5 py-3.5 sm:px-6 lg:flex lg:px-7">
+            !isOverview && <header className="admin-global-header relative z-[150] hidden min-h-[96px] shrink-0 items-center gap-4 px-5 py-3.5 sm:px-6 lg:flex lg:px-7">
                 <div className="admin-header-identity min-w-[230px] flex-1">
                   <div className="flex items-center gap-2"><p className="eyebrow">{currentLabel}</p><span className="hidden text-[10px] text-slate-soft 2xl:inline">· {localClock} PHT</span></div>
                   <h1 className="mt-1 font-display text-[24px] font-semibold leading-tight tracking-[-0.03em] text-ink-900">{currentLabel}</h1>
@@ -542,7 +541,6 @@ export default function MainLayout({ children }) {
                   />
                 </div>
               </header>
-            )
           )}
           <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative pb-20 lg:pb-0">{children}</div>
           <ShiftManagementModal isOpen={shiftModalOpen} onClose={() => setShiftModalOpen(false)} />
@@ -642,7 +640,7 @@ export default function MainLayout({ children }) {
             aria-label="Close navigation"
           />
           <aside
-            className="relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-[28px] border-t border-[var(--admin-ui-border)] bg-[var(--admin-sidebar-bg)] p-4 shadow-2xl animate-in slide-in-from-bottom duration-300"
+            className="admin-mobile-drawer relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-[28px] border-t border-[var(--admin-ui-border)] bg-[var(--admin-sidebar-bg)] p-4 shadow-2xl animate-in slide-in-from-bottom duration-300"
             role="dialog"
             aria-modal="true"
             aria-label="Admin navigation"
@@ -713,6 +711,8 @@ export default function MainLayout({ children }) {
                   </NavLink>
                 )}
               </div>
+
+              <PwaInstallButton />
 
               {/* Quick Tools Line Strip */}
               <div className="mt-3 pt-3 border-t border-[var(--admin-ui-border)] space-y-2">

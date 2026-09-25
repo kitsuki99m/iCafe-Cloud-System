@@ -20,6 +20,7 @@
     "dist:win": "node ../../scripts/build-installer.mjs customer"
   },
   "dependencies": {
+    "framer-motion": "^13.4.4",
     "lucide-react": "^1.31.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -31,11 +32,11 @@
     "@vitejs/plugin-react": "^6.0.5",
     "concurrently": "^9.2.1",
     "electron": "39.0.0",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
     "vite": "^8.2.1",
-    "wait-on": "^9.0.1",
-    "electron-builder": "^26.15.3"
+    "wait-on": "^9.0.1"
   },
   "build": {
     "appId": "com.icafe.customer",

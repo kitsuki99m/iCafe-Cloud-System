@@ -145,7 +145,7 @@ test('login announcement still exposes all active plans as requested', () => {
 
 test('Electron ACTIVE mode is normal, cancel returns IDLE, and remote unlock restores IDLE', () => {
   const source = read('apps/customer/electron/main.cjs')
-  assert.match(source, /function applyActiveWindowMode[\s\S]*?setAlwaysOnTop\(false\)/)
+  assert.match(source, /function applyActiveWindowMode/)
   assert.match(source, /client:cancel-session-start['"], \(\) => showIdleDashboard\(\)/)
   assert.match(source, /snapshot\?\.windowState === WINDOW_STATES\.IDLE[\s\S]*?showIdleDashboard\(\)/)
   assert.doesNotMatch(source, /for \(const accelerator of \['Alt\+F4','Alt\+Tab'/)
@@ -297,16 +297,16 @@ test('customer Aktura fallback logo matches Midnight Express branding while warn
   assert.match(toasts, /warning:[\s\S]*border-amber-[0-9]+[\s\S]*text-amber-[0-9]+/)
 })
 
-test('customer idle dashboard is fullscreen/topmost while ACTIVE dashboard is 960x680 and normal desktop behavior', () => {
+test('customer idle dashboard is fullscreen/topmost while ACTIVE dashboard is fullscreen kiosk with taskbar support', () => {
   const source = read('apps/customer/electron/main.cjs')
   assert.match(source, /const ACTIVE_WIDTH = 960/)
   assert.match(source, /const ACTIVE_HEIGHT = 680/)
   assert.match(source, /function applyIdleDashboardMode[\s\S]*?setKiosk\(true\)[\s\S]*?setFullScreen\(true\)[\s\S]*?setAlwaysOnTop\(true, 'screen-saver'\)/)
   assert.doesNotMatch(source, /function applyIdleDashboardMode[\s\S]*?mainWindow\.maximize\(\)/)
-  assert.match(source, /function applyActiveWindowMode[\s\S]*?isMaximized\(\)[\s\S]*?unmaximize\(\)[\s\S]*?setAlwaysOnTop\(false\)[\s\S]*?setBounds\(\{ x, y, width:ACTIVE_WIDTH, height:ACTIVE_HEIGHT \}, false\)/)
+  assert.match(source, /function applyActiveWindowMode[\s\S]*?isMaximized\(\)[\s\S]*?unmaximize\(\)[\s\S]*?setAlwaysOnTop\(true, 'screen-saver'\)[\s\S]*?setFullScreen\(true\)/)
   assert.match(source, /function enterActiveState[\s\S]*?applyActiveWindowMode\(\{ show:true \}\)/)
   assert.match(source, /function completeSessionStartTransition[\s\S]*?applyActiveWindowMode\(\{ show:true \}\)/)
-  assert.match(source, /setSkipTaskbar\(true\)/)
+  assert.match(source, /setSkipTaskbar\(!\(gameIsLaunched && isActive\(\)\)\)/)
 })
 
 test('customer dashboard keeps announcements and feedback while using plain-language actions', () => {

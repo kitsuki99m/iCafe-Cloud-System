@@ -1,37 +1,36 @@
 @import "tailwindcss";
 
 @theme {
-  /* Dynamic semantic token mapping to active Theme Mode & Hardware Skin */
-  --color-midnight: var(--color-midnight);
-  --color-bluish: var(--color-bluish);
-  --color-grape: var(--color-grape);
-  --color-trillium: var(--color-trillium);
-  --color-new-wool: var(--color-new-wool);
-  --color-dance: var(--color-dance);
-  --color-soft-white: var(--color-soft-white);
+  --color-midnight: #202937;
+  --color-bluish: #423D42;
+  --color-grape: #766664;
+  --color-trillium: #A99898;
+  --color-new-wool: #D4C1B9;
+  --color-dance: #E6D7CD;
+  --color-soft-white: #F5F5F5;
 
-  --color-ink: var(--color-ink);
-  --color-ink-soft: var(--color-ink-soft);
-  --color-ink-900: var(--color-ink-900);
+  --color-ink: #F5F5F5;
+  --color-ink-soft: #E6D7CD;
+  --color-ink-900: #202937;
 
-  --color-surface: var(--color-surface);
-  --color-surface-raised: var(--color-surface-raised);
-  --color-surface-line: var(--color-surface-line);
+  --color-surface: #F5F5F5;
+  --color-surface-raised: #E6D7CD;
+  --color-surface-line: #D4C1B9;
 
-  --color-gold: var(--color-gold);
-  --color-gold-soft: var(--color-gold-soft);
-  --color-gold-dim: var(--color-gold-dim);
+  --color-gold: #C9A85D;
+  --color-gold-soft: #F3E6C4;
+  --color-gold-dim: #8B6B25;
 
-  --color-teal: var(--color-teal);
-  --color-teal-soft: var(--color-teal-soft);
-  --color-teal-dim: var(--color-teal-dim);
+  --color-teal: #2E9E6B;
+  --color-teal-soft: #E1F3EA;
+  --color-teal-dim: #237A54;
 
-  --color-ember: var(--color-ember);
-  --color-ember-soft: var(--color-ember-soft);
-  --color-ember-dim: var(--color-ember-dim);
+  --color-ember: #DD5353;
+  --color-ember-soft: #FBE4E4;
+  --color-ember-dim: #B53E3E;
 
-  --color-slate: var(--color-slate);
-  --color-slate-soft: var(--color-slate-soft);
+  --color-slate: #94A3B8;
+  --color-slate-soft: #5F6F82;
 
   --font-display: "Space Grotesk", "Chakra Petch", sans-serif;
   --font-body: "Inter", sans-serif;

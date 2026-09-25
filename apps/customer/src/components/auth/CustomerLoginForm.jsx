@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle,
   CheckCircle2,
@@ -233,12 +234,19 @@ export default function CustomerLoginForm() {
                 </p>
               </div>
             </div>
-            {error && (
-              <div className="mb-4 flex items-center gap-1.5 rounded-lg bg-ember/10 px-3 py-2 text-xs text-ember-dim">
-                <AlertCircle size={13} />
-                <span>{error}</span>
-              </div>
-            )}
+            <AnimatePresence mode="wait">
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="mb-4 flex items-center gap-1.5 rounded-lg bg-ember/10 px-3 py-2 text-xs text-ember-dim"
+                >
+                  <AlertCircle size={13} />
+                  <span>{error}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
             <form
               onSubmit={(e) => {
                 e.preventDefault();

@@ -1,41 +1,40 @@
 @import "tailwindcss";
 
 @theme {
-  /* Dynamic semantic token mapping to active Theme Mode & Hardware Skin */
-  --color-midnight: var(--color-midnight);
-  --color-bluish: var(--color-bluish);
-  --color-grape: var(--color-grape);
-  --color-trillium: var(--color-trillium);
-  --color-new-wool: var(--color-new-wool);
-  --color-dance: var(--color-dance);
-  --color-soft-white: var(--color-soft-white);
+  --color-midnight: #202937;
+  --color-bluish: #423D42;
+  --color-grape: #766664;
+  --color-trillium: #A99898;
+  --color-new-wool: #D4C1B9;
+  --color-dance: #E6D7CD;
+  --color-soft-white: #F5F5F5;
 
-  --color-ink: var(--color-ink);
-  --color-ink-soft: var(--color-ink-soft);
-  --color-ink-900: var(--color-ink-900);
+  --color-ink: #F5F5F5;
+  --color-ink-soft: #E6D7CD;
+  --color-ink-900: #202937;
 
-  --color-surface: var(--color-surface);
-  --color-surface-raised: var(--color-surface-raised);
-  --color-surface-line: var(--color-surface-line);
+  --color-surface: #F5F5F5;
+  --color-surface-raised: #E6D7CD;
+  --color-surface-line: #D4C1B9;
 
-  --color-gold: var(--color-gold);
-  --color-gold-soft: var(--color-gold-soft);
-  --color-gold-dim: var(--color-gold-dim);
+  --color-gold: #C9A85D;
+  --color-gold-soft: #F3E6C4;
+  --color-gold-dim: #8B6B25;
 
-  --color-teal: var(--color-teal);
-  --color-teal-soft: var(--color-teal-soft);
-  --color-teal-dim: var(--color-teal-dim);
+  --color-teal: #2E9E6B;
+  --color-teal-soft: #E1F3EA;
+  --color-teal-dim: #237A54;
 
-  --color-orange: var(--color-orange);
-  --color-orange-soft: var(--color-orange-soft);
-  --color-orange-dim: var(--color-orange-dim);
+  --color-orange: #D97706;
+  --color-orange-soft: #FFFBEB;
+  --color-orange-dim: #B45309;
 
-  --color-ember: var(--color-ember);
-  --color-ember-soft: var(--color-ember-soft);
-  --color-ember-dim: var(--color-ember-dim);
+  --color-ember: #DD5353;
+  --color-ember-soft: #FBE4E4;
+  --color-ember-dim: #B53E3E;
 
-  --color-slate: var(--color-slate);
-  --color-slate-soft: var(--color-slate-soft);
+  --color-slate: #94A3B8;
+  --color-slate-soft: #423D42;
 
   --font-display: "Space Grotesk", "Chakra Petch", sans-serif;
   --font-body: "Inter", sans-serif;
@@ -177,9 +176,9 @@
 
     /* Dark mode palette tokens */
     --bg: #0B0F17;
-    --surface: #121824;
-    --surface-2: #1A2232;
-    --line: #222E42;
+    --surface: #272D39;
+    --surface-2: #303744;
+    --line: #4B5360;
     --line-soft: #182232;
     --text: #F1F5F9;
     --muted: #8E9DB5;
@@ -213,11 +212,11 @@
 
     --color-ink: var(--bg);
     --color-ink-soft: var(--surface-2);
-    --color-ink-900: var(--text);
+    --color-ink-900: #F5F5F5;
 
-    --color-surface: var(--surface);
-    --color-surface-raised: var(--surface-2);
-    --color-surface-line: var(--line);
+    --color-surface: #272D39;
+    --color-surface-raised: #303744;
+    --color-surface-line: #4B5360;
 
     --color-gold: #F59E0B;
     --color-gold-soft: rgba(245, 158, 11, 0.15);
@@ -236,18 +235,36 @@
     --color-ember-dim: #EF4444;
 
     --color-slate: var(--muted);
-    --color-slate-soft: var(--muted);
+    --color-slate-soft: #C9B27A;
 
     --app-dot: rgba(241, 245, 249, 0.055);
 
     --admin-canvas-bg: var(--bg);
     --admin-shell-bg: var(--bg);
     --admin-sidebar-bg: var(--surface);
-    --admin-card-bg: var(--surface);
-    --admin-card-subtle: var(--surface-2);
+    --admin-card-bg: #272D39;
+    --admin-card-subtle: rgba(245, 245, 245, 0.055);
     --admin-card-strong: var(--surface-2);
-    --admin-ui-border: var(--line);
+    --admin-ui-border: rgba(245, 245, 245, 0.14);
     --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+  }
+
+  html[data-theme="dark"] {
+    --admin-canvas-bg: var(--bg);
+    --admin-shell-bg: var(--bg);
+    --admin-sidebar-bg: var(--surface);
+    --admin-card-bg: #272D39;
+    --admin-card-subtle: rgba(245, 245, 245, 0.055);
+    --admin-card-strong: var(--surface-2);
+    --admin-ui-border: rgba(245, 245, 245, 0.14);
+    --admin-shell-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+  }
+
+  html[data-theme="dark"] .admin-empty-state-icon {
+    color: var(--color-dance);
+  }
+  html[data-theme="dark"] .admin-rail-card .text-midnight {
+    color: var(--color-dance);
   }
 
   /* ==========================================================================
@@ -1961,9 +1978,9 @@
     --login-input-bg: #FFFFFF;
     --login-input-border: #CBD5E1;
     --login-input-text: #0F172A;
-    --login-brand: #4F46E5;
-    --login-brand-hover: #4338CA;
-    --login-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.04);
+    --login-brand: #0F172A;
+    --login-brand-hover: #1E293B;
+    --login-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06);
 
     min-height: 100vh;
     display: flex;
@@ -1972,7 +1989,7 @@
     padding: 28px;
     background-color: var(--login-bg) !important;
     background-image:
-      radial-gradient(ellipse 65% 55% at 50% 8%, rgba(79, 70, 229, 0.08), transparent 70%),
+      radial-gradient(ellipse 65% 55% at 50% 8%, rgba(15, 23, 42, 0.04), transparent 70%),
       radial-gradient(circle, rgba(15, 23, 42, 0.06) 1px, transparent 1px) !important;
     background-size: auto, 24px 24px !important;
     color: var(--login-text-primary) !important;
@@ -1995,7 +2012,7 @@
     flex-direction: column;
     justify-content: space-between;
     padding: 36px 32px;
-    background: linear-gradient(145deg, #1E293B 0%, #0F172A 100%) !important;
+    background: linear-gradient(155deg, #090D16 0%, #0F172A 100%) !important;
     color: #FFFFFF !important;
     border-right: 1px solid rgba(255, 255, 255, 0.08);
   }
@@ -2051,8 +2068,8 @@
   }
 
   .admin-login-input:focus {
-    border-color: #4F46E5 !important;
-    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15) !important;
+    border-color: #0F172A !important;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.12) !important;
   }
 
   .admin-login-submit-btn {
@@ -2063,19 +2080,19 @@
     justify-content: center;
     gap: 8px;
     border-radius: 12px;
-    background-color: #4F46E5 !important;
+    background-color: #0F172A !important;
     color: #FFFFFF !important;
     font-weight: 600;
     font-size: 14px;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
     cursor: pointer;
-    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35) !important;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
     transition: all 0.15s ease;
   }
 
   .admin-login-submit-btn:hover:not(:disabled) {
-    background-color: #4338CA !important;
-    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.45) !important;
+    background-color: #1E293B !important;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
     transform: translateY(-1px);
   }
 

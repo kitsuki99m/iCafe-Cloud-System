@@ -83,6 +83,7 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
   return (
     <article
       data-pc-id={pc.id}
+      data-customer-version={pc.customerVersion || pc.softwareVersion || undefined}
       style={{
         clipPath: 'var(--tile-clip, none)',
         borderRadius: 'var(--tile-r, 12px)',
@@ -144,7 +145,8 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
                 onControls(pc, event)
               }}
               className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-              title="Station Quick Controls"
+              title="Open station controls"
+              aria-label="Open station controls"
             >
               <Settings2 size={12} />
             </button>
@@ -171,7 +173,9 @@ function PcCard({ pc, now = Date.now(), lowTimeWarningMinutes = 5, onSelect, onC
       <div className="relative z-10 flex flex-col gap-0.5 pointer-events-none text-xs">
         <div className="truncate font-medium text-[var(--muted)]">
           {isOccupied
-            ? `${session?.customerName || session?.username || 'Guest'} · ${pc.game || session?.game || 'Match'}`
+            ? disconnected
+              ? 'Station connection lost · session still active'
+              : `${session?.customerName || session?.username || 'Guest'} · ${pc.game || session?.game || 'Match'}`
             : isHold
             ? `Held for ${pc.reservedFor || 'a player'}`
             : statusKey === 'maintenance'

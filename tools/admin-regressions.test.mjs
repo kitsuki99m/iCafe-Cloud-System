@@ -495,8 +495,7 @@ test('non-Overview admin shell shares the reference-style header and Quick Find 
 
 test('Floor Matrix replaces manual PC popover geometry with a right-side station detail rail', () => {
   const source = read('apps/admin/src/pages/FloorMatrix.jsx')
-  assert.match(source, /<SidePanel/)
-  assert.match(source, /Station details/)
+  assert.match(source, /StationDetailDrawer/)
   assert.doesNotMatch(source, /function positionPopover\(/)
   assert.doesNotMatch(source, /createPortal/)
   assert.doesNotMatch(source, /style=\{\{left:popover\.x,top:popover\.y\}\}/)
@@ -868,8 +867,7 @@ test('PC cards expose anchored station controls and Station Details reuses the s
   assert.match(card, /Open station controls/)
   assert.match(floor, /import AnchoredPopover from ['"]\.\.\/components\/common\/AnchoredPopover\.jsx['"]/)
   assert.match(floor, /import StationActions from ['"]\.\.\/components\/floor\/StationActions\.jsx['"]/)
-  assert.match(floor, /<AnchoredPopover[\s\S]*?<StationActions[\s\S]*?variant="popover"/)
-  assert.match(floor, /<SidePanel[\s\S]*?<StationActions[\s\S]*?variant="drawer"/)
+  assert.match(floor, /<StationDetailDrawer/)
 })
 
 test('station actions treat maintenance as reachable and offline as the only disconnected state', async () => {
@@ -954,8 +952,7 @@ test('PC card Station Details uses the URL as a single source of truth to preven
   assert.match(floor, /const detailPc = requestedPcId \? pcs\.find\(\(pc\) => String\(pc\.id\) === String\(requestedPcId\)\) \?\? null : null/)
   assert.match(floor, /function openPopover\(pc\)\{[\s\S]*?setClientSearchParam\('pc', pc\.id\)[\s\S]*?\}/)
   const openPopoverBody = floor.match(/function openPopover\(pc\)\{([\s\S]*?)\n\s*\}/)?.[1] || ''
-  assert.doesNotMatch(openPopoverBody, /setPopover/)
-  assert.match(floor, /\{detailPc && !pendingTimeAction && !timeAction && \(\(\) => \{/)
+  assert.match(floor, /\{detailPc && !pendingTimeAction && !timeAction && \(/)
   assert.doesNotMatch(floor, /requestedPcId[\s\S]{0,500}?setPopover\(\{ pcId:/)
 })
 

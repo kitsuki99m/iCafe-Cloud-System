@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { HashRouter } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { AppDataProvider } from './context/AppDataContext.jsx'
 import { ThemeProvider } from './context/ThemeContext.jsx'
@@ -12,18 +12,12 @@ import { cloudConsumeAuthCallback } from './lib/cloudClient.js'
 import './index.css'
 import { registerAdminPwa } from './lib/pwa.js'
 
-// Migrate any legacy hash URL (e.g. /#/clients) to clean HTML5 URL (/clients)
-if (typeof window !== 'undefined' && window.location.hash && window.location.hash.startsWith('#/')) {
-  const cleanPath = window.location.hash.slice(1)
-  window.history.replaceState(null, '', cleanPath)
-}
-
 cloudConsumeAuthCallback()
 registerAdminPwa()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <AdminModeProvider>
           <EsportsThemeProvider>
@@ -33,6 +27,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           </EsportsThemeProvider>
         </AdminModeProvider>
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   </React.StrictMode>,
 )
