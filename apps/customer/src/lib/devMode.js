@@ -132,7 +132,7 @@ export function getDevMockAppData() {
       stock: 35,
       isAvailable: true,
       description: "Chilimansi / Sweet & Spicy flavor with fried egg",
-      imageUrl: "",
+      imageUrl: "/assets/menu/lucky-me-pancit-canton-kalamansi.webp",
     },
     {
       id: "menu-2",
@@ -142,7 +142,7 @@ export function getDevMockAppData() {
       stock: 20,
       isAvailable: true,
       description: "Golden crispy fried chicken with garlic rice and gravy",
-      imageUrl: "",
+      imageUrl: "/assets/menu/tapsilog.webp",
     },
     {
       id: "menu-3",
@@ -152,7 +152,7 @@ export function getDevMockAppData() {
       stock: 50,
       isAvailable: true,
       description: "Ice cold citrus soda",
-      imageUrl: "",
+      imageUrl: "/assets/menu/mountain-dew-bottle.webp",
     },
     {
       id: "menu-4",
@@ -162,7 +162,7 @@ export function getDevMockAppData() {
       stock: 25,
       isAvailable: true,
       description: "Freshly brewed espresso with creamy caramel syrup",
-      imageUrl: "",
+      imageUrl: "/assets/menu/kopiko-78c.webp",
     },
     {
       id: "menu-5",
@@ -172,7 +172,7 @@ export function getDevMockAppData() {
       stock: 15,
       isAvailable: true,
       description: "Crispy tortilla chips smothered in warm cheese sauce & jalapeños",
-      imageUrl: "",
+      imageUrl: "/assets/menu/piattos-sour-cream.webp",
     },
     {
       id: "menu-6",
@@ -182,7 +182,7 @@ export function getDevMockAppData() {
       stock: 18,
       isAvailable: true,
       description: "Jumbo cheesy hotdog in toasted bun with cheese and mayo",
-      imageUrl: "",
+      imageUrl: "/assets/menu/tocilog.webp",
     },
   ];
 

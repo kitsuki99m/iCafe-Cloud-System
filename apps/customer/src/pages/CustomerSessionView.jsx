@@ -11,6 +11,8 @@ import {
   PlusCircle,
   UserRound,
   Minimize2,
+  Maximize,
+  AppWindow,
   Megaphone,
   Moon,
   Sun,
@@ -38,6 +40,7 @@ import TopUpModal from "../components/customer/TopUpModal.jsx";
 import ExtendSessionModal from "../components/customer/ExtendSessionModal.jsx";
 import StartSessionModal from "../components/customer/StartSessionModal.jsx";
 import MenuOrderModal from "../components/customer/MenuOrderModal.jsx";
+import MenuThumbnail from "../components/customer/MenuThumbnail.jsx";
 import VoucherRedemptionModal from "../components/customer/VoucherRedemptionModal.jsx";
 import StationLauncherConfigModal from "../components/customer/StationLauncherConfigModal.jsx";
 import AdminPinGateModal from "../components/common/AdminPinGateModal.jsx";
@@ -147,6 +150,7 @@ export default function CustomerSessionView() {
   const branding = useBranding();
   const [now, setNow] = useState(Date.now());
   const [compactView, setCompactView] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 420 && window.innerHeight <= 180);
+  const [dashboardMode, setDashboardMode] = useState(() => (typeof window !== 'undefined' && window.innerWidth <= 1024 && window.innerHeight <= 720 ? 'minified' : 'expanded'));
   const [timerPreferences, setTimerPreferences] = useState(() => {
     const saved = typeof window !== 'undefined' ? window.aezakmiClient?.getTimerPreferences?.() : null;
     const rawOpacity = Number(saved?.opacity);
@@ -496,11 +500,20 @@ export default function CustomerSessionView() {
     // switch, so the layout can swap immediately. 'resize' stays as a
     // fallback for the very first paint and for any host that doesn't
     // support the client bridge (e.g. a plain browser preview).
-    const syncCompactView = () => setCompactView(window.innerWidth <= 420 && window.innerHeight <= 180);
+    const syncCompactView = () => {
+      const isComp = window.innerWidth <= 420 && window.innerHeight <= 180;
+      setCompactView(isComp);
+      if (!isComp) {
+        setDashboardMode(window.innerWidth <= 1024 && window.innerHeight <= 720 ? 'minified' : 'expanded');
+      }
+    };
     syncCompactView();
     window.addEventListener('resize', syncCompactView);
     const unsubscribe = window.aezakmiClient?.onDashboardModeChanged?.(
-      (mode) => setCompactView(mode === 'compact')
+      (mode) => {
+        setCompactView(mode === 'compact');
+        setDashboardMode(mode || 'expanded');
+      }
     );
     return () => {
       window.removeEventListener('resize', syncCompactView);
@@ -996,6 +1009,39 @@ export default function CustomerSessionView() {
               </div>
             )}
           </div>
+          {/* Dashboard Sizing / Minified 960x640 HUD Toggle */}
+          {dashboardMode === 'minified' ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.aezakmiClient?.showFullscreenDashboard) {
+                  window.aezakmiClient.showFullscreenDashboard();
+                } else {
+                  setDashboardMode('expanded');
+                }
+              }}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35 cursor-pointer"
+              title="Expand to Fullscreen HUD"
+            >
+              <Maximize size={14} /> <span className="hidden sm:inline">Fullscreen</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.aezakmiClient?.showMiniDashboard) {
+                  window.aezakmiClient.showMiniDashboard();
+                } else {
+                  setDashboardMode('minified');
+                }
+              }}
+              className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35 cursor-pointer"
+              title="Switch to Minified 960×640 Dashboard Window"
+            >
+              <AppWindow size={14} /> <span className="hidden sm:inline">Minify (960×640)</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -1005,7 +1051,7 @@ export default function CustomerSessionView() {
                 setCompactView(true);
               }
             }}
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-surface-line bg-surface px-2.5 text-[11px] font-semibold text-ink-900 transition-colors hover:bg-dance/35 cursor-pointer"
             title="Compact to floating session timer"
           >
             <Minimize2 size={14} /> <span className="hidden sm:inline">Compact</span>
@@ -1658,17 +1704,12 @@ export default function CustomerSessionView() {
                         >
                           {/* Photo / Thumbnail */}
                           <div className="relative h-14 w-full rounded-lg overflow-hidden bg-surface-raised/40 flex items-center justify-center border border-surface-line/40 group">
-                            {item.image_url || item.imageUrl ? (
-                              <img
-                                src={item.image_url || item.imageUrl}
-                                alt={item.name}
-                                loading="lazy"
-                                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
-                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                              />
-                            ) : (
-                              <UtensilsCrossed className="w-5 h-5 text-slate-soft/40 group-hover:scale-110 transition-transform" />
-                            )}
+                            <MenuThumbnail
+                              item={item}
+                              className="w-full h-full object-contain"
+                              containerClassName="w-full h-full flex items-center justify-center"
+                              fallbackIconSize={20}
+                            />
                             {/* Hover Add Overlay */}
                             {!isOutOfStock && (
                               <div className="absolute inset-0 bg-midnight/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-bold">

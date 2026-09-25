@@ -108,6 +108,8 @@ function configureCustomerInstallStorage() {
 const customerDataRoot = configureCustomerInstallStorage()
 const ACTIVE_WIDTH = 960
 const ACTIVE_HEIGHT = 680
+const MINIFIED_WIDTH = 960
+const MINIFIED_HEIGHT = 640
 const COMPACT_WIDTH = 84
 const COMPACT_HEIGHT = 22
 const COMPACT_MARGIN = 6
@@ -630,6 +632,39 @@ function applyActiveWindowMode({ show = false } = {}) {
   })
 }
 
+function applyMiniWindowMode({ show = true } = {}) {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const wasVisible = mainWindow.isVisible()
+  mainWindow.setOpacity(0)
+  if (show && wasVisible) mainWindow.hide()
+  activeDashboardMode = 'minified'
+  notifyDashboardMode()
+  mainWindow.setMinimumSize(0, 0)
+  mainWindow.setMaximumSize(0, 0)
+  applyAfterLeavingFullScreen(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    mainWindow.setMinimumSize(MINIFIED_WIDTH, MINIFIED_HEIGHT)
+    mainWindow.setMaximumSize(MINIFIED_WIDTH, MINIFIED_HEIGHT)
+    mainWindow.setResizable(false)
+    mainWindow.setSkipTaskbar(false)
+    mainWindow.setAlwaysOnTop(true, 'normal')
+    const display = screen.getDisplayMatching(mainWindow.getBounds()) || screen.getPrimaryDisplay()
+    const workArea = display?.workArea || { x:0, y:0, width:1920, height:1080 }
+    const x = Math.max(workArea.x, Math.round(workArea.x + (workArea.width - MINIFIED_WIDTH) / 2))
+    const y = Math.max(workArea.y, Math.round(workArea.y + (workArea.height - MINIFIED_HEIGHT) / 2))
+    mainWindow.setBounds({ x, y, width:MINIFIED_WIDTH, height:MINIFIED_HEIGHT }, false)
+    if (show) {
+      mainWindow.show()
+      mainWindow.focus()
+      keepWindowContentOpaque()
+      dashboardVisible = true
+    } else {
+      keepWindowContentOpaque()
+    }
+  })
+}
+
 function applyIdleDashboardMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   gameIsLaunched = false
@@ -744,6 +779,13 @@ function completeSessionStartTransition() {
 }
 
 function showMiniDashboard() {
+  if (!isActive() || !mainWindow || mainWindow.isDestroyed()) return false
+  applyMiniWindowMode({ show:true })
+  updateTrayMenu()
+  return true
+}
+
+function showFullscreenDashboard() {
   if (!isActive() || !mainWindow || mainWindow.isDestroyed()) return false
   applyActiveWindowMode({ show:true })
   updateTrayMenu()
@@ -1159,6 +1201,8 @@ app.whenReady().then(async () => {
   handleTrusted('client:cancel-session-start', () => showIdleDashboard())
   handleTrusted('client:hide-dashboard', () => hideMiniDashboard())
   handleTrusted('client:show-dashboard', () => showMiniDashboard())
+  handleTrusted('client:show-mini-dashboard', () => showMiniDashboard())
+  handleTrusted('client:show-fullscreen-dashboard', () => showFullscreenDashboard())
   ipcMain.on('client:get-timer-preferences', event => {
     if (!isTrustedRenderer(event)) { event.returnValue = { ...DEFAULT_TIMER_PREFERENCES }; return }
     event.returnValue = getTimerPreferences()

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext.jsx'
 import { showToast } from '../../lib/toast.js'
 import Button from '../common/Button.jsx'
 import Modal from '../common/Modal.jsx'
+import MenuThumbnail from './MenuThumbnail.jsx'
 
 export default function MenuOrderModal({ isOpen, onClose, cart: externalCart, onCartChange: setExternalCart }) {
   const { menuItems = [], placeMenuOrder, currentMember, myOrders = [] } = useAppData()
@@ -227,17 +228,12 @@ export default function MenuOrderModal({ isOpen, onClose, cart: externalCart, on
                         className="h-28 min-h-[112px] w-full rounded-xl overflow-hidden relative mb-2 flex items-center justify-center p-1.5 transition shrink-0 bg-surface-raised/50 border border-surface-line/50 cursor-pointer group select-none"
                         title={isOutOfStock ? 'Out of stock' : `Click to add ${item.name}`}
                       >
-                        {item.image_url || item.imageUrl ? (
-                          <img
-                            src={item.image_url || item.imageUrl}
-                            alt={item.name}
-                            loading="lazy"
-                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-200"
-                            onError={(e) => { e.currentTarget.style.display = 'none' }}
-                          />
-                        ) : (
-                          <UtensilsCrossed className="w-8 h-8 text-slate-soft/40 group-hover:scale-110 transition-transform" />
-                        )}
+                        <MenuThumbnail
+                          item={item}
+                          className="w-full h-full object-contain"
+                          containerClassName="w-full h-full flex items-center justify-center"
+                          fallbackIconSize={28}
+                        />
                         <span className="absolute top-1.5 right-1.5 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md bg-surface/95 text-gold-dim border border-surface-line shadow-xs">
                           ₱{Number(item.price).toFixed(2)}
                         </span>

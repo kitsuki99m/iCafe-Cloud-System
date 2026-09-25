@@ -6919,10 +6919,32 @@ router.patch("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, res
   res.json({ success: true, menuItem: { id: req.params.id, name: nextName, category: nextCategory, description: nextDescription, price: Number(nextPrice), imageUrl: nextImage, stockQuantity: nextStock, isAvailable: Boolean(nextAvailable), isActive: Boolean(nextActive) } });
 });
 
-router.delete("/menu-items/:id", auth, requireRole("admin"), (req, res) => {
+router.put("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM menu_items WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Menu item not found." });
+  const { name, category, description, price, imageUrl, stockQuantity, isAvailable, isActive } = req.body || {};
+  const nextName = name !== undefined ? String(name).trim() : existing.name;
+  const nextCategory = category !== undefined ? String(category) : existing.category;
+  const nextDescription = description !== undefined ? String(description).trim() : existing.description;
+  const nextPrice = price !== undefined ? Math.max(0, Number(price)) : existing.price;
+  const nextImage = imageUrl !== undefined ? imageUrl : existing.image_url;
+  const nextStock = stockQuantity !== undefined ? (stockQuantity != null ? Math.max(0, Number(stockQuantity)) : null) : existing.stock_quantity;
+  const nextAvailable = isAvailable !== undefined ? (isAvailable ? 1 : 0) : existing.is_available;
+  const nextActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
+  db.prepare(`
+    UPDATE menu_items SET name=?, category=?, description=?, price=?, image_url=?, stock_quantity=?, is_available=?, is_active=?, updated_at=?
+    WHERE id=?
+  `).run(nextName, nextCategory, nextDescription, nextPrice, nextImage, nextStock, nextAvailable, nextActive, nowIso(), req.params.id);
+  emitDataChanged({ entity: 'menu_items' });
+  res.json({ success: true, menuItem: { id: req.params.id, name: nextName, category: nextCategory, description: nextDescription, price: Number(nextPrice), imageUrl: nextImage, stockQuantity: nextStock, isAvailable: Boolean(nextAvailable), isActive: Boolean(nextActive) } });
+});
+
+router.delete("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM menu_items WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Menu item not found." });
   db.prepare("UPDATE menu_items SET is_active=0, updated_at=? WHERE id=?").run(nowIso(), req.params.id);
   emitDataChanged({ entity: 'menu_items' });
-  res.json({ success: true });
+  res.json({ success: true, message: "Menu item deleted successfully." });
 });
 
 router.get("/menu-orders", auth, (req, res) => {
@@ -7818,10 +7840,27 @@ router.patch("/launcher/categories/:id", auth, requireRole("admin", "cashier"), 
   });
 });
 
-router.delete("/launcher/categories/:id", auth, requireRole("admin"), (req, res) => {
+router.put("/launcher/categories/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM launcher_categories WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Category not found." });
+  const { name, sortOrder, isActive } = req.body || {};
+  const nextName = name !== undefined ? String(name).trim() : existing.name;
+  const nextSort = sortOrder !== undefined ? (Number(sortOrder) || 0) : existing.sort_order;
+  const nextActive = isActive !== undefined ? (isActive ? 1 : 0) : existing.is_active;
+  db.prepare("UPDATE launcher_categories SET name=?, sort_order=?, is_active=? WHERE id=?").run(nextName, nextSort, nextActive, req.params.id);
+  emitDataChanged({ entity: 'launcher' });
+  res.json({
+    success: true,
+    category: { id: req.params.id, name: nextName, sortOrder: nextSort, isActive: Boolean(nextActive) }
+  });
+});
+
+router.delete("/launcher/categories/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM launcher_categories WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Category not found." });
   db.prepare("UPDATE launcher_categories SET is_active=0 WHERE id=?").run(req.params.id);
   emitDataChanged({ entity: 'launcher' });
-  res.json({ success: true });
+  res.json({ success: true, message: "Category deleted successfully." });
 });
 
 router.get("/launcher/apps", (req, res) => {
@@ -8012,10 +8051,71 @@ router.patch("/launcher/apps/:id", auth, requireRole("admin", "cashier"), (req, 
   });
 });
 
-router.delete("/launcher/apps/:id", auth, requireRole("admin"), (req, res) => {
+router.put("/launcher/apps/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM launcher_apps WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Application not found." });
+
+  const {
+    name,
+    categoryId,
+    categoryName,
+    icon,
+    executablePath,
+    protocolUrl,
+    launchArguments,
+    workingDirectory,
+    isEnabled,
+    sortOrder,
+  } = req.body || {};
+
+  const nextName = name !== undefined ? String(name).trim() : existing.name;
+  const nextCatId = categoryId !== undefined ? categoryId : existing.category_id;
+  const nextCatName = categoryName !== undefined ? String(categoryName).trim() : existing.category_name;
+  const nextIcon = icon !== undefined ? icon : existing.icon;
+  const nextExe = executablePath !== undefined ? executablePath : existing.executable_path;
+  const nextProtocol = protocolUrl !== undefined ? protocolUrl : existing.protocol_url;
+  const nextArgs = launchArguments !== undefined ? launchArguments : existing.launch_arguments;
+  const nextWorkDir = workingDirectory !== undefined ? workingDirectory : existing.working_directory;
+  const nextEnabled = isEnabled !== undefined ? (isEnabled ? 1 : 0) : existing.is_enabled;
+  const nextSort = sortOrder !== undefined ? (Number(sortOrder) || 0) : existing.sort_order;
+
+  db.prepare(`
+    UPDATE launcher_apps SET
+      name=?, category_id=?, category_name=?, icon=?, executable_path=?,
+      protocol_url=?, launch_arguments=?, working_directory=?, is_enabled=?,
+      sort_order=?, updated_at=?
+    WHERE id=?
+  `).run(
+    nextName, nextCatId, nextCatName, nextIcon, nextExe,
+    nextProtocol, nextArgs, nextWorkDir, nextEnabled,
+    nextSort, nowIso(), req.params.id
+  );
+
+  emitDataChanged({ entity: 'launcher' });
+  res.json({
+    success: true,
+    app: {
+      id: req.params.id,
+      name: nextName,
+      categoryId: nextCatId,
+      categoryName: nextCatName,
+      icon: nextIcon,
+      executablePath: nextExe,
+      protocolUrl: nextProtocol,
+      launchArguments: nextArgs,
+      workingDirectory: nextWorkDir,
+      isEnabled: Boolean(nextEnabled),
+      sortOrder: nextSort,
+    }
+  });
+});
+
+router.delete("/launcher/apps/:id", auth, requireRole("admin", "cashier"), (req, res) => {
+  const existing = db.prepare("SELECT * FROM launcher_apps WHERE id=?").get(req.params.id);
+  if (!existing) return res.status(404).json({ success: false, error: "Application not found." });
   db.prepare("DELETE FROM launcher_apps WHERE id=?").run(req.params.id);
   emitDataChanged({ entity: 'launcher' });
-  res.json({ success: true });
+  res.json({ success: true, message: "Application deleted successfully." });
 });
 
 export default router;

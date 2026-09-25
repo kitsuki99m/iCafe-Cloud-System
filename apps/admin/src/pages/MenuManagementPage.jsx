@@ -23,6 +23,7 @@ import {
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { showToast } from '../lib/toast.js'
+import { resolveMenuImageUrl } from '../lib/images.js'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
@@ -265,10 +266,6 @@ export default function MenuManagementPage() {
   }
 
   function promptDeleteItem(item) {
-    if (isCashier) {
-      showToast({ title: 'Restricted Action', message: 'Cashiers cannot delete menu items.', tone: 'error' })
-      return
-    }
     setDeleteTargetItem(item)
   }
 
@@ -574,16 +571,14 @@ export default function MenuManagementPage() {
                   />
                 </div>
 
-                {!isCashier && (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button variant="secondary" icon={Layers} onClick={openBatchModal} size="sm">
-                      Presets & Batch Add
-                    </Button>
-                    <Button variant="primary" icon={Plus} onClick={openCreateModal} size="sm">
-                      Add Item
-                    </Button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button variant="secondary" icon={Layers} onClick={openBatchModal} size="sm">
+                    Presets & Batch Add
+                  </Button>
+                  <Button variant="primary" icon={Plus} onClick={openCreateModal} size="sm">
+                    Add Item
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -593,16 +588,14 @@ export default function MenuManagementPage() {
                 title="No Menu Items Found"
                 description="Add food and beverage items or select from our Philippine market presets to start selling."
                 action={
-                  !isCashier ? (
-                    <div className="flex items-center gap-2">
-                      <Button variant="secondary" icon={Layers} onClick={openBatchModal}>
-                        Philippine Presets & Batch
-                      </Button>
-                      <Button variant="primary" icon={Plus} onClick={openCreateModal}>
-                        Add Menu Item
-                      </Button>
-                    </div>
-                  ) : null
+                  <div className="flex items-center gap-2">
+                    <Button variant="secondary" icon={Layers} onClick={openBatchModal}>
+                      Philippine Presets & Batch
+                    </Button>
+                    <Button variant="primary" icon={Plus} onClick={openCreateModal}>
+                      Add Menu Item
+                    </Button>
+                  </div>
                 }
               />
             ) : (
@@ -616,16 +609,16 @@ export default function MenuManagementPage() {
                   return (
                     <div
                       key={item.id}
-                      className={`rounded-2xl border border-surface-line customer-neutral-surface overflow-hidden flex flex-col justify-between transition hover:border-gold/40 ${
+                      className={`rounded-2xl border border-surface-line customer-neutral-surface overflow-hidden flex flex-col justify-between transition hover:border-gold/40 p-3 h-full ${
                         !isAvail || isOutOfStock ? 'opacity-70' : ''
                       }`}
                     >
-                      <div>
+                      <div className="flex flex-col flex-1">
                         {/* Image Container with fixed height and contain */}
-                        <div className={`h-32 min-h-[128px] w-full rounded-xl relative overflow-hidden flex items-center justify-center p-2 m-2 mb-0 transition shrink-0 ${item.image_url || item.imageUrl ? 'bg-white' : 'bg-surface-raised'}`}>
-                          {item.image_url || item.imageUrl ? (
+                        <div className={`h-36 w-full rounded-xl relative overflow-hidden flex items-center justify-center p-2 mb-3 transition shrink-0 ${resolveMenuImageUrl(item.image_url || item.imageUrl) ? 'bg-white' : 'bg-surface-raised'}`}>
+                          {resolveMenuImageUrl(item.image_url || item.imageUrl) ? (
                             <img
-                              src={item.image_url || item.imageUrl}
+                              src={resolveMenuImageUrl(item.image_url || item.imageUrl)}
                               alt={item.name}
                               loading="lazy"
                               width="128"
@@ -636,7 +629,7 @@ export default function MenuManagementPage() {
                           ) : (
                             <UtensilsCrossed className="w-8 h-8 text-slate-soft/50" />
                           )}
-                          <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-surface text-ink-900 border border-surface-line shadow-xs">
+                          <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase px-2 py-0.5 rounded-full bg-surface/90 text-ink-900 border border-surface-line shadow-xs">
                             {item.category || 'Food'}
                           </span>
                           {(!isAvail || isOutOfStock) && (
@@ -649,19 +642,23 @@ export default function MenuManagementPage() {
                         </div>
 
                         {/* Info */}
-                        <div className="p-3.5 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="font-semibold text-xs text-ink-900 leading-snug">{item.name}</h4>
-                            <span className="font-bold text-xs text-gold-dim stat-figure">
-                              ₱{Number(item.price || 0).toFixed(2)}
-                            </span>
+                        <div className="space-y-1.5 flex-1 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <h4 className="font-semibold text-xs text-ink-900 leading-snug line-clamp-1" title={item.name}>{item.name}</h4>
+                              <span className="font-bold text-xs text-gold-dim stat-figure whitespace-nowrap shrink-0">
+                                ₱{Number(item.price || 0).toFixed(2)}
+                              </span>
+                            </div>
+
+                            {item.description ? (
+                              <p className="text-[11px] text-slate-soft line-clamp-2 min-h-[2rem] leading-relaxed">{item.description}</p>
+                            ) : (
+                              <div className="min-h-[2rem]" />
+                            )}
                           </div>
 
-                          {item.description && (
-                            <p className="text-[11px] text-slate-soft line-clamp-2">{item.description}</p>
-                          )}
-
-                          <div className="flex items-center gap-1.5 pt-0.5">
+                          <div className="flex items-center gap-1.5 pt-1.5">
                             {stock == null ? (
                               <span className="text-[10px] font-semibold text-teal-dim bg-teal/10 px-2 py-0.5 rounded-md border border-teal/20">
                                 Unlimited Stock
@@ -684,25 +681,23 @@ export default function MenuManagementPage() {
                       </div>
 
                       {/* Actions */}
-                      <div className="p-3 pt-0 flex items-center justify-end gap-1.5 border-t border-surface-line/50 mt-1">
+                      <div className="pt-2.5 flex items-center justify-end gap-1.5 border-t border-surface-line mt-3">
                         <button
                           type="button"
                           onClick={() => openEditModal(item)}
-                          className="p-1.5 rounded-lg text-slate-soft hover:text-ink-900 hover:bg-dance/35 transition"
+                          className="p-1.5 rounded-lg text-slate-soft hover:text-ink-900 hover:bg-dance/35 transition cursor-pointer"
                           title="Edit Item"
                         >
                           <Pencil size={13} />
                         </button>
-                        {!isCashier && (
-                          <button
-                            type="button"
-                            onClick={() => promptDeleteItem(item)}
-                            className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition"
-                            title="Delete Item"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => promptDeleteItem(item)}
+                          className="p-1.5 rounded-lg text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition cursor-pointer"
+                          title="Delete Item"
+                        >
+                          <Trash2 size={13} />
+                        </button>
                       </div>
                     </div>
                   )
@@ -731,7 +726,7 @@ export default function MenuManagementPage() {
                   onClick={() => {
                     const target = editingItem
                     setModalOpen(false)
-                    setDeleteTarget(target)
+                    setDeleteTargetItem(target)
                   }}
                   className="flex items-center gap-1.5 text-xs text-ember-dim hover:bg-ember/10 border border-ember/20"
                 >
@@ -744,8 +739,12 @@ export default function MenuManagementPage() {
               <Button variant="ghost" onClick={() => setModalOpen(false)} disabled={submitting}>
                 Cancel
               </Button>
-              <Button variant="primary" onClick={handleSaveItem} disabled={submitting || !formData.name.trim() || !(Number(formData.price) > 0)}>
-                {submitting ? 'Saving…' : 'Save Item'}
+              <Button
+                variant="primary"
+                onClick={handleSaveItem}
+                disabled={submitting || !formData.name.trim() || formData.price === '' || isNaN(Number(formData.price)) || Number(formData.price) < 0}
+              >
+                {submitting ? 'Saving…' : editingItem ? 'Save Changes' : 'Save Item'}
               </Button>
             </div>
           </div>
@@ -796,7 +795,7 @@ export default function MenuManagementPage() {
               />
             </div>
             <div>
-              <label className="eyebrow mb-1.5 block">Stock Quantity <span className="text-slate-soft font-normal text-[10px]">(Leave blank for unlimited)</span></label>
+              <label className="eyebrow mb-1.5 block">Stock Quantity</label>
               <NumericInput
                 min="0"
                 step="1"
@@ -834,8 +833,8 @@ export default function MenuManagementPage() {
           {/* Row 4: Product Photo */}
           <div>
             <label className="eyebrow mb-1.5 block">Product Photo / Display Image</label>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl border border-surface-line customer-neutral-surface">
-              <div className="w-20 h-20 rounded-2xl bg-white overflow-hidden flex items-center justify-center p-2 shrink-0 border border-surface-line shadow-xs">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-3.5 rounded-2xl border border-surface-line customer-neutral-surface">
+              <div className="w-20 h-20 rounded-xl bg-white overflow-hidden flex items-center justify-center p-1.5 shrink-0 border border-surface-line shadow-xs">
                 {formData.imageUrl ? (
                   <img
                     src={formData.imageUrl}
@@ -870,9 +869,9 @@ export default function MenuManagementPage() {
                 </div>
                 <input
                   type="text"
-                  value={formData.imageUrl}
+                  value={formData.imageUrl?.startsWith('data:') ? '' : formData.imageUrl}
                   onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                  placeholder="Or paste public image URL (https://… or /assets/food/...)"
+                  placeholder={formData.imageUrl?.startsWith('data:') ? 'Custom uploaded image loaded (paste URL to replace)' : 'Or paste public image URL (https://… or /assets/...)'}
                   className="w-full text-xs rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-ink-900 focus:outline-none focus:border-gold/50 font-mono"
                 />
               </div>
@@ -881,7 +880,7 @@ export default function MenuManagementPage() {
 
           {/* Row 5: Description */}
           <div>
-            <label className="eyebrow mb-1.5 block">Description / Serving Notes (Optional)</label>
+            <label className="eyebrow mb-1.5 block">Description / Serving Notes</label>
             <textarea
               rows={2}
               value={formData.description}
@@ -1163,8 +1162,8 @@ export default function MenuManagementPage() {
         title="Delete Menu Item"
         description={`Are you sure you want to delete "${deleteTargetItem?.name}"? This action cannot be undone.`}
         confirmLabel={actionBusy ? 'Deleting…' : 'Delete Item'}
-        confirmTone="danger"
-        disabled={actionBusy}
+        variant="danger"
+        busy={actionBusy}
         onConfirm={confirmDeleteItem}
         onClose={() => setDeleteTargetItem(null)}
       />
@@ -1175,8 +1174,8 @@ export default function MenuManagementPage() {
         title="Cancel Customer Order"
         description="Are you sure you want to cancel this order? If paid via wallet balance, the customer will be automatically refunded."
         confirmLabel={actionBusy ? 'Cancelling…' : 'Cancel Order'}
-        confirmTone="danger"
-        disabled={actionBusy}
+        variant="danger"
+        busy={actionBusy}
         onConfirm={confirmCancelOrder}
         onClose={() => setCancelTargetOrderId(null)}
       />

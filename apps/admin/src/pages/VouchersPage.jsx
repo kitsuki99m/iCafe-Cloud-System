@@ -470,7 +470,7 @@ export default function VouchersPage({ headerSlot }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="eyebrow mb-1.5 block">Max Uses (Limit)</label>
+              <label className="eyebrow mb-1.5 block">Max Uses</label>
               <input
                 type="number"
                 value={maxRedemptions}
@@ -498,8 +498,8 @@ export default function VouchersPage({ headerSlot }) {
         title="Deactivate Promo Voucher"
         description={`Are you sure you want to deactivate voucher code "${deleteTargetVoucher?.code}"? Customers will no longer be able to redeem this voucher.`}
         confirmLabel={actionBusy ? 'Deactivating…' : 'Deactivate Voucher'}
-        confirmTone="danger"
-        disabled={actionBusy}
+        variant="danger"
+        busy={actionBusy}
         onConfirm={() => confirmDeleteVoucher()}
         onClose={() => setDeleteTargetVoucher(null)}
       />

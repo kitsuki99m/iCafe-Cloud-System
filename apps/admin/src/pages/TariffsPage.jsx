@@ -258,7 +258,7 @@ function RatePlanFields({ draft, setDraft, errors = {} }) {
                 : "Plan tiers cascade: VIP sees Regular, Gold, and VIP plans; Gold sees Regular and Gold plans; Regular sees Regular only."}
           </div>
           <label>
-            <span className="eyebrow mb-1.5 block">Starts (optional)</span>
+            <span className="eyebrow mb-1.5 block">Starts</span>
             <input
               type="datetime-local"
               value={draft.startsAt ?? ""}
@@ -268,7 +268,7 @@ function RatePlanFields({ draft, setDraft, errors = {} }) {
             <FieldError>{errors.startsAt}</FieldError>
           </label>
           <label>
-            <span className="eyebrow mb-1.5 block">Ends (optional)</span>
+            <span className="eyebrow mb-1.5 block">Ends</span>
             <input
               type="datetime-local"
               value={draft.endsAt ?? ""}

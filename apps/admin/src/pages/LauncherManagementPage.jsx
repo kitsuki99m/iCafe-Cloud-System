@@ -621,17 +621,15 @@ export default function LauncherManagementPage() {
                     <Pencil size={13} />
                     <span>Edit</span>
                   </button>
-                  {!isCashier && (
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTargetApp(app)}
-                      className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition flex items-center gap-1 cursor-pointer"
-                      title="Delete App"
-                    >
-                      <Trash2 size={13} />
-                      <span>Delete</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTargetApp(app)}
+                    className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-soft hover:text-ember-dim hover:bg-ember/10 transition flex items-center gap-1 cursor-pointer"
+                    title="Delete App"
+                  >
+                    <Trash2 size={13} />
+                    <span>Delete</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -651,7 +649,7 @@ export default function LauncherManagementPage() {
         footer={
           <div className="flex items-center justify-between w-full">
             <div>
-              {editingApp && !isCashier && (
+              {editingApp && (
                 <Button
                   variant="ghost"
                   disabled={actionBusy}
@@ -727,9 +725,9 @@ export default function LauncherManagementPage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    value={appForm.icon}
+                    value={appForm.icon?.startsWith('data:') ? '' : (appForm.icon || '')}
                     onChange={(e) => setAppForm({ ...appForm, icon: e.target.value })}
-                    placeholder="/assets/launcher/valorant.webp or https://..."
+                    placeholder={appForm.icon?.startsWith('data:') ? 'Custom uploaded icon active (paste URL to replace)' : '/assets/launcher/valorant.webp or https://...'}
                     className="flex-1 rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-xs text-ink-900 focus:outline-none focus:border-gold/50 font-mono"
                   />
                   <label className="cursor-pointer shrink-0 rounded-xl border border-surface-line customer-neutral-surface px-3.5 py-2 text-xs font-semibold text-ink-900 hover:bg-dance/35 transition shadow-xs">
@@ -753,6 +751,15 @@ export default function LauncherManagementPage() {
                       }}
                     />
                   </label>
+                  {appForm.icon?.startsWith('data:') && (
+                    <button
+                      type="button"
+                      onClick={() => setAppForm((prev) => ({ ...prev, icon: '🎮' }))}
+                      className="px-2.5 py-2 text-xs font-semibold rounded-xl text-ember-dim hover:bg-ember/10 transition border border-ember/20 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-[10px] font-semibold text-slate-soft uppercase tracking-wider">Presets:</span>
