@@ -608,7 +608,7 @@
     --art: radial-gradient(1000px 520px at 88% 6%, rgba(5, 147, 143, 0.08), transparent 66%), linear-gradient(180deg, #FFFFFF, #F0F6F8);
   }
 
-  /* Backdrop animated layer */
+  /* Backdrop animated layer - Hardware accelerated GPU compositor layer */
   .backdrop {
     position: fixed;
     inset: 0;
@@ -618,6 +618,9 @@
     background-repeat: repeat;
     animation: drift 90s linear infinite;
     pointer-events: none;
+    transform: translate3d(0, 0, 0);
+    will-change: transform;
+    contain: strict;
   }
   [data-skin="nexus"] .backdrop,
   :root:not([data-skin]) .backdrop {
@@ -629,6 +632,7 @@
     inset: 0;
     opacity: 0;
     pointer-events: none;
+    transform: translate3d(0, 0, 0);
   }
   [data-skin="alien"] .backdrop::after {
     opacity: 1;
@@ -656,12 +660,12 @@
     100% { filter: hue-rotate(360deg); }
   }
   @keyframes sweep {
-    0%, 100% { transform: translateY(-40vh); }
-    50% { transform: translateY(120vh); }
+    0%, 100% { transform: translate3d(0, -40vh, 0); }
+    50% { transform: translate3d(0, 120vh, 0); }
   }
   @keyframes beam {
-    0%, 100% { transform: translateX(-30%); }
-    50% { transform: translateX(30%); }
+    0%, 100% { transform: translate3d(-30%, 0, 0); }
+    50% { transform: translate3d(30%, 0, 0); }
   }
 
   .chroma {
@@ -676,6 +680,7 @@
     background-size: 300% 100%;
     animation: chroma 9s linear infinite;
     pointer-events: none;
+    transform: translate3d(0, 0, 0);
   }
   [data-skin="razer"] .chroma {
     display: block;
@@ -683,18 +688,26 @@
   @keyframes chroma {
     to { background-position: 300% 0; }
   }
-  @keyframes powerOn {
-    0% { opacity: 0; transform: translateY(6px); }
-    100% { opacity: 1; transform: none; }
-  }
-  .booting .admin-main,
-  .booting .admin-sidebar,
-  .booting .overview-container {
-    animation: powerOn 0.38s cubic-bezier(0.2, 0.7, 0.3, 1);
-  }
   @keyframes ringPulse {
     0%, 100% { box-shadow: 0 0 0 0 transparent; }
     50% { box-shadow: 0 0 0 3px var(--glow); }
+  }
+
+  /* Instant zero-jank theme and skin transition lock */
+  .no-theme-transitions,
+  .no-theme-transitions *,
+  .no-theme-transitions *::before,
+  .no-theme-transitions *::after {
+    transition: none !important;
+    animation-duration: 0.001ms !important;
+  }
+
+  @media (prefers-reduced-motion: reduce), (max-width: 639px) {
+    .backdrop,
+    .backdrop::after,
+    .chroma {
+      animation: none !important;
+    }
   }
 
   /* Universal Root and Body Surface Bindings */

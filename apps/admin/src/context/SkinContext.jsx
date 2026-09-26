@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 import { apiPatch } from '../lib/api.js'
+import { applyThemeWithoutTransition } from './ThemeContext.jsx'
 
 export const SKINS = [
   {
@@ -77,20 +78,22 @@ export function SkinProvider({ children }) {
 
   // Ensure document root dataset.skin is synchronized with active skin state only when in esports mode
   useEffect(() => {
-    const persona = document.documentElement.getAttribute('data-theme-persona')
-    if (persona === 'esports') {
-      document.documentElement.dataset.skin = skinId
-    } else {
-      delete document.documentElement.dataset.skin
-      document.documentElement.removeAttribute('data-skin')
-    }
+    applyThemeWithoutTransition(() => {
+      const persona = document.documentElement.getAttribute('data-theme-persona')
+      if (persona === 'esports') {
+        document.documentElement.dataset.skin = skinId
+      } else {
+        delete document.documentElement.dataset.skin
+        document.documentElement.removeAttribute('data-skin')
+      }
+    })
     try {
       localStorage.setItem(SKIN_STORAGE_KEY, skinId)
       sessionStorage.setItem(SKIN_STORAGE_KEY, skinId)
     } catch {}
   }, [skinId])
 
-  const setSkin = (targetId) => {
+  const setSkin = useCallback((targetId) => {
     const valid = SKINS.some((s) => s.id === targetId) ? targetId : 'nexus'
     setSkinIdState(valid)
     try {
@@ -99,24 +102,20 @@ export function SkinProvider({ children }) {
     } catch {}
 
     const persona = document.documentElement.getAttribute('data-theme-persona')
-    if (persona === 'esports') {
-      document.documentElement.dataset.skin = valid
-    } else {
-      delete document.documentElement.dataset.skin
-      document.documentElement.removeAttribute('data-skin')
-    }
-
-    // Trigger booting effect
-    document.body.classList.add('booting')
-    setTimeout(() => {
-      document.body.classList.remove('booting')
-    }, 420)
+    applyThemeWithoutTransition(() => {
+      if (persona === 'esports') {
+        document.documentElement.dataset.skin = valid
+      } else {
+        delete document.documentElement.dataset.skin
+        document.documentElement.removeAttribute('data-skin')
+      }
+    })
 
     window.dispatchEvent(new CustomEvent('aezakmi:skin-changed', { detail: { skin: valid } }))
     try {
       apiPatch('/settings', { themePersona: persona || 'dashboard', skinId: valid }).catch(() => {})
     } catch {}
-  }
+  }, [])
 
   const value = useMemo(() => ({
     skinId,
@@ -126,7 +125,7 @@ export function SkinProvider({ children }) {
     isGalleryOpen,
     openGallery: () => setIsGalleryOpen(true),
     closeGallery: () => setIsGalleryOpen(false),
-  }), [skinId, activeSkin, isGalleryOpen])
+  }), [skinId, activeSkin, isGalleryOpen, setSkin])
 
   return <SkinContext.Provider value={value}>{children}</SkinContext.Provider>
 }

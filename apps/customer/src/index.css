@@ -55,6 +55,15 @@
   100% { opacity: 1; transform: translateY(0); }
 }
 
+/* Instant zero-jank theme transition lock */
+.no-theme-transitions,
+.no-theme-transitions *,
+.no-theme-transitions *::before,
+.no-theme-transitions *::after {
+  transition: none !important;
+  animation-duration: 0.001ms !important;
+}
+
 @layer base {
   :root,
   html,

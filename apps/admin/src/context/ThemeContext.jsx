@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 
 const ThemeContext = createContext(null)
 
@@ -12,39 +12,63 @@ function initialTheme() {
   }
 }
 
+export function applyThemeWithoutTransition(updateFn) {
+  if (typeof document === 'undefined') {
+    updateFn?.()
+    return
+  }
+  const doc = document.documentElement
+  doc.classList.add('no-theme-transitions')
+  try {
+    updateFn?.()
+  } finally {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        doc.classList.remove('no-theme-transitions')
+      })
+    })
+  }
+}
+
 export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(initialTheme)
 
-  const setTheme = (target) => {
+  const setTheme = useCallback((target) => {
     const valid = target === 'dark' ? 'dark' : 'light'
     setThemeState(valid)
     try {
       localStorage.setItem('aezakmi.theme', valid)
     } catch {}
-    document.documentElement.dataset.theme = valid
-    document.documentElement.classList.toggle('dark', valid === 'dark')
-    document.documentElement.classList.toggle('light', valid === 'light')
-    document.documentElement.style.colorScheme = valid
+
+    applyThemeWithoutTransition(() => {
+      document.documentElement.dataset.theme = valid
+      document.documentElement.classList.toggle('dark', valid === 'dark')
+      document.documentElement.classList.toggle('light', valid === 'light')
+      document.documentElement.style.colorScheme = valid
+    })
+
     window.dispatchEvent(new CustomEvent('aezakmi:theme-changed', { detail: { theme: valid } }))
-  }
+  }, [])
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    document.documentElement.classList.toggle('light', theme === 'light')
-    document.documentElement.style.colorScheme = theme
-    try {
-      localStorage.setItem('aezakmi.theme', theme)
-    } catch {}
-    window.dispatchEvent(new CustomEvent('aezakmi:theme-changed', { detail: { theme } }))
+    applyThemeWithoutTransition(() => {
+      document.documentElement.dataset.theme = theme
+      document.documentElement.classList.toggle('dark', theme === 'dark')
+      document.documentElement.classList.toggle('light', theme === 'light')
+      document.documentElement.style.colorScheme = theme
+    })
   }, [theme])
+
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+  }, [theme, setTheme])
 
   const value = useMemo(() => ({
     theme,
     isDark: theme === 'dark',
     setTheme,
-    toggleTheme: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
-  }), [theme])
+    toggleTheme,
+  }), [theme, setTheme, toggleTheme])
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

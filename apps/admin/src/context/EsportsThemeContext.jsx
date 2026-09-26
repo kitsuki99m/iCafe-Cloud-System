@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 import { apiPatch } from '../lib/api.js'
+import { applyThemeWithoutTransition } from './ThemeContext.jsx'
 
 const EsportsThemeContext = createContext(null)
 
@@ -17,8 +18,8 @@ export function EsportsThemeProvider({ children }) {
     }
   })
 
-  const syncSkinDataset = (mode) => {
-    try {
+  const syncSkinDataset = useCallback((mode) => {
+    applyThemeWithoutTransition(() => {
       document.documentElement.setAttribute('data-theme-persona', mode)
       if (mode === 'esports') {
         const activeSkinId = localStorage.getItem(SKIN_STORAGE_KEY) || 'nexus'
@@ -27,10 +28,10 @@ export function EsportsThemeProvider({ children }) {
         delete document.documentElement.dataset.skin
         document.documentElement.removeAttribute('data-skin')
       }
-    } catch {}
-  }
+    })
+  }, [])
 
-  const setThemeMode = (mode) => {
+  const setThemeMode = useCallback((mode) => {
     const target = mode === 'esports' ? 'esports' : 'dashboard'
     setThemeModeState(target)
     try {
@@ -43,16 +44,16 @@ export function EsportsThemeProvider({ children }) {
       const activeSkinId = localStorage.getItem(SKIN_STORAGE_KEY) || 'nexus'
       apiPatch('/settings', { themePersona: target, skinId: activeSkinId }).catch(() => {})
     } catch {}
-  }
+  }, [syncSkinDataset])
 
-  const toggleThemeMode = () => {
+  const toggleThemeMode = useCallback(() => {
     setThemeMode(themeMode === 'esports' ? 'dashboard' : 'esports')
-  }
+  }, [themeMode, setThemeMode])
 
   // Keep data-theme-persona and data-skin synchronized on document root
   useEffect(() => {
     syncSkinDataset(themeMode)
-  }, [themeMode])
+  }, [themeMode, syncSkinDataset])
 
   // Synchronize when skin changes (only if in esports mode)
   useEffect(() => {
