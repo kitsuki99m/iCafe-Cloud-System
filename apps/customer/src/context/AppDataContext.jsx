@@ -243,7 +243,7 @@ export function AppDataProvider({ children }) {
           myOrders:[],
         })
         if (generation !== refreshGenerationRef.current) return
-        setState((current) => preserveActiveSession(current, snapshot))
+        setState(snapshot)
         if (cacheKey) writeSnapshot(cacheKey,snapshot)
         return
       }
@@ -379,8 +379,19 @@ export function AppDataProvider({ children }) {
     setState(createPublicState({ loading:true }))
     if (cacheKey) {
       readSnapshot(cacheKey)
-        .then((snapshot)=>{if(active&&snapshot)setState(createPublicState({ ...snapshot, loading:false, serverError:'' }))})
-        .finally(()=>{if(active)refresh()})
+        .then((snapshot) => {
+          if (active && snapshot) {
+            const sanitized = {
+              ...snapshot,
+              pcs: (snapshot.pcs || []).map((p) => ({ ...p, session: null })),
+              currentClientPc: snapshot.currentClientPc ? { ...snapshot.currentClientPc, session: null } : null,
+              loading: false,
+              serverError: '',
+            }
+            setState(createPublicState(sanitized))
+          }
+        })
+        .finally(() => { if (active) refresh() })
     } else {
       // Guest session state must always come from the live station session.
       // Do not render a stale prior guest while the authoritative refresh runs.
@@ -493,6 +504,11 @@ export function AppDataProvider({ children }) {
       // the generic Admin-session logout event. Neither path uses Lock Session.
       if ((payload?.forceLogout === true || reason === 'session_forfeited') && belongsToPc) {
         clearStationLifecycleMarker().catch?.(() => {})
+        setState((current) => ({
+          ...current,
+          pcs: current.pcs.map((item) => sameId(item.id, payload.pcId) ? { ...item, session: null } : item),
+          currentClientPc: sameId(current.currentClientPc?.id, payload.pcId) ? { ...current.currentClientPc, session: null } : current.currentClientPc,
+        }))
         window.aezakmiClient?.showLoginKiosk?.().catch?.(() => {})
         const detail={ reason, sessionId:payload?.sessionId || null, committed:true, source:'session_updated', disposition:payload?.disposition || null }
         if (reason === 'session_forfeited') window.dispatchEvent(new CustomEvent('aezakmi:admin-forfeit-logout', { detail }))

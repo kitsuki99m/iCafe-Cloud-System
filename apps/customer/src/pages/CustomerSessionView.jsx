@@ -180,7 +180,7 @@ export default function CustomerSessionView() {
   } = useAppData();
   const branding = useBranding();
   const [now, setNow] = useState(Date.now());
-  const [compactView, setCompactView] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 420 && window.innerHeight <= 180);
+  const [compactView, setCompactView] = useState(false);
   const [dashboardMode, setDashboardMode] = useState(() => (typeof window !== 'undefined' && window.innerWidth <= 1024 && window.innerHeight <= 720 ? 'minified' : 'expanded'));
   const isMinified = dashboardMode === 'minified';
   const [timerPreferences, setTimerPreferences] = useState(() => {
@@ -541,7 +541,7 @@ export default function CustomerSessionView() {
     // fallback for the very first paint and for any host that doesn't
     // support the client bridge (e.g. a plain browser preview).
     const syncCompactView = () => {
-      const isComp = window.innerWidth <= 420 && window.innerHeight <= 180;
+      const isComp = Boolean(hasActiveSession && window.innerWidth <= 420 && window.innerHeight <= 180);
       setCompactView(isComp);
       if (!isComp) {
         setDashboardMode(window.innerWidth <= 1024 && window.innerHeight <= 720 ? 'minified' : 'expanded');
@@ -551,7 +551,7 @@ export default function CustomerSessionView() {
     window.addEventListener('resize', syncCompactView);
     const unsubscribe = window.aezakmiClient?.onDashboardModeChanged?.(
       (mode) => {
-        setCompactView(mode === 'compact');
+        setCompactView(Boolean(hasActiveSession && mode === 'compact'));
         setDashboardMode(mode || 'expanded');
       }
     );
@@ -559,7 +559,7 @@ export default function CustomerSessionView() {
       window.removeEventListener('resize', syncCompactView);
       unsubscribe?.();
     };
-  }, []);
+  }, [hasActiveSession]);
 
   useEffect(() => {
     const client = window.aezakmiClient;
@@ -724,6 +724,7 @@ export default function CustomerSessionView() {
       return;
     }
     activeStateKey.current = null;
+    setCompactView(false);
     // A signed-in station without a session is a visible, maximized dashboard
     // state. Keep the shell-key guard active so virtual desktops cannot bypass
     // the station while it is waiting for a session.

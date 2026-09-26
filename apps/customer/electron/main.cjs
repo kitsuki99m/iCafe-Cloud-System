@@ -499,12 +499,20 @@ function createTray() {
   return tray
 }
 
+let pendingTransitionToken = 0
+
+function cancelPendingTransitions() {
+  pendingTransitionToken++
+}
+
 function applyLockedWindowMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   gameIsLaunched = false
+  cancelPendingTransitions()
   keepWindowContentOpaque()
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
+  if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.setSkipTaskbar(true)
   mainWindow.setResizable(false)
   mainWindow.setKiosk(true)
@@ -521,14 +529,15 @@ function applyLockedWindowMode() {
 // again (e.g. clicking "Compact" right after opening the dashboard) stacks a
 // second exit request on top of the first, which is what produced the
 // "flash of fullscreen before collapsing to compact" bug. This guard applies
-// the next mode's bounds only after the real transition has completed.
-function applyAfterLeavingFullScreen(applyBounds) {
+// the next mode's bounds only after the real transition has completed and
+// verifies that no subsequent window state transition has occurred.
+function applyAfterLeavingFullScreen(transitionId, applyBounds) {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const wasTransitioning = mainWindow.isFullScreen() || mainWindow.isKiosk()
   mainWindow.setKiosk(false)
   mainWindow.setFullScreen(false)
   if (!wasTransitioning) {
-    applyBounds()
+    if (transitionId === pendingTransitionToken) applyBounds()
     return
   }
   let settled = false
@@ -537,7 +546,9 @@ function applyAfterLeavingFullScreen(applyBounds) {
     settled = true
     mainWindow.removeListener('leave-full-screen', finish)
     clearTimeout(fallback)
-    applyBounds()
+    if (transitionId === pendingTransitionToken) {
+      applyBounds()
+    }
   }
   // Fallback in case 'leave-full-screen' never fires (e.g. it was already
   // mid-transition when we called setFullScreen(false) again above).
@@ -560,12 +571,14 @@ function applyCompactSessionMode() {
   // or from the fullscreen active dashboard.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
-  applyAfterLeavingFullScreen(() => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
+  const transitionId = ++pendingTransitionToken
+  applyAfterLeavingFullScreen(transitionId, () => {
+    if (!mainWindow || mainWindow.isDestroyed() || transitionId !== pendingTransitionToken || !isActive() || activeDashboardMode !== 'compact') return
     // Fullscreen idle/login mode can leave a maximized restore state behind on
     // Windows. Explicitly clear it before applying compact bounds, otherwise
     // setSize() can be ignored and the timer/dashboard appears maximized.
     if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.setMinimumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
     mainWindow.setMaximumSize(COMPACT_WIDTH, COMPACT_HEIGHT)
     mainWindow.setResizable(false)
@@ -607,10 +620,12 @@ function applyActiveWindowMode({ show = false } = {}) {
   // old maximum and refuse the resize.
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
-  applyAfterLeavingFullScreen(() => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
+  const transitionId = ++pendingTransitionToken
+  applyAfterLeavingFullScreen(transitionId, () => {
+    if (!mainWindow || mainWindow.isDestroyed() || transitionId !== pendingTransitionToken || !isActive() || activeDashboardMode !== 'expanded') return
     // Clear any maximized restore state before applying fullscreen.
     if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
     mainWindow.setMaximumSize(0, 0)
     // ACTIVE sessions (member or Guest) now use fullscreen kiosk mode
@@ -641,9 +656,11 @@ function applyMiniWindowMode({ show = true } = {}) {
   notifyDashboardMode()
   mainWindow.setMinimumSize(0, 0)
   mainWindow.setMaximumSize(0, 0)
-  applyAfterLeavingFullScreen(() => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
+  const transitionId = ++pendingTransitionToken
+  applyAfterLeavingFullScreen(transitionId, () => {
+    if (!mainWindow || mainWindow.isDestroyed() || transitionId !== pendingTransitionToken || !isActive() || activeDashboardMode !== 'minified') return
     if (mainWindow.isMaximized()) mainWindow.unmaximize()
+    if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.setMinimumSize(MINIFIED_WIDTH, MINIFIED_HEIGHT)
     mainWindow.setMaximumSize(MINIFIED_WIDTH, MINIFIED_HEIGHT)
     mainWindow.setResizable(false)
@@ -668,9 +685,11 @@ function applyMiniWindowMode({ show = true } = {}) {
 function applyIdleDashboardMode() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   gameIsLaunched = false
+  cancelPendingTransitions()
   keepWindowContentOpaque()
   mainWindow.setMinimumSize(ACTIVE_WIDTH, ACTIVE_HEIGHT)
   mainWindow.setMaximumSize(0, 0)
+  if (mainWindow.isMinimized()) mainWindow.restore()
   // The signed-in/no-session station is the customer-facing shell. Keep it
   // in true kiosk fullscreen so the Windows taskbar and desktop cannot show
   // around the fullscreen dashboard.
@@ -692,11 +711,10 @@ function isIdleDashboard() { return windowState === WINDOW_STATES.IDLE }
 function showIdleDashboard() {
   if (!mainWindow || mainWindow.isDestroyed()) return false
   gameIsLaunched = false
-  if (isIdleDashboard()) {
-    if (!mainWindow.isVisible() || !mainWindow.isFullScreen()) applyIdleDashboardMode()
-    return true
-  }
+  cancelPendingTransitions()
   windowState = WINDOW_STATES.IDLE
+  activeDashboardMode = 'expanded'
+  notifyDashboardMode()
   sessionStartTransitionPending = false
   const hadRemoteLock = Boolean(remoteLockSnapshot)
   remoteLockSnapshot = null
@@ -825,9 +843,12 @@ function showLoginKiosk() {
   // AuthContext can already be logged out while SessionLockedOverlay remains
   // above the login screen, making Pause & Save / Forfeit look like a lock.
   gameIsLaunched = false
+  cancelPendingTransitions()
   remoteLockSnapshot = null
   notifyStationLocked(false)
   windowState = WINDOW_STATES.LOCKED
+  activeDashboardMode = 'expanded'
+  notifyDashboardMode()
   sessionStartTransitionPending = false
   dashboardVisible = false
   setWindowsKeyLocked(true)
@@ -1143,9 +1164,10 @@ function createWindow() {
     else applyLockedWindowMode()
   })
   mainWindow.on('minimize', event => {
-    if (!isActive()) return
     event.preventDefault()
-    hideMiniDashboard()
+    if (isActive()) hideMiniDashboard()
+    else if (isIdleDashboard()) applyIdleDashboardMode()
+    else applyLockedWindowMode()
   })
 
 
@@ -1156,6 +1178,7 @@ function createWindow() {
     else if (sessionStartTransitionPending) beginSessionStartTransition()
     else if (isIdleDashboard()) applyIdleDashboardMode()
     else if (activeDashboardMode === 'expanded') applyActiveWindowMode({show:true})
+    else if (activeDashboardMode === 'minified') applyMiniWindowMode({show:true})
     else applyCompactSessionMode()
     // The renderer just (re)mounted — replay the current remote-lock state
     // so a page reload while locked still shows the "session is locked"
