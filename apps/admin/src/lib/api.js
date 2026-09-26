@@ -17,8 +17,12 @@ function readTtl(path) {
   if (base==='/auth/me' || /^\/remote-commands\//.test(base) || /\/settlement-preview$/.test(base)) return 0
   if (base==='/client/context') return 5 * 60_000
   if (base==='/settings' || base==='/public/settings' || base==='/rate-plans' || base==='/announcements') return 5 * 60_000
+  if (base==='/launcher/categories' || base==='/launcher/apps') return 5 * 60_000
   if (base==='/app-data') return 20_000
   if (base==='/pcs' || base==='/members' || base==='/top-ups' || base==='/support' || base==='/session-extensions') return 20_000
+  if (base==='/menu-items' || base==='/vouchers') return 60_000
+  if (base==='/menu-orders' || base==='/shifts/current') return 20_000
+  if (base==='/shifts/history') return 60_000
   if (base==='/dashboard/overview') return 45_000
   if (base==='/logs' || base==='/sessions/interrupted') return 60_000
   if (base==='/cloud/status') return 30_000

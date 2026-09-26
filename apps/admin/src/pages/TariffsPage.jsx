@@ -588,7 +588,6 @@ export default function TariffsPage({ initialTab }) {
     setError("");
     try {
       await updateRatePlan(editing.id, ratePlanPayload(editing));
-      showToast({ title: "Rate Plan Updated", message: `Updated ${editing.name || "plan"}.` });
       setEditing(null);
     } catch (err) {
       const msg = err?.message || "Unable to update the rate plan.";
@@ -613,7 +612,6 @@ export default function TariffsPage({ initialTab }) {
     try {
       const plan = ratePlanPayload(creating);
       await addRatePlan({ ...plan, id: makeRatePlanId(plan.name) });
-      showToast({ title: "Rate Plan Created", message: `Created ${creating.name}.` });
       setCreating(null);
     } catch (err) {
       const msg = err?.message || "Unable to create the rate plan.";
@@ -630,7 +628,6 @@ export default function TariffsPage({ initialTab }) {
     setError("");
     try {
       await deleteRatePlan(deleteTarget.id);
-      showToast({ title: "Rate Plan Deleted", message: deleteTarget.name, tone: "warning" });
       setDeleteTarget(null);
     } catch (err) {
       const msg = err?.message || "Unable to delete the rate plan.";

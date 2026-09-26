@@ -1176,69 +1176,610 @@ export function AppDataProvider({ children }) {
   }
 
   function updateSettings(patch) {
-    return refreshAfter(apiPatch('/settings', patch)).then((result) => { showToast({ title:'Settings saved', message:'Cafe configuration is up to date.' }); return result })
+    const prevSettings = state.settings
+    setState((curr) => ({ ...curr, settings: normalizeSettings({ ...curr.settings, ...patch }) }))
+    return apiPatch('/settings', patch)
+      .then((result) => {
+        const canonical = result?.settings
+        if (canonical) {
+          setState((curr) => ({ ...curr, settings: normalizeSettings(canonical) }))
+        }
+        refresh().catch(() => {})
+        return result
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, settings: prevSettings }))
+        refresh().catch(() => {})
+        throw err
+      })
   }
-  function updateSessionPolicy(patch){return refreshAfter(apiPatch('/billing-policy/session',patch)).then(result=>{showToast({title:'Session policy saved'});return result})}
+  function updateSessionPolicy(patch) {
+    const prevSettings = state.settings
+    setState((curr) => ({ ...curr, settings: normalizeSettings({ ...curr.settings, ...patch }) }))
+    return apiPatch('/billing-policy/session', patch)
+      .then((result) => {
+        refresh().catch(() => {})
+        return result
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, settings: prevSettings }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
 
-  function createAnnouncement(payload) { return refreshAfter(apiPost('/announcements', payload)) }
-  function updateAnnouncement(id, payload) { return refreshAfter(apiPatch(`/announcements/${id}`, payload)) }
+  function createAnnouncement(payload) {
+    const tempId = `temp:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+    const optimistic = {
+      id: tempId,
+      title: payload.title || '',
+      message: payload.message || '',
+      priority: payload.priority || 'normal',
+      isActive: payload.isActive !== false,
+      createdAt: new Date().toISOString(),
+      pending: true,
+    }
+    setState((curr) => ({ ...curr, announcements: [optimistic, ...(curr.announcements || [])] }))
+    return apiPost('/announcements', payload)
+      .then((res) => {
+        const canonical = res?.announcement
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            announcements: (curr.announcements || []).map((a) => a.id === tempId ? { ...canonical, pending: false } : a)
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({
+          ...curr,
+          announcements: (curr.announcements || []).filter((a) => a.id !== tempId)
+        }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function updateAnnouncement(id, payload) {
+    const prev = (state.announcements || []).find((a) => String(a.id) === String(id))
+    setState((curr) => ({
+      ...curr,
+      announcements: (curr.announcements || []).map((a) =>
+        String(a.id) === String(id) ? { ...a, ...payload, pending: true } : a
+      )
+    }))
+    return apiPatch(`/announcements/${id}`, payload)
+      .then((res) => {
+        const canonical = res?.announcement
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            announcements: (curr.announcements || []).map((a) =>
+              String(a.id) === String(id) ? { ...a, ...canonical, pending: false } : a
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prev) {
+          setState((curr) => ({
+            ...curr,
+            announcements: (curr.announcements || []).map((a) =>
+              String(a.id) === String(id) ? prev : a
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
+  }
   function deleteAnnouncement(id) {
-    optimisticState((curr) => ({
+    const prev = (state.announcements || []).find((a) => String(a.id) === String(id))
+    setState((curr) => ({
       ...curr,
       announcements: (curr.announcements || []).filter((a) => String(a.id) !== String(id))
     }))
-    return refreshAfter(apiDelete(`/announcements/${id}`))
+    return apiDelete(`/announcements/${id}`)
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prev) {
+          setState((curr) => ({
+            ...curr,
+            announcements: [prev, ...(curr.announcements || [])]
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
   }
 
   // Menu Items & Orders
-  function createMenuItem(payload) { return refreshAfter(apiPost('/menu-items', payload)) }
-  function batchCreateMenuItems(items) { return refreshAfter(apiPost('/menu-items/batch', { items })) }
-  function updateMenuItem(id, payload) { return refreshAfter(apiPatch(`/menu-items/${id}`, payload)) }
+  function createMenuItem(payload) {
+    const tempId = `temp:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+    const optimisticItem = {
+      id: tempId,
+      name: payload.name,
+      category: payload.category || 'Food',
+      description: payload.description || '',
+      price: Number(payload.price || 0),
+      imageUrl: payload.imageUrl || '',
+      stockQuantity: payload.stockQuantity != null ? Number(payload.stockQuantity) : null,
+      isAvailable: payload.isAvailable !== false,
+      isActive: true,
+      pending: true,
+    }
+    setState((curr) => ({ ...curr, menuItems: [optimisticItem, ...(curr.menuItems || [])] }))
+    return apiPost('/menu-items', payload)
+      .then((res) => {
+        const canonical = res?.menuItem
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            menuItems: (curr.menuItems || []).map((m) => m.id === tempId ? { ...canonical, pending: false } : m)
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({
+          ...curr,
+          menuItems: (curr.menuItems || []).filter((m) => m.id !== tempId)
+        }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function batchCreateMenuItems(items) {
+    const optimisticItems = items.map((item, idx) => ({
+      id: `temp:${Date.now()}:${idx}`,
+      name: item.name,
+      category: item.category || 'Food',
+      description: item.description || '',
+      price: Number(item.price || 0),
+      imageUrl: item.imageUrl || '',
+      stockQuantity: item.stockQuantity != null ? Number(item.stockQuantity) : null,
+      isAvailable: item.isAvailable !== false,
+      isActive: true,
+      pending: true,
+    }))
+    const prevItems = state.menuItems || []
+    setState((curr) => ({ ...curr, menuItems: [...optimisticItems, ...(curr.menuItems || [])] }))
+    return apiPost('/menu-items/batch', { items })
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, menuItems: prevItems }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function updateMenuItem(id, payload) {
+    const prevItem = (state.menuItems || []).find((m) => String(m.id) === String(id))
+    setState((curr) => ({
+      ...curr,
+      menuItems: (curr.menuItems || []).map((m) =>
+        String(m.id) === String(id) ? { ...m, ...payload, pending: true } : m
+      )
+    }))
+    return apiPatch(`/menu-items/${id}`, payload)
+      .then((res) => {
+        const canonical = res?.menuItem
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            menuItems: (curr.menuItems || []).map((m) =>
+              String(m.id) === String(id) ? { ...m, ...canonical, pending: false } : m
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prevItem) {
+          setState((curr) => ({
+            ...curr,
+            menuItems: (curr.menuItems || []).map((m) =>
+              String(m.id) === String(id) ? prevItem : m
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
+  }
   function deleteMenuItem(id) {
-    optimisticState((curr) => ({
+    const prevItem = (state.menuItems || []).find((m) => String(m.id) === String(id))
+    setState((curr) => ({
       ...curr,
       menuItems: (curr.menuItems || []).filter((m) => String(m.id) !== String(id))
     }))
-    return refreshAfter(apiDelete(`/menu-items/${id}`))
+    return apiDelete(`/menu-items/${id}`)
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prevItem) {
+          setState((curr) => ({
+            ...curr,
+            menuItems: [prevItem, ...(curr.menuItems || [])]
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
   }
-  function updateOrderStatus(id, status) { return refreshAfter(apiPatch(`/menu-orders/${id}/status`, { status })) }
-  function cancelMenuOrder(id) { return refreshAfter(apiPost(`/menu-orders/${id}/cancel`, {})) }
+  function updateOrderStatus(id, status) {
+    const prevOrders = state.menuOrders || []
+    setState((curr) => ({
+      ...curr,
+      menuOrders: (curr.menuOrders || []).map((o) =>
+        String(o.id) === String(id) ? { ...o, status, order_status: status, orderStatus: status, pending: true } : o
+      )
+    }))
+    return apiPatch(`/menu-orders/${id}/status`, { status })
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, menuOrders: prevOrders }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function cancelMenuOrder(id) {
+    const prevOrders = state.menuOrders || []
+    setState((curr) => ({
+      ...curr,
+      menuOrders: (curr.menuOrders || []).map((o) =>
+        String(o.id) === String(id) ? { ...o, status: 'cancelled', order_status: 'cancelled', orderStatus: 'cancelled', pending: true } : o
+      )
+    }))
+    return apiPost(`/menu-orders/${id}/cancel`, {})
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, menuOrders: prevOrders }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
 
   // Shifts
-  function openShift(payload) { return refreshAfter(apiPost('/shifts/open', payload)) }
-  function closeShift(payload) { return refreshAfter(apiPost('/shifts/close', payload)) }
+  function openShift(payload) {
+    const prevShift = state.currentShift
+    const optimistic = {
+      id: `temp:${Date.now()}`,
+      openingFloat: Number(payload.openingFloat || 0),
+      openedAt: new Date().toISOString(),
+      cashierName: user?.name || 'Staff',
+      status: 'open',
+      pending: true,
+    }
+    setState((curr) => ({ ...curr, currentShift: optimistic }))
+    return apiPost('/shifts/open', payload)
+      .then((res) => {
+        const canonical = res?.shift || res?.activeShift
+        if (canonical) {
+          setState((curr) => ({ ...curr, currentShift: { ...canonical, pending: false } }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, currentShift: prevShift }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function closeShift(payload) {
+    const prevShift = state.currentShift
+    setState((curr) => ({ ...curr, currentShift: null }))
+    return apiPost('/shifts/close', payload)
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, currentShift: prevShift }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
   function fetchShiftHistory() { return apiGet('/shifts/history') }
 
   // Vouchers
-  function createVoucher(payload) { return refreshAfter(apiPost('/vouchers', payload)) }
+  function createVoucher(payload) {
+    const tempId = `temp:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+    const optimistic = {
+      id: tempId,
+      code: payload.code,
+      benefitType: payload.benefitType,
+      benefit_type: payload.benefitType,
+      valueAmount: payload.valueAmount,
+      value_amount: payload.valueAmount,
+      maxRedemptions: payload.maxRedemptions,
+      max_redemptions: payload.maxRedemptions,
+      redemptionsCount: 0,
+      redemptions_count: 0,
+      isActive: true,
+      is_active: true,
+      expiresAt: payload.expiresAt,
+      expires_at: payload.expiresAt,
+      pending: true,
+    }
+    setState((curr) => ({ ...curr, vouchers: [optimistic, ...(curr.vouchers || [])] }))
+    return apiPost('/vouchers', payload)
+      .then((res) => {
+        const canonical = res?.voucher
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            vouchers: (curr.vouchers || []).map((v) => v.id === tempId ? { ...canonical, pending: false } : v)
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({
+          ...curr,
+          vouchers: (curr.vouchers || []).filter((v) => v.id !== tempId)
+        }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
   function deleteVoucher(id) {
-    optimisticState((curr) => ({
+    const prevVoucher = (state.vouchers || []).find((v) => String(v.id) === String(id))
+    setState((curr) => ({
       ...curr,
       vouchers: (curr.vouchers || []).filter((v) => String(v.id) !== String(id))
     }))
-    return refreshAfter(apiDelete(`/vouchers/${id}`))
+    return apiDelete(`/vouchers/${id}`)
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prevVoucher) {
+          setState((curr) => ({
+            ...curr,
+            vouchers: [prevVoucher, ...(curr.vouchers || [])]
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
   }
 
   // Launcher Categories & Apps
-  function createLauncherCategory(payload) { return refreshAfter(apiPost('/launcher/categories', payload)) }
-  function updateLauncherCategory(id, payload) { return refreshAfter(apiPatch(`/launcher/categories/${id}`, payload)) }
+  function createLauncherCategory(payload) {
+    const tempId = `temp:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+    const optimistic = {
+      id: tempId,
+      name: payload.name,
+      sortOrder: payload.sortOrder || 0,
+      isActive: true,
+      pending: true,
+    }
+    setState((curr) => ({ ...curr, launcherCategories: [...(curr.launcherCategories || []), optimistic] }))
+    return apiPost('/launcher/categories', payload)
+      .then((res) => {
+        const canonical = res?.category
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            launcherCategories: (curr.launcherCategories || []).map((c) => c.id === tempId ? { ...canonical, pending: false } : c)
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({
+          ...curr,
+          launcherCategories: (curr.launcherCategories || []).filter((c) => c.id !== tempId)
+        }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function updateLauncherCategory(id, payload) {
+    const prevCat = (state.launcherCategories || []).find((c) => String(c.id) === String(id))
+    setState((curr) => ({
+      ...curr,
+      launcherCategories: (curr.launcherCategories || []).map((c) =>
+        String(c.id) === String(id) ? { ...c, ...payload, pending: true } : c
+      )
+    }))
+    return apiPatch(`/launcher/categories/${id}`, payload)
+      .then((res) => {
+        const canonical = res?.category
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            launcherCategories: (curr.launcherCategories || []).map((c) =>
+              String(c.id) === String(id) ? { ...c, ...canonical, pending: false } : c
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prevCat) {
+          setState((curr) => ({
+            ...curr,
+            launcherCategories: (curr.launcherCategories || []).map((c) =>
+              String(c.id) === String(id) ? prevCat : c
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
+  }
   function deleteLauncherCategory(id) {
-    optimisticState((curr) => ({
+    const prevCat = (state.launcherCategories || []).find((c) => String(c.id) === String(id))
+    setState((curr) => ({
       ...curr,
       launcherCategories: (curr.launcherCategories || []).filter((c) => String(c.id) !== String(id))
     }))
-    return refreshAfter(apiDelete(`/launcher/categories/${id}`))
+    return apiDelete(`/launcher/categories/${id}`)
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prevCat) {
+          setState((curr) => ({
+            ...curr,
+            launcherCategories: [...(curr.launcherCategories || []), prevCat]
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
   }
 
-  function createLauncherApp(payload) { return refreshAfter(apiPost('/launcher/apps', payload)) }
-  function batchCreateLauncherApps(apps) { return refreshAfter(apiPost('/launcher/apps/batch', { apps })) }
-  function updateLauncherApp(id, payload) { return refreshAfter(apiPatch(`/launcher/apps/${id}`, payload)) }
+  function createLauncherApp(payload) {
+    const tempId = `temp:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+    const optimistic = {
+      id: tempId,
+      name: payload.name,
+      categoryId: payload.categoryId || null,
+      categoryName: payload.categoryName || 'Online Games',
+      icon: payload.icon || '🎮',
+      executablePath: payload.executablePath || '',
+      protocolUrl: payload.protocolUrl || '',
+      launchArguments: payload.launchArguments || '',
+      workingDirectory: payload.workingDirectory || '',
+      isEnabled: payload.isEnabled !== false,
+      sortOrder: Number(payload.sortOrder || 0),
+      isPreset: Boolean(payload.isPreset),
+      pending: true,
+    }
+    setState((curr) => ({ ...curr, launcherApps: [...(curr.launcherApps || []), optimistic] }))
+    return apiPost('/launcher/apps', payload)
+      .then((res) => {
+        const canonical = res?.app
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            launcherApps: (curr.launcherApps || []).map((a) => a.id === tempId ? { ...canonical, pending: false } : a)
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({
+          ...curr,
+          launcherApps: (curr.launcherApps || []).filter((a) => a.id !== tempId)
+        }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function batchCreateLauncherApps(apps) {
+    const optimisticApps = apps.map((app, idx) => ({
+      id: `temp:${Date.now()}:${idx}`,
+      name: app.name,
+      categoryId: app.categoryId || null,
+      categoryName: app.categoryName || 'Online Games',
+      icon: app.icon || '🎮',
+      executablePath: app.executablePath || app.exe || '',
+      protocolUrl: app.protocolUrl || app.protocol || '',
+      launchArguments: app.launchArguments || '',
+      workingDirectory: app.workingDirectory || '',
+      isEnabled: app.isEnabled !== false,
+      sortOrder: Number(app.sortOrder || 0),
+      isPreset: Boolean(app.isPreset),
+      pending: true,
+    }))
+    const prevApps = state.launcherApps || []
+    setState((curr) => ({ ...curr, launcherApps: [...(curr.launcherApps || []), ...optimisticApps] }))
+    return apiPost('/launcher/apps/batch', { apps })
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, launcherApps: prevApps }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function updateLauncherApp(id, payload) {
+    const prevApp = (state.launcherApps || []).find((a) => String(a.id) === String(id))
+    setState((curr) => ({
+      ...curr,
+      launcherApps: (curr.launcherApps || []).map((a) =>
+        String(a.id) === String(id) ? { ...a, ...payload, pending: true } : a
+      )
+    }))
+    return apiPatch(`/launcher/apps/${id}`, payload)
+      .then((res) => {
+        const canonical = res?.app
+        if (canonical) {
+          setState((curr) => ({
+            ...curr,
+            launcherApps: (curr.launcherApps || []).map((a) =>
+              String(a.id) === String(id) ? { ...a, ...canonical, pending: false } : a
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prevApp) {
+          setState((curr) => ({
+            ...curr,
+            launcherApps: (curr.launcherApps || []).map((a) =>
+              String(a.id) === String(id) ? prevApp : a
+            )
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
+  }
   function deleteLauncherApp(id) {
-    optimisticState((curr) => ({
+    const prevApp = (state.launcherApps || []).find((a) => String(a.id) === String(id))
+    setState((curr) => ({
       ...curr,
       launcherApps: (curr.launcherApps || []).filter((a) => String(a.id) !== String(id))
     }))
-    return refreshAfter(apiDelete(`/launcher/apps/${id}`))
+    return apiDelete(`/launcher/apps/${id}`)
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        if (prevApp) {
+          setState((curr) => ({
+            ...curr,
+            launcherApps: [...(curr.launcherApps || []), prevApp]
+          }))
+        }
+        refresh().catch(() => {})
+        throw err
+      })
   }
 
   // Reports

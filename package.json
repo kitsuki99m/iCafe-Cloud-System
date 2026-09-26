@@ -29,5 +29,8 @@
     "test:cloud": "node --test tools/cloud-deployment-regressions.test.mjs",
     "check:release": "node tools/release-readiness.mjs",
     "deploy:auth-templates": "node scripts/deploy-auth-email-templates.mjs"
+  },
+  "dependencies": {
+    "electron": "^44.4.5"
   }
 }

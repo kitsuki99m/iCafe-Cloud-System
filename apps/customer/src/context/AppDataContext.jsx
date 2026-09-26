@@ -957,49 +957,75 @@ export function AppDataProvider({ children }) {
   }
 
   function placeMenuOrder(payload, options = {}) {
+    const tempId = `order-${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+    const optimisticOrder = {
+      id: tempId,
+      items: payload.items || [],
+      totalAmount: payload.totalAmount || 0,
+      paymentMethod: payload.paymentMethod || 'wallet',
+      status: 'pending',
+      orderStatus: 'pending',
+      createdAt: new Date().toISOString(),
+      pending: true,
+    }
+    setState((current) => ({
+      ...current,
+      myOrders: [optimisticOrder, ...(current.myOrders || [])]
+    }))
+    showToast({ title: 'Order Placed', message: 'Your kitchen order was submitted successfully.', tone: 'success' })
+
     return apiPost('/menu-orders', payload, options).then((data) => {
-      refresh()
-      return data.order
-    }).catch((error) => {
-      if (isDevBypassEnabled()) {
-        const mockOrder = {
-          id: `order-dev-${Date.now()}`,
-          items: payload.items || [],
-          totalAmount: payload.totalAmount || 0,
-          paymentMethod: payload.paymentMethod || 'wallet',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-        }
+      const canonical = data?.order || data
+      if (canonical?.id) {
         setState((current) => ({
           ...current,
-          myOrders: [mockOrder, ...(current.myOrders || [])]
+          myOrders: (current.myOrders || []).map((o) => o.id === tempId ? { ...canonical, pending: false } : o)
         }))
-        showToast({ title:'Order placed (Dev Mode)', message:'Your kitchen order was submitted successfully.', tone:'success' })
-        return mockOrder
       }
+      refresh()
+      return canonical
+    }).catch((error) => {
+      if (isDevBypassEnabled()) {
+        return optimisticOrder
+      }
+      setState((current) => ({
+        ...current,
+        myOrders: (current.myOrders || []).filter((o) => o.id !== tempId)
+      }))
+      refresh()
       throw error
     })
   }
 
   function cancelMyOrder(orderId, options = {}) {
+    const prevOrders = state.myOrders || []
+    setState((current) => ({
+      ...current,
+      myOrders: (current.myOrders || []).map((o) =>
+        String(o.id) === String(orderId) ? { ...o, status: 'cancelled', orderStatus: 'cancelled' } : o
+      )
+    }))
+    showToast({ title: 'Order Cancelled', message: 'Your order was cancelled.', tone: 'info' })
+
     return apiPost(`/menu-orders/${orderId}/cancel`, {}, options).then((data) => {
       refresh()
       return data
     }).catch((error) => {
       if (isDevBypassEnabled()) {
-        setState((current) => ({
-          ...current,
-          myOrders: current.myOrders.filter(o => o.id !== orderId)
-        }))
-        showToast({ title:'Order cancelled (Dev Mode)', message:'Order was cancelled.', tone:'info' })
         return { ok: true }
       }
+      setState((current) => ({
+        ...current,
+        myOrders: prevOrders
+      }))
+      refresh()
       throw error
     })
   }
 
   function redeemVoucher(code, options = {}) {
     return apiPost('/vouchers/redeem', { code }, options).then((data) => {
+      showToast({ title: 'Voucher Redeemed', message: data?.message || 'Voucher benefit credited.', tone: 'success' })
       refresh()
       return data
     })

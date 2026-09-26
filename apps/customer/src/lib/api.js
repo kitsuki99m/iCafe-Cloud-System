@@ -24,6 +24,9 @@ function readTtl(path) {
   if (base==='/auth/me' || base==='/guest/session') return 0
   if (base==='/app-data' || base==='/client/context' || base==='/pcs/current' || base==='/members/me' || base==='/wallet') return 1_500
   if (base==='/settings' || base==='/public/settings' || base==='/rate-plans' || base==='/public/rate-plans' || base==='/announcements' || base==='/public/announcements') return 5 * 60_000
+  if (base==='/launcher/categories' || base==='/launcher/apps') return 5 * 60_000
+  if (base==='/menu-items') return 60_000
+  if (base==='/menu-orders') return 20_000
   if (base==='/feedback/me' || base==='/public/feedback/me') return 30_000
   return 2_000
 }
@@ -238,5 +241,6 @@ export async function apiGet(path, options = {}) {
 }
 export function apiPost(path, body, options = {}) { return apiFetch(path, { ...options, method:'POST', body: JSON.stringify(body ?? {}) }) }
 export function apiPatch(path, body, options = {}) { return apiFetch(path, { ...options, method:'PATCH', body: JSON.stringify(body ?? {}) }) }
+export function apiPut(path, body, options = {}) { return apiFetch(path, { ...options, method:'PUT', body: JSON.stringify(body ?? {}) }) }
 export function apiDelete(path, options = {}) { return apiFetch(path, { ...options, method:'DELETE' }) }
 export function apiUrl(path = '') { return `${getApiBase()}${path}` }
