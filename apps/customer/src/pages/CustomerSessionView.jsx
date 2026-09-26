@@ -335,12 +335,19 @@ export default function CustomerSessionView() {
     });
   }
 
-  const pendingOrdersCount = useMemo(() => {
+  const visibleOrders = useMemo(() => {
     return (myOrders || []).filter((o) => {
+      const status = o.order_status || o.orderStatus || o.status || 'pending';
+      return status !== 'cancelled';
+    });
+  }, [myOrders]);
+
+  const pendingOrdersCount = useMemo(() => {
+    return visibleOrders.filter((o) => {
       const status = o.order_status || o.orderStatus || o.status || 'pending';
       return status === 'pending' || status === 'preparing';
     }).length;
-  }, [myOrders]);
+  }, [visibleOrders]);
 
   const lastCancelTimeRef = useRef(0);
 
@@ -1623,17 +1630,17 @@ export default function CustomerSessionView() {
                           </div>
                         </div>
                         <span className="text-[10px] font-bold text-slate-soft px-2 py-0.5 rounded-full bg-surface-raised">
-                          {pendingOrdersCount} active / {myOrders.length} total
+                          {pendingOrdersCount} active / {visibleOrders.length} total
                         </span>
                       </div>
 
                       <div className="p-2 max-h-64 overflow-y-auto divide-y divide-surface-line">
-                        {myOrders.length === 0 ? (
+                        {visibleOrders.length === 0 ? (
                           <div className="py-6 text-center text-xs text-slate-soft">
                             No active or past orders yet.
                           </div>
                         ) : (
-                          myOrders.map((order) => {
+                          visibleOrders.map((order) => {
                             const status = order.order_status || order.orderStatus || "pending";
                             const isPending = status === "pending";
                             const isPreparing = status === "preparing";

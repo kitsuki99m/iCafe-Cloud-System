@@ -670,12 +670,21 @@ export function AppDataProvider({ children }) {
       })
     }
     const onMenuOrderUpdated = (payload) => {
-      invalidateAndRefresh()
-      if (payload && (sameId(payload.customerId, user?.memberId) || sameId(payload.customer_id, user?.memberId))) {
-        if (payload.orderStatus === 'fulfilled' || payload.order_status === 'fulfilled') {
-          showToast({ title: 'Order Ready!', message: 'Your snacks/drinks order has been fulfilled by staff!', tone: 'success' })
-        } else if (payload.orderStatus === 'cancelled' || payload.order_status === 'cancelled') {
-          showToast({ title: 'Order Cancelled', message: 'Your order was cancelled.', tone: 'info' })
+      if (!payload?.id) return
+      if (payload.orderStatus === 'cancelled' || payload.order_status === 'cancelled' || payload.isDeleted) {
+        setState((current) => ({
+          ...current,
+          myOrders: (current.myOrders || []).filter((o) => String(o.id) !== String(payload.id)),
+        }))
+        if (sameId(payload.customerId, user?.memberId) || sameId(payload.customer_id, user?.memberId)) {
+          showToast({ title: 'Order Cancelled', message: 'Your order was cancelled and removed.', tone: 'info' })
+        }
+      } else {
+        invalidateAndRefresh()
+        if (sameId(payload.customerId, user?.memberId) || sameId(payload.customer_id, user?.memberId)) {
+          if (payload.orderStatus === 'fulfilled' || payload.order_status === 'fulfilled') {
+            showToast({ title: 'Order Ready!', message: 'Your snacks/drinks order has been fulfilled by staff!', tone: 'success' })
+          }
         }
       }
     }
@@ -697,8 +706,10 @@ export function AppDataProvider({ children }) {
       target.on('station:session-transferred', onStationTransferred)
       target.on('menu:new_order', onMenuOrderUpdated)
       target.on('menu:order_updated', onMenuOrderUpdated)
+      target.on('menu:order_cancelled', onMenuOrderUpdated)
       target.on('order:created', onMenuOrderUpdated)
       target.on('order:updated', onMenuOrderUpdated)
+      target.on('order:cancelled', onMenuOrderUpdated)
     }
     function unbindSocket(target) {
       if (!target) return
@@ -717,8 +728,10 @@ export function AppDataProvider({ children }) {
       target.off('station:session-transferred', onStationTransferred)
       target.off('menu:new_order', onMenuOrderUpdated)
       target.off('menu:order_updated', onMenuOrderUpdated)
+      target.off('menu:order_cancelled', onMenuOrderUpdated)
       target.off('order:created', onMenuOrderUpdated)
       target.off('order:updated', onMenuOrderUpdated)
+      target.off('order:cancelled', onMenuOrderUpdated)
     }
     const cloudPrimary = cloudStationFeatureEnabled() && cloudStationPaired()
     let cloudRefreshInterval = null
@@ -1001,13 +1014,15 @@ export function AppDataProvider({ children }) {
     const prevOrders = state.myOrders || []
     setState((current) => ({
       ...current,
-      myOrders: (current.myOrders || []).map((o) =>
-        String(o.id) === String(orderId) ? { ...o, status: 'cancelled', orderStatus: 'cancelled' } : o
-      )
+      myOrders: (current.myOrders || []).filter((o) => String(o.id) !== String(orderId)),
     }))
     showToast({ title: 'Order Cancelled', message: 'Your order was cancelled.', tone: 'info' })
 
     return apiPost(`/menu-orders/${orderId}/cancel`, {}, options).then((data) => {
+      setState((current) => ({
+        ...current,
+        myOrders: (current.myOrders || []).filter((o) => String(o.id) !== String(orderId)),
+      }))
       refresh()
       return data
     }).catch((error) => {

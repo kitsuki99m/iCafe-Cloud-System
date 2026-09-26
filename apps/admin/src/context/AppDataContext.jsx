@@ -551,10 +551,17 @@ export function AppDataProvider({ children }) {
 
     const onOrderUpdated = (order) => {
       if (!order?.id) return
-      setState((current) => ({
-        ...current,
-        menuOrders: current.menuOrders.map((o) => (String(o.id) === String(order.id) ? { ...o, ...order } : o)),
-      }))
+      if (order.orderStatus === 'cancelled' || order.order_status === 'cancelled' || order.isDeleted) {
+        setState((current) => ({
+          ...current,
+          menuOrders: (current.menuOrders || []).filter((o) => String(o.id) !== String(order.id)),
+        }))
+      } else {
+        setState((current) => ({
+          ...current,
+          menuOrders: current.menuOrders.map((o) => (String(o.id) === String(order.id) ? { ...o, ...order } : o)),
+        }))
+      }
       invalidateAndRefresh()
     }
 
@@ -591,6 +598,8 @@ export function AppDataProvider({ children }) {
     socket.on('menu:new_request', onOrderNewRequest)
     socket.on('order:updated', onOrderUpdated)
     socket.on('menu:order_updated', onOrderUpdated)
+    socket.on('order:cancelled', onOrderUpdated)
+    socket.on('menu:order_cancelled', onOrderUpdated)
     socket.on('shift:updated', onShiftUpdated)
     socket.on('vouchers:updated', onVouchersUpdated)
 
@@ -616,6 +625,8 @@ export function AppDataProvider({ children }) {
       socket.off('menu:new_request', onOrderNewRequest)
       socket.off('order:updated', onOrderUpdated)
       socket.off('menu:order_updated', onOrderUpdated)
+      socket.off('order:cancelled', onOrderUpdated)
+      socket.off('menu:order_cancelled', onOrderUpdated)
       socket.off('shift:updated', onShiftUpdated)
       socket.off('vouchers:updated', onVouchersUpdated)
       clearTimeout(refreshTimer)
@@ -1433,12 +1444,19 @@ export function AppDataProvider({ children }) {
   }
   function updateOrderStatus(id, status) {
     const prevOrders = state.menuOrders || []
-    setState((curr) => ({
-      ...curr,
-      menuOrders: (curr.menuOrders || []).map((o) =>
-        String(o.id) === String(id) ? { ...o, status, order_status: status, orderStatus: status, pending: true } : o
-      )
-    }))
+    if (status === 'cancelled') {
+      setState((curr) => ({
+        ...curr,
+        menuOrders: (curr.menuOrders || []).filter((o) => String(o.id) !== String(id))
+      }))
+    } else {
+      setState((curr) => ({
+        ...curr,
+        menuOrders: (curr.menuOrders || []).map((o) =>
+          String(o.id) === String(id) ? { ...o, status, order_status: status, orderStatus: status, pending: true } : o
+        )
+      }))
+    }
     return apiPatch(`/menu-orders/${id}/status`, { status })
       .then((res) => {
         refresh().catch(() => {})
@@ -1454,9 +1472,7 @@ export function AppDataProvider({ children }) {
     const prevOrders = state.menuOrders || []
     setState((curr) => ({
       ...curr,
-      menuOrders: (curr.menuOrders || []).map((o) =>
-        String(o.id) === String(id) ? { ...o, status: 'cancelled', order_status: 'cancelled', orderStatus: 'cancelled', pending: true } : o
-      )
+      menuOrders: (curr.menuOrders || []).filter((o) => String(o.id) !== String(id))
     }))
     return apiPost(`/menu-orders/${id}/cancel`, {})
       .then((res) => {

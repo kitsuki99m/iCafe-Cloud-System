@@ -75,3 +75,33 @@ test('philippineMenuPresets and generated WebP assets exist and cover all reques
   assert.ok(fs.existsSync(adminMenuAssets), 'Admin public assets/menu directory must exist')
   assert.ok(fs.existsSync(customerMenuAssets), 'Customer public assets/menu directory must exist')
 })
+
+test('cancelled menu orders are removed from database and filtered out from live orders', () => {
+  const apiRoutesPath = path.join(repoRoot, 'backend', 'src', 'routes', 'apiRoutes.js')
+  const apiContent = fs.readFileSync(apiRoutesPath, 'utf8')
+
+  assert.ok(apiContent.includes("DELETE FROM menu_orders WHERE id=?"), 'apiRoutes must delete cancelled orders from menu_orders table')
+  assert.ok(apiContent.includes("DELETE FROM revenue_events WHERE source_type='menu_order' AND source_id=?"), 'apiRoutes must delete revenue events for cancelled orders')
+  assert.ok(apiContent.includes("order_status != 'cancelled'"), 'GET /menu-orders must exclude cancelled orders from list')
+
+  const customerAppCtxPath = path.join(repoRoot, 'apps', 'customer', 'src', 'context', 'AppDataContext.jsx')
+  const customerAppCtx = fs.readFileSync(customerAppCtxPath, 'utf8')
+  assert.ok(customerAppCtx.includes("myOrders: (current.myOrders || []).filter((o) => String(o.id) !== String(orderId))"), 'cancelMyOrder must remove order from customer list')
+
+  const adminPagePath = path.join(repoRoot, 'apps', 'admin', 'src', 'pages', 'MenuManagementPage.jsx')
+  const adminPage = fs.readFileSync(adminPagePath, 'utf8')
+  assert.ok(adminPage.includes("liveOrders = useMemo"), 'Admin MenuManagementPage must filter liveOrders to exclude cancelled orders')
+})
+
+test('customer auth and lifecycle recovery guards active logged in member from being wiped out after crash/forfeit', () => {
+  const authCtxPath = path.join(repoRoot, 'apps', 'customer', 'src', 'context', 'AuthContext.jsx')
+  const authCtx = fs.readFileSync(authCtxPath, 'utf8')
+
+  assert.ok(authCtx.includes("if (getToken() || user) return"), 'AuthContext recovery loop must guard against wiping active user state')
+  assert.ok(authCtx.includes("clearAdminSessionCloseFence()"), 'loginCustomerCredentials must clear admin session close fence')
+  assert.ok(authCtx.includes("clearStationLifecycleMarker()"), 'loginCustomerCredentials must clear station lifecycle marker')
+
+  const apiRoutesPath = path.join(repoRoot, 'backend', 'src', 'routes', 'apiRoutes.js')
+  const apiContent = fs.readFileSync(apiRoutesPath, 'utf8')
+  assert.ok(apiContent.includes("created_at <= ? AND revoked_at IS NULL"), 'apiRoutes lifecycle must not revoke fresh auth sessions created after crash interruption')
+})

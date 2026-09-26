@@ -1191,8 +1191,8 @@ app.whenReady().then(async () => {
   app.setAppUserModelId('com.icafe.customer')
   session.defaultSession.setPermissionRequestHandler((_webContents,_permission,callback)=>callback(false))
 
-  handleTrusted('client:unlock', () => applyAuthenticatedWindowMode())
-  handleTrusted('client:show-idle-dashboard', () => showIdleDashboard())
+  handleTrusted('client:unlock', () => { remoteLockSnapshot = null; return applyAuthenticatedWindowMode() })
+  handleTrusted('client:show-idle-dashboard', () => { remoteLockSnapshot = null; return showIdleDashboard() })
   handleTrusted('client:show-login-kiosk', () => showLoginKiosk())
   handleTrusted('client:unlock-only', () => { setWindowsKeyLocked(false); return true })
   handleTrusted('client:activate-session', (_event, data) => { markActiveSession(data || {}); return enterActiveState() })

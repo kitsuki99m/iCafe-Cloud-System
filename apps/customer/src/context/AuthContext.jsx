@@ -314,8 +314,9 @@ export function AuthProvider({ children }) {
     let cancelled=false;
     const retry = async () => {
       if (!hasPendingStationLifecycle()) return;
+      if (getToken() || user) return;
       const result=await recoverPendingStationLifecycle();
-      if (!cancelled && result?.ok) {
+      if (!cancelled && result?.ok && !getToken() && !user) {
         setToken(null);
         setUser(null);
       }
@@ -323,7 +324,7 @@ export function AuthProvider({ children }) {
     retry();
     const timer=setInterval(retry,5000);
     return () => { cancelled=true; clearInterval(timer); };
-  }, [stationPairingRequired]);
+  }, [stationPairingRequired, user]);
 
   // Admin-started guest sessions must switch the Customer station immediately
   // into Guest mode and directly into the active 960x680 dashboard. Realtime is the fast
@@ -376,8 +377,11 @@ export function AuthProvider({ children }) {
       });
       sessionStorage.removeItem(CUSTOMER_PASSWORD_SETUP_DEFERRED_TOKEN);
       setPasswordSetupDeferred(false);
+      clearAdminSessionCloseFence();
+      await clearStationLifecycleMarker().catch?.(() => {});
       setToken(d.token);
       window.aezakmiClient?.unlockClient?.();
+      window.aezakmiClient?.showIdleDashboard?.();
       setUser(d.user);
       return { ok: true };
     } catch (e) {

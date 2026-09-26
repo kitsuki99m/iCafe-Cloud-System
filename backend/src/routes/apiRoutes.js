@@ -1490,8 +1490,8 @@ router.post("/public/station/lifecycle", requirePairedStation, (req, res, next) 
     const markAvailable = ["logout","session_expired","startup_recovery"].includes(reason);
     const result = transaction(() => {
       const released = releaseStationSession(pc.id, { reason, at:interruptedAt, markAvailable });
-      const revoked = db.prepare("UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,?) WHERE pc_id=? AND revoked_at IS NULL")
-        .run(interruptedAt,interruptedAt,reason,pc.id).changes;
+      const revoked = db.prepare("UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,?),ended_at=COALESCE(ended_at,?),end_reason=COALESCE(end_reason,?) WHERE pc_id=? AND created_at <= ? AND revoked_at IS NULL")
+        .run(interruptedAt,interruptedAt,reason,pc.id,interruptedAt).changes;
       return { released, revoked };
     });
     if (result.released?.released) {
@@ -6948,8 +6948,8 @@ router.delete("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, re
 router.get("/menu-orders", auth, (req, res) => {
   const isStaff = ['admin', 'cashier'].includes(req.auth.role);
   const rows = isStaff
-    ? db.prepare("SELECT * FROM menu_orders ORDER BY created_at DESC LIMIT 100").all()
-    : db.prepare("SELECT * FROM menu_orders WHERE customer_id=? ORDER BY created_at DESC LIMIT 50").all(req.auth.memberId || req.auth.userId);
+    ? db.prepare("SELECT * FROM menu_orders WHERE order_status != 'cancelled' ORDER BY created_at DESC LIMIT 100").all()
+    : db.prepare("SELECT * FROM menu_orders WHERE customer_id=? AND order_status != 'cancelled' ORDER BY created_at DESC LIMIT 50").all(req.auth.memberId || req.auth.userId);
   res.json({
     success: true,
     orders: rows.map(r => ({
@@ -7096,7 +7096,7 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
     if (status === 'cancelled') cancelledAt = now;
 
     transaction(() => {
-      if (status === 'cancelled' && order.order_status !== 'cancelled') {
+      if (status === 'cancelled') {
         if (order.payment_method === 'wallet' && order.payment_status === 'paid' && order.customer_id) {
           const member = db.prepare("SELECT * FROM members WHERE id=?").get(order.customer_id);
           if (member) {
@@ -7121,15 +7121,23 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
             `).run(Number(it.quantity), now, it.id);
           }
         }
+
+        db.prepare("DELETE FROM revenue_events WHERE source_type='menu_order' AND source_id=?").run(order.id);
+        db.prepare("DELETE FROM menu_orders WHERE id=?").run(order.id);
+      } else {
+        db.prepare(`
+          UPDATE menu_orders SET order_status=?, fulfilled_at=?, cancelled_at=? WHERE id=?
+        `).run(status, fulfilledAt, cancelledAt, order.id);
       }
-      db.prepare(`
-        UPDATE menu_orders SET order_status=?, fulfilled_at=?, cancelled_at=? WHERE id=?
-      `).run(status, fulfilledAt, cancelledAt, order.id);
     });
 
-    const updated = { ...order, orderStatus: status, fulfilledAt, cancelledAt };
+    const updated = { ...order, orderStatus: status, fulfilledAt, cancelledAt, isDeleted: status === 'cancelled' };
     try {
       const io = getIO();
+      if (status === 'cancelled') {
+        io?.emit("menu:order_cancelled", { id: order.id, customerId: order.customer_id, pcId: order.pc_id, isDeleted: true, orderStatus: 'cancelled' });
+        io?.emit("order:cancelled", { id: order.id, customerId: order.customer_id, pcId: order.pc_id, isDeleted: true, orderStatus: 'cancelled' });
+      }
       io?.emit("menu:order_updated", updated);
       io?.emit("order:updated", updated);
       emitDataChanged({ entity: 'menu_orders' });
@@ -7142,7 +7150,7 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
       }
     } catch {}
 
-    res.json({ success: true, order: updated });
+    res.json({ success: true, order: updated, removed: status === 'cancelled' });
   } catch (error) { next(error); }
 });
 
@@ -7185,13 +7193,16 @@ router.post("/menu-orders/:id/cancel", auth, (req, res, next) => {
         }
       }
 
-      db.prepare("UPDATE menu_orders SET order_status='cancelled', cancelled_at=? WHERE id=?").run(now, order.id);
+      db.prepare("DELETE FROM revenue_events WHERE source_type='menu_order' AND source_id=?").run(order.id);
+      db.prepare("DELETE FROM menu_orders WHERE id=?").run(order.id);
     });
 
     try {
       const io = getIO();
-      io?.emit("menu:order_updated", { ...order, orderStatus: 'cancelled', cancelledAt: now });
-      io?.emit("order:updated", { ...order, orderStatus: 'cancelled', cancelledAt: now });
+      io?.emit("menu:order_cancelled", { id: order.id, customerId: order.customer_id, pcId: order.pc_id, isDeleted: true, orderStatus: 'cancelled' });
+      io?.emit("order:cancelled", { id: order.id, customerId: order.customer_id, pcId: order.pc_id, isDeleted: true, orderStatus: 'cancelled' });
+      io?.emit("menu:order_updated", { ...order, orderStatus: 'cancelled', isDeleted: true, cancelledAt: now });
+      io?.emit("order:updated", { ...order, orderStatus: 'cancelled', isDeleted: true, cancelledAt: now });
       emitDataChanged({ entity: 'menu_orders' });
       emitDataChanged({ entity: 'menu_items' });
       if (order.customer_id) {
@@ -7200,7 +7211,7 @@ router.post("/menu-orders/:id/cancel", auth, (req, res, next) => {
       }
     } catch {}
 
-    res.json({ success: true, message: "Order cancelled successfully." });
+    res.json({ success: true, message: "Order cancelled successfully.", removed: true, orderId: order.id });
   } catch (error) { next(error); }
 });
 

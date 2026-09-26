@@ -178,6 +178,10 @@ export default function MenuManagementPage() {
     }
   }
 
+  const liveOrders = useMemo(() => {
+    return menuOrders.filter((o) => (o.order_status || o.orderStatus) !== 'cancelled')
+  }, [menuOrders])
+
   const pendingOrders = useMemo(() => {
     return menuOrders.filter((o) => (o.order_status || o.orderStatus) === 'pending')
   }, [menuOrders])
@@ -419,7 +423,7 @@ export default function MenuManagementPage() {
               />
             </div>
 
-            {menuOrders.length === 0 ? (
+            {liveOrders.length === 0 ? (
               <AdminEmptyState
                 icon={ShoppingBag}
                 title="No Customer Orders Yet"
@@ -427,7 +431,7 @@ export default function MenuManagementPage() {
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {menuOrders.map((order) => {
+                {liveOrders.map((order) => {
                   const status = order.order_status || order.orderStatus || 'pending'
                   const isPending = status === 'pending'
                   const isPreparing = status === 'preparing'
