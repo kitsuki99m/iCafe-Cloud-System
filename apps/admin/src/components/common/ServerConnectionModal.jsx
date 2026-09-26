@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Server } from 'lucide-react'
 import Modal from './Modal.jsx'
 import Button from './Button.jsx'
 import {
+  getDetectedLocalIp,
   getServerConnectionDefaults,
   saveRuntimeServerConfig,
   testServerConfig,
@@ -17,6 +18,7 @@ export default function ServerConnectionModal({ open, onClose }) {
   const [verifiedDraft, setVerifiedDraft] = useState('')
   const abortRef = useRef(null)
 
+  const detectedIp = getDetectedLocalIp()
   const isTesting = action === 'testing'
   const isSaving = action === 'saving'
   const draftKey = `${host.trim()}:${Number(port)}`
@@ -65,7 +67,9 @@ export default function ServerConnectionModal({ open, onClose }) {
       setStatus({ tone: 'success', message: `Connected to ${result.host}:${result.port}. You can save this server now.` })
     } catch (error) {
       if (error?.code !== 'SERVER_CONNECTION_CANCELLED') {
-        setStatus({ tone: 'error', message: `${error.message || 'Unable to reach the server.'} You can try again or close this window.` })
+        const rawMessage = String(error.message || 'Unable to reach the server.').trim()
+        const formatted = rawMessage.endsWith('.') ? rawMessage : `${rawMessage}.`
+        setStatus({ tone: 'error', message: `${formatted} You can try again or close this window.` })
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null
@@ -141,6 +145,27 @@ export default function ServerConnectionModal({ open, onClose }) {
             />
           </div>
         </div>
+        {(detectedIp || host !== '127.0.0.1') && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-slate-soft">Quick fill:</span>
+            {detectedIp && (
+              <button
+                type="button"
+                onClick={() => { setHost(detectedIp); clearVerification() }}
+                className={`rounded-lg border px-2.5 py-1 font-medium transition-colors ${host === detectedIp ? 'border-gold/40 bg-gold/10 text-gold' : 'border-surface-line bg-surface text-slate-soft hover:border-gold/30 hover:text-ink-900'}`}
+              >
+                Auto-detected LAN IP ({detectedIp})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { setHost('127.0.0.1'); clearVerification() }}
+              className={`rounded-lg border px-2.5 py-1 font-medium transition-colors ${host === '127.0.0.1' ? 'border-gold/40 bg-gold/10 text-gold' : 'border-surface-line bg-surface text-slate-soft hover:border-gold/30 hover:text-ink-900'}`}
+            >
+              Localhost (127.0.0.1)
+            </button>
+          </div>
+        )}
         <p className="text-[11px] leading-5 text-slate-soft">
           Example: <span className="font-semibold text-ink-900">192.168.254.126</span> on port <span className="font-semibold text-ink-900">3000</span>. Test the connection before Save & Reload becomes available.
         </p>

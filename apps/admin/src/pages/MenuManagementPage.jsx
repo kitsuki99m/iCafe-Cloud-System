@@ -840,7 +840,7 @@ export default function MenuManagementPage() {
               <div className="w-20 h-20 rounded-xl bg-white overflow-hidden flex items-center justify-center p-1.5 shrink-0 border border-surface-line shadow-xs">
                 {formData.imageUrl ? (
                   <img
-                    src={formData.imageUrl}
+                    src={resolveMenuImageUrl(formData.imageUrl)}
                     alt="Preview"
                     className="w-full h-full object-contain"
                     onError={(e) => { e.target.style.display = 'none' }}
@@ -1026,7 +1026,7 @@ export default function MenuManagementPage() {
                     <div>
                       <div className="h-28 rounded-xl bg-surface-raised relative overflow-hidden flex items-center justify-center p-2 mb-2">
                         <img
-                          src={preset.imageUrl}
+                          src={resolveMenuImageUrl(preset.imageUrl)}
                           alt={preset.name}
                           className="w-full h-full object-contain"
                           onError={(e) => { e.target.style.display = 'none' }}

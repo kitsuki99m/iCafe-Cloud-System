@@ -191,7 +191,7 @@ export function AppDataProvider({ children }) {
       }
 
       let snapshot
-      const isStaff = ['admin', 'cashier'].includes(user.role)
+      const isStaff = ['admin', 'cashier', 'manager', 'owner'].includes(user.role)
       if (isCloudAdmin() && isStaff) {
         // Cloud Admin receives one branch snapshot instead of fanning a single
         // refresh into many duplicate PostgREST reads. The Cloud client still
@@ -462,7 +462,7 @@ export function AppDataProvider({ children }) {
     // follow-up for any related wallet/session changes.
     const onTopUp = (request) => {
       setState((current) => {
-        if (!['admin'].includes(user.role)) return current
+        if (!['admin', 'cashier', 'manager', 'owner'].includes(user.role)) return current
         if (current.topUpRequests.some((item) => item.id === request.id)) return current
         const next = {
           id: request.id,
@@ -482,7 +482,7 @@ export function AppDataProvider({ children }) {
     }
 
     const onExtensionRequest = (request) => {
-      if (user.role !== 'admin' || !request?.id) return
+      if (!['admin', 'cashier', 'manager', 'owner'].includes(user.role) || !request?.id) return
       const normalized = normalizeSessionExtension(request)
       setState((current) => ({
         ...current,
@@ -517,7 +517,7 @@ export function AppDataProvider({ children }) {
 
     const onSupport = (request) => {
       setState((current) => {
-        if (!['admin', 'cashier'].includes(user.role)) return current
+        if (!['admin', 'cashier', 'manager', 'owner'].includes(user.role)) return current
         if (current.supportRequests.some((item) => item.id === request.id)) return current
         const next = {
           id: request.id,
@@ -535,19 +535,27 @@ export function AppDataProvider({ children }) {
     }
 
     const onOrderNewRequest = (order) => {
-      if (!['admin', 'cashier'].includes(user.role)) return
+      if (!['admin', 'cashier', 'manager', 'owner'].includes(user.role) || !order?.id) return
       playAdminSound('order')
+      showToast({
+        title: `New Food/Drink Order (${order.pcLabel || order.pcId || 'Station'})`,
+        message: `${order.customerName || 'Customer'} ordered ${order.items?.length || 1} item(s) • ₱${Number(order.total || 0).toFixed(2)}`,
+        tone: 'info',
+      })
       setState((current) => ({
         ...current,
-        menuOrders: [order, ...current.menuOrders.filter((o) => o.id !== order.id)],
+        menuOrders: [order, ...current.menuOrders.filter((o) => String(o.id) !== String(order.id))],
       }))
+      invalidateAndRefresh()
     }
 
     const onOrderUpdated = (order) => {
+      if (!order?.id) return
       setState((current) => ({
         ...current,
-        menuOrders: current.menuOrders.map((o) => (o.id === order.id ? { ...o, ...order } : o)),
+        menuOrders: current.menuOrders.map((o) => (String(o.id) === String(order.id) ? { ...o, ...order } : o)),
       }))
+      invalidateAndRefresh()
     }
 
     const onShiftUpdated = (payload) => {
@@ -579,6 +587,8 @@ export function AppDataProvider({ children }) {
     socket.on('extension:new_request', onExtensionRequest)
     socket.on('extension:updated', onExtensionUpdated)
     socket.on('order:new_request', onOrderNewRequest)
+    socket.on('menu:new_order', onOrderNewRequest)
+    socket.on('menu:new_request', onOrderNewRequest)
     socket.on('order:updated', onOrderUpdated)
     socket.on('menu:order_updated', onOrderUpdated)
     socket.on('shift:updated', onShiftUpdated)
@@ -602,6 +612,8 @@ export function AppDataProvider({ children }) {
       socket.off('extension:new_request', onExtensionRequest)
       socket.off('extension:updated', onExtensionUpdated)
       socket.off('order:new_request', onOrderNewRequest)
+      socket.off('menu:new_order', onOrderNewRequest)
+      socket.off('menu:new_request', onOrderNewRequest)
       socket.off('order:updated', onOrderUpdated)
       socket.off('menu:order_updated', onOrderUpdated)
       socket.off('shift:updated', onShiftUpdated)

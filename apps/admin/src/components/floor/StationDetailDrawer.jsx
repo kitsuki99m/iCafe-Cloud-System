@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   X,
   Play,
@@ -108,18 +109,18 @@ export default function StationDetailDrawer({
 
   if (!pc) return null
 
-  return (
+  return createPortal(
     <>
       {/* Background Scrim */}
       <div
-        className="fixed inset-0 z-[160] bg-black/50 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 z-[500] bg-black/50 backdrop-blur-xs transition-opacity overscroll-contain"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Slide-out Drawer */}
       <aside
-        className="fixed right-0 top-0 z-[170] flex h-screen w-full max-w-[420px] flex-col border-l border-[var(--line)] bg-[var(--surface)] text-[var(--text)] shadow-2xl transition-transform duration-200"
+        className="fixed right-0 top-0 z-[510] flex h-[100dvh] w-full max-w-[420px] flex-col border-l border-[var(--line)] bg-[var(--surface)] text-[var(--text)] shadow-2xl transition-transform duration-200 overscroll-contain"
         role="dialog"
         aria-label={`Station ${stationTitle} details`}
       >
@@ -345,6 +346,7 @@ export default function StationDetailDrawer({
           )}
         </footer>
       </aside>
-    </>
+    </>,
+    document.body
   )
 }

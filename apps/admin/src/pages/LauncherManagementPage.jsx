@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Gamepad2,
   Plus,
@@ -22,19 +22,33 @@ import { showToast } from '../lib/toast.js'
 import Button from '../components/common/Button.jsx'
 import Modal from '../components/common/Modal.jsx'
 import ConfirmModal from '../components/common/ConfirmModal.jsx'
+import { resolveAppIconUrl } from '../lib/images.js'
 import { AdminEmptyState, AdminMetricCard, AdminPageWorkspace, AdminRailCard } from '../components/layout/AdminPageWorkspace.jsx'
 
 const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
 function AppIcon({ icon, name, className = 'h-10 w-10', iconClass = 'text-xl' }) {
-  const isImage = icon && (icon.startsWith('/') || icon.startsWith('http') || icon.startsWith('data:') || /\.(webp|png|jpg|jpeg|svg)$/i.test(icon))
+  const resolved = resolveAppIconUrl(icon) || icon
+  const isImage = resolved && typeof resolved === 'string' && (
+    resolved.startsWith('/') ||
+    resolved.startsWith('./') ||
+    resolved.startsWith('http') ||
+    resolved.startsWith('data:') ||
+    resolved.startsWith('blob:') ||
+    /\.(webp|png|jpg|jpeg|svg|avif|gif)$/i.test(resolved)
+  )
+  const isEmoji = icon && typeof icon === 'string' && !icon.includes('/') && !icon.includes('.') && icon.length <= 4
   const [imgError, setImgError] = useState(false)
+
+  useEffect(() => {
+    setImgError(false)
+  }, [icon])
 
   if (isImage && !imgError) {
     return (
-      <span className={`inline-flex items-center justify-center rounded-xl bg-surface-raised/80 border border-surface-line/50 overflow-hidden p-1 shrink-0 ${className}`}>
+      <span className={`inline-flex items-center justify-center rounded-xl bg-surface-raised/80 border border-surface-line/50 overflow-hidden p-1 shrink-0 select-none ${className}`}>
         <img
-          src={icon}
+          src={resolved}
           alt={name || 'App Icon'}
           className="h-full w-full object-contain"
           onError={() => setImgError(true)}
@@ -44,9 +58,27 @@ function AppIcon({ icon, name, className = 'h-10 w-10', iconClass = 'text-xl' })
     )
   }
 
+  if (isEmoji && !imgError) {
+    return (
+      <span className={`inline-flex items-center justify-center rounded-xl bg-midnight/8 ${iconClass} shrink-0 select-none ${className}`}>
+        {icon}
+      </span>
+    )
+  }
+
+  const isLarge = className.includes('h-16') || className.includes('w-16')
+  const iconSize = isLarge ? 22 : 14
+  const textSize = isLarge ? 'text-[9px]' : 'text-[7.5px]'
+
   return (
-    <span className={`inline-flex items-center justify-center rounded-xl bg-midnight/8 ${iconClass} shrink-0 ${className}`}>
-      {icon || '🎮'}
+    <span
+      className={`inline-flex flex-col items-center justify-center rounded-xl border border-dashed border-surface-line bg-surface-raised/60 text-slate-soft p-0.5 shrink-0 select-none overflow-hidden ${className}`}
+      title="No icon found"
+    >
+      <Gamepad2 size={iconSize} className="opacity-40 shrink-0" />
+      <span className={`${textSize} font-black tracking-tight uppercase leading-none text-slate-soft/70 mt-0.5 whitespace-nowrap`}>
+        NO ICON
+      </span>
     </span>
   )
 }

@@ -153,7 +153,7 @@ io.on('connection', (socket) => {
         }
         auth = { role:session.role, memberId:session.member_id, pcId:session.pc_id, userId:session.user_id, sessionId:session.id, jwtId:session.jwt_id }
         socket.data.auth = auth
-        if (session.role === 'admin') socket.join('admin')
+        if (session.role && session.role !== 'customer') socket.join('admin')
         if (session.member_id) socket.join(`customer:${session.member_id}`)
         if (session.role === 'customer' && session.pc_id) socket.join('customer-stations')
         if (session.pc_id) {

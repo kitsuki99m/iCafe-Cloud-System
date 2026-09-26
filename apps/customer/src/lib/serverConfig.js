@@ -129,6 +129,14 @@ export function getRuntimeServerConfig() {
   return null
 }
 
+export function getDetectedLocalIp() {
+  try {
+    const ip = bridge()?.getLocalIPv4?.()
+    if (ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) return ip
+  } catch {}
+  return null
+}
+
 export function getApiBase() {
   const runtime = getRuntimeServerConfig()
   if (runtime?.apiBase) return runtime.apiBase.replace(/\/$/, '')

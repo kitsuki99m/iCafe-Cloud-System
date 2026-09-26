@@ -86,14 +86,23 @@ export function getApiBase() {
   return '/api'
 }
 
+export function getDetectedLocalIp() {
+  try {
+    const ip = bridge()?.getLocalIPv4?.()
+    if (ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) return ip
+  } catch {}
+  return null
+}
+
 export function getServerConnectionDefaults() {
   const runtime = getRuntimeServerConfig()
-  if (runtime) return { host: runtime.host || '127.0.0.1', port: Number(runtime.port || DEFAULT_PORT), source: runtime.source || 'runtime' }
+  const detectedIp = getDetectedLocalIp()
+  if (runtime) return { host: runtime.host || detectedIp || '127.0.0.1', port: Number(runtime.port || DEFAULT_PORT), source: runtime.source || 'runtime' }
 
   const env = parseApiBase(absoluteEnvBase())
   if (env) return { host: env.host, port: env.port, source: 'build fallback' }
 
-  return { host: '127.0.0.1', port: DEFAULT_PORT, source: 'local default' }
+  return { host: detectedIp || '127.0.0.1', port: DEFAULT_PORT, source: detectedIp ? 'auto-detected LAN IP' : 'local default' }
 }
 
 export function normalizeServerDraft(hostValue, portValue) {

@@ -87,6 +87,12 @@
 }
 
 @layer base {
+  .app-drag-region {
+    -webkit-app-region: drag;
+  }
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+  }
   /* ==========================================================================
      GLOBAL THEME SYSTEM: LIGHT MODE & DARK MODE BASE TOKENS
      ========================================================================== */

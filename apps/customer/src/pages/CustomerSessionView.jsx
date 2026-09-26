@@ -48,9 +48,9 @@ import PhtClock from "../components/common/PhtClock.jsx";
 import { playSessionWarningVoice, playFinalSecondPing } from "../lib/sound.js";
 import { showToast } from "../lib/toast.js";
 import logo from "../assets/aktura-logo.svg";
-import { useTheme } from "../context/ThemeContext.jsx";
 import { useBranding } from "../hooks/useBranding.js";
 import { elapsedSessionSeconds, remainingSessionSeconds, sessionWarningMinute } from "../lib/sessionTime.js";
+import { resolveAppIconUrl } from "../lib/images.js";
 
 const DEFAULT_FALLBACK_APPS = [
   { id: "steam", name: "Steam", categoryName: "Online Games", icon: "/assets/launcher/steam.webp", protocolUrl: "steam://", executablePath: "steam.exe" },
@@ -76,14 +76,27 @@ const DEFAULT_FALLBACK_APPS = [
 ];
 
 function CustomerAppIcon({ icon, name, className = "h-12 w-12", iconClass = "text-xl" }) {
-  const isImage = icon && (icon.startsWith('/') || icon.startsWith('http') || icon.startsWith('data:') || /\.(webp|png|jpg|jpeg|svg)$/i.test(icon));
+  const resolved = resolveAppIconUrl(icon) || icon;
+  const isImage = resolved && typeof resolved === 'string' && (
+    resolved.startsWith('/') ||
+    resolved.startsWith('./') ||
+    resolved.startsWith('http') ||
+    resolved.startsWith('data:') ||
+    resolved.startsWith('blob:') ||
+    /\.(webp|png|jpg|jpeg|svg|avif|gif)$/i.test(resolved)
+  );
+  const isEmoji = icon && typeof icon === 'string' && !icon.includes('/') && !icon.includes('.') && icon.length <= 4;
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [icon]);
 
   if (isImage && !imgError) {
     return (
-      <span className={`inline-flex items-center justify-center rounded-xl bg-surface-raised/80 border border-surface-line/50 p-1.5 overflow-hidden shrink-0 shadow-xs ${className}`}>
+      <span className={`inline-flex items-center justify-center rounded-xl bg-surface-raised/80 border border-surface-line/50 p-1.5 overflow-hidden shrink-0 shadow-xs select-none ${className}`}>
         <img
-          src={icon}
+          src={resolved}
           alt={name || "App Icon"}
           className="h-full w-full object-contain"
           onError={() => setImgError(true)}
@@ -93,9 +106,27 @@ function CustomerAppIcon({ icon, name, className = "h-12 w-12", iconClass = "tex
     );
   }
 
+  if (isEmoji && !imgError) {
+    return (
+      <span className={`inline-flex items-center justify-center rounded-xl bg-midnight/8 ${iconClass} shrink-0 select-none ${className}`}>
+        {icon}
+      </span>
+    );
+  }
+
+  const isLarge = className.includes('h-16') || className.includes('w-16');
+  const iconSize = isLarge ? 22 : 16;
+  const textSize = isLarge ? 'text-[9px]' : 'text-[7.5px]';
+
   return (
-    <span className={`inline-flex items-center justify-center rounded-xl bg-midnight/8 ${iconClass} shrink-0 ${className}`}>
-      {icon || "🎮"}
+    <span
+      className={`inline-flex flex-col items-center justify-center rounded-xl border border-dashed border-surface-line bg-surface-raised/60 text-slate-soft p-0.5 shrink-0 select-none overflow-hidden ${className}`}
+      title="No icon found"
+    >
+      <Gamepad2 size={iconSize} className="opacity-40 shrink-0" />
+      <span className={`${textSize} font-black tracking-tight uppercase leading-none text-slate-soft/70 mt-0.5 whitespace-nowrap`}>
+        NO ICON
+      </span>
     </span>
   );
 }
@@ -1292,7 +1323,7 @@ export default function CustomerSessionView() {
         {/* RIGHT COLUMN: TIME, ORDERS, WALLET, SUPPORT (SIDEBAR) */}
         {/* In minified mode this becomes the full main content       */}
         {/* ======================================================== */}
-        <aside className={`${isMinified ? 'flex-1' : 'lg:col-span-4 xl:col-span-3'} flex flex-col min-h-0 min-w-0 gap-3 overflow-y-auto pr-0.5`}>
+        <aside className={`${isMinified ? 'flex-1' : 'lg:col-span-4 xl:col-span-3'} flex flex-col min-h-0 min-w-0 gap-2.5 overflow-y-auto pr-0.5 pb-2`}>
           {/* 1. UNIFIED SESSION & WALLET CARD */}
           <div className="customer-primary-card shrink-0 flex flex-col overflow-hidden shadow-sm">
             {/* Card Header: Session Info & Status */}
@@ -1534,7 +1565,7 @@ export default function CustomerSessionView() {
           </div>
 
           {/* 2. CAFE KITCHEN / FOOD & DRINKS QUICK TRAY */}
-          <div className="customer-primary-card flex flex-col overflow-hidden">
+          <div className="customer-primary-card shrink-0 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between gap-2 border-b border-surface-line px-3.5 py-2 bg-surface-raised/30">
               <div className="flex items-center gap-2">
                 <span className="flex h-6.5 w-6.5 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">

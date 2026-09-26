@@ -177,7 +177,7 @@ export default function MenuOrderModal({ isOpen, onClose, cart: externalCart, on
         </div>
       }
     >
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_290px] gap-4 min-h-[380px] max-h-[62vh] overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_290px] gap-4 min-h-0 max-h-[calc(100dvh-13rem)] sm:max-h-[65vh] overflow-hidden">
         {/* Catalog Side */}
         <div className="flex flex-col min-h-0 space-y-3 overflow-hidden">
           {/* Category Chips */}

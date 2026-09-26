@@ -4,6 +4,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const net = require("node:net");
+const os = require("node:os");
 
 const isDev = !app.isPackaged;
 const DEV_URL = process.env.AEZAKMI_ADMIN_DEV_URL || "http://localhost:5174";
@@ -67,6 +68,21 @@ function writeServerConfig(value) {
   fs.writeFileSync(temp, JSON.stringify({ host: normalized.host, port: normalized.port }, null, 2), { mode: 0o600 })
   fs.renameSync(temp, file)
   return normalized
+}
+
+function getLocalIPv4() {
+  const addresses = []
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const item of entries || []) {
+      if (item?.family === 'IPv4' && !item.internal) addresses.push(item.address)
+    }
+  }
+  const unique = [...new Set(addresses)]
+  return unique.find(ip => /^10\./.test(ip))
+    || unique.find(ip => /^172\.(1[6-9]|2\d|3[0-1])\./.test(ip))
+    || unique.find(ip => /^192\.168\./.test(ip))
+    || unique[0]
+    || null
 }
 
 function installedCafeName() {
@@ -350,6 +366,8 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
 
+    frame: false,
+
     title: installedCafeName(),
 
     icon: path.join(__dirname, "app-icon.ico"),
@@ -368,6 +386,13 @@ function createWindow() {
   });
 
   adminWindow = win;
+
+  win.on('maximize', () => {
+    if (!win.isDestroyed()) win.webContents.send('admin:window:maximized-change', true)
+  })
+  win.on('unmaximize', () => {
+    if (!win.isDestroyed()) win.webContents.send('admin:window:maximized-change', false)
+  })
 
   win.webContents.on("before-input-event", (event, input) => {
     if (!adminLocked || input.type !== "keyDown") {
@@ -426,6 +451,49 @@ function createWindow() {
     adminWindow = null;
   });
 }
+
+ipcMain.on('admin:window:minimize', (event) => {
+  if (!isTrustedRenderer(event)) return
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    adminWindow.minimize()
+  }
+})
+
+ipcMain.on('admin:window:maximize', (event) => {
+  if (!isTrustedRenderer(event)) return
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    if (adminWindow.isMaximized()) {
+      adminWindow.unmaximize()
+    } else {
+      adminWindow.maximize()
+    }
+  }
+})
+
+ipcMain.on('admin:window:close', (event) => {
+  if (!isTrustedRenderer(event)) return
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    if (adminLocked) return
+    if (adminAuthenticated && !appIsQuitting) {
+      adminWindow.hide()
+    } else {
+      requestAdminQuit()
+    }
+  }
+})
+
+ipcMain.on('admin:window:is-maximized', (event) => {
+  if (!isTrustedRenderer(event)) {
+    event.returnValue = false
+    return
+  }
+  event.returnValue = Boolean(adminWindow && !adminWindow.isDestroyed() && adminWindow.isMaximized())
+})
+
+ipcMain.on('admin:get-local-ipv4', (event) => {
+  if (!isTrustedRenderer(event)) { event.returnValue = null; return }
+  event.returnValue = getLocalIPv4()
+})
 
 ipcMain.on('admin:server-config:get', (event) => {
   if (!isTrustedRenderer(event)) { event.returnValue = null; return }

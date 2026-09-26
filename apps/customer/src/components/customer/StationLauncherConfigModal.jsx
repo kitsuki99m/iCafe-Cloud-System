@@ -17,8 +17,61 @@ import {
 import Modal from '../common/Modal.jsx'
 import Button from '../common/Button.jsx'
 import { showToast } from '../../lib/toast.js'
+import { resolveAppIconUrl } from '../../lib/images.js'
 
 const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-xs text-ink-900 focus:outline-none focus:border-gold/50'
+
+function AppIcon({ icon, name, className = 'h-9 w-9', iconClass = 'text-xl' }) {
+  const resolved = resolveAppIconUrl(icon) || icon
+  const isImage = resolved && typeof resolved === 'string' && (
+    resolved.startsWith('/') ||
+    resolved.startsWith('./') ||
+    resolved.startsWith('http') ||
+    resolved.startsWith('data:') ||
+    resolved.startsWith('blob:') ||
+    /\.(webp|png|jpg|jpeg|svg|avif|gif)$/i.test(resolved)
+  )
+  const isEmoji = icon && typeof icon === 'string' && !icon.includes('/') && !icon.includes('.') && icon.length <= 4
+  const [imgError, setImgError] = useState(false)
+
+  useEffect(() => {
+    setImgError(false)
+  }, [icon])
+
+  if (isImage && !imgError) {
+    return (
+      <span className={`inline-flex items-center justify-center rounded-xl bg-surface-raised/80 border border-surface-line/50 p-1 overflow-hidden shrink-0 select-none ${className}`}>
+        <img
+          src={resolved}
+          alt={name || 'App Icon'}
+          className="h-full w-full object-contain"
+          onError={() => setImgError(true)}
+          loading="lazy"
+        />
+      </span>
+    )
+  }
+
+  if (isEmoji && !imgError) {
+    return (
+      <span className={`inline-flex items-center justify-center rounded-xl bg-midnight/8 ${iconClass} shrink-0 select-none ${className}`}>
+        {icon}
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className={`inline-flex flex-col items-center justify-center rounded-xl border border-dashed border-surface-line bg-surface-raised/60 text-slate-soft p-0.5 shrink-0 select-none overflow-hidden ${className}`}
+      title="No icon found"
+    >
+      <Gamepad2 size={14} className="opacity-40 shrink-0" />
+      <span className="text-[7px] font-black tracking-tight uppercase leading-none text-slate-soft/70 mt-0.5 whitespace-nowrap">
+        NO ICON
+      </span>
+    </span>
+  )
+}
 
 export default function StationLauncherConfigModal({
   open,
@@ -291,9 +344,7 @@ export default function StationLauncherConfigModal({
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-surface-line customer-neutral-surface hover:border-gold/30 transition"
                   >
                     <div className="flex items-start sm:items-center gap-3 min-w-0">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-midnight/8 text-xl">
-                        {app.icon || '🎮'}
-                      </span>
+                      <AppIcon icon={app.icon} name={app.name} className="h-9 w-9" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-ink-900">{app.name}</span>

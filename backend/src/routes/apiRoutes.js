@@ -7066,6 +7066,8 @@ router.post("/menu-orders", auth, (req, res, next) => {
     try {
       const io = getIO();
       io?.emit("menu:new_order", newOrder);
+      io?.emit("order:new_request", newOrder);
+      io?.emit("menu:new_request", newOrder);
       emitDataChanged({ entity: 'menu_orders' });
       emitDataChanged({ entity: 'menu_items' });
       if (payMethod === 'wallet' && memberId) {
@@ -7129,6 +7131,7 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
     try {
       const io = getIO();
       io?.emit("menu:order_updated", updated);
+      io?.emit("order:updated", updated);
       emitDataChanged({ entity: 'menu_orders' });
       if (status === 'cancelled') {
         emitDataChanged({ entity: 'menu_items' });
@@ -7188,6 +7191,7 @@ router.post("/menu-orders/:id/cancel", auth, (req, res, next) => {
     try {
       const io = getIO();
       io?.emit("menu:order_updated", { ...order, orderStatus: 'cancelled', cancelledAt: now });
+      io?.emit("order:updated", { ...order, orderStatus: 'cancelled', cancelledAt: now });
       emitDataChanged({ entity: 'menu_orders' });
       emitDataChanged({ entity: 'menu_items' });
       if (order.customer_id) {

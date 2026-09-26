@@ -19,16 +19,18 @@ import LauncherManagementPage from './pages/LauncherManagementPage.jsx'
 import DeveloperConsolePage from './pages/DeveloperConsolePage.jsx'
 import CloudInviteSetup from './components/cloud/CloudInviteSetup.jsx'
 import CloudAccessPending from './components/cloud/CloudAccessPending.jsx'
+import AdminTitleBar from './components/layout/AdminTitleBar.jsx'
 
 export default function App() {
   const { user, authLoading, mustChange } = useAuth()
-  if (authLoading) return <AdminSplashScreen label="Checking admin session…" />
-  if (!user) return <><AdminLoginForm /><ToastContainer /></>
-  if (user.cloud && user.cloudInviteSetup) return <><CloudInviteSetup /><ToastContainer /></>
-  if (user.cloud && user.cloudBusinessSuspended) return <><CloudAccessPending suspended /><ToastContainer /></>
-  if (user.cloud && user.cloudDeveloper && user.cloudNeedsSetup) return <><DeveloperConsolePage standalone /><ToastContainer /></>
+  if (authLoading) return <><AdminTitleBar /><AdminSplashScreen label="Checking admin session…" /></>
+  if (!user) return <><AdminTitleBar /><AdminLoginForm /><ToastContainer /></>
+  if (user.cloud && user.cloudInviteSetup) return <><AdminTitleBar /><CloudInviteSetup /><ToastContainer /></>
+  if (user.cloud && user.cloudBusinessSuspended) return <><AdminTitleBar /><CloudAccessPending suspended /><ToastContainer /></>
+  if (user.cloud && user.cloudDeveloper && user.cloudNeedsSetup) return <><AdminTitleBar /><DeveloperConsolePage standalone /><ToastContainer /></>
   const isStaffOrCashier = user?.role === 'cashier' || user?.role === 'staff' || user?.cloudRole === 'cashier' || user?.cloudRole === 'staff' || user?.cloudRole === 'viewer'
   return <>
+    <AdminTitleBar />
     {mustChange && <AdminCredentialSetup />}
     <MainLayout>
       <Routes>

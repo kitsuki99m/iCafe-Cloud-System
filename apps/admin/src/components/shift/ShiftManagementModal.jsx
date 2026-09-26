@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useId } from 'react'
+import { useState, useEffect, useRef, useId } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Clock, DollarSign, AlertTriangle, CheckCircle2, History, ArrowRight, Banknote, Sparkles } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext.jsx'
@@ -93,7 +93,7 @@ export default function ShiftManagementModal({ isOpen, onClose }) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-6 overflow-hidden overscroll-contain" role="dialog" aria-modal="true" aria-labelledby={titleId}>
       {/* Non-blurred solid/translucent dark backdrop to eliminate GPU lag */}
       <div
         className="admin-modal-backdrop absolute inset-0 bg-midnight/70"
@@ -103,11 +103,11 @@ export default function ShiftManagementModal({ isOpen, onClose }) {
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="admin-modal-shell relative flex max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-surface-line bg-surface shadow-2xl animate-fade-in"
+        className="admin-modal-shell relative flex max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100vh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-surface-line bg-surface shadow-2xl animate-fade-in"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="admin-modal-header flex items-start justify-between gap-4 border-b border-surface-line px-6 py-5 bg-surface-raised/40">
+        <div className="admin-modal-header flex items-start justify-between gap-4 border-b border-surface-line px-6 py-5 bg-surface-raised/40 shrink-0">
           <div className="flex items-center gap-3.5">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gold/10 border border-gold/20 text-gold shadow-xs">
               <Clock size={20} strokeWidth={2.2} />
@@ -142,7 +142,7 @@ export default function ShiftManagementModal({ isOpen, onClose }) {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-surface-line bg-surface px-6 pt-2 gap-2">
+        <div className="flex border-b border-surface-line bg-surface px-6 pt-2 gap-2 shrink-0">
           <button
             type="button"
             onClick={() => setActiveTab('current')}
@@ -169,7 +169,7 @@ export default function ShiftManagementModal({ isOpen, onClose }) {
         </div>
 
         {/* Modal Body */}
-        <div className="admin-modal-body min-h-0 max-h-[calc(100vh-12rem)] overflow-y-auto p-6 space-y-6">
+        <div className="admin-modal-body min-h-0 flex-1 max-h-[calc(100dvh-10rem)] sm:max-h-[calc(100vh-12rem)] overflow-y-auto p-6 space-y-6 overscroll-contain">
           {activeTab === 'current' ? (
             currentShift ? (
               /* Active Shift Reconciliation Form */

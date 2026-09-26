@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, Sparkles, X } from 'lucide-react'
 import { useSkin } from '../../context/SkinContext.jsx'
 import { showToast } from '../../lib/toast.js'
@@ -27,9 +28,9 @@ export default function SkinGalleryModal() {
     })
   }
 
-  return (
+  return createPortal(
     <div
-      className="admin-modal-backdrop fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4 backdrop-blur-sm transition-opacity"
+      className="admin-modal-backdrop fixed inset-0 z-[600] flex items-center justify-center bg-black/75 p-3 sm:p-6 backdrop-blur-sm transition-opacity overflow-hidden overscroll-contain"
       role="dialog"
       aria-modal="true"
       aria-label="Console Skins"
@@ -37,9 +38,9 @@ export default function SkinGalleryModal() {
         if (e.target === e.currentTarget) closeGallery()
       }}
     >
-      <div className="admin-modal-shell relative flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden border shadow-2xl">
+      <div className="admin-modal-shell relative flex max-h-[calc(100dvh-2rem)] sm:max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-[var(--line,#26314A)] bg-[var(--surface,#0E131F)] shadow-2xl">
         {/* Header */}
-        <header className="admin-modal-header sticky top-0 z-10 flex items-center justify-between px-6 py-4">
+        <header className="admin-modal-header sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-[var(--line,#26314A)] bg-[var(--surface,#0E131F)] px-5 py-4 sm:px-6">
           <div className="flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--brand,#7B61FF)] text-white shadow-md">
               <Sparkles size={18} />
@@ -167,6 +168,7 @@ export default function SkinGalleryModal() {
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
