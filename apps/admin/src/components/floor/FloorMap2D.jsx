@@ -507,7 +507,7 @@ const FloorMap2D = forwardRef(function FloorMap2D({
   }, [onSelect])
 
   return (
-    <div className="relative w-full h-[clamp(420px,calc(100dvh-295px),740px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)]/75 backdrop-blur-md overflow-auto select-none shadow-card">
+    <div className="relative w-full h-[clamp(360px,calc(100dvh-310px),740px)] rounded-2xl border border-[var(--line)] bg-[var(--surface)]/75 backdrop-blur-md overflow-auto select-none shadow-card touch-pan-x touch-pan-y overscroll-contain">
       <div
         ref={canvasRef}
         style={{

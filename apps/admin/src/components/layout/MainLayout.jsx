@@ -544,7 +544,7 @@ export default function MainLayout({ children }) {
                 </div>
               </header>
           )}
-          <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative pb-20 lg:pb-0">{children}</div>
+          <div className="admin-route-viewport min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain relative pb-28 lg:pb-0">{children}</div>
           <ShiftManagementModal isOpen={shiftModalOpen} onClose={() => setShiftModalOpen(false)} />
           <SkinGalleryModal />
           {!isOverview && <FeedbackInboxModal open={feedbackOpen} onClose={()=>setFeedbackOpen(false)} />}
@@ -552,7 +552,7 @@ export default function MainLayout({ children }) {
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="admin-mobile-bottom-bar fixed bottom-0 inset-x-0 z-[140] flex h-16 items-center justify-around border-t border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-xl px-2 shadow-lg lg:hidden" aria-label="Mobile Navigation">
+      <nav className="admin-mobile-bottom-bar fixed bottom-0 inset-x-0 z-[140] flex h-16 items-center justify-around border-t border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-xl px-2 pb-[env(safe-area-inset-bottom,0px)] shadow-lg lg:hidden" aria-label="Mobile Navigation">
         {(() => {
           const isMoreActive = !['/', '/clients', '/menu', '/members'].some((p) => isNavItemActive(p, location.pathname, p === '/'))
           return (

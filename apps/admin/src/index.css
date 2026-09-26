@@ -2336,7 +2336,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .clients-floor-workspace {
-    padding: 10px;
+    padding: 0;
     border-radius: 14px;
   }
   .clients-floor-workspace .admin-page-toolbar {
@@ -2345,7 +2345,6 @@
   .clients-floor-workspace .admin-page-toolbar > div {
     width: 100%;
     margin-left: 0 !important;
-    justify-content: flex-start !important;
   }
   .admin-page-toolbar > .ml-auto,
   .admin-page-toolbar .ml-auto {
@@ -2356,16 +2355,18 @@
     overflow-x: auto;
     flex-wrap: nowrap;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
   .admin-segmented-control::-webkit-scrollbar { display: none; }
   .admin-segmented-control > button {
-    min-height: 38px;
+    min-height: 34px;
     white-space: nowrap;
+    flex-shrink: 0;
   }
   .admin-search-field {
     width: 100%;
     max-width: none !important;
-    min-height: 44px;
+    min-height: 40px;
   }
   .admin-table-shell table,
   .earnings-expense-table-wrap table {

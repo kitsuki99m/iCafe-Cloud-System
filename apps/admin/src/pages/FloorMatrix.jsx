@@ -545,24 +545,48 @@ export default function FloorMatrix() {
   }
 
   const toolbarActions = (
-    <div className="flex flex-wrap items-center gap-2">
-      <BulkActionsDropdown items={bulkDropdownItems} onAction={handleBulkAction} />
-      <Button icon={Play} variant="primary" size="sm" onClick={() => setStartSessionModalOpen(true)}>
+    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+      <Button
+        icon={Play}
+        variant="primary"
+        size="sm"
+        onClick={() => setStartSessionModalOpen(true)}
+        className="flex-1 sm:flex-initial justify-center"
+      >
         Start Session
       </Button>
-      {!isStaffOrCashier && isCloudAdmin() && (
-        <Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>
-          Pair Customer PC
+      <BulkActionsDropdown items={bulkDropdownItems} onAction={handleBulkAction} className="flex-1 sm:flex-initial" />
+      {!isStaffOrCashier && (
+        <Button
+          icon={Plus}
+          variant="secondary"
+          size="sm"
+          onClick={() => setPcFormOpen(true)}
+          className="flex-1 sm:flex-initial justify-center"
+        >
+          Add PC
         </Button>
       )}
       {!isStaffOrCashier && (
-        <Button icon={Monitor} variant="ghost" size="sm" onClick={() => setBulkAddOpen(true)}>
+        <Button
+          icon={Monitor}
+          variant="ghost"
+          size="sm"
+          onClick={() => setBulkAddOpen(true)}
+          className="flex-1 sm:flex-initial justify-center"
+        >
           Bulk add
         </Button>
       )}
-      {!isStaffOrCashier && (
-        <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
-          Add PC
+      {!isStaffOrCashier && isCloudAdmin() && (
+        <Button
+          icon={Link2}
+          variant="subtle"
+          size="sm"
+          onClick={openStationPairing}
+          className="w-full sm:w-auto justify-center"
+        >
+          Pair Customer PC
         </Button>
       )}
     </div>
@@ -624,7 +648,7 @@ export default function FloorMatrix() {
         </div>
 
         {/* STATUS LEGEND matching Claude artifact */}
-        <div className="flex items-center gap-4 text-xs text-[var(--muted)] flex-wrap py-1 px-1">
+        <div className="flex items-center gap-3 text-xs text-[var(--muted)] flex-wrap py-1 px-1">
           <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--free,#2ED3A0)]" /> Open</div>
           <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--live,#FFB020)] animate-pulse" /> In use</div>
           <div className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-[var(--hold,#4CC2FF)]" /> Reserved</div>
@@ -633,71 +657,76 @@ export default function FloorMatrix() {
         </div>
 
         <div className="admin-page-toolbar space-y-2.5">
-          {/* Row 1: View Switcher, Search Bar, and Action Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
-              {/* View Mode Toggle: Grid Matrix vs 2D Floor Plan */}
-              <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMode('grid')
-                    try { localStorage.setItem('aezakmi:floor_view_mode', 'grid') } catch {}
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    viewMode === 'grid'
-                      ? 'bg-midnight text-soft-white shadow-xs'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                  title="Grid Matrix View"
-                >
-                  <LayoutGrid size={13} />
-                  <span>Grid Matrix</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMode('map')
-                    try { localStorage.setItem('aezakmi:floor_view_mode', 'map') } catch {}
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                    viewMode === 'map'
-                      ? 'bg-midnight text-soft-white shadow-xs'
-                      : 'text-slate-soft hover:text-ink-900'
-                  }`}
-                  title="2D Floor Plan Layout (Drag & Drop Stations)"
-                >
-                  <Map size={13} />
-                  <span>2D Floor Map</span>
-                </button>
-              </div>
-
-              {/* Search Bar */}
-              <div className="admin-search-field min-w-[200px] flex-1 max-w-sm">
-                <Search size={14} />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search PC, IP, or customer…"
-                  className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-slate-soft"
-                />
-              </div>
+          {/* Top Bar: View Mode Switcher and Clean Availability Pill Badge */}
+          <div className="flex items-center justify-between gap-2 w-full">
+            {/* View Mode Toggle: Grid Matrix vs 2D Floor Plan */}
+            <div className="flex items-center rounded-xl bg-surface-raised border border-surface-line p-0.5 shadow-xs shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('grid')
+                  try { localStorage.setItem('aezakmi:floor_view_mode', 'grid') } catch {}
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-midnight text-soft-white shadow-xs'
+                    : 'text-slate-soft hover:text-ink-900'
+                }`}
+                title="Grid Matrix View"
+              >
+                <LayoutGrid size={13} />
+                <span>Grid Matrix</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('map')
+                  try { localStorage.setItem('aezakmi:floor_view_mode', 'map') } catch {}
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  viewMode === 'map'
+                    ? 'bg-midnight text-soft-white shadow-xs'
+                    : 'text-slate-soft hover:text-ink-900'
+                }`}
+                title="2D Floor Plan Layout (Drag & Drop Stations)"
+              >
+                <Map size={13} />
+                <span>2D Floor Map</span>
+              </button>
             </div>
 
-            {/* Right Side: Stat Figure + Mode Actions */}
-            <div className="flex flex-wrap items-center justify-end gap-2.5">
-              <span className="stat-figure text-xs text-slate-soft mr-1">
-                <b className="text-ink-900">{stats.available}</b> of {stats.total} free
+            {/* Availability Pill Badge */}
+            <div className="inline-flex items-center gap-1.5 rounded-xl border border-surface-line bg-surface-raised px-2.5 py-1.5 text-xs font-semibold text-slate-soft shrink-0 shadow-xs">
+              <span className="h-2 w-2 rounded-full bg-teal shrink-0" />
+              <span className="stat-figure whitespace-nowrap">
+                <b className="text-ink-900 font-bold">{stats.available}</b> of {stats.total} free
               </span>
+            </div>
+          </div>
 
-              {viewMode === 'map' ? (
-                <div className="flex items-center gap-2">
+          {/* Search Field & Action Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 w-full">
+            {/* Search Bar */}
+            <div className="admin-search-field w-full sm:max-w-xs flex-1">
+              <Search size={14} className="text-slate-soft shrink-0" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search PC, IP, or customer…"
+                className="min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-slate-soft"
+              />
+            </div>
+
+            {/* Mode Actions */}
+            {viewMode === 'map' ? (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center justify-between sm:justify-start gap-1.5 w-full sm:w-auto">
                   {/* Zoom Controls */}
                   <div className="flex items-center gap-0.5 rounded-lg border border-surface-line bg-surface-raised p-0.5 shadow-xs">
                     <button
                       type="button"
                       onClick={() => floorMapRef.current?.zoomOut()}
-                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
+                      className="p-1.5 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
                       title="Zoom Out"
                     >
                       <ZoomOut size={13} />
@@ -708,7 +737,7 @@ export default function FloorMatrix() {
                     <button
                       type="button"
                       onClick={() => floorMapRef.current?.zoomIn()}
-                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
+                      className="p-1.5 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
                       title="Zoom In"
                     >
                       <ZoomIn size={13} />
@@ -716,7 +745,7 @@ export default function FloorMatrix() {
                     <button
                       type="button"
                       onClick={() => floorMapRef.current?.zoomReset()}
-                      className="p-1 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
+                      className="p-1.5 rounded-md text-slate-soft hover:text-ink-900 hover:bg-surface transition cursor-pointer"
                       title="Fit to Screen (100%)"
                     >
                       <Maximize2 size={12} />
@@ -745,34 +774,48 @@ export default function FloorMatrix() {
                     }`}
                   >
                     {floorMapHasChanges ? <Save size={13} /> : <Check size={13} className="text-teal" />}
-                    <span>Save Layout</span>
+                    <span>Save</span>
                   </button>
+                </div>
 
-                  <Button icon={Play} variant="primary" size="sm" onClick={() => setStartSessionModalOpen(true)}>
+                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+                  <Button
+                    icon={Play}
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setStartSessionModalOpen(true)}
+                    className="w-full sm:w-auto justify-center"
+                  >
                     Start Session
                   </Button>
                   {!isStaffOrCashier && (
-                    <Button icon={Plus} variant="primary" size="sm" onClick={() => setPcFormOpen(true)}>
+                    <Button
+                      icon={Plus}
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPcFormOpen(true)}
+                      className="w-full sm:w-auto justify-center"
+                    >
                       Add PC
                     </Button>
                   )}
                 </div>
-              ) : (
-                toolbarActions
-              )}
-            </div>
+              </div>
+            ) : (
+              toolbarActions
+            )}
           </div>
 
-          {/* Row 2: Status Filter Strip */}
-          <div className="flex items-center justify-between gap-3 pt-1 border-t border-surface-line/50">
-            <div className="admin-segmented-control flex-nowrap overflow-x-auto max-w-full">
+          {/* Row 3: Status Filter Strip */}
+          <div className="flex items-center justify-between gap-3 pt-1 border-t border-surface-line/50 w-full overflow-hidden">
+            <div className="admin-segmented-control flex-nowrap overflow-x-auto max-w-full no-scrollbar px-1 py-1 -mx-0.5 scroll-smooth overscroll-x-contain touch-pan-x">
               {CLIENT_STATUS_FILTERS.map((value) => (
                 <button
                   type="button"
                   key={value}
                   onClick={()=>setClientStatusFilter(value)}
-                  className={`rounded-md px-2.5 py-1.5 text-[11px] font-semibold capitalize whitespace-nowrap transition-colors cursor-pointer ${
-                    filter === value ? 'bg-midnight text-soft-white' : 'text-slate-soft hover:text-ink-900'
+                  className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-semibold capitalize transition-colors cursor-pointer ${
+                    filter === value ? 'bg-midnight text-soft-white shadow-xs' : 'text-slate-soft hover:text-ink-900'
                   }`}
                 >
                   {value === 'occupied' ? 'In use' : value}
@@ -781,7 +824,7 @@ export default function FloorMatrix() {
             </div>
 
             {viewMode === 'map' && (
-              <div className="hidden lg:flex items-center gap-2">
+              <div className="hidden lg:flex items-center gap-2 shrink-0">
                 {!isStaffOrCashier && isCloudAdmin() && (
                   <Button icon={Link2} variant="subtle" size="sm" onClick={openStationPairing}>
                     Pair Customer PC
