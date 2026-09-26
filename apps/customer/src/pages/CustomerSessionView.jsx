@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useAppData } from "../context/AppDataContext.jsx";
+import { useTheme } from "../context/ThemeContext.jsx";
 import { findPcById, rateForId, eligibleCustomerPlans, eligibleWalletStartPlans } from "../lib/rates.js";
 import Button from "../components/common/Button.jsx";
 import Modal from "../components/common/Modal.jsx";
