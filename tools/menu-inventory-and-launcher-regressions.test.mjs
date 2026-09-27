@@ -105,3 +105,25 @@ test('customer auth and lifecycle recovery guards active logged in member from b
   const apiContent = fs.readFileSync(apiRoutesPath, 'utf8')
   assert.ok(apiContent.includes("created_at <= ? AND revoked_at IS NULL"), 'apiRoutes lifecycle must not revoke fresh auth sessions created after crash interruption')
 })
+
+test('fulfilled menu orders can be archived individually or in bulk and live order cards do not show per-item prices', () => {
+  const adminPagePath = path.join(repoRoot, 'apps', 'admin', 'src', 'pages', 'MenuManagementPage.jsx')
+  const adminPage = fs.readFileSync(adminPagePath, 'utf8')
+
+  // Live order cards must not render individual item price column
+  assert.ok(!adminPage.includes("Number(it.price || 0) * Number(it.quantity || 1)"), 'Admin MenuManagementPage must not display per-item prices on live order cards')
+  // Must have Archive All Fulfilled button
+  assert.ok(adminPage.includes("Archive All Fulfilled"), 'Admin MenuManagementPage must include Archive All Fulfilled button')
+  // Must exclude archived from live orders
+  assert.ok(adminPage.includes("st !== 'archived'"), 'Admin MenuManagementPage must filter out archived orders from liveOrders')
+
+  const apiRoutesPath = path.join(repoRoot, 'backend', 'src', 'routes', 'apiRoutes.js')
+  const apiContent = fs.readFileSync(apiRoutesPath, 'utf8')
+  assert.ok(apiContent.includes("/menu-orders/archive-fulfilled"), 'apiRoutes must expose archive-fulfilled endpoint')
+  assert.ok(apiContent.includes("'archived'"), 'apiRoutes must support archived order status')
+
+  const adminApiPath = path.join(repoRoot, 'supabase', 'functions', 'admin-api', 'index.ts')
+  const adminApiContent = fs.readFileSync(adminApiPath, 'utf8')
+  assert.ok(adminApiContent.includes("/menu-orders/archive-fulfilled"), 'admin-api must expose archive-fulfilled endpoint')
+})
+

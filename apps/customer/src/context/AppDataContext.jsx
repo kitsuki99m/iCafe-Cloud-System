@@ -692,7 +692,7 @@ export function AppDataProvider({ children }) {
           ...current,
           myOrders: (current.myOrders || []).filter((o) => String(o.id) !== String(payload.id)),
         }))
-        if (sameId(payload.customerId, user?.memberId) || sameId(payload.customer_id, user?.memberId)) {
+        if ((payload.orderStatus === 'cancelled' || payload.order_status === 'cancelled') && (sameId(payload.customerId, user?.memberId) || sameId(payload.customer_id, user?.memberId))) {
           showToast({ title: 'Order Cancelled', message: 'Your order was cancelled and removed.', tone: 'info' })
         }
       } else {

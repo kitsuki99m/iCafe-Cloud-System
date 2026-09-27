@@ -6948,8 +6948,8 @@ router.delete("/menu-items/:id", auth, requireRole("admin", "cashier"), (req, re
 router.get("/menu-orders", auth, (req, res) => {
   const isStaff = ['admin', 'cashier'].includes(req.auth.role);
   const rows = isStaff
-    ? db.prepare("SELECT * FROM menu_orders WHERE order_status != 'cancelled' ORDER BY created_at DESC LIMIT 100").all()
-    : db.prepare("SELECT * FROM menu_orders WHERE customer_id=? AND order_status != 'cancelled' ORDER BY created_at DESC LIMIT 50").all(req.auth.memberId || req.auth.userId);
+    ? db.prepare("SELECT * FROM menu_orders WHERE order_status != 'cancelled' AND order_status != 'archived' ORDER BY created_at DESC LIMIT 100").all()
+    : db.prepare("SELECT * FROM menu_orders WHERE customer_id=? AND order_status != 'cancelled' AND order_status != 'archived' ORDER BY created_at DESC LIMIT 50").all(req.auth.memberId || req.auth.userId);
   res.json({
     success: true,
     orders: rows.map(r => ({
@@ -7002,6 +7002,7 @@ router.post("/menu-orders", auth, (req, res, next) => {
         id: dbItem.id,
         name: dbItem.name,
         category: dbItem.category,
+        price: unitPrice,
         unitPrice,
         quantity: qty,
         subtotal,
@@ -7083,7 +7084,7 @@ router.post("/menu-orders", auth, (req, res, next) => {
 router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (req, res, next) => {
   try {
     const { status } = req.body || {};
-    if (!['pending', 'preparing', 'fulfilled', 'cancelled'].includes(status)) {
+    if (!['pending', 'preparing', 'fulfilled', 'cancelled', 'archived'].includes(status)) {
       return res.status(400).json({ success: false, error: "Invalid order status." });
     }
     const order = db.prepare("SELECT * FROM menu_orders WHERE id=?").get(req.params.id);
@@ -7131,12 +7132,16 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
       }
     });
 
-    const updated = { ...order, orderStatus: status, fulfilledAt, cancelledAt, isDeleted: status === 'cancelled' };
+    const isRemoved = status === 'cancelled' || status === 'archived';
+    const updated = { ...order, orderStatus: status, fulfilledAt, cancelledAt, isDeleted: isRemoved };
     try {
       const io = getIO();
       if (status === 'cancelled') {
         io?.emit("menu:order_cancelled", { id: order.id, customerId: order.customer_id, pcId: order.pc_id, isDeleted: true, orderStatus: 'cancelled' });
         io?.emit("order:cancelled", { id: order.id, customerId: order.customer_id, pcId: order.pc_id, isDeleted: true, orderStatus: 'cancelled' });
+      }
+      if (status === 'archived') {
+        io?.emit("menu:order_archived", { id: order.id, isDeleted: true, orderStatus: 'archived' });
       }
       io?.emit("menu:order_updated", updated);
       io?.emit("order:updated", updated);
@@ -7150,7 +7155,19 @@ router.patch("/menu-orders/:id/status", auth, requireRole("admin", "cashier"), (
       }
     } catch {}
 
-    res.json({ success: true, order: updated, removed: status === 'cancelled' });
+    res.json({ success: true, order: updated, removed: isRemoved });
+  } catch (error) { next(error); }
+});
+
+router.post("/menu-orders/archive-fulfilled", auth, requireRole("admin", "cashier"), (req, res, next) => {
+  try {
+    const result = db.prepare("UPDATE menu_orders SET order_status='archived' WHERE order_status='fulfilled'").run();
+    try {
+      const io = getIO();
+      io?.emit("menu:orders_archived", { count: result.changes });
+      emitDataChanged({ entity: 'menu_orders' });
+    } catch {}
+    res.json({ success: true, count: result.changes, message: `Archived ${result.changes} fulfilled order(s).` });
   } catch (error) { next(error); }
 });
 
@@ -7224,7 +7241,7 @@ router.get("/shifts/current", auth, requireRole("admin", "cashier"), (req, res) 
   if (!current) return res.json({ success: true, activeShift: null });
 
   const cashTopUps = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM top_up_requests WHERE status='approved' AND payment_method='cash' AND processed_at >= ?").get(current.opened_at)?.total || 0;
-  const cashMenuOrders = db.prepare("SELECT COALESCE(SUM(total), 0) AS total FROM menu_orders WHERE order_status='fulfilled' AND payment_method='cash' AND fulfilled_at >= ?").get(current.opened_at)?.total || 0;
+  const cashMenuOrders = db.prepare("SELECT COALESCE(SUM(total), 0) AS total FROM menu_orders WHERE (order_status='fulfilled' OR order_status='archived') AND payment_method='cash' AND fulfilled_at >= ?").get(current.opened_at)?.total || 0;
   const cashSessionStarts = db.prepare("SELECT COALESCE(SUM(amount_paid), 0) AS total FROM computer_sessions WHERE settlement_method='cash' AND started_at >= ?").get(current.opened_at)?.total || 0;
   const totalCashInflow = Number(cashTopUps) + Number(cashMenuOrders) + Number(cashSessionStarts);
   const expectedCash = Number(current.opening_float || 0) + totalCashInflow;
@@ -7268,7 +7285,7 @@ router.post("/shifts/close", auth, requireRole("admin", "cashier"), (req, res) =
   const now = nowIso();
 
   const cashTopUps = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM top_up_requests WHERE status='approved' AND payment_method='cash' AND processed_at >= ?").get(current.opened_at)?.total || 0;
-  const cashMenuOrders = db.prepare("SELECT COALESCE(SUM(total), 0) AS total FROM menu_orders WHERE order_status='fulfilled' AND payment_method='cash' AND fulfilled_at >= ?").get(current.opened_at)?.total || 0;
+  const cashMenuOrders = db.prepare("SELECT COALESCE(SUM(total), 0) AS total FROM menu_orders WHERE (order_status='fulfilled' OR order_status='archived') AND payment_method='cash' AND fulfilled_at >= ?").get(current.opened_at)?.total || 0;
   const cashSessionStarts = db.prepare("SELECT COALESCE(SUM(amount_paid), 0) AS total FROM computer_sessions WHERE settlement_method='cash' AND started_at >= ?").get(current.opened_at)?.total || 0;
   const totalCashInflow = Number(cashTopUps) + Number(cashMenuOrders) + Number(cashSessionStarts);
   const expectedCash = Number(current.opening_float || 0) + totalCashInflow;
@@ -7497,7 +7514,7 @@ router.post("/reports/send-summary", auth, requireRole("admin", "cashier"), asyn
 
     const sessionRevenue = db.prepare("SELECT COALESCE(SUM(amount_paid), 0) AS total, COUNT(*) AS count FROM computer_sessions WHERE started_at >= ?").get(sinceIso);
     const topUpRevenue = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count FROM top_up_requests WHERE status='approved' AND processed_at >= ?").get(sinceIso);
-    const orderRevenue = db.prepare("SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count FROM menu_orders WHERE order_status='fulfilled' AND fulfilled_at >= ?").get(sinceIso);
+    const orderRevenue = db.prepare("SELECT COALESCE(SUM(total), 0) AS total, COUNT(*) AS count FROM menu_orders WHERE (order_status='fulfilled' OR order_status='archived') AND fulfilled_at >= ?").get(sinceIso);
     const shiftSummary = db.prepare("SELECT COUNT(*) AS shift_count, COALESCE(SUM(variance), 0) AS total_variance FROM user_shifts WHERE opened_at >= ?").get(sinceIso);
 
     const totalEarnings = Number(sessionRevenue?.total || 0) + Number(topUpRevenue?.total || 0) + Number(orderRevenue?.total || 0);

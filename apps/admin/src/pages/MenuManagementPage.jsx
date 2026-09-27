@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Upload,
   Camera,
+  Archive,
 } from 'lucide-react'
 import { useAppData } from '../context/AppDataContext.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -35,7 +36,7 @@ const CATEGORIES = ['All', 'Food', 'Drinks', 'Snacks', 'Combos']
 const inputClass = 'w-full rounded-xl border border-surface-line customer-neutral-surface px-3 py-2 text-sm text-ink-900 focus:outline-none focus:border-gold/50'
 
 export default function MenuManagementPage() {
-  const { menuItems, menuOrders, createMenuItem, batchCreateMenuItems, updateMenuItem, deleteMenuItem, updateOrderStatus, cancelMenuOrder } = useAppData()
+  const { menuItems, menuOrders, createMenuItem, batchCreateMenuItems, updateMenuItem, deleteMenuItem, updateOrderStatus, cancelMenuOrder, archiveAllFulfilledOrders } = useAppData()
   const { user } = useAuth()
   const isCashier = user?.role === 'cashier'
   const [activeTab, setActiveTab] = useState('orders') // 'orders' | 'items'
@@ -179,7 +180,10 @@ export default function MenuManagementPage() {
   }
 
   const liveOrders = useMemo(() => {
-    return menuOrders.filter((o) => (o.order_status || o.orderStatus) !== 'cancelled')
+    return menuOrders.filter((o) => {
+      const st = o.order_status || o.orderStatus
+      return st !== 'cancelled' && st !== 'archived'
+    })
   }, [menuOrders])
 
   const pendingOrders = useMemo(() => {
@@ -317,6 +321,19 @@ export default function MenuManagementPage() {
     }
   }
 
+  async function handleArchiveAllFulfilled() {
+    if (fulfilledOrders.length === 0) return
+    setActionBusy(true)
+    try {
+      await archiveAllFulfilledOrders()
+      showToast({ title: 'Orders Archived', message: `Archived ${fulfilledOrders.length} fulfilled order(s).`, tone: 'success' })
+    } catch (err) {
+      showToast({ title: 'Archive Failed', message: err.message, tone: 'error' })
+    } finally {
+      setActionBusy(false)
+    }
+  }
+
   return (
     <AdminPageWorkspace
       aside={
@@ -423,6 +440,28 @@ export default function MenuManagementPage() {
               />
             </div>
 
+            {/* Orders Queue Toolbar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-raised/30 p-3 rounded-2xl border border-surface-line">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-ink-900">Live Orders Queue</span>
+                <span className="text-xs text-slate-soft">
+                  ({liveOrders.length} active {liveOrders.length === 1 ? 'order' : 'orders'})
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleArchiveAllFulfilled}
+                  disabled={fulfilledOrders.length === 0 || actionBusy}
+                  className="gap-1.5"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  Archive All Fulfilled ({fulfilledOrders.length})
+                </Button>
+              </div>
+            </div>
+
             {liveOrders.length === 0 ? (
               <AdminEmptyState
                 icon={ShoppingBag}
@@ -481,12 +520,9 @@ export default function MenuManagementPage() {
                         {/* Items */}
                         <div className="py-3 space-y-1.5">
                           {items.map((it, idx) => (
-                            <div key={idx} className="flex items-center justify-between text-xs">
-                              <span className="text-ink-900">
-                                <strong className="text-gold-dim">{it.quantity}x</strong> {it.name}
-                              </span>
-                              <span className="text-slate-soft font-mono">
-                                ₱{(Number(it.price || 0) * Number(it.quantity || 1)).toFixed(2)}
+                            <div key={idx} className="flex items-center text-xs">
+                              <span className="text-ink-900 font-medium">
+                                <strong className="text-gold-dim font-bold mr-1.5">{it.quantity}x</strong> {it.name}
                               </span>
                             </div>
                           ))}
@@ -532,6 +568,21 @@ export default function MenuManagementPage() {
                               onClick={() => promptCancelOrder(order.id)}
                             >
                               Cancel
+                            </Button>
+                          </div>
+                        )}
+
+                        {isFulfilled && (
+                          <div className="flex items-center justify-end pt-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs gap-1.5 text-slate-soft hover:text-ink-900"
+                              onClick={() => handleStatusChange(order.id, 'archived')}
+                              disabled={actionBusy}
+                            >
+                              <Archive className="w-3.5 h-3.5" />
+                              Archive Order
                             </Button>
                           </div>
                         )}

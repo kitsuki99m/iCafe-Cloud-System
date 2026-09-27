@@ -465,15 +465,21 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
   }
 
   if(method==='GET'&&route==='/menu-orders'){
-    const{data,error}=await admin.from('branch_menu_orders').select('*').eq('branch_id',branchId).order('created_at',{ascending:false}).limit(100);
+    const{data,error}=await admin.from('branch_menu_orders').select('*').eq('branch_id',branchId).neq('order_status','cancelled').neq('order_status','archived').order('created_at',{ascending:false}).limit(100);
     if(error)throw error;
     return result({success:true,orders:(data||[]).map((r:any)=>({id:r.local_id||r.id,customerId:r.customer_id,customerName:r.customer_name,pcId:r.pc_id,pcLabel:r.pc_label,items:typeof r.items_json==='string'?JSON.parse(r.items_json):(r.items_json||[]),total:n(r.total_centavos)/100,paymentMethod:r.payment_method,paymentStatus:r.payment_status,orderStatus:r.order_status,notes:r.notes,createdAt:r.created_at,fulfilledAt:r.fulfilled_at,cancelledAt:r.cancelled_at}))});
+  }
+  if(method==='POST'&&route==='/menu-orders/archive-fulfilled'){
+    const nowStr=now();
+    const{data,error}=await admin.from('branch_menu_orders').update({order_status:'archived',updated_at:nowStr}).eq('branch_id',branchId).eq('order_status','fulfilled').select();
+    if(error)throw error;
+    return result({success:true,count:(data||[]).length});
   }
   const menuOrderStatusMatch=route.match(/^\/menu-orders\/([^/]+)\/status$/);
   if(menuOrderStatusMatch&&method==='PATCH'){
     const localId=decodeURIComponent(menuOrderStatusMatch[1]);
     const status=body?.status;
-    if(!['pending','preparing','fulfilled','cancelled'].includes(status))return result({success:false,error:'Invalid status'},400);
+    if(!['pending','preparing','fulfilled','cancelled','archived'].includes(status))return result({success:false,error:'Invalid status'},400);
     const nowStr=now();
     const patch:any={order_status:status};
     if(status==='fulfilled')patch.fulfilled_at=nowStr;
@@ -663,7 +669,10 @@ async function cloudNative(admin:SupabaseClient,user:any,branch:any,method:strin
     const shiftsVariance=(shiftsData||[]).reduce((sum:number,s:any)=>sum+n(s.variance_centavos)/100,0);
 
     const{data:ordersData}=await admin.from('branch_menu_orders').select('*').eq('branch_id',branchId).gte('created_at',sinceIso);
-    const fulfilledOrders=(ordersData||[]).filter((o:any)=>String(o.order_status||o.orderStatus||'').toLowerCase()==='fulfilled'||o.status==='completed');
+    const fulfilledOrders=(ordersData||[]).filter((o:any)=>{
+      const st=String(o.order_status||o.orderStatus||'').toLowerCase();
+      return st==='fulfilled'||st==='archived'||o.status==='completed';
+    });
     const orderRevenue=fulfilledOrders.reduce((sum:number,o:any)=>sum+n(o.total||o.total_amount,0),0);
     const ordersCount=fulfilledOrders.length;
 

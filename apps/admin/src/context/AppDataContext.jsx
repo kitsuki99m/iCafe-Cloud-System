@@ -1444,7 +1444,7 @@ export function AppDataProvider({ children }) {
   }
   function updateOrderStatus(id, status) {
     const prevOrders = state.menuOrders || []
-    if (status === 'cancelled') {
+    if (status === 'cancelled' || status === 'archived') {
       setState((curr) => ({
         ...curr,
         menuOrders: (curr.menuOrders || []).filter((o) => String(o.id) !== String(id))
@@ -1458,6 +1458,26 @@ export function AppDataProvider({ children }) {
       }))
     }
     return apiPatch(`/menu-orders/${id}/status`, { status })
+      .then((res) => {
+        refresh().catch(() => {})
+        return res
+      })
+      .catch((err) => {
+        setState((curr) => ({ ...curr, menuOrders: prevOrders }))
+        refresh().catch(() => {})
+        throw err
+      })
+  }
+  function archiveAllFulfilledOrders() {
+    const prevOrders = state.menuOrders || []
+    setState((curr) => ({
+      ...curr,
+      menuOrders: (curr.menuOrders || []).filter((o) => {
+        const st = o.order_status || o.orderStatus
+        return st !== 'fulfilled' && st !== 'archived'
+      })
+    }))
+    return apiPost('/menu-orders/archive-fulfilled', {})
       .then((res) => {
         refresh().catch(() => {})
         return res
@@ -1883,6 +1903,7 @@ export function AppDataProvider({ children }) {
       deleteMenuItem,
       updateOrderStatus,
       cancelMenuOrder,
+      archiveAllFulfilledOrders,
       openShift,
       closeShift,
       fetchShiftHistory,

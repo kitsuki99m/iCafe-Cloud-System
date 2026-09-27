@@ -339,7 +339,7 @@ export default function CustomerSessionView() {
   const visibleOrders = useMemo(() => {
     return (myOrders || []).filter((o) => {
       const status = o.order_status || o.orderStatus || o.status || 'pending';
-      return status !== 'cancelled';
+      return status !== 'cancelled' && status !== 'archived';
     });
   }, [myOrders]);
 
