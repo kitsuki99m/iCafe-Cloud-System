@@ -726,7 +726,7 @@ async function cloudAppData(branchId) {
     rest(`branch_launcher_categories?select=*&branch_id=eq.${encoded}&order=sort_order.asc,name.asc`).catch(() => []),
     rest(`branch_launcher_apps?select=*&branch_id=eq.${encoded}&order=sort_order.asc,name.asc`).catch(() => []),
     rest(`branch_menu_items?select=*&branch_id=eq.${encoded}&order=category.asc,name.asc`).catch(() => []),
-    rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&order=created_at.desc&limit=100`).catch(() => []),
+    rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&order_status=neq.archived&order_status=neq.cancelled&order=created_at.desc&limit=100`).catch(() => []),
     rest(`branch_user_shifts?select=*&branch_id=eq.${encoded}&order=opened_at.desc&limit=20`).catch(() => []),
     rest(`branch_promo_vouchers?select=*&branch_id=eq.${encoded}&order=created_at.desc`).catch(() => []),
   ]);
@@ -954,7 +954,7 @@ async function cloudDirectRead(path, branchId) {
     };
   }
   if (route === "/menu-orders") {
-    const rows = await rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&order=created_at.desc&limit=100`);
+    const rows = await rest(`branch_menu_orders?select=*&branch_id=eq.${encoded}&order_status=neq.archived&order_status=neq.cancelled&order=created_at.desc&limit=100`);
     return {
       success: true,
       orders: (rows || []).map((r) => ({
