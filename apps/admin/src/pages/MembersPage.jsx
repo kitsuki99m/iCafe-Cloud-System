@@ -254,7 +254,7 @@ function SessionTransferModal({ member, members, onClose, onConfirm }) {
 export default function MembersPage(){
   const {members:liveMembers,pcs,ratePlans,addMember,updateMember,deleteMember,setMemberWallet,topUpMemberSession,transferMemberWallet,transferMemberSessionTime,adminTopUp}=useAppData()
   const { user } = useAuth()
-  const canManageMembers = String(user?.role ?? '').trim().toLowerCase() === 'admin'
+  const canManageMembers = !['cashier', 'staff', 'viewer'].includes(String(user?.role ?? '').trim().toLowerCase())
   const [query,setQuery]=useState(''); const [editing,setEditing]=useState(null); const [walletTopUp,setWalletTopUp]=useState(null); const [creating,setCreating]=useState(null); const [deleteTarget,setDeleteTarget]=useState(null); const [walletEdit,setWalletEdit]=useState(null); const [walletTransfer,setWalletTransfer]=useState(null); const [sessionTransfer,setSessionTransfer]=useState(null); const [sessionTopUp,setSessionTopUp]=useState(null); const [bulkWalletOpen,setBulkWalletOpen]=useState(false); const [bulkSessionOpen,setBulkSessionOpen]=useState(false); const [detailMemberId,setDetailMemberId]=useState(null); const [,tick]=useState(0); const [actionError,setActionError]=useState(''); const [savingMember,setSavingMember]=useState(false); const [bulkWalletOperationKey,setBulkWalletOperationKey]=useState(null); const [bulkSessionOperationKey,setBulkSessionOperationKey]=useState(null)
   const [searchParams,setSearchParams]=useSearchParams()
   useEffect(()=>{const t=setInterval(()=>tick(v=>v+1),30000);return()=>clearInterval(t)},[])
